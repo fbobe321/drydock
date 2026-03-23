@@ -1,0 +1,11 @@
+This product includes software derived from mistralai/mistral-vibe.
+
+Original work:
+Copyright 2025 Mistral AI
+
+Licensed under the Apache License, Version 2.0
+
+Modifications:
+- Rebranding to Drydock
+- UI/UX changes (TUI, CLI output, banners)
+- Added nautical state system

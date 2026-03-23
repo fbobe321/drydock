@@ -1,0 +1,134 @@
+/* =============================================================================
+   Onboarding App Styles
+   ============================================================================= */
+
+Screen {
+    align: center middle;
+}
+
+OnboardingScreen {
+    align: center middle;
+}
+
+/* =============================================================================
+   Welcome Screen
+   ============================================================================= */
+
+#welcome-container {
+    align: center middle;
+}
+
+#welcome-text {
+    border: round #555555;
+    padding: 1 3;
+    margin-bottom: 2;
+    text-align: center;
+    width: auto;
+}
+
+WelcomeScreen #enter-hint {
+    color: ansi_bright_black;
+    min-width: 16;
+    text-align: center;
+}
+
+WelcomeScreen #enter-hint.hidden {
+    visibility: hidden;
+}
+
+/* =============================================================================
+   API Key Screen
+   ============================================================================= */
+
+#api-key-outer {
+    overflow-y: auto;
+}
+
+.spacer {
+    height: 1fr;
+}
+
+#api-key-title {
+    text-align: center;
+    margin-bottom: 2;
+}
+
+#api-key-content {
+    width: auto;
+    height: auto;
+}
+
+#api-key-content Static {
+    text-align: center;
+}
+
+.link-row {
+    width: auto;
+    height: auto;
+    margin-top: 1;
+}
+
+.link-chevron {
+    width: auto;
+}
+
+#input-box {
+    border: round #555555;
+    padding: 0 1;
+    margin-top: 2;
+    width: auto;
+    height: 3;
+}
+
+#input-box.valid {
+    border: round ansi_green;
+}
+
+#input-box.invalid {
+    border: round ansi_red;
+}
+
+#key {
+    border: none;
+    width: 48;
+    height: 1;
+    padding: 0;
+}
+
+#paste-hint {
+    margin-top: 3;
+}
+
+#feedback {
+    text-align: center;
+    height: 1;
+    margin-top: 1;
+}
+
+#feedback.error {
+    color: ansi_red;
+}
+
+#feedback.success {
+    color: ansi_bright_black;
+}
+
+#config-docs-section {
+    width: 100%;
+    height: auto;
+    align: center top;
+    padding-bottom: 2;
+}
+
+#config-docs-group {
+    width: auto;
+    height: auto;
+}
+
+#config-docs-group Static {
+    color: ansi_bright_black;
+}
+
+#config-docs-group .link-row {
+    margin-top: 0;
+}

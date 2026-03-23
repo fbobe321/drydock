@@ -1,0 +1,35 @@
+id = "drydock"
+name = "Drydock"
+description = "Nautical CLI coding agent"
+version = "2.4.2"
+schema_version = 1
+authors = ["Drydock contributors", "Mistral AI (original)"]
+repository = "https://github.com/mistralai/mistral-vibe"
+
+[agent_servers.drydock]
+name = "Drydock"
+icon = "./icons/mistral_vibe.svg"
+
+[agent_servers.drydock.targets.darwin-aarch64]
+archive = "https://github.com/mistralai/mistral-vibe/releases/download/v2.4.2/vibe-acp-darwin-aarch64-2.4.2.zip"
+cmd = "./vibe-acp"
+
+[agent_servers.drydock.targets.darwin-x86_64]
+archive = "https://github.com/mistralai/mistral-vibe/releases/download/v2.4.2/vibe-acp-darwin-x86_64-2.4.2.zip"
+cmd = "./vibe-acp"
+
+[agent_servers.drydock.targets.linux-aarch64]
+archive = "https://github.com/mistralai/mistral-vibe/releases/download/v2.4.2/vibe-acp-linux-aarch64-2.4.2.zip"
+cmd = "./vibe-acp"
+
+[agent_servers.drydock.targets.linux-x86_64]
+archive = "https://github.com/mistralai/mistral-vibe/releases/download/v2.4.2/vibe-acp-linux-x86_64-2.4.2.zip"
+cmd = "./vibe-acp"
+
+[agent_servers.drydock.targets.windows-aarch64]
+archive = "https://github.com/mistralai/mistral-vibe/releases/download/v2.4.2/vibe-acp-windows-aarch64-2.4.2.zip"
+cmd = "./vibe-acp.exe"
+
+[agent_servers.drydock.targets.windows-x86_64]
+archive = "https://github.com/mistralai/mistral-vibe/releases/download/v2.4.2/vibe-acp-windows-x86_64-2.4.2.zip"
+cmd = "./vibe-acp.exe"
