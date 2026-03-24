@@ -1277,15 +1277,14 @@ class AgentLoop:
             return f"WARNING|{last_tool}"
 
         # Check 2: Same tool called N+ times consecutively with different args
-        # Investigation tools (grep, read_file) need more room — typical bug-fix
-        # requires 3-5 greps + 3-5 reads before making an edit.
-        # Bash gets a higher threshold since it's naturally used more often.
+        # Lower thresholds catch loops where the model uses the same tool
+        # with slightly different args (e.g., grep with different paths).
         if last_tool in ("bash", "run_command"):
-            same_tool_limit = 12
-        elif last_tool in ("grep", "read_file"):
-            same_tool_limit = 12  # investigation tools need room to explore
-        else:
             same_tool_limit = 8
+        elif last_tool in ("grep", "read_file"):
+            same_tool_limit = 10  # investigation tools need some room
+        else:
+            same_tool_limit = 6
         if (
             len(tool_names) >= same_tool_limit
             and all(n == tool_names[-1] for n in tool_names[-same_tool_limit:])
@@ -1311,6 +1310,16 @@ class AgentLoop:
                 target = read_paths[0]
                 count = sum(1 for p in read_paths[:8] if p == target)
                 if count >= 5:
+                    return f"WARNING|{last_tool}"
+
+        # Check 4: Alternating pattern (A→B→A→B or A→B→C→A→B→C)
+        # Catches loops where the model alternates between two tools
+        if len(tool_names) >= 8:
+            # Check for 2-tool cycle: A B A B A B A B
+            last_two = tool_names[-2:]
+            if len(last_two) == 2 and last_two[0] != last_two[1]:
+                cycle = last_two * 4
+                if tool_names[-8:] == cycle:
                     return f"WARNING|{last_tool}"
 
         return None

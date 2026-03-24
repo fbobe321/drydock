@@ -109,23 +109,23 @@ class ReadFile(
                 async with await anyio.Path(file_path).open(
                     encoding="utf-8", errors="ignore"
                 ) as f:
-                line_index = 0
-                async for line in f:
-                    if line_index < args.offset:
+                    line_index = 0
+                    async for line in f:
+                        if line_index < args.offset:
+                            line_index += 1
+                            continue
+
+                        if args.limit is not None and len(lines_to_return) >= args.limit:
+                            break
+
+                        line_bytes = len(line.encode("utf-8"))
+                        if bytes_read + line_bytes > self.config.max_read_bytes:
+                            was_truncated = True
+                            break
+
+                        lines_to_return.append(line)
+                        bytes_read += line_bytes
                         line_index += 1
-                        continue
-
-                    if args.limit is not None and len(lines_to_return) >= args.limit:
-                        break
-
-                    line_bytes = len(line.encode("utf-8"))
-                    if bytes_read + line_bytes > self.config.max_read_bytes:
-                        was_truncated = True
-                        break
-
-                    lines_to_return.append(line)
-                    bytes_read += line_bytes
-                    line_index += 1
 
             return _ReadResult(
                 lines=lines_to_return,
