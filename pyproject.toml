@@ -59,10 +59,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mistralai/mistral-vibe"
-Repository = "https://github.com/mistralai/mistral-vibe"
-Issues = "https://github.com/mistralai/mistral-vibe/issues"
-Documentation = "https://github.com/mistralai/mistral-vibe#readme"
+Homepage = "https://github.com/fbobe321/drydock"
+Repository = "https://github.com/fbobe321/drydock"
+Issues = "https://github.com/fbobe321/drydock/issues"
+Documentation = "https://github.com/fbobe321/drydock#readme"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs", "editables"]
