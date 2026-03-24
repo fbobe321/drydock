@@ -122,7 +122,7 @@ class ToolDecision(BaseModel):
     feedback: str | None = None
 
 
-MAX_TOOL_TURNS = 500
+MAX_TOOL_TURNS = 200  # Bug fixes rarely need more than 50 turns; 200 is generous ceiling
 MAX_API_ERRORS = 5
 REPEAT_WARNING_THRESHOLD = 8  # Same exact call 8+ times before warning
 REPEAT_FORCE_STOP_THRESHOLD = 25  # Same exact call 25+ times before force-stop
@@ -462,6 +462,8 @@ class AgentLoop:
             repeat_warnings = 0
             has_made_edit = False  # Track if model has used search_replace/write_file
             text_without_action = 0  # Consecutive text responses without tool calls
+            bash_count = 0  # Track consecutive bash calls without an edit
+            search_replace_failures = 0  # Track failed search_replace attempts
             files_explored: list[str] = []  # Track files read for context state
             context_summary_injected = False
             while not should_break_loop:
@@ -509,7 +511,7 @@ class AgentLoop:
 
                 last_message = self.messages[-1]
 
-                # Track files explored and edits made
+                # Track files explored, edits made, and bash/failure patterns
                 if not has_made_edit:
                     for msg in reversed(self.messages[-5:]):
                         if msg.role == Role.assistant and msg.tool_calls:
@@ -518,6 +520,7 @@ class AgentLoop:
                                     continue
                                 if tc.function.name in ("search_replace", "write_file"):
                                     has_made_edit = True
+                                    bash_count = 0  # Reset on successful edit
                                 if tc.function.name == "read_file":
                                     try:
                                         args = json.loads(tc.function.arguments or "{}")
@@ -526,6 +529,34 @@ class AgentLoop:
                                             files_explored.append(path)
                                     except (json.JSONDecodeError, AttributeError):
                                         pass
+                                if tc.function.name in ("bash", "run_command"):
+                                    bash_count += 1
+
+                    # Track search_replace failures (called but error in result)
+                    for msg in reversed(self.messages[-3:]):
+                        if msg.role == Role.tool and msg.content:
+                            content = msg.content or ""
+                            if "search_replace" in content.lower() and "error" in content.lower():
+                                search_replace_failures += 1
+
+                # Bash abuse detection: if model keeps using bash instead of
+                # search_replace/read_file, redirect it to the proper tools
+                if not has_made_edit and bash_count >= 10 and bash_count % 5 == 0:
+                    self._inject_system_note(
+                        f"STOP using bash. You have run {bash_count} bash commands without making an edit. "
+                        "Use search_replace to edit files, not bash. Use read_file to read files, not cat/head. "
+                        "Use grep (the tool) to search, not bash grep. "
+                        "Call search_replace NOW with your fix."
+                    )
+
+                # search_replace keeps failing — suggest re-reading the file
+                if search_replace_failures >= 3 and search_replace_failures % 2 == 1:
+                    self._inject_system_note(
+                        f"Your search_replace has failed {search_replace_failures} times. "
+                        "The text you're searching for doesn't match the file. STOP guessing. "
+                        "Use read_file with offset/limit to see the EXACT current text, "
+                        "then copy it precisely into search_replace old_str."
+                    )
 
                 # Context budget warning: after 7 tool turns without an edit,
                 # warn that context is being consumed without progress
