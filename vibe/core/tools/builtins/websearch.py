@@ -67,6 +67,21 @@ class WebSearch(
         if not api_key:
             raise ToolError("MISTRAL_API_KEY environment variable not set.")
 
+        # Pass proxy and SSL settings if configured
+        import httpx
+        http_client = None
+        proxy_url = os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or os.getenv("HTTP_PROXY") or os.getenv("http_proxy")
+        ssl_cert = os.getenv("SSL_CERT_FILE") or os.getenv("REQUESTS_CA_BUNDLE")
+        if proxy_url or ssl_cert:
+            import ssl as _ssl
+            ssl_ctx = None
+            if ssl_cert:
+                ssl_ctx = _ssl.create_default_context(cafile=ssl_cert)
+            http_client = httpx.AsyncClient(
+                proxy=proxy_url,
+                verify=ssl_ctx or (ssl_cert or True),
+            )
+
         client = mistralai.Mistral(
             api_key=api_key,
             server_url=self._resolve_server_url(ctx),

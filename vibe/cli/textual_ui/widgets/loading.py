@@ -29,40 +29,39 @@ def _format_elapsed(seconds: int) -> str:
 
 
 class LoadingWidget(SpinnerMixin, Static):
-    TARGET_COLORS = ("#FFD800", "#FFAF00", "#FF8205", "#FA500F", "#E10500")
-    SPINNER_TYPE = SpinnerType.SNAKE
+    TARGET_COLORS = ("#0077B6", "#0096C7", "#00B4D8", "#48CAE4", "#90E0EF")
+    SPINNER_TYPE = SpinnerType.WAVE
 
     EASTER_EGGS: ClassVar[list[str]] = [
-        "Eating a chocolatine",
-        "Eating a pain au chocolat",
-        "Réflexion",
-        "Analyse",
-        "Contemplation",
-        "Synthèse",
-        "Reading Proust",
-        "Oui oui baguette",
-        "Counting Rs in strawberry",
         "Hoisting the mainsail",
-        "Vibing",
-        "Sending good vibes",
-        "Petting le chat",
+        "Swabbing the deck",
+        "Trimming the sails",
+        "Checking the rigging",
+        "Scanning the horizon",
+        "Reading the tide charts",
+        "Polishing the compass",
+        "Furling the jib",
+        "Splicing the mainbrace",
+        "Battening the hatches",
+        "Charting the stars",
+        "Sounding the depths",
+        "Coiling the lines",
     ]
 
     EASTER_EGGS_HALLOWEEN: ClassVar[list[str]] = [
-        "Trick or treating",
-        "Carving pumpkins",
-        "Summoning spirits",
-        "Brewing potions",
-        "Haunting the terminal",
-        "Petting le chat noir",
+        "Sailing the ghost ship",
+        "Navigating the fog",
+        "Summoning Davy Jones",
+        "Hunting the Kraken",
+        "Haunting the quarterdeck",
     ]
 
     EASTER_EGGS_DECEMBER: ClassVar[list[str]] = [
-        "Wrapping presents",
-        "Decorating the tree",
-        "Drinking hot chocolate",
-        "Building snowmen",
-        "Writing holiday cards",
+        "Decorating the mast",
+        "Brewing grog",
+        "Navigating by starlight",
+        "Anchoring for winter",
+        "Stocking the galley",
     ]
 
     def __init__(self, status: str | None = None) -> None:

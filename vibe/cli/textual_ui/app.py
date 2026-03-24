@@ -1435,6 +1435,14 @@ class VibeApp(App):  # noqa: PLR0904
         self.call_after_refresh(schedule_switch)
 
     def action_clear_quit(self) -> None:
+        import time as _time
+
+        # If agent is running, first Ctrl-C cancels the current operation
+        if self._agent_task and not self._agent_task.done():
+            self._agent_task.cancel()
+            return
+
+        # If input has text, clear it
         input_widgets = self.query(ChatInputContainer)
         if input_widgets:
             input_widget = input_widgets.first()
@@ -1442,7 +1450,13 @@ class VibeApp(App):  # noqa: PLR0904
                 input_widget.value = ""
                 return
 
-        self.action_force_quit()
+        # Double Ctrl-C within 1 second to quit (like Claude Code)
+        now = _time.monotonic()
+        if hasattr(self, "_last_ctrl_c") and (now - self._last_ctrl_c) < 1.0:
+            self.action_force_quit()
+        else:
+            self._last_ctrl_c = now
+            self.notify("Press Ctrl-C again to exit", timeout=1)
 
     def action_force_quit(self) -> None:
         if self._agent_task and not self._agent_task.done():

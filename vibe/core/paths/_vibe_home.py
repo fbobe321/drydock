@@ -16,13 +16,23 @@ class GlobalPath:
         return self._resolver()
 
 
+_DEFAULT_DRYDOCK_HOME = Path.home() / ".drydock"
+# Fall back to ~/.vibe if it exists and ~/.drydock doesn't (migration support)
 _DEFAULT_VIBE_HOME = Path.home() / ".vibe"
 
 
 def _get_vibe_home() -> Path:
+    # Check env vars: DRYDOCK_HOME takes priority, then VIBE_HOME for compat
+    if drydock_home := os.getenv("DRYDOCK_HOME"):
+        return Path(drydock_home).expanduser().resolve()
     if vibe_home := os.getenv("VIBE_HOME"):
         return Path(vibe_home).expanduser().resolve()
-    return _DEFAULT_VIBE_HOME
+    # Default: use ~/.drydock, fall back to ~/.vibe if it exists
+    if _DEFAULT_DRYDOCK_HOME.exists():
+        return _DEFAULT_DRYDOCK_HOME
+    if _DEFAULT_VIBE_HOME.exists():
+        return _DEFAULT_VIBE_HOME
+    return _DEFAULT_DRYDOCK_HOME
 
 
 VIBE_HOME = GlobalPath(_get_vibe_home)
@@ -30,8 +40,8 @@ GLOBAL_ENV_FILE = GlobalPath(lambda: VIBE_HOME.path / ".env")
 SESSION_LOG_DIR = GlobalPath(lambda: VIBE_HOME.path / "logs" / "session")
 TRUSTED_FOLDERS_FILE = GlobalPath(lambda: VIBE_HOME.path / "trusted_folders.toml")
 LOG_DIR = GlobalPath(lambda: VIBE_HOME.path / "logs")
-LOG_FILE = GlobalPath(lambda: VIBE_HOME.path / "logs" / "vibe.log")
-HISTORY_FILE = GlobalPath(lambda: VIBE_HOME.path / "vibehistory")
+LOG_FILE = GlobalPath(lambda: VIBE_HOME.path / "logs" / "drydock.log")
+HISTORY_FILE = GlobalPath(lambda: VIBE_HOME.path / "drydock_history")
 PLANS_DIR = GlobalPath(lambda: VIBE_HOME.path / "plans")
 
 DEFAULT_TOOL_DIR = GlobalPath(lambda: VIBE_ROOT / "core" / "tools" / "builtins")

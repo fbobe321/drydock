@@ -138,7 +138,7 @@ STATE_CATEGORIES: Dict[str, List[str]] = {
 # Recent-term tracking (avoid repeating the last 2 terms used)
 # ---------------------------------------------------------------------------
 
-_recent: deque = deque(maxlen=2)
+_recent: deque = deque(maxlen=5)
 
 
 def get_state_term(category: str) -> str:

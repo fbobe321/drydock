@@ -69,10 +69,25 @@ class PulseSpinner(Spinner):
     )
 
 
+class WaveSpinner(Spinner):
+    """Ocean wave animation using Unicode water characters."""
+    FRAMES: ClassVar[tuple[str, ...]] = (
+        "~≈~",
+        "≈~≈",
+        "~≈~",
+        "≈~~",
+        "~~≈",
+        "~≈≈",
+        "≈≈~",
+        "≈~≈",
+    )
+
+
 class SpinnerType(Enum):
     BRAILLE = auto()
     PULSE = auto()
     SNAKE = auto()
+    WAVE = auto()
 
 
 class SnakeSpinner(Spinner):
@@ -132,6 +147,7 @@ _SPINNER_CLASSES: dict[SpinnerType, type[Spinner]] = {
     SpinnerType.BRAILLE: BrailleSpinner,
     SpinnerType.PULSE: PulseSpinner,
     SpinnerType.SNAKE: SnakeSpinner,
+    SpinnerType.WAVE: WaveSpinner,
 }
 
 
