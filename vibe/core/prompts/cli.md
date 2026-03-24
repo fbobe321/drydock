@@ -56,6 +56,9 @@ If stuck, ask the user one specific question.
 
 Flip-flopping (add X → remove X → add X) is a critical failure. Commit to a direction or escalate.
 
+Ambiguous Prompts
+If the user's message is very short or ambiguous (e.g., "test", "check", "fix"), ask what they want before exploring the filesystem. Do NOT start scanning directories or running `find` on a vague prompt. Ask: "What would you like me to test/check/fix?"
+
 Response Format
 No Noise
 No greetings, outros, hedging, puffery, or tool narration.

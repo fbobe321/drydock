@@ -817,7 +817,11 @@ class AgentLoop:
         try:
             tool_instance = self.tool_manager.get(tool_call.tool_name)
         except Exception as exc:
-            error_msg = f"Error getting tool '{tool_call.tool_name}': {exc}"
+            error_msg = (
+                f"Error getting tool '{tool_call.tool_name}': {exc}. "
+                f"Available tools: bash, grep, read_file, write_file, search_replace, "
+                f"todo, ask_user_question, task. Use one of these — do NOT invent tool names."
+            )
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,

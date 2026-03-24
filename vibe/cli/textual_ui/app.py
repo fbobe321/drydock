@@ -196,6 +196,7 @@ async def prune_oldest_children(
 class VibeApp(App):  # noqa: PLR0904
     ENABLE_COMMAND_PALETTE = False
     CSS_PATH = "app.tcss"
+    MOUSE_SUPPORT = True  # Enable mouse scroll in the chat window
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+c", "clear_quit", "Quit", show=False),
