@@ -546,31 +546,36 @@ class AgentLoop:
                 should_break_loop = last_message.role != Role.tool
 
                 # If model gives text without tool calls and hasn't edited anything,
-                # nudge it to make an edit instead of just describing what to do
+                # nudge it to make an edit instead of just describing what to do.
+                # Never let the agent exit without at least attempting an edit.
                 if should_break_loop and not has_made_edit and tool_turns >= 2:
                     text_without_action += 1
-                    if text_without_action <= 3:
-                        should_break_loop = False
-                        if text_without_action == 1:
-                            nudge_text = (
-                                "You responded with text but did not call any tools. "
-                                "Use search_replace NOW to apply your code change. "
-                                "If you are unsure of the exact text, use read_file on the target function ONCE, "
-                                "then immediately search_replace."
-                            )
-                        elif text_without_action == 2:
-                            nudge_text = (
-                                "STOP describing the fix. You MUST call search_replace on your NEXT response. "
-                                "No more text-only responses. Act NOW."
-                            )
-                        else:
-                            nudge_text = (
-                                "FINAL WARNING: You have given 3 text responses without making an edit. "
-                                "If you do not call search_replace immediately, this session will end. "
-                                "Make your best fix attempt RIGHT NOW even if you are unsure."
-                            )
-                        # Inject nudge — _sanitize_message_ordering() in _chat()
-                        # will fix any role violations before the next LLM call
+                    # Always continue — don't let the agent exit without editing
+                    should_break_loop = False
+                    if text_without_action == 1:
+                        nudge_text = (
+                            "You responded with text but did not call any tools. "
+                            "Use search_replace NOW to apply your code change. "
+                            "If you are unsure of the exact text, use read_file on the target function ONCE, "
+                            "then immediately search_replace."
+                        )
+                    elif text_without_action == 2:
+                        nudge_text = (
+                            "STOP describing the fix. You MUST call search_replace on your NEXT response. "
+                            "No more text-only responses. Act NOW."
+                        )
+                    elif text_without_action <= 5:
+                        nudge_text = (
+                            f"WARNING ({text_without_action} text responses without editing): "
+                            "You MUST call search_replace or read_file immediately. "
+                            "Make your best fix attempt RIGHT NOW even if you are unsure. "
+                            "Pick the most likely file and function, and make a minimal edit."
+                        )
+                    else:
+                        # Give up after 5 futile nudges — the model can't/won't edit
+                        should_break_loop = True
+                        nudge_text = None
+                    if nudge_text:
                         self._inject_system_note(nudge_text)
                         logger.info("Model gave text without editing — nudging (attempt %d)", text_without_action)
 

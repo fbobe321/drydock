@@ -88,11 +88,43 @@ def run_programmatic(
                 pass
 
     try:
-        return asyncio.run(_async_run())
+        result = asyncio.run(_async_run())
+        # Print diagnostic summary to stdout for headless/harness runs
+        _print_diagnostic_summary(agent_loop)
+        return result
     except ConversationLimitException:
         # Agent was stopped by middleware (loop detection, turn limit, etc.)
         # This is a normal exit — the agent did work, just got stopped.
-        # Exit 0 so the harness knows a patch may have been generated.
+        _print_diagnostic_summary(agent_loop)
         sys.stdout.flush()
         sys.stderr.flush()
         os._exit(0)
+
+
+def _print_diagnostic_summary(agent_loop: AgentLoop) -> None:
+    """Print a brief summary of what the agent did (for headless/harness runs)."""
+    try:
+        tool_calls = []
+        text_responses = []
+        for msg in agent_loop.messages:
+            if msg.role == Role.assistant:
+                if msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        if tc.function:
+                            tool_calls.append(tc.function.name or "unknown")
+                if msg.content and msg.content.strip():
+                    text_responses.append(msg.content.strip()[:200])
+
+        if tool_calls or text_responses:
+            print("\n--- Agent Summary ---", flush=True)
+            if tool_calls:
+                from collections import Counter
+                counts = Counter(tool_calls)
+                tools_str = ", ".join(f"{name}:{n}" for name, n in counts.most_common())
+                print(f"Tool calls: {tools_str}", flush=True)
+            if text_responses:
+                # Print last text response (most relevant)
+                print(f"Last response: {text_responses[-1][:300]}", flush=True)
+            print(f"Total messages: {len(agent_loop.messages)}", flush=True)
+    except Exception:
+        pass  # Never crash on diagnostics
