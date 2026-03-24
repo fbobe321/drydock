@@ -39,7 +39,7 @@ class HarnessFilesManager:
     def config_file(self) -> Path | None:
         workdir = self.trusted_workdir
         if workdir is not None:
-            candidate = workdir / ".vibe" / "config.toml"
+            candidate = workdir / ".drydock" / "config.toml"
             if candidate.is_file():
                 return candidate
         if "user" in self.sources:
@@ -59,10 +59,18 @@ class HarnessFilesManager:
 
     @property
     def user_skills_dirs(self) -> list[Path]:
-        if "user" not in self.sources:
-            return []
-        d = GLOBAL_SKILLS_DIR.path
-        return [d] if d.is_dir() else []
+        dirs: list[Path] = []
+        # Bundled skills shipped with drydock (always available)
+        from vibe import VIBE_ROOT
+        bundled = VIBE_ROOT / "skills"
+        if bundled.is_dir():
+            dirs.append(bundled)
+        # User skills in ~/.drydock/skills/
+        if "user" in self.sources:
+            d = GLOBAL_SKILLS_DIR.path
+            if d.is_dir():
+                dirs.append(d)
+        return dirs
 
     @property
     def user_agents_dirs(self) -> list[Path]:
@@ -100,7 +108,7 @@ class HarnessFilesManager:
         workdir = self.trusted_workdir
         if workdir is None:
             return []
-        candidate = workdir / ".vibe" / "prompts"
+        candidate = workdir / ".drydock" / "prompts"
         return [candidate] if candidate.is_dir() else []
 
     @property

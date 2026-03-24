@@ -6,12 +6,11 @@ from pathlib import Path
 
 from vibe.core.autocompletion.file_indexer.ignore_rules import WALK_SKIP_DIR_NAMES
 
-_VIBE_DIR = ".vibe"
-_TOOLS_SUBDIR = Path(_VIBE_DIR) / "tools"
-_VIBE_SKILLS_SUBDIR = Path(_VIBE_DIR) / "skills"
-_AGENTS_SUBDIR = Path(_VIBE_DIR) / "agents"
+_DRYDOCK_DIR = ".drydock"
+_VIBE_DIR = ".vibe"  # Legacy fallback
 _AGENTS_DIR = ".agents"
-_AGENTS_SKILLS_SUBDIR = Path(_AGENTS_DIR) / "skills"
+
+_CONFIG_DIRS = (_DRYDOCK_DIR, _VIBE_DIR)  # Check .drydock first, fall back to .vibe
 
 
 @cache
@@ -25,15 +24,17 @@ def walk_local_config_dirs_all(
     for dirpath, dirnames, _ in os.walk(resolved_root, topdown=True):
         dir_set = frozenset(dirnames)
         path = Path(dirpath)
-        if _VIBE_DIR in dir_set:
-            if (candidate := path / _TOOLS_SUBDIR).is_dir():
-                tools_dirs.append(candidate)
-            if (candidate := path / _VIBE_SKILLS_SUBDIR).is_dir():
-                skills_dirs.append(candidate)
-            if (candidate := path / _AGENTS_SUBDIR).is_dir():
-                agents_dirs.append(candidate)
+        for config_dir in _CONFIG_DIRS:
+            if config_dir in dir_set:
+                if (candidate := path / config_dir / "tools").is_dir():
+                    tools_dirs.append(candidate)
+                if (candidate := path / config_dir / "skills").is_dir():
+                    skills_dirs.append(candidate)
+                if (candidate := path / config_dir / "agents").is_dir():
+                    agents_dirs.append(candidate)
+                break  # Use first found (.drydock wins over .vibe)
         if _AGENTS_DIR in dir_set:
-            if (candidate := path / _AGENTS_SKILLS_SUBDIR).is_dir():
+            if (candidate := path / _AGENTS_DIR / "skills").is_dir():
                 skills_dirs.append(candidate)
         dirnames[:] = sorted(d for d in dirnames if d not in WALK_SKIP_DIR_NAMES)
     return (tuple(tools_dirs), tuple(skills_dirs), tuple(agents_dirs))
