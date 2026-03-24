@@ -6,15 +6,15 @@
 > Fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe) (Apache 2.0) — optimized for SWE-bench with local LLMs.
 
 ```
-██████████████████░░
-██████████████████░░
-████  ██████  ████░░
-████    ██    ████░░
-████          ████░░
-████  ██  ██  ████░░
-██      ██      ██░░
-██████████████████░░
-██████████████████░░
+         |    |    |
+        )_)  )_)  )_)
+       )___))___))___)\
+      )____)____)_____)\\
+    _____|____|____|____\\\__
+---\                   /----
+    \_________________/
+  ~~~~ ~~~ ~~~~ ~~~ ~~~~
+   ~~~ ~~~~ ~~~ ~~~ ~~~
 ```
 
 **Nautical CLI coding agent. Chart your course. Execute with precision.**
