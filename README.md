@@ -5,17 +5,6 @@
 [![CI Status](https://github.com/mistralai/drydock/actions/workflows/ci.yml/badge.svg)](https://github.com/mistralai/drydock/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/mistralai/drydock)](https://github.com/mistralai/drydock/blob/main/LICENSE)
 
-```
-██████████████████░░
-██████████████████░░
-████  ██████  ████░░
-████    ██    ████░░
-████          ████░░
-████  ██  ██  ████░░
-██      ██      ██░░
-██████████████████░░
-██████████████████░░
-```
 
 **Nautical CLI coding agent. Chart your course. Execute with precision.**
 
