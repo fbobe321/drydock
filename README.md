@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/github/license/mistralai/drydock)](https://github.com/mistralai/drydock/blob/main/LICENSE)
 
 
-**Nautical CLI coding agent. Chart your course. Execute with precision.**
+**CLI coding agent. Chart your course. Execute with precision.**
 
 Drydock is a command-line coding assistant powered by Mistral's models. It provides a conversational interface to your codebase, allowing you to use natural language to explore, modify, and interact with your projects through a powerful set of tools.
 
