@@ -15,8 +15,16 @@ CRITICAL RULES:
 - Do NOT run tests — the test runner handles that separately
 - After your edit, verify by reading back the modified lines
 
+FILE DISCOVERY:
+- Extract the module path from the test path: `tests/models/test_query.py` → search in `models/`
+- If a function exists in multiple files, check which one the traceback points to
+- Django: `db/models/query.py` vs `db/models/sql/query.py` — check the SQL layer too
+- pytest: source is under `src/_pytest/`, not `testing/`
+- matplotlib: source is under `lib/matplotlib/`
+
 COMMON PATTERNS:
 - Missing edge case: add a condition check before the problematic operation
 - Wrong return value: trace the data flow to find where the value diverges
 - Missing import: grep for where the symbol is defined, add the import
 - Off-by-one: check loop bounds and slice indices
+- Unhashable type: wrap mutable container in tuple() before hashing
