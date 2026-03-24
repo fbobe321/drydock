@@ -2,7 +2,22 @@
 
 **Repository:** https://github.com/fbobe321/drydock
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
-**Status:** Active development
+**Status:** Active development — continuous improvement running
+
+---
+
+## Directive: Continuous Improvement
+
+Drydock improves itself automatically and survives restarts:
+
+1. **`continuous_bench.sh`** runs SWE-bench batches in a loop (20 tasks per batch, 600s timeout)
+2. **`@reboot` cron** restarts the bench loop 2 minutes after any system restart
+3. **Every 6 hours** cron re-launches if the loop died for any reason
+4. **Daily at 4 AM** `deploy_to_github.sh` pushes all changes to GitHub
+5. **State persists** in `continuous_bench_state.json` — tracks tested tasks and pass rates across restarts
+6. **Lock file** prevents concurrent runs
+
+If the computer restarts, the improvement process resumes automatically. No human intervention needed.
 
 ---
 
@@ -165,20 +180,33 @@ Investigation tools (grep, read_file) get a longer leash than action tools (bash
 
 ---
 
+## Available Datasets
+
+| Dataset | Instances | Status |
+|---------|-----------|--------|
+| SWE-bench Verified | 500 | Active — continuous benchmarking |
+| SWE-bench Full | 2,294 | Batch file ready (`batch_full_2294.txt`) |
+| SWE-bench Lite | 534 | Available on HuggingFace |
+| SWE-bench Multimodal | 600 | Future (requires image support) |
+| SWE-bench Multilingual | 300 | Future (requires multi-language support) |
+
+---
+
 ## Next Steps
 
 ### P1: Reduce "no patch" failures
 The model either gets loop-killed or talks instead of acting. Currently ~28% of tasks.
-- Escalating forced-edit nudges (partially implemented)
-- Investigate why some tasks produce zero output even with `PYTHONUNBUFFERED=1`
+- Extended nudging to 5 attempts (implemented, converts 3/5 to passes)
+- Diagnostic summary in stdout for analysis
+- Investigate remaining zero-output tasks
 
 ### P2: Fix wrong source file selection
-The model finds the right function name but in the wrong file (e.g., `models/query.py` instead of `models/sql/query.py`). Currently ~11%.
-- Source directory hints per repo (partially implemented for pytest, matplotlib, scikit-learn)
+The model finds the right function name but in the wrong file. Currently ~11%.
+- Source directory hints per repo (implemented for pytest, matplotlib, scikit-learn)
 - Recovery hints on search_replace failure suggesting deeper module paths
 
-### P3: Run full 500-task benchmark
-Get a real, stable number across all SWE-bench Verified tasks with the current codebase.
+### P3: Expand to full SWE-bench (2,294 tasks)
+Batch file ready. Switch continuous_bench.sh to use `batch_full_2294.txt` once Verified coverage is complete.
 
 ### P4: Support more LLM backends
-Currently optimized for devstral-24B via vLLM. Test with other models (Codestral, Claude, GPT-4) to understand which improvements are model-specific vs general.
+Currently optimized for devstral-24B via vLLM. Test with other models to understand which improvements are model-specific vs general.
