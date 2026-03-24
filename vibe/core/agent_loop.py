@@ -476,6 +476,14 @@ class AgentLoop:
                     )
                     return
 
+                # Progressive budget warnings (visible to user via tool results)
+                if tool_turns in (50, 100, 150):
+                    self._inject_system_note(
+                        f"You have used {tool_turns}/{MAX_TOOL_TURNS} tool calls. "
+                        "Wrap up your current task. If you are stuck in a loop, "
+                        "stop and ask the user for clarification."
+                    )
+
                 result = await self.middleware_pipeline.run_before_turn(
                     self._get_context()
                 )
