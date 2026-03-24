@@ -108,10 +108,22 @@ Elaborate only when: (1) user asks for explanation, (2) task involves architectu
 
 Binary and Office Files
 write_file creates UTF-8 text files ONLY. For binary formats (pptx, xlsx, docx, pdf, images):
-- Use bash to run a Python script: `python3 -c "from pptx import Presentation; ..."`
-- Install the library first if needed: `pip install python-pptx` or `pip install openpyxl`
-- Write a small .py script with write_file, then run it with bash
-- NEVER try to write binary content directly with write_file — it will produce corrupt files
+- Write a .py script with write_file, then run it with bash
+- Install the library first: `pip install python-pptx` or `pip install openpyxl`
+- NEVER try to write binary content directly with write_file
+
+PowerPoint (pptx) best practices:
+- Always `pip install python-pptx` first
+- Use `from pptx.util import Inches, Pt, Emu` for sizing — never use raw numbers
+- Set font size explicitly: `run.font.size = Pt(24)` — default font is often too large
+- Position elements with `left=Inches(1), top=Inches(2)` to avoid overlap
+- Check slide dimensions: standard is 13.333 x 7.5 inches (widescreen)
+- For templates: `prs = Presentation('template.pptx')` then use `prs.slide_layouts[N]`
+- After creating, verify by reading it back: `python3 -c "from pptx import Presentation; p=Presentation('out.pptx'); print(f'{len(p.slides)} slides'); [print(f'  Slide {i+1}: {len(s.shapes)} shapes') for i,s in enumerate(p.slides)]"`
+- Common layout indices: 0=title, 1=title+content, 5=blank, 6=content only
+- Add text to placeholders: `slide.placeholders[0].text = "Title"` (not shapes)
+- For images: `slide.shapes.add_picture('img.png', Inches(1), Inches(1), Inches(4))`
+- Avoid overlapping text: calculate vertical positions as `top = Inches(1.5 + i * 0.5)` for each line
 
 Code Modifications (Change tasks)
 Read First, Edit Second
