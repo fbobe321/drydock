@@ -553,12 +553,22 @@ class AgentLoop:
                     # Always continue — don't let the agent exit without editing
                     should_break_loop = False
                     if text_without_action == 1:
-                        nudge_text = (
-                            "You responded with text but did not call any tools. "
-                            "Use search_replace NOW to apply your code change. "
-                            "If you are unsure of the exact text, use read_file on the target function ONCE, "
-                            "then immediately search_replace."
-                        )
+                        # Check if model already identified a TARGET in its text
+                        last_text = (last_message.content or "").upper()
+                        has_target = "TARGET:" in last_text or "FILE:" in last_text
+                        if has_target:
+                            nudge_text = (
+                                "Good — you identified the target. Now proceed to PHASE 2: "
+                                "use read_file to read the target function, then search_replace to fix it. "
+                                "Do NOT describe the fix — apply it with search_replace."
+                            )
+                        else:
+                            nudge_text = (
+                                "You responded with text but did not call any tools. "
+                                "Use search_replace NOW to apply your code change. "
+                                "If you are unsure of the exact text, use read_file on the target function ONCE, "
+                                "then immediately search_replace."
+                            )
                     elif text_without_action == 2:
                         nudge_text = (
                             "STOP describing the fix. You MUST call search_replace on your NEXT response. "
@@ -864,6 +874,20 @@ class AgentLoop:
 
         except (ToolError, ToolPermissionError) as exc:
             error_msg = f"<{TOOL_ERROR_TAG}>{tool_instance.get_name()} failed: {exc}</{TOOL_ERROR_TAG}>"
+
+            # RECOVERY: Warn when editing test files
+            if tool_call.tool_name == "search_replace":
+                try:
+                    sr_args = json.loads(tool_call.raw_arguments or "{}")
+                    sr_path = sr_args.get("file_path", sr_args.get("path", ""))
+                    if sr_path and ("/test_" in sr_path or "/tests/" in sr_path or sr_path.endswith("_test.py")):
+                        error_msg += (
+                            "\n\n[WARNING: You are editing a TEST file. "
+                            "The bug is in LIBRARY SOURCE code, not tests. "
+                            "Use grep to find the corresponding source file and edit that instead.]"
+                        )
+                except (json.JSONDecodeError, AttributeError):
+                    pass
 
             # RECOVERY: Add actionable guidance for common tool failures
             if tool_call.tool_name == "search_replace" and "not found" in str(exc).lower():
