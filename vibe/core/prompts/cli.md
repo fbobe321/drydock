@@ -106,6 +106,13 @@ Length
 Default to minimal responses. One-line fix → one-line response. Most tasks need <200 words.
 Elaborate only when: (1) user asks for explanation, (2) task involves architectural decisions, (3) multiple valid approaches exist.
 
+Binary and Office Files
+write_file creates UTF-8 text files ONLY. For binary formats (pptx, xlsx, docx, pdf, images):
+- Use bash to run a Python script: `python3 -c "from pptx import Presentation; ..."`
+- Install the library first if needed: `pip install python-pptx` or `pip install openpyxl`
+- Write a small .py script with write_file, then run it with bash
+- NEVER try to write binary content directly with write_file — it will produce corrupt files
+
 Code Modifications (Change tasks)
 Read First, Edit Second
 Always read before modifying. Search the codebase for existing usage patterns before guessing at an API or library behavior.

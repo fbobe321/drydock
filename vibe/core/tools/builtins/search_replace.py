@@ -220,8 +220,11 @@ class SearchReplace(
 
     async def _read_file(self, file_path: Path) -> str:
         try:
-            async with await anyio.Path(file_path).open(encoding="utf-8") as f:
-                return await f.read()
+            with anyio.fail_after(30):
+                async with await anyio.Path(file_path).open(encoding="utf-8") as f:
+                    return await f.read()
+        except TimeoutError:
+            raise ToolError(f"Timed out reading {file_path} after 30s.")
         except UnicodeDecodeError as e:
             raise ToolError(f"Unicode decode error reading {file_path}: {e}") from e
         except PermissionError:
@@ -234,10 +237,16 @@ class SearchReplace(
 
     async def _write_file(self, file_path: Path, content: str) -> None:
         try:
-            async with await anyio.Path(file_path).open(
-                mode="w", encoding="utf-8"
-            ) as f:
-                await f.write(content)
+            with anyio.fail_after(30):
+                async with await anyio.Path(file_path).open(
+                    mode="w", encoding="utf-8"
+                ) as f:
+                    await f.write(content)
+        except TimeoutError:
+            raise ToolError(
+                f"Timed out writing {file_path} after 30s. "
+                f"The file may be locked or on a slow filesystem."
+            )
         except PermissionError:
             raise ToolError(f"Permission denied writing to file: {file_path}")
         except OSError as e:

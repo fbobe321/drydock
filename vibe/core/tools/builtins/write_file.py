@@ -93,9 +93,27 @@ class WriteFile(
             content=args.content,
         )
 
+    _BINARY_EXTENSIONS = frozenset({
+        ".pptx", ".xlsx", ".docx", ".pdf", ".zip", ".tar", ".gz", ".bz2",
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg",
+        ".mp3", ".mp4", ".wav", ".avi", ".mov",
+        ".exe", ".dll", ".so", ".dylib", ".whl", ".egg",
+        ".sqlite", ".db", ".pkl", ".pickle", ".npy", ".npz",
+    })
+
     def _prepare_and_validate_path(self, args: WriteFileArgs) -> tuple[Path, bool, int]:
         if not args.path.strip():
             raise ToolError("Path cannot be empty")
+
+        # Warn about binary file extensions
+        ext = Path(args.path).suffix.lower()
+        if ext in self._BINARY_EXTENSIONS:
+            raise ToolError(
+                f"write_file creates UTF-8 text files only. "
+                f"'{ext}' is a binary format — use bash to run a Python script instead. "
+                f"Example: write a .py script that uses the appropriate library "
+                f"(python-pptx, openpyxl, Pillow, etc.), then run it with bash."
+            )
 
         content_bytes = len(args.content.encode("utf-8"))
         if content_bytes > self.config.max_write_bytes:
@@ -124,9 +142,15 @@ class WriteFile(
 
     async def _write_file(self, args: WriteFileArgs, file_path: Path) -> None:
         try:
-            async with await anyio.Path(file_path).open(
-                mode="w", encoding="utf-8"
-            ) as f:
-                await f.write(args.content)
+            with anyio.fail_after(30):  # 30s timeout prevents hangs on NFS/locks
+                async with await anyio.Path(file_path).open(
+                    mode="w", encoding="utf-8"
+                ) as f:
+                    await f.write(args.content)
+        except TimeoutError:
+            raise ToolError(
+                f"Timed out writing {file_path} after 30s. "
+                f"The file may be locked by another process or on a slow filesystem."
+            )
         except Exception as e:
             raise ToolError(f"Error writing {file_path}: {e}") from e

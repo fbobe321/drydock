@@ -105,9 +105,10 @@ class ReadFile(
             bytes_read = 0
             was_truncated = False
 
-            async with await anyio.Path(file_path).open(
-                encoding="utf-8", errors="ignore"
-            ) as f:
+            with anyio.fail_after(30):  # Prevent hangs on NFS/locked files
+                async with await anyio.Path(file_path).open(
+                    encoding="utf-8", errors="ignore"
+                ) as f:
                 line_index = 0
                 async for line in f:
                     if line_index < args.offset:
@@ -132,6 +133,8 @@ class ReadFile(
                 was_truncated=was_truncated,
             )
 
+        except TimeoutError:
+            raise ToolError(f"Timed out reading {file_path} after 30s.")
         except OSError as exc:
             raise ToolError(f"Error reading {file_path}: {exc}") from exc
 
