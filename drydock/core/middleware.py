@@ -98,35 +98,63 @@ class AutoCompactMiddleware:
 
 
 class ContextWarningMiddleware:
+    """Tiered context warnings inspired by GSD's context monitoring.
+
+    Warns at multiple thresholds as context fills up:
+    - 50% used: soft warning ("you're halfway through")
+    - 65% used: moderate warning ("wrap up current task")
+    - 75% used: critical warning ("finish NOW or compact")
+    - 85% used: emergency ("stop exploring, make final edit")
+
+    Debounced: only warns every 5 tool calls to avoid spamming.
+    """
+
+    _TIERS = [
+        (0.50, "soft", "You've used {pct:.0f}% of context ({used:,}/{max:,} tokens). Start wrapping up your current task."),
+        (0.65, "moderate", "Context at {pct:.0f}%. Stop exploring — finish your current edit and verify it works."),
+        (0.75, "critical", "Context at {pct:.0f}% — CRITICAL. Make your final edit NOW. No more grep/read_file. Use /compact if you need to continue."),
+        (0.85, "emergency", "Context nearly full ({pct:.0f}%). You MUST stop after this turn. Apply your fix with search_replace immediately or the session will degrade."),
+    ]
+
     def __init__(
         self, threshold_percent: float = 0.5, max_context: int | None = None
     ) -> None:
         self.threshold_percent = threshold_percent
         self.max_context = max_context
-        self.has_warned = False
+        self._tier_warned: set[str] = set()
+        self._calls_since_last_warn = 0
+        self._debounce_interval = 5
 
     async def before_turn(self, context: ConversationContext) -> MiddlewareResult:
-        if self.has_warned:
-            return MiddlewareResult()
-
         max_context = self.max_context
-        if max_context is None:
+        if max_context is None or max_context == 0:
             return MiddlewareResult()
 
-        if context.stats.context_tokens >= max_context * self.threshold_percent:
-            self.has_warned = True
+        self._calls_since_last_warn += 1
 
-            percentage_used = (context.stats.context_tokens / max_context) * 100
-            warning_msg = f"<{VIBE_WARNING_TAG}>You have used {percentage_used:.0f}% of your total context ({context.stats.context_tokens:,}/{max_context:,} tokens)</{VIBE_WARNING_TAG}>"
+        # Debounce: don't warn on every single turn
+        if self._calls_since_last_warn < self._debounce_interval:
+            return MiddlewareResult()
 
-            return MiddlewareResult(
-                action=MiddlewareAction.INJECT_MESSAGE, message=warning_msg
-            )
+        pct_used = context.stats.context_tokens / max_context
+
+        # Find the highest tier we've crossed but haven't warned about
+        for threshold, tier_name, template in reversed(self._TIERS):
+            if pct_used >= threshold and tier_name not in self._tier_warned:
+                self._tier_warned.add(tier_name)
+                self._calls_since_last_warn = 0
+
+                warning_msg = f"<{VIBE_WARNING_TAG}>{template.format(pct=pct_used * 100, used=context.stats.context_tokens, max=max_context)}</{VIBE_WARNING_TAG}>"
+                return MiddlewareResult(
+                    action=MiddlewareAction.INJECT_MESSAGE, message=warning_msg
+                )
+                break
 
         return MiddlewareResult()
 
     def reset(self, reset_reason: ResetReason = ResetReason.STOP) -> None:
-        self.has_warned = False
+        self._tier_warned.clear()
+        self._calls_since_last_warn = 0
 
 
 def make_plan_agent_reminder(plan_file_path: str) -> str:

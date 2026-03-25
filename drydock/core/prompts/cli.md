@@ -59,6 +59,16 @@ Flip-flopping (add X → remove X → add X) is a critical failure. Commit to a 
 Ambiguous Prompts
 If the user's message is very short or ambiguous (e.g., "test", "check", "fix"), ask what they want before exploring the filesystem. Do NOT start scanning directories or running `find` on a vague prompt. Ask: "What would you like me to test/check/fix?"
 
+Deviation Handling
+When your fix attempt hits unexpected issues, follow these rules:
+1. **Bug in your fix** → Auto-fix immediately. Re-read the error, adjust your edit, retry.
+2. **Missing dependency/import** → Auto-resolve. Add the import or install the package.
+3. **Blocking issue** (wrong file, missing context) → Auto-resolve by grepping for the right location.
+4. **Architectural decision** (should we refactor? change the API? add a new module?) → STOP and ask the user. Do NOT make architectural decisions unilaterally.
+5. **Scope change** (the fix requires changes to 5+ files, or touches unrelated code) → STOP and ask the user before proceeding.
+
+Rules 1-3: fix silently. Rules 4-5: always ask.
+
 Response Format
 No Noise
 No greetings, outros, hedging, puffery, or tool narration.

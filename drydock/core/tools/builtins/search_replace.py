@@ -119,14 +119,18 @@ class SearchReplace(
     ) -> AsyncGenerator[ToolStreamEvent | SearchReplaceResult, None]:
         file_path, search_replace_blocks = self._prepare_and_validate_args(args)
 
-        # Warn (but don't block) when editing test files — the system prompt
-        # says NEVER edit tests, but we add a strong warning to the result
-        # so the model sees it made a mistake.
+        # Warn (but don't block) when editing test files
         file_str = str(file_path)
         if ("/tests/" in file_str or "/test_" in file_str or
                 file_str.endswith("_test.py") or "/testing/" in file_str):
             import logging
             logging.getLogger(__name__).warning("search_replace targeting test file: %s", file_str)
+
+        # Injection guard: scan replacement content for suspicious patterns
+        from drydock.core.tools.injection_guard import check_content_for_injection
+        if warning := check_content_for_injection(args.content, args.file_path):
+            import logging
+            logging.getLogger(__name__).warning("search_replace: %s", warning)
 
         original_content = await self._read_file(file_path)
 

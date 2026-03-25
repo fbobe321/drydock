@@ -84,6 +84,12 @@ class WriteFile(
     ) -> AsyncGenerator[ToolStreamEvent | WriteFileResult, None]:
         file_path, file_existed, content_bytes = self._prepare_and_validate_path(args)
 
+        # Injection guard: scan content for suspicious patterns
+        from drydock.core.tools.injection_guard import check_content_for_injection
+        if warning := check_content_for_injection(args.content, args.path):
+            import logging
+            logging.getLogger(__name__).warning("write_file: %s", warning)
+
         await self._write_file(args, file_path)
 
         yield WriteFileResult(

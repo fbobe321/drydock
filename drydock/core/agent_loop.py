@@ -288,6 +288,18 @@ class AgentLoop:
 
     async def act(self, msg: str) -> AsyncGenerator[BaseEvent]:
         self._clean_message_history()
+
+        # Load project state for cross-session context
+        try:
+            from drydock.core.session.state_file import load_state
+            state_content = load_state()
+            if state_content:
+                self._inject_system_note(
+                    f"Previous session state:\n{state_content[:500]}"
+                )
+        except Exception:
+            pass  # Non-critical
+
         async for event in self._conversation_loop(msg):
             yield event
 
