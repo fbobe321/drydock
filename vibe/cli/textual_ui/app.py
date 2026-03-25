@@ -378,7 +378,12 @@ class VibeApp(App):  # noqa: PLR0904
         input_widget.value = ""
 
         if self._agent_running:
-            await self._interrupt_agent_loop()
+            # Queue the message instead of interrupting — process after current task
+            if not hasattr(self, "_pending_messages"):
+                self._pending_messages: list[str] = []
+            self._pending_messages.append(value)
+            self.notify(f"Queued — will process after current task ({len(self._pending_messages)} pending)")
+            return
 
         if value.startswith("!"):
             await self._handle_bash_command(value[1:])
@@ -755,6 +760,25 @@ class VibeApp(App):  # noqa: PLR0904
                 await self.event_handler.finalize_streaming()
             await self._refresh_windowing_from_history()
             self._terminal_notifier.notify(NotificationContext.COMPLETE)
+
+            # Process queued messages from user input during agent execution
+            if hasattr(self, "_pending_messages") and self._pending_messages:
+                next_msg = self._pending_messages.pop(0)
+                # Use call_later to avoid recursion in the finally block
+                self.call_later(lambda: self._process_queued_message(next_msg))
+
+    def _process_queued_message(self, message: str) -> None:
+        """Process a message that was queued while the agent was busy."""
+        async def _run() -> None:
+            if message.startswith("!"):
+                await self._handle_bash_command(message[1:])
+            elif await self._handle_command(message):
+                pass
+            elif await self._handle_skill(message):
+                pass
+            else:
+                await self._handle_user_message(message)
+        self.run_worker(_run(), exclusive=False)
 
     def _rate_limit_message(self) -> str:
         upgrade_to_pro = self._plan_info and self._plan_info.plan_type in {
