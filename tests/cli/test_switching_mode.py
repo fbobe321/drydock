@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from tests.conftest import build_test_vibe_app
-from vibe.cli.textual_ui.widgets.chat_input import ChatInputContainer
-from vibe.cli.textual_ui.widgets.chat_input.body import ChatInputBody, _PromptSpinner
-from vibe.cli.textual_ui.widgets.messages import UserMessage
+from drydock.cli.textual_ui.widgets.chat_input import ChatInputContainer
+from drydock.cli.textual_ui.widgets.chat_input.body import ChatInputBody, _PromptSpinner
+from drydock.cli.textual_ui.widgets.messages import UserMessage
 
 
 @pytest.mark.asyncio

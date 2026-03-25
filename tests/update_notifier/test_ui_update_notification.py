@@ -14,9 +14,9 @@ from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
 )
 from tests.update_notifier.adapters.fake_update_gateway import FakeUpdateGateway
-from vibe.cli.textual_ui.app import VibeApp
-from vibe.cli.textual_ui.widgets.messages import WhatsNewMessage
-from vibe.cli.update_notifier import (
+from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.widgets.messages import WhatsNewMessage
+from drydock.cli.update_notifier import (
     Update,
     UpdateCache,
     UpdateCacheRepository,
@@ -24,7 +24,7 @@ from vibe.cli.update_notifier import (
     UpdateGatewayCause,
     UpdateGatewayError,
 )
-from vibe.core.config import VibeConfig
+from drydock.core.config import VibeConfig
 
 TEST_CURRENT_VERSION = "0.1.0"
 
@@ -231,7 +231,7 @@ async def test_ui_displays_whats_new_message_when_content_exists(
     )
 
     whats_new_content = "# What's New\n\n- Feature 1\n- Feature 2"
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         whats_new_file = tmp_path / "whats_new.md"
         whats_new_file.write_text(whats_new_content)
 
@@ -262,7 +262,7 @@ async def test_ui_does_not_display_whats_new_when_seen_whats_new_version_matches
         current_version="1.0.0",
     )
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         whats_new_file = tmp_path / "whats_new.md"
         whats_new_file.write_text("# What's New\n\n- Feature 1")
 
@@ -293,7 +293,7 @@ async def test_ui_does_not_display_whats_new_when_file_is_empty(
         current_version="1.0.0",
     )
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         whats_new_file = tmp_path / "whats_new.md"
         whats_new_file.write_text("")
 
@@ -327,7 +327,7 @@ async def test_ui_does_not_display_whats_new_when_file_does_not_exist(
         current_version="1.0.0",
     )
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         async with app.run_test() as pilot:
             await pilot.pause(0.5)
 
@@ -348,7 +348,7 @@ async def test_ui_displays_success_notification_when_auto_update_succeeds(
     config = build_test_vibe_config(enable_update_checks=True, enable_auto_update=True)
     notifier = FakeUpdateGateway(update=Update(latest_version="0.2.0"))
 
-    with patch("vibe.cli.update_notifier.update.UPDATE_COMMANDS", ["true"]):
+    with patch("drydock.cli.update_notifier.update.UPDATE_COMMANDS", ["true"]):
         app = build_update_test_app(update_notifier=notifier, config=config)
 
         async with app.run_test() as pilot:
@@ -372,7 +372,7 @@ async def test_ui_displays_update_notification_when_auto_update_fails(
     config = build_test_vibe_config(enable_update_checks=True, enable_auto_update=True)
     notifier = FakeUpdateGateway(update=Update(latest_version="0.2.0"))
 
-    with patch("vibe.cli.update_notifier.update.UPDATE_COMMANDS", ["false"]):
+    with patch("drydock.cli.update_notifier.update.UPDATE_COMMANDS", ["false"]):
         app = build_update_test_app(update_notifier=notifier, config=config)
 
         async with app.run_test() as pilot:

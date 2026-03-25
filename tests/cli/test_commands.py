@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from vibe.cli.commands import Command, CommandRegistry
+from drydock.cli.commands import Command, CommandRegistry
 
 
 class TestCommandRegistry:

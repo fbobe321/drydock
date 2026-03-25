@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from vibe.cli.textual_ui.external_editor import ExternalEditor
+from drydock.cli.textual_ui.external_editor import ExternalEditor
 
 
 class TestGetEditor:

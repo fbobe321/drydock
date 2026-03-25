@@ -7,9 +7,9 @@ from textual.content import Content
 from textual.style import Style
 from textual.widgets import Markdown
 
-from vibe.cli.textual_ui.app import VibeApp
-from vibe.cli.textual_ui.widgets.chat_input.completion_popup import CompletionPopup
-from vibe.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
+from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.widgets.chat_input.completion_popup import CompletionPopup
+from drydock.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
 
 
 @pytest.mark.asyncio
@@ -118,7 +118,7 @@ async def test_pressing_enter_submits_selected_command_and_hides_popup(
         slash_used = [
             e
             for e in telemetry_events
-            if e.get("event_name") == "vibe.slash_command_used"
+            if e.get("event_name") == "drydock.slash_command_used"
         ]
         assert any(
             e.get("properties", {}).get("command") == "help"

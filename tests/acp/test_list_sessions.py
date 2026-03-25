@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from tests.acp.conftest import _create_acp_agent
-from vibe.core.config import MissingAPIKeyError, SessionLoggingConfig
+from drydock.core.config import MissingAPIKeyError, SessionLoggingConfig
 
 
 class TestListSessions:
@@ -18,7 +18,7 @@ class TestListSessions:
             save_dir=str(temp_session_dir), session_prefix="session", enabled=True
         )
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_config = mock_load.return_value
             mock_config.session_logging = session_config
 
@@ -51,7 +51,7 @@ class TestListSessions:
             save_dir=str(temp_session_dir), session_prefix="session", enabled=True
         )
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_config = mock_load.return_value
             mock_config.session_logging = session_config
 
@@ -91,7 +91,7 @@ class TestListSessions:
             save_dir=str(temp_session_dir), session_prefix="session", enabled=True
         )
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_config = mock_load.return_value
             mock_config.session_logging = session_config
 
@@ -133,7 +133,7 @@ class TestListSessions:
             save_dir=str(temp_session_dir), session_prefix="session", enabled=True
         )
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_config = mock_load.return_value
             mock_config.session_logging = session_config
 
@@ -163,7 +163,7 @@ class TestListSessions:
             save_dir=str(temp_session_dir), session_prefix="session", enabled=True
         )
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_config = mock_load.return_value
             mock_config.session_logging = session_config
 
@@ -205,7 +205,7 @@ class TestListSessions:
             save_dir=str(temp_session_dir), session_prefix="session", enabled=True
         )
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_config = mock_load.return_value
             mock_config.session_logging = session_config
 
@@ -222,7 +222,7 @@ class TestListSessions:
             save_dir="/nonexistent/path", session_prefix="session", enabled=True
         )
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_config = mock_load.return_value
             mock_config.session_logging = session_config
 
@@ -234,7 +234,7 @@ class TestListSessions:
     async def test_list_sessions_without_api_key(self) -> None:
         acp_agent = _create_acp_agent()
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.load") as mock_load:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.load") as mock_load:
             mock_load.side_effect = MissingAPIKeyError("api_key", "mistral")
 
             response = await acp_agent.list_sessions()

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from vibe.core.auth.github import (
+from drydock.core.auth.github import (
     DeviceFlowHandle,
     DeviceFlowInfo,
     GitHubAuthError,
@@ -52,14 +52,14 @@ class TestGitHubAuthProviderContextManager:
 
 class TestGitHubAuthProviderGetToken:
     def test_returns_token_from_keyring(self) -> None:
-        with patch("vibe.core.auth.github.keyring") as mock_keyring:
+        with patch("drydock.core.auth.github.keyring") as mock_keyring:
             mock_keyring.get_password.return_value = "ghp_test_token"
             provider = GitHubAuthProvider()
             token = provider.get_token()
             assert token == "ghp_test_token"
 
     def test_returns_none_on_keyring_error(self) -> None:
-        with patch("vibe.core.auth.github.keyring") as mock_keyring:
+        with patch("drydock.core.auth.github.keyring") as mock_keyring:
             import keyring.errors
 
             mock_keyring.errors = keyring.errors
@@ -69,7 +69,7 @@ class TestGitHubAuthProviderGetToken:
             assert token is None
 
     def test_returns_none_when_no_token(self) -> None:
-        with patch("vibe.core.auth.github.keyring") as mock_keyring:
+        with patch("drydock.core.auth.github.keyring") as mock_keyring:
             mock_keyring.get_password.return_value = None
             provider = GitHubAuthProvider()
             token = provider.get_token()
@@ -78,13 +78,13 @@ class TestGitHubAuthProviderGetToken:
 
 class TestGitHubAuthProviderHasToken:
     def test_returns_true_when_token_exists(self) -> None:
-        with patch("vibe.core.auth.github.keyring") as mock_keyring:
+        with patch("drydock.core.auth.github.keyring") as mock_keyring:
             mock_keyring.get_password.return_value = "ghp_token"
             provider = GitHubAuthProvider()
             assert provider.has_token() is True
 
     def test_returns_false_when_no_token(self) -> None:
-        with patch("vibe.core.auth.github.keyring") as mock_keyring:
+        with patch("drydock.core.auth.github.keyring") as mock_keyring:
             mock_keyring.get_password.return_value = None
             provider = GitHubAuthProvider()
             assert provider.has_token() is False
@@ -113,7 +113,7 @@ class TestGitHubAuthProviderStartDeviceFlow:
         }
         mock_client.post = AsyncMock(return_value=mock_response)
 
-        with patch("vibe.core.auth.github.webbrowser") as mock_browser:
+        with patch("drydock.core.auth.github.webbrowser") as mock_browser:
             handle = await provider.start_device_flow(open_browser=True)
             mock_browser.open.assert_called_once_with("https://github.com/login/device")
 
@@ -135,7 +135,7 @@ class TestGitHubAuthProviderStartDeviceFlow:
         }
         mock_client.post = AsyncMock(return_value=mock_response)
 
-        with patch("vibe.core.auth.github.webbrowser") as mock_browser:
+        with patch("drydock.core.auth.github.webbrowser") as mock_browser:
             await provider.start_device_flow(open_browser=False)
             mock_browser.open.assert_not_called()
 
@@ -169,7 +169,7 @@ class TestGitHubAuthProviderPollForToken:
         mock_response.json.return_value = {"access_token": "ghp_new_token"}
         mock_client.post = AsyncMock(return_value=mock_response)
 
-        with patch("vibe.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
+        with patch("drydock.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
             token = await provider._poll_for_token(
                 mock_client, "dc_123", expires_in=10, interval=1
             )
@@ -187,7 +187,7 @@ class TestGitHubAuthProviderPollForToken:
         ]
         mock_client.post = AsyncMock(side_effect=responses)
 
-        with patch("vibe.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
+        with patch("drydock.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
             token = await provider._poll_for_token(
                 mock_client, "dc_123", expires_in=30, interval=1
             )
@@ -201,7 +201,7 @@ class TestGitHubAuthProviderPollForToken:
         mock_response.json.return_value = {"error": "expired_token"}
         mock_client.post = AsyncMock(return_value=mock_response)
 
-        with patch("vibe.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
+        with patch("drydock.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(GitHubAuthError, match="expired_token"):
                 await provider._poll_for_token(
                     mock_client, "dc_123", expires_in=10, interval=1
@@ -215,7 +215,7 @@ class TestGitHubAuthProviderPollForToken:
         mock_response.json.return_value = {"error": "access_denied"}
         mock_client.post = AsyncMock(return_value=mock_response)
 
-        with patch("vibe.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
+        with patch("drydock.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(GitHubAuthError, match="access_denied"):
                 await provider._poll_for_token(
                     mock_client, "dc_123", expires_in=10, interval=1
@@ -229,7 +229,7 @@ class TestGitHubAuthProviderPollForToken:
         mock_response.json.return_value = {"error": "authorization_pending"}
         mock_client.post = AsyncMock(return_value=mock_response)
 
-        with patch("vibe.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
+        with patch("drydock.core.auth.github.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(GitHubAuthError, match="timed out"):
                 await provider._poll_for_token(
                     mock_client, "dc_123", expires_in=2, interval=1
@@ -238,7 +238,7 @@ class TestGitHubAuthProviderPollForToken:
 
 class TestGitHubAuthProviderSaveToken:
     def test_save_token_success(self) -> None:
-        with patch("vibe.core.auth.github.keyring") as mock_keyring:
+        with patch("drydock.core.auth.github.keyring") as mock_keyring:
             provider = GitHubAuthProvider()
             provider._save_token("ghp_token")
             mock_keyring.set_password.assert_called_once_with(
@@ -246,7 +246,7 @@ class TestGitHubAuthProviderSaveToken:
             )
 
     def test_save_token_raises_on_keyring_error(self) -> None:
-        with patch("vibe.core.auth.github.keyring") as mock_keyring:
+        with patch("drydock.core.auth.github.keyring") as mock_keyring:
             import keyring.errors
 
             mock_keyring.errors = keyring.errors
@@ -277,8 +277,8 @@ class TestGitHubAuthProviderWaitForToken:
         handle = DeviceFlowHandle(device_code="dc_123", expires_in=10, info=info)
 
         with (
-            patch("vibe.core.auth.github.asyncio.sleep", new_callable=AsyncMock),
-            patch("vibe.core.auth.github.keyring") as mock_keyring,
+            patch("drydock.core.auth.github.asyncio.sleep", new_callable=AsyncMock),
+            patch("drydock.core.auth.github.keyring") as mock_keyring,
         ):
             token = await provider.wait_for_token(handle)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from vibe.cli.textual_ui.widgets.braille_renderer import (
+from drydock.cli.textual_ui.widgets.braille_renderer import (
     _braille_char_from_dot_indices,
     _braille_dot_index,
     render_braille,

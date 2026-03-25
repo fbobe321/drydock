@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from tests.conftest import build_test_vibe_config
-from vibe.core.config import VibeConfig
+from drydock.core.config import VibeConfig
 
 
 @pytest.fixture

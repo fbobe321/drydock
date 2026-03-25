@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from tests.conftest import build_test_vibe_config
-from vibe.core.config import ModelConfig
-from vibe.core.config.harness_files import (
+from drydock.core.config import ModelConfig
+from drydock.core.config.harness_files import (
     HarnessFilesManager,
     init_harness_files_manager,
     reset_harness_files_manager,
 )
-from vibe.core.paths import VIBE_HOME
-from vibe.core.trusted_folders import trusted_folders_manager
+from drydock.core.paths import VIBE_HOME
+from drydock.core.trusted_folders import trusted_folders_manager
 
 
 class TestResolveConfigFile:
@@ -29,7 +29,7 @@ class TestResolveConfigFile:
 
         reset_harness_files_manager()
         init_harness_files_manager("user", "project")
-        from vibe.core.config.harness_files import get_harness_files_manager
+        from drydock.core.config.harness_files import get_harness_files_manager
 
         mgr = get_harness_files_manager()
         resolved = mgr.config_file
@@ -49,7 +49,7 @@ class TestResolveConfigFile:
 
         reset_harness_files_manager()
         init_harness_files_manager("user", "project")
-        from vibe.core.config.harness_files import get_harness_files_manager
+        from drydock.core.config.harness_files import get_harness_files_manager
 
         mgr = get_harness_files_manager()
         assert mgr.config_file == VIBE_HOME.path / "config.toml"
@@ -63,7 +63,7 @@ class TestResolveConfigFile:
 
         reset_harness_files_manager()
         init_harness_files_manager("user", "project")
-        from vibe.core.config.harness_files import get_harness_files_manager
+        from drydock.core.config.harness_files import get_harness_files_manager
 
         mgr = get_harness_files_manager()
         assert mgr.config_file == VIBE_HOME.path / "config.toml"

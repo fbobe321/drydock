@@ -7,7 +7,7 @@ from typing import override
 import pytest
 from textual.app import App
 
-from vibe.setup import onboarding
+from drydock.setup import onboarding
 
 
 class StubApp(App[str | None]):

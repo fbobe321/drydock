@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from vibe.acp.acp_agent_loop import VibeAcpAgentLoop
-from vibe.core.agents.models import BuiltinAgentName
+from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.core.agents.models import BuiltinAgentName
 
 
 class TestACPSetMode:

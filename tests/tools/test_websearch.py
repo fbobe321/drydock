@@ -6,9 +6,9 @@ import mistralai
 import pytest
 
 from tests.mock.utils import collect_result
-from vibe.core.config import Backend, ProviderConfig
-from vibe.core.tools.base import BaseToolState, InvokeContext, ToolError
-from vibe.core.tools.builtins.websearch import WebSearch, WebSearchArgs, WebSearchConfig
+from drydock.core.config import Backend, ProviderConfig
+from drydock.core.tools.base import BaseToolState, InvokeContext, ToolError
+from drydock.core.tools.builtins.websearch import WebSearch, WebSearchArgs, WebSearchConfig
 
 
 def _make_response(

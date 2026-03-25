@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from vibe.core.config import ProviderConfig
-from vibe.core.llm.backend.anthropic import AnthropicAdapter, AnthropicMapper
-from vibe.core.types import (
+from drydock.core.config import ProviderConfig
+from drydock.core.llm.backend.anthropic import AnthropicAdapter, AnthropicMapper
+from drydock.core.types import (
     AvailableFunction,
     AvailableTool,
     FunctionCall,

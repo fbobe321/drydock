@@ -13,12 +13,12 @@ import pytest
 
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
-from vibe.core.tools.mcp_sampling import (
+from drydock.core.tools.mcp_sampling import (
     MCPSamplingHandler,
     _extract_text_content,
     _map_sampling_messages,
 )
-from vibe.core.types import LLMMessage, Role
+from drydock.core.types import LLMMessage, Role
 
 
 def _make_config(model_name: str = "test-model") -> MagicMock:

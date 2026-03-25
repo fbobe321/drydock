@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from vibe.core.paths import PLANS_DIR
-from vibe.core.plan_session import PlanSession
+from drydock.core.paths import PLANS_DIR
+from drydock.core.plan_session import PlanSession
 
 
 class TestPlanSession:

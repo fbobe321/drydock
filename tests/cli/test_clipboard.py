@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 from textual.app import App
 
-from vibe.cli.clipboard import (
+from drydock.cli.clipboard import (
     _copy_osc52,
     _copy_pbcopy,
     _copy_to_clipboard,
@@ -87,7 +87,7 @@ def test_copy_selection_to_clipboard_no_notification(
     mock_app.notify.assert_not_called()
 
 
-@patch("vibe.cli.clipboard._copy_to_clipboard")
+@patch("drydock.cli.clipboard._copy_to_clipboard")
 def test_copy_selection_to_clipboard_success(
     mock_copy_to_clipboard: MagicMock, mock_app: MagicMock
 ) -> None:
@@ -108,7 +108,7 @@ def test_copy_selection_to_clipboard_success(
     )
 
 
-@patch("vibe.cli.clipboard._copy_to_clipboard")
+@patch("drydock.cli.clipboard._copy_to_clipboard")
 def test_copy_selection_to_clipboard_shows_failure_when_all_strategies_raise(
     mock_copy_to_clipboard: MagicMock, mock_app: MagicMock
 ) -> None:
@@ -139,7 +139,7 @@ def test_copy_selection_to_clipboard_multiple_widgets(mock_app: MagicMock) -> No
     widget3 = MockWidget(text_selection=None)
     mock_app.query.return_value = [widget1, widget2, widget3]
 
-    with patch("vibe.cli.clipboard._copy_to_clipboard") as mock_copy_to_clipboard:
+    with patch("drydock.cli.clipboard._copy_to_clipboard") as mock_copy_to_clipboard:
         result = copy_selection_to_clipboard(mock_app)
 
         assert result == "first selection\nsecond selection"
@@ -161,7 +161,7 @@ def test_copy_selection_to_clipboard_preview_shortening(mock_app: MagicMock) -> 
     )
     mock_app.query.return_value = [widget]
 
-    with patch("vibe.cli.clipboard._copy_to_clipboard") as mock_copy_to_clipboard:
+    with patch("drydock.cli.clipboard._copy_to_clipboard") as mock_copy_to_clipboard:
         result = copy_selection_to_clipboard(mock_app)
         assert result == long_text
 
@@ -179,8 +179,8 @@ def test_copy_to_clipboard_stops_after_verified_copy() -> None:
     mock_second = MagicMock()
 
     with (
-        patch("vibe.cli.clipboard._COPY_METHODS", [mock_first, mock_second]),
-        patch("vibe.cli.clipboard._read_clipboard", return_value="hello"),
+        patch("drydock.cli.clipboard._COPY_METHODS", [mock_first, mock_second]),
+        patch("drydock.cli.clipboard._read_clipboard", return_value="hello"),
     ):
         _copy_to_clipboard("hello")
 
@@ -194,8 +194,8 @@ def test_copy_to_clipboard_tries_all_when_verify_fails() -> None:
     mock_second = MagicMock()
 
     with (
-        patch("vibe.cli.clipboard._COPY_METHODS", [mock_first, mock_second]),
-        patch("vibe.cli.clipboard._read_clipboard", return_value=None),
+        patch("drydock.cli.clipboard._COPY_METHODS", [mock_first, mock_second]),
+        patch("drydock.cli.clipboard._read_clipboard", return_value=None),
     ):
         _copy_to_clipboard("hello")
 
@@ -209,7 +209,7 @@ def test_copy_to_clipboard_raises_when_all_strategies_raise() -> None:
     mock_pyperclip = MagicMock(side_effect=RuntimeError("pyperclip unavailable"))
 
     with (
-        patch("vibe.cli.clipboard._COPY_METHODS", [mock_osc52, mock_pyperclip]),
+        patch("drydock.cli.clipboard._COPY_METHODS", [mock_osc52, mock_pyperclip]),
         pytest.raises(RuntimeError, match="All clipboard strategies failed"),
     ):
         _copy_to_clipboard("anything")
@@ -219,7 +219,7 @@ def test_read_clipboard_returns_first_successful_reader() -> None:
     mock_reader = MagicMock(return_value="hello")
     mock_reader2 = MagicMock(side_effect=RuntimeError("no clipboard"))
     with patch(
-        "vibe.cli.clipboard._READ_CLIPBOARD_METHODS", [mock_reader, mock_reader2]
+        "drydock.cli.clipboard._READ_CLIPBOARD_METHODS", [mock_reader, mock_reader2]
     ):
         assert _read_clipboard() == "hello"
     mock_reader.assert_called_once()
@@ -228,14 +228,14 @@ def test_read_clipboard_returns_first_successful_reader() -> None:
 
 def test_read_clipboard_falls_through_on_failure() -> None:
     failing = MagicMock(side_effect=RuntimeError("no clipboard"))
-    with patch("vibe.cli.clipboard._READ_CLIPBOARD_METHODS", [failing]):
+    with patch("drydock.cli.clipboard._READ_CLIPBOARD_METHODS", [failing]):
         assert _read_clipboard() is None
 
 
 def test_read_clipboard_skips_failing_reader() -> None:
     failing = MagicMock(side_effect=RuntimeError("broken"))
     working = MagicMock(return_value="hello")
-    with patch("vibe.cli.clipboard._READ_CLIPBOARD_METHODS", [failing, working]):
+    with patch("drydock.cli.clipboard._READ_CLIPBOARD_METHODS", [failing, working]):
         assert _read_clipboard() == "hello"
     working.assert_called_once()
 
@@ -264,7 +264,7 @@ def test_copy_methods_includes_available_commands() -> None:
     """_COPY_METHODS is built at import time using _has_cmd; re-import with mocked shutil.which."""
     import importlib
 
-    import vibe.cli.clipboard as mod
+    import drydock.cli.clipboard as mod
 
     with patch(
         "shutil.which",

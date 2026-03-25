@@ -7,10 +7,10 @@ import pytest
 
 from tests.acp.conftest import _create_acp_agent
 from tests.conftest import build_test_vibe_config
-from vibe.acp.acp_agent_loop import VibeAcpAgentLoop
-from vibe.core.agent_loop import AgentLoop
-from vibe.core.agents.models import BuiltinAgentName
-from vibe.core.config import ModelConfig
+from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.core.agent_loop import AgentLoop
+from drydock.core.agents.models import BuiltinAgentName
+from drydock.core.config import ModelConfig
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def acp_agent_loop(backend) -> VibeAcpAgentLoop:
             self._base_config = config
             self.agent_manager.invalidate_config()
 
-    patch("vibe.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgentLoop).start()
+    patch("drydock.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgentLoop).start()
 
     return _create_acp_agent()
 
@@ -48,7 +48,7 @@ class TestACPNewSession:
         )
 
         new_session_events = [
-            e for e in telemetry_events if e.get("event_name") == "vibe.new_session"
+            e for e in telemetry_events if e.get("event_name") == "drydock.new_session"
         ]
         assert len(new_session_events) == 1
         assert new_session_events[0]["properties"]["entrypoint"] == "acp"

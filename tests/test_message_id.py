@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from vibe.core.types import (
+from drydock.core.types import (
     AssistantEvent,
     LLMMessage,
     ReasoningEvent,

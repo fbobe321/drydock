@@ -7,9 +7,9 @@ import pytest
 
 from tests.conftest import build_test_vibe_app, build_test_vibe_config
 from tests.skills.conftest import create_skill
-from vibe.cli.textual_ui.app import VibeApp
-from vibe.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
-from vibe.cli.textual_ui.widgets.messages import ErrorMessage, UserMessage
+from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
+from drydock.cli.textual_ui.widgets.messages import ErrorMessage, UserMessage
 
 SKILL_BODY = "## Instructions\n\nDo the thing."
 

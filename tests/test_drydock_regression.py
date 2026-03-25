@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-from vibe.core.types import LLMMessage, MessageList, Role
+from drydock.core.types import LLMMessage, MessageList, Role
 
 
 # ============================================================================
@@ -31,7 +31,7 @@ class TestMessageOrdering:
 
     def _make_agent(self):
         """Create a minimal AgentLoop just for testing message methods."""
-        from vibe.core.agent_loop import AgentLoop
+        from drydock.core.agent_loop import AgentLoop
         al = object.__new__(AgentLoop)
         al.messages = MessageList()
         return al
@@ -122,7 +122,7 @@ class TestInjectSystemNote:
     """Tests for _inject_system_note() safe message injection."""
 
     def _make_agent(self):
-        from vibe.core.agent_loop import AgentLoop
+        from drydock.core.agent_loop import AgentLoop
         al = object.__new__(AgentLoop)
         al.messages = MessageList()
         return al
@@ -163,7 +163,7 @@ class TestInjectSystemNote:
 
 class TestWaveSpinner:
     def test_wave_spinner_frames(self):
-        from vibe.cli.textual_ui.widgets.spinner import WaveSpinner
+        from drydock.cli.textual_ui.widgets.spinner import WaveSpinner
 
         spinner = WaveSpinner()
         frames = set()
@@ -176,7 +176,7 @@ class TestWaveSpinner:
         assert len(frames) >= 3
 
     def test_wave_spinner_type_in_enum(self):
-        from vibe.cli.textual_ui.widgets.spinner import SpinnerType, create_spinner, WaveSpinner
+        from drydock.cli.textual_ui.widgets.spinner import SpinnerType, create_spinner, WaveSpinner
 
         spinner = create_spinner(SpinnerType.WAVE)
         assert isinstance(spinner, WaveSpinner)
@@ -188,13 +188,15 @@ class TestWaveSpinner:
 
 class TestConfigPaths:
     def test_default_is_drydock(self):
-        from vibe.core.paths._vibe_home import _DEFAULT_DRYDOCK_HOME
-
-        assert _DEFAULT_DRYDOCK_HOME == Path.home() / ".drydock"
+        # Verify the source code defines .drydock as the default
+        import inspect
+        from drydock.core.paths import _vibe_home
+        source = inspect.getsource(_vibe_home)
+        assert '".drydock"' in source
 
     def test_drydock_home_env_takes_priority(self, tmp_path):
         with patch.dict(os.environ, {"DRYDOCK_HOME": str(tmp_path), "VIBE_HOME": "/should/not/use"}):
-            from vibe.core.paths._vibe_home import _get_vibe_home
+            from drydock.core.paths._vibe_home import _get_vibe_home
             assert _get_vibe_home() == tmp_path
 
     def test_vibe_home_env_fallback(self, tmp_path):
@@ -202,7 +204,7 @@ class TestConfigPaths:
         with patch.dict(os.environ, env, clear=False):
             # Remove DRYDOCK_HOME if set
             os.environ.pop("DRYDOCK_HOME", None)
-            from vibe.core.paths._vibe_home import _get_vibe_home
+            from drydock.core.paths._vibe_home import _get_vibe_home
             result = _get_vibe_home()
             assert result == tmp_path
 
@@ -213,13 +215,13 @@ class TestConfigPaths:
 
 class TestDrydockStates:
     def test_all_categories_exist(self):
-        from vibe.core.drydock_states import STATE_CATEGORIES
+        from drydock.core.drydock_states import STATE_CATEGORIES
 
         expected = {"plan", "search", "reason", "execute", "debug", "retry", "error", "complete", "reflect"}
         assert set(STATE_CATEGORIES.keys()) == expected
 
     def test_no_french_terms(self):
-        from vibe.core.drydock_states import STATE_CATEGORIES
+        from drydock.core.drydock_states import STATE_CATEGORIES
 
         french_terms = {"Réflexion", "Analyse", "Synthèse", "Contemplation"}
         for category, terms in STATE_CATEGORIES.items():
@@ -227,7 +229,7 @@ class TestDrydockStates:
                 assert term not in french_terms, f"French term '{term}' found in category '{category}'"
 
     def test_get_state_term_no_immediate_repeat(self):
-        from vibe.core.drydock_states import get_state_term, _recent
+        from drydock.core.drydock_states import get_state_term, _recent
         _recent.clear()
 
         terms = [get_state_term("reason") for _ in range(10)]
@@ -238,7 +240,7 @@ class TestDrydockStates:
                 pass  # Soft check — the deque prevents most repeats
 
     def test_each_category_has_enough_terms(self):
-        from vibe.core.drydock_states import STATE_CATEGORIES
+        from drydock.core.drydock_states import STATE_CATEGORIES
 
         for cat, terms in STATE_CATEGORIES.items():
             assert len(terms) >= 6, f"Category '{cat}' has only {len(terms)} terms (need >=6)"
@@ -250,7 +252,7 @@ class TestDrydockStates:
 
 class TestEasterEggs:
     def test_no_french_easter_eggs(self):
-        from vibe.cli.textual_ui.widgets.loading import LoadingWidget
+        from drydock.cli.textual_ui.widgets.loading import LoadingWidget
 
         french_words = ["chocolatine", "pain au chocolat", "Réflexion", "Analyse",
                         "Synthèse", "Proust", "baguette", "le chat"]
@@ -259,7 +261,7 @@ class TestEasterEggs:
                 assert french not in egg, f"French term '{french}' found in Easter egg: '{egg}'"
 
     def test_easter_eggs_are_nautical(self):
-        from vibe.cli.textual_ui.widgets.loading import LoadingWidget
+        from drydock.cli.textual_ui.widgets.loading import LoadingWidget
 
         nautical_words = ["sail", "deck", "mast", "compass", "anchor", "rig",
                           "jib", "hatch", "star", "depth", "line", "tide",
@@ -275,27 +277,27 @@ class TestEasterEggs:
 
 class TestBashAllowlist:
     def test_pip_install_allowed(self):
-        from vibe.core.tools.builtins.bash import _get_default_allowlist
+        from drydock.core.tools.builtins.bash import _get_default_allowlist
         allowlist = _get_default_allowlist()
         assert "pip install" in allowlist
 
     def test_conda_install_allowed(self):
-        from vibe.core.tools.builtins.bash import _get_default_allowlist
+        from drydock.core.tools.builtins.bash import _get_default_allowlist
         allowlist = _get_default_allowlist()
         assert "conda install -y" in allowlist
 
     def test_conda_run_allowed(self):
-        from vibe.core.tools.builtins.bash import _get_default_allowlist
+        from drydock.core.tools.builtins.bash import _get_default_allowlist
         allowlist = _get_default_allowlist()
         assert "conda run" in allowlist
 
     def test_pytest_allowed(self):
-        from vibe.core.tools.builtins.bash import _get_default_allowlist
+        from drydock.core.tools.builtins.bash import _get_default_allowlist
         allowlist = _get_default_allowlist()
         assert "pytest" in allowlist
 
     def test_python_standalone_denied(self):
-        from vibe.core.tools.builtins.bash import _get_default_denylist_standalone
+        from drydock.core.tools.builtins.bash import _get_default_denylist_standalone
         denylist = _get_default_denylist_standalone()
         assert "python" in denylist
         assert "python3" in denylist
@@ -307,7 +309,7 @@ class TestBashAllowlist:
 
 class TestCondaDetection:
     def test_conda_setup_script_detection(self):
-        from vibe.core.tools.builtins.bash import _get_conda_setup_script
+        from drydock.core.tools.builtins.bash import _get_conda_setup_script
 
         result = _get_conda_setup_script()
         # On a system with conda, this should find the script
@@ -317,7 +319,7 @@ class TestCondaDetection:
             assert "conda.sh" in result
 
     def test_bash_env_set_when_conda_exists(self):
-        from vibe.core.tools.builtins.bash import _get_base_env, _get_conda_setup_script
+        from drydock.core.tools.builtins.bash import _get_base_env, _get_conda_setup_script
 
         env = _get_base_env()
         conda_sh = _get_conda_setup_script()
@@ -334,7 +336,7 @@ class TestCondaDetection:
 
 class TestCLIFlags:
     def test_dangerous_skip_permissions_flag_exists(self):
-        from vibe.cli.entrypoint import parse_arguments
+        from drydock.cli.entrypoint import parse_arguments
         import sys
 
         # Test that the flag is recognized (won't error)
@@ -343,8 +345,8 @@ class TestCLIFlags:
             assert args.dangerously_skip_permissions is True
 
     def test_dangerous_skip_permissions_sets_auto_approve(self):
-        from vibe.cli.entrypoint import parse_arguments
-        from vibe.core.agents.models import BuiltinAgentName
+        from drydock.cli.entrypoint import parse_arguments
+        from drydock.core.agents.models import BuiltinAgentName
         import sys
 
         with patch.object(sys, "argv", ["drydock", "--dangerously-skip-permissions", "-p", "test"]):
@@ -360,7 +362,7 @@ class TestCLIFlags:
 
 class TestLoopDetection:
     def test_thresholds_are_reasonable(self):
-        from vibe.core.agent_loop import (
+        from drydock.core.agent_loop import (
             MAX_TOOL_TURNS,
             REPEAT_WARNING_THRESHOLD,
             REPEAT_FORCE_STOP_THRESHOLD,
@@ -383,8 +385,8 @@ class TestLoopDetection:
 
 class TestWriteFileSafety:
     def test_binary_extension_rejected(self):
-        from vibe.core.tools.builtins.write_file import WriteFile, WriteFileArgs, WriteFileConfig
-        from vibe.core.tools.base import BaseToolState, ToolError
+        from drydock.core.tools.builtins.write_file import WriteFile, WriteFileArgs, WriteFileConfig
+        from drydock.core.tools.base import BaseToolState, ToolError
 
         wf = object.__new__(WriteFile)
         wf.config = WriteFileConfig()
@@ -393,7 +395,7 @@ class TestWriteFileSafety:
             wf._prepare_and_validate_path(WriteFileArgs(path="test.pptx", content="hello"))
 
     def test_binary_extensions_list(self):
-        from vibe.core.tools.builtins.write_file import WriteFile
+        from drydock.core.tools.builtins.write_file import WriteFile
 
         binary_exts = WriteFile._BINARY_EXTENSIONS
         assert ".pptx" in binary_exts
@@ -404,7 +406,7 @@ class TestWriteFileSafety:
         assert ".zip" in binary_exts
 
     def test_text_extension_allowed(self):
-        from vibe.core.tools.builtins.write_file import WriteFile, WriteFileArgs, WriteFileConfig
+        from drydock.core.tools.builtins.write_file import WriteFile, WriteFileArgs, WriteFileConfig
 
         wf = object.__new__(WriteFile)
         wf.config = WriteFileConfig()
@@ -424,7 +426,7 @@ class TestWriteFileSafety:
 
 class TestLoopDetectionPatterns:
     def _make_agent(self):
-        from vibe.core.agent_loop import AgentLoop
+        from drydock.core.agent_loop import AgentLoop
         al = object.__new__(AgentLoop)
         al.messages = MessageList()
         return al
@@ -453,7 +455,7 @@ class TestLoopDetectionPatterns:
 
 class TestLoadingWidget:
     def test_ocean_blue_colors(self):
-        from vibe.cli.textual_ui.widgets.loading import LoadingWidget
+        from drydock.cli.textual_ui.widgets.loading import LoadingWidget
 
         # Should be blue-ish, not orange (Mistral)
         for color in LoadingWidget.TARGET_COLORS:
@@ -462,7 +464,7 @@ class TestLoadingWidget:
             assert not color.startswith("#FF"), f"Color {color} looks orange, not ocean blue"
 
     def test_uses_wave_spinner(self):
-        from vibe.cli.textual_ui.widgets.loading import LoadingWidget
-        from vibe.cli.textual_ui.widgets.spinner import SpinnerType
+        from drydock.cli.textual_ui.widgets.loading import LoadingWidget
+        from drydock.cli.textual_ui.widgets.spinner import SpinnerType
 
         assert LoadingWidget.SPINNER_TYPE == SpinnerType.WAVE

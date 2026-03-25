@@ -7,13 +7,13 @@ from os import environ
 import pytest
 
 from tests.cli.plan_offer.adapters.fake_whoami_gateway import FakeWhoAmIGateway
-from vibe.cli.plan_offer.decide_plan_offer import (
+from drydock.cli.plan_offer.decide_plan_offer import (
     WhoAmIPlanType,
     decide_plan_offer,
     resolve_api_key_for_plan,
 )
-from vibe.cli.plan_offer.ports.whoami_gateway import WhoAmIResponse
-from vibe.core.config import Backend, ProviderConfig
+from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIResponse
+from drydock.core.config import Backend, ProviderConfig
 
 
 @pytest.fixture

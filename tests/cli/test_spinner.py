@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from vibe.cli.textual_ui.widgets.spinner import SpinnerType, create_spinner
+from drydock.cli.textual_ui.widgets.spinner import SpinnerType, create_spinner
 
 
 def test_generate_100_frames_no_crash() -> None:

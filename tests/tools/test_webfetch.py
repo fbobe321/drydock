@@ -5,8 +5,8 @@ import pytest
 import respx
 
 from tests.mock.utils import collect_result
-from vibe.core.tools.base import BaseToolState, ToolError
-from vibe.core.tools.builtins.webfetch import WebFetch, WebFetchArgs, WebFetchConfig
+from drydock.core.tools.base import BaseToolState, ToolError
+from drydock.core.tools.builtins.webfetch import WebFetch, WebFetchArgs, WebFetchConfig
 
 
 @pytest.fixture

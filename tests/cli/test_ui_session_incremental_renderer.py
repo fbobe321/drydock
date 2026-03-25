@@ -7,19 +7,19 @@ from textual.widgets import Button
 
 from tests.cli.plan_offer.adapters.fake_whoami_gateway import FakeWhoAmIGateway
 from tests.conftest import build_test_agent_loop
-from vibe.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from vibe.cli.textual_ui.app import ChatScroll, VibeApp
-from vibe.cli.textual_ui.widgets.load_more import (
+from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
+from drydock.cli.textual_ui.app import ChatScroll, VibeApp
+from drydock.cli.textual_ui.widgets.load_more import (
     HistoryLoadMoreMessage,
     HistoryLoadMoreRequested,
 )
-from vibe.cli.textual_ui.widgets.messages import UserMessage
-from vibe.cli.textual_ui.windowing import (
+from drydock.cli.textual_ui.widgets.messages import UserMessage
+from drydock.cli.textual_ui.windowing import (
     HISTORY_RESUME_TAIL_MESSAGES,
     LOAD_MORE_BATCH_SIZE,
 )
-from vibe.core.config import SessionLoggingConfig, VibeConfig
-from vibe.core.types import LLMMessage, Role
+from drydock.core.config import SessionLoggingConfig, VibeConfig
+from drydock.core.types import LLMMessage, Role
 
 
 @pytest.fixture

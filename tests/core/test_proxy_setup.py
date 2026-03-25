@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from vibe.core.paths import GLOBAL_ENV_FILE
-from vibe.core.proxy_setup import (
+from drydock.core.paths import GLOBAL_ENV_FILE
+from drydock.core.proxy_setup import (
     SUPPORTED_PROXY_VARS,
     ProxySetupError,
     get_current_proxy_settings,
@@ -102,7 +102,7 @@ class TestGetCurrentProxySettings:
         def raise_error(*args, **kwargs):
             raise OSError("Permission denied")
 
-        monkeypatch.setattr("vibe.core.proxy_setup.dotenv_values", raise_error)
+        monkeypatch.setattr("drydock.core.proxy_setup.dotenv_values", raise_error)
 
         result = get_current_proxy_settings()
 

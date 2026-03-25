@@ -6,11 +6,11 @@ from textual.widgets.text_area import TextAreaTheme
 from tests.cli.plan_offer.adapters.fake_whoami_gateway import FakeWhoAmIGateway
 from tests.conftest import build_test_agent_loop, build_test_vibe_config
 from tests.stubs.fake_backend import FakeBackend
-from vibe.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from vibe.cli.textual_ui.app import VibeApp
-from vibe.cli.textual_ui.widgets.chat_input import ChatTextArea
-from vibe.core.agents.models import BuiltinAgentName
-from vibe.core.config import VibeConfig
+from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
+from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.widgets.chat_input import ChatTextArea
+from drydock.core.agents.models import BuiltinAgentName
+from drydock.core.config import VibeConfig
 
 
 def default_config() -> VibeConfig:

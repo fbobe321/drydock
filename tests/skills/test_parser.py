@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from vibe.core.skills.parser import SkillParseError, parse_frontmatter
+from drydock.core.skills.parser import SkillParseError, parse_frontmatter
 
 
 class TestParseFrontmatter:

@@ -10,8 +10,8 @@ import pytest
 from tests.conftest import build_test_vibe_config, make_test_models
 from tests.stubs.fake_backend import FakeBackend
 from tests.stubs.fake_client import FakeClient
-from vibe.acp.acp_agent_loop import VibeAcpAgentLoop
-from vibe.core.agent_loop import AgentLoop
+from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.core.agent_loop import AgentLoop
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def acp_agent_loop(backend: FakeBackend) -> VibeAcpAgentLoop:
             )
             super().__init__(*args, **kwargs, backend=backend)
 
-    patch("vibe.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgent).start()
+    patch("drydock.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgent).start()
     vibe_acp_agent = VibeAcpAgentLoop()
     client = FakeClient()
     vibe_acp_agent.on_connect(client)

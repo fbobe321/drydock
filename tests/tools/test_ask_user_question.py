@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from vibe.core.tools.base import BaseToolState, ToolError
-from vibe.core.tools.builtins.ask_user_question import (
+from drydock.core.tools.base import BaseToolState, ToolError
+from drydock.core.tools.builtins.ask_user_question import (
     Answer,
     AskUserQuestion,
     AskUserQuestionArgs,
@@ -12,7 +12,7 @@ from vibe.core.tools.builtins.ask_user_question import (
     Choice,
     Question,
 )
-from vibe.core.types import ToolCallEvent, ToolResultEvent
+from drydock.core.types import ToolCallEvent, ToolResultEvent
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ def multi_question_args():
 
 
 async def run_tool_with_callback(tool, args, callback):
-    from vibe.core.tools.base import InvokeContext
+    from drydock.core.tools.base import InvokeContext
 
     ctx = InvokeContext(user_input_callback=callback, tool_call_id="123")
     result = None

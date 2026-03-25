@@ -8,8 +8,8 @@ import pytest
 from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
 )
-from vibe.cli.update_notifier import UpdateCache
-from vibe.cli.update_notifier.whats_new import (
+from drydock.cli.update_notifier import UpdateCache
+from drydock.cli.update_notifier.whats_new import (
     load_whats_new_content,
     mark_version_as_seen,
     should_show_whats_new,
@@ -76,7 +76,7 @@ async def test_should_show_whats_new_returns_true_when_seen_whats_new_version_is
 def test_load_whats_new_content_returns_none_when_file_does_not_exist(
     tmp_path: Path,
 ) -> None:
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         result = load_whats_new_content()
 
     assert result is None
@@ -86,7 +86,7 @@ def test_load_whats_new_content_returns_none_when_file_is_empty(tmp_path: Path) 
     whats_new_file = tmp_path / "whats_new.md"
     whats_new_file.write_text("")
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         result = load_whats_new_content()
 
     assert result is None
@@ -98,7 +98,7 @@ def test_load_whats_new_content_returns_none_when_file_contains_only_whitespace(
     whats_new_file = tmp_path / "whats_new.md"
     whats_new_file.write_text("   \n\t  \n  ")
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         result = load_whats_new_content()
 
     assert result is None
@@ -111,7 +111,7 @@ def test_load_whats_new_content_returns_content_when_file_exists(
     content = "# What's New\n\n- Feature 1\n- Feature 2"
     whats_new_file.write_text(content)
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         result = load_whats_new_content()
 
     assert result == content
@@ -121,7 +121,7 @@ def test_load_whats_new_content_handles_os_error(tmp_path: Path) -> None:
     whats_new_file = tmp_path / "whats_new.md"
     whats_new_file.write_text("content")
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         with patch.object(Path, "read_text", side_effect=OSError("Permission denied")):
             result = load_whats_new_content()
 

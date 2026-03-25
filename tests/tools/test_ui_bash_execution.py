@@ -5,9 +5,9 @@ import time
 import pytest
 from textual.widgets import Static
 
-from vibe.cli.textual_ui.app import VibeApp
-from vibe.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
-from vibe.cli.textual_ui.widgets.messages import BashOutputMessage, ErrorMessage
+from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
+from drydock.cli.textual_ui.widgets.messages import BashOutputMessage, ErrorMessage
 
 
 async def _wait_for_bash_output_message(

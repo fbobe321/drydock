@@ -5,8 +5,8 @@ from textual.containers import Container
 from textual.pilot import Pilot
 
 from tests.snapshots.snap_compare import SnapCompare
-from vibe.cli.textual_ui.widgets.question_app import QuestionApp
-from vibe.core.tools.builtins.ask_user_question import (
+from drydock.cli.textual_ui.widgets.question_app import QuestionApp
+from drydock.core.tools.builtins.ask_user_question import (
     AskUserQuestionArgs,
     Choice,
     Question,

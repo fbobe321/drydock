@@ -5,7 +5,7 @@ from textual.markup import MarkupError
 from textual.visual import visualize
 from textual.widgets import Static
 
-from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
+from drydock.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
 
 
 def test_static_raises_on_invalid_markup() -> None:

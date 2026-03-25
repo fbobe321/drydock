@@ -11,7 +11,7 @@ from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
 )
 from tests.update_notifier.adapters.fake_update_gateway import FakeUpdateGateway
-from vibe.cli.update_notifier import Update
+from drydock.cli.update_notifier import Update
 
 
 class SnapshotTestAppWithUpdate(BaseSnapshotTestApp):
@@ -37,7 +37,7 @@ def test_snapshot_shows_release_update_notification(
     async def run_before(pilot: Pilot) -> None:
         await pilot.pause(0.2)
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         assert snap_compare(
             "test_ui_snapshot_release_update_notification.py:SnapshotTestAppWithUpdate",
             terminal_size=(120, 36),

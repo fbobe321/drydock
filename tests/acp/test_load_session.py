@@ -15,11 +15,11 @@ import pytest
 from tests.conftest import build_test_vibe_config
 from tests.stubs.fake_backend import FakeBackend
 from tests.stubs.fake_client import FakeClient
-from vibe.acp.acp_agent_loop import VibeAcpAgentLoop
-from vibe.core.agent_loop import AgentLoop
-from vibe.core.agents.models import BuiltinAgentName
-from vibe.core.config import ModelConfig, SessionLoggingConfig
-from vibe.core.types import Role
+from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.core.agent_loop import AgentLoop
+from drydock.core.agents.models import BuiltinAgentName
+from drydock.core.config import ModelConfig, SessionLoggingConfig
+from drydock.core.types import Role
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def acp_agent_with_session_config(
             self._base_config = config
             self.agent_manager.invalidate_config()
 
-    monkeypatch.setattr("vibe.acp.acp_agent_loop.AgentLoop", PatchedAgentLoop)
+    monkeypatch.setattr("drydock.acp.acp_agent_loop.AgentLoop", PatchedAgentLoop)
     monkeypatch.setattr(VibeAcpAgentLoop, "_load_config", lambda self: config)
 
     vibe_acp_agent = VibeAcpAgentLoop()

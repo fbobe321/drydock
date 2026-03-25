@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from vibe.core.config import Backend
-from vibe.core.llm.backend.factory import BACKEND_FACTORY
+from drydock.core.config import Backend
+from drydock.core.llm.backend.factory import BACKEND_FACTORY
 
 
 @contextmanager

@@ -6,14 +6,14 @@ from acp import ReadTextFileResponse
 import pytest
 
 from tests.mock.utils import collect_result
-from vibe.acp.tools.builtins.search_replace import AcpSearchReplaceState, SearchReplace
-from vibe.core.tools.base import ToolError
-from vibe.core.tools.builtins.search_replace import (
+from drydock.acp.tools.builtins.search_replace import AcpSearchReplaceState, SearchReplace
+from drydock.core.tools.base import ToolError
+from drydock.core.tools.builtins.search_replace import (
     SearchReplaceArgs,
     SearchReplaceConfig,
     SearchReplaceResult,
 )
-from vibe.core.types import ToolCallEvent, ToolResultEvent
+from drydock.core.types import ToolCallEvent, ToolResultEvent
 
 
 class MockClient:

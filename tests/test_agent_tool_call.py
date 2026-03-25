@@ -10,12 +10,12 @@ from tests.conftest import build_test_agent_loop, build_test_vibe_config
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
 from tests.stubs.fake_tool import FakeTool
-from vibe.core.agent_loop import AgentLoop
-from vibe.core.agents.models import BuiltinAgentName
-from vibe.core.config import VibeConfig
-from vibe.core.tools.base import BaseToolConfig, ToolPermission
-from vibe.core.tools.builtins.todo import TodoItem
-from vibe.core.types import (
+from drydock.core.agent_loop import AgentLoop
+from drydock.core.agents.models import BuiltinAgentName
+from drydock.core.config import VibeConfig
+from drydock.core.tools.base import BaseToolConfig, ToolPermission
+from drydock.core.tools.builtins.todo import TodoItem
+from drydock.core.types import (
     ApprovalResponse,
     AssistantEvent,
     BaseEvent,
@@ -112,7 +112,7 @@ async def test_single_tool_call_executes_under_auto_approve(
     assert "total_count" in (tool_msgs[-1].content or "")
 
     tool_finished = [
-        e for e in telemetry_events if e.get("event_name") == "vibe.tool_call_finished"
+        e for e in telemetry_events if e.get("event_name") == "drydock.tool_call_finished"
     ]
     assert len(tool_finished) == 1
     assert tool_finished[0]["properties"]["tool_name"] == "todo"
@@ -157,7 +157,7 @@ async def test_tool_call_requires_approval_if_not_auto_approved(
     assert agent_loop.stats.tool_calls_succeeded == 0
 
     tool_finished = [
-        e for e in telemetry_events if e.get("event_name") == "vibe.tool_call_finished"
+        e for e in telemetry_events if e.get("event_name") == "drydock.tool_call_finished"
     ]
     assert len(tool_finished) == 1
     assert tool_finished[0]["properties"]["approval_type"] == "ask"
@@ -197,7 +197,7 @@ async def test_tool_call_approved_by_callback(telemetry_events: list[dict]) -> N
     assert agent_loop.stats.tool_calls_succeeded == 1
 
     tool_finished = [
-        e for e in telemetry_events if e.get("event_name") == "vibe.tool_call_finished"
+        e for e in telemetry_events if e.get("event_name") == "drydock.tool_call_finished"
     ]
     assert len(tool_finished) == 1
     assert tool_finished[0]["properties"]["approval_type"] == "ask"
@@ -242,7 +242,7 @@ async def test_tool_call_rejected_when_auto_approve_disabled_and_rejected_by_cal
     assert agent_loop.stats.tool_calls_succeeded == 0
 
     tool_finished = [
-        e for e in telemetry_events if e.get("event_name") == "vibe.tool_call_finished"
+        e for e in telemetry_events if e.get("event_name") == "drydock.tool_call_finished"
     ]
     assert len(tool_finished) == 1
     assert tool_finished[0]["properties"]["approval_type"] == "ask"
@@ -286,7 +286,7 @@ async def test_tool_call_skipped_when_permission_is_never(
     assert agent_loop.stats.tool_calls_succeeded == 0
 
     tool_finished = [
-        e for e in telemetry_events if e.get("event_name") == "vibe.tool_call_finished"
+        e for e in telemetry_events if e.get("event_name") == "drydock.tool_call_finished"
     ]
     assert len(tool_finished) == 1
     assert tool_finished[0]["properties"]["approval_type"] == "never"

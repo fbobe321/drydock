@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from vibe.core.config.harness_files import HarnessFilesManager
-from vibe.core.trusted_folders import trusted_folders_manager
+from drydock.core.config.harness_files import HarnessFilesManager
+from drydock.core.trusted_folders import trusted_folders_manager
 
 
 class TestTrustedWorkdir:
@@ -179,14 +179,14 @@ class TestUserToolsDirs:
     def test_returns_empty_when_dir_does_not_exist(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr("vibe.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
+        monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
         mgr = HarnessFilesManager(sources=("user",))
         assert mgr.user_tools_dirs == []
 
     def test_returns_path_when_user_in_sources_and_dir_exists(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr("vibe.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
+        monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
         tools_dir = tmp_path / "tools"
         tools_dir.mkdir()
         mgr = HarnessFilesManager(sources=("user",))
@@ -201,14 +201,14 @@ class TestUserSkillsDirs:
     def test_returns_empty_when_dir_does_not_exist(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr("vibe.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
+        monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
         mgr = HarnessFilesManager(sources=("user",))
         assert mgr.user_skills_dirs == []
 
     def test_returns_path_when_user_in_sources_and_dir_exists(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr("vibe.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
+        monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
         mgr = HarnessFilesManager(sources=("user",))
@@ -223,14 +223,14 @@ class TestUserAgentsDirs:
     def test_returns_empty_when_dir_does_not_exist(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr("vibe.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
+        monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
         mgr = HarnessFilesManager(sources=("user",))
         assert mgr.user_agents_dirs == []
 
     def test_returns_path_when_user_in_sources_and_dir_exists(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr("vibe.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
+        monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_VIBE_HOME", tmp_path)
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
         mgr = HarnessFilesManager(sources=("user",))

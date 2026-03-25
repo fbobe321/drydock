@@ -9,7 +9,7 @@ from tests.conftest import (
 )
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
-from vibe.core.types import (
+from drydock.core.types import (
     AssistantEvent,
     CompactEndEvent,
     CompactStartEvent,
@@ -48,7 +48,7 @@ async def test_auto_compact_emits_correct_events(telemetry_events: list[dict]) -
     auto_compact = [
         e
         for e in telemetry_events
-        if e.get("event_name") == "vibe.auto_compact_triggered"
+        if e.get("event_name") == "drydock.auto_compact_triggered"
     ]
     assert len(auto_compact) == 1
 

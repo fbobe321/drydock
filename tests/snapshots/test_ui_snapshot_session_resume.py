@@ -4,7 +4,7 @@ from textual.pilot import Pilot
 
 from tests.snapshots.base_snapshot_test_app import BaseSnapshotTestApp
 from tests.snapshots.snap_compare import SnapCompare
-from vibe.core.types import FunctionCall, LLMMessage, Role, ToolCall
+from drydock.core.types import FunctionCall, LLMMessage, Role, ToolCall
 
 
 class SnapshotTestAppWithResumedSession(BaseSnapshotTestApp):

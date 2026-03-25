@@ -13,21 +13,21 @@ from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
 )
 from tests.update_notifier.adapters.fake_update_gateway import FakeUpdateGateway
-from vibe.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from vibe.cli.textual_ui.app import CORE_VERSION, VibeApp
-from vibe.core.agent_loop import AgentLoop
-from vibe.core.agents.models import BuiltinAgentName
-from vibe.core.config import (
+from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
+from drydock.cli.textual_ui.app import CORE_VERSION, VibeApp
+from drydock.core.agent_loop import AgentLoop
+from drydock.core.agents.models import BuiltinAgentName
+from drydock.core.config import (
     DEFAULT_MODELS,
     ModelConfig,
     SessionLoggingConfig,
     VibeConfig,
 )
-from vibe.core.config.harness_files import (
+from drydock.core.config.harness_files import (
     init_harness_files_manager,
     reset_harness_files_manager,
 )
-from vibe.core.llm.types import BackendLike
+from drydock.core.llm.types import BackendLike
 
 
 def get_base_config() -> dict[str, Any]:
@@ -71,7 +71,7 @@ def config_dir(
     config_file = config_dir / "config.toml"
     config_file.write_text(tomli_w.dumps(get_base_config()), encoding="utf-8")
 
-    monkeypatch.setattr("vibe.core.paths._vibe_home._DEFAULT_VIBE_HOME", config_dir)
+    monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_DRYDOCK_HOME", config_dir)
     return config_dir
 
 
@@ -101,7 +101,7 @@ def _mock_platform(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _mock_update_commands(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("vibe.cli.update_notifier.update.UPDATE_COMMANDS", ["true"])
+    monkeypatch.setattr("drydock.cli.update_notifier.update.UPDATE_COMMANDS", ["true"])
 
 
 @pytest.fixture(autouse=True)
@@ -114,7 +114,7 @@ def telemetry_events(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         events.append({"event_name": event_name, "properties": properties})
 
     monkeypatch.setattr(
-        "vibe.core.telemetry.send.TelemetryClient.send_telemetry_event",
+        "drydock.core.telemetry.send.TelemetryClient.send_telemetry_event",
         record_telemetry,
     )
     return events

@@ -6,9 +6,9 @@ from tests.conftest import build_test_vibe_config
 from tests.mock.mock_backend_factory import mock_backend_factory
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
-from vibe.core import run_programmatic
-from vibe.core.config import Backend
-from vibe.core.types import LLMMessage, OutputFormat, Role
+from drydock.core import run_programmatic
+from drydock.core.config import Backend
+from drydock.core.types import LLMMessage, OutputFormat, Role
 
 
 class SpyStreamingFormatter:
@@ -30,7 +30,7 @@ def test_run_programmatic_preload_streaming_is_batched(
 ) -> None:
     spy = SpyStreamingFormatter()
     monkeypatch.setattr(
-        "vibe.core.programmatic.create_formatter", lambda *_args, **_kwargs: spy
+        "drydock.core.programmatic.create_formatter", lambda *_args, **_kwargs: spy
     )
 
     with mock_backend_factory(
@@ -79,7 +79,7 @@ def test_run_programmatic_preload_streaming_is_batched(
         ]
 
         new_session = [
-            e for e in telemetry_events if e.get("event_name") == "vibe.new_session"
+            e for e in telemetry_events if e.get("event_name") == "drydock.new_session"
         ]
         assert len(new_session) == 1
         assert new_session[0]["properties"]["entrypoint"] == "programmatic"
@@ -102,7 +102,7 @@ def test_run_programmatic_ignores_system_messages_in_previous(
 ) -> None:
     spy = SpyStreamingFormatter()
     monkeypatch.setattr(
-        "vibe.core.programmatic.create_formatter", lambda *_args, **_kwargs: spy
+        "drydock.core.programmatic.create_formatter", lambda *_args, **_kwargs: spy
     )
 
     with mock_backend_factory(

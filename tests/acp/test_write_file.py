@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from tests.mock.utils import collect_result
-from vibe.acp.tools.builtins.write_file import AcpWriteFileState, WriteFile
-from vibe.core.tools.base import ToolError
-from vibe.core.tools.builtins.write_file import (
+from drydock.acp.tools.builtins.write_file import AcpWriteFileState, WriteFile
+from drydock.core.tools.base import ToolError
+from drydock.core.tools.builtins.write_file import (
     WriteFileArgs,
     WriteFileConfig,
     WriteFileResult,
 )
-from vibe.core.types import ToolCallEvent, ToolResultEvent
+from drydock.core.types import ToolCallEvent, ToolResultEvent
 
 
 class MockClient:
@@ -214,7 +214,7 @@ class TestAcpWriteFileSessionUpdates:
         assert update.locations[0].path == "/tmp/test.txt"
 
     def test_tool_call_session_update_invalid_args(self) -> None:
-        from vibe.core.types import FunctionCall, ToolCall
+        from drydock.core.types import FunctionCall, ToolCall
 
         class InvalidArgs:
             pass

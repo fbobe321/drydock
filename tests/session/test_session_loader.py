@@ -7,9 +7,9 @@ import time
 
 import pytest
 
-from vibe.core.config import SessionLoggingConfig
-from vibe.core.session.session_loader import SessionLoader
-from vibe.core.types import LLMMessage, Role, ToolCall
+from drydock.core.config import SessionLoggingConfig
+from drydock.core.session.session_loader import SessionLoader
+from drydock.core.types import LLMMessage, Role, ToolCall
 
 
 @pytest.fixture

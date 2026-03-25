@@ -6,9 +6,9 @@ from acp import ReadTextFileResponse
 import pytest
 
 from tests.mock.utils import collect_result
-from vibe.acp.tools.builtins.read_file import AcpReadFileState, ReadFile
-from vibe.core.tools.base import ToolError
-from vibe.core.tools.builtins.read_file import (
+from drydock.acp.tools.builtins.read_file import AcpReadFileState, ReadFile
+from drydock.core.tools.base import ToolError
+from drydock.core.tools.builtins.read_file import (
     ReadFileArgs,
     ReadFileResult,
     ReadFileToolConfig,

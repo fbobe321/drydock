@@ -7,10 +7,10 @@ import pytest
 
 from tests.acp.conftest import _create_acp_agent
 from tests.conftest import build_test_vibe_config
-from vibe.acp.acp_agent_loop import VibeAcpAgentLoop
-from vibe.core.agent_loop import AgentLoop
-from vibe.core.agents.models import BuiltinAgentName
-from vibe.core.config import ModelConfig, VibeConfig
+from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.core.agent_loop import AgentLoop
+from drydock.core.agents.models import BuiltinAgentName
+from drydock.core.config import ModelConfig, VibeConfig
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def acp_agent_loop(backend) -> VibeAcpAgentLoop:
             except ValueError:
                 pass
 
-    patch("vibe.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgentLoop).start()
+    patch("drydock.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgentLoop).start()
 
     return _create_acp_agent()
 
@@ -259,7 +259,7 @@ class TestACPSetConfigOptionModel:
         )
         session_id = session_response.session_id
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.save_updates") as mock_save:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.save_updates") as mock_save:
             response = await acp_agent_loop.set_config_option(
                 session_id=session_id, config_id="model", value="devstral-small"
             )
@@ -276,7 +276,7 @@ class TestACPSetConfigOptionModel:
         )
         session_id = session_response.session_id
 
-        with patch("vibe.acp.acp_agent_loop.VibeConfig.save_updates") as mock_save:
+        with patch("drydock.acp.acp_agent_loop.VibeConfig.save_updates") as mock_save:
             response = await acp_agent_loop.set_config_option(
                 session_id=session_id, config_id="model", value="non-existent-model"
             )

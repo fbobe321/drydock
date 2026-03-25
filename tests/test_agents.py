@@ -6,8 +6,8 @@ import pytest
 
 from tests.conftest import build_test_agent_loop, build_test_vibe_config
 from tests.stubs.fake_backend import FakeBackend
-from vibe.core.agents.manager import AgentManager
-from vibe.core.agents.models import (
+from drydock.core.agents.manager import AgentManager
+from drydock.core.agents.models import (
     BUILTIN_AGENTS,
     AgentProfile,
     AgentSafety,
@@ -15,10 +15,10 @@ from vibe.core.agents.models import (
     BuiltinAgentName,
     _deep_merge,
 )
-from vibe.core.config import VibeConfig
-from vibe.core.config.harness_files import HarnessFilesManager
-from vibe.core.tools.base import ToolPermission
-from vibe.core.types import LLMChunk, LLMMessage, LLMUsage, Role
+from drydock.core.config import VibeConfig
+from drydock.core.config.harness_files import HarnessFilesManager
+from drydock.core.tools.base import ToolPermission
+from drydock.core.types import LLMChunk, LLMMessage, LLMUsage, Role
 
 
 class TestDeepMerge:
@@ -186,7 +186,7 @@ class TestAgentApplyToConfig:
 
         mock_manager = _MockManager(sources=("user",))
         monkeypatch.setattr(
-            "vibe.core.config._settings.get_harness_files_manager", lambda: mock_manager
+            "drydock.core.config._settings.get_harness_files_manager", lambda: mock_manager
         )
 
         base = VibeConfig(include_project_context=False, include_prompt_detail=False)
@@ -572,7 +572,7 @@ class TestAgentLoopInitialization:
 
         mock_manager = _MockManager(sources=("user",))
         monkeypatch.setattr(
-            "vibe.core.config._settings.get_harness_files_manager", lambda: mock_manager
+            "drydock.core.config._settings.get_harness_files_manager", lambda: mock_manager
         )
 
         custom_agent = AgentProfile(
@@ -583,8 +583,8 @@ class TestAgentLoopInitialization:
             overrides={"system_prompt_id": "custom_agent"},
         )
         patched_agents = {**BUILTIN_AGENTS, "custom_test_agent": custom_agent}
-        monkeypatch.setattr("vibe.core.agents.models.BUILTIN_AGENTS", patched_agents)
-        monkeypatch.setattr("vibe.core.agents.manager.BUILTIN_AGENTS", patched_agents)
+        monkeypatch.setattr("drydock.core.agents.models.BUILTIN_AGENTS", patched_agents)
+        monkeypatch.setattr("drydock.core.agents.manager.BUILTIN_AGENTS", patched_agents)
 
         config = build_test_vibe_config(
             include_project_context=False, include_prompt_detail=False

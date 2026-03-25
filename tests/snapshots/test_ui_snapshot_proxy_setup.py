@@ -5,7 +5,7 @@ from textual.pilot import Pilot
 
 from tests.snapshots.base_snapshot_test_app import BaseSnapshotTestApp
 from tests.snapshots.snap_compare import SnapCompare
-from vibe.core.proxy_setup import get_current_proxy_settings, set_proxy_var
+from drydock.core.proxy_setup import get_current_proxy_settings, set_proxy_var
 
 
 class ProxySetupTestApp(BaseSnapshotTestApp):
@@ -114,7 +114,7 @@ def test_snapshot_proxy_setup_save_error(
     def raise_error(*args, **kwargs):
         raise OSError("Permission denied")
 
-    monkeypatch.setattr("vibe.core.proxy_setup.set_key", raise_error)
+    monkeypatch.setattr("drydock.core.proxy_setup.set_key", raise_error)
 
     async def run_before(pilot: Pilot) -> None:
         await pilot.pause(0.2)

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from vibe.acp.utils import get_proxy_help_text
-from vibe.core.paths import GLOBAL_ENV_FILE
-from vibe.core.proxy_setup import SUPPORTED_PROXY_VARS
+from drydock.acp.utils import get_proxy_help_text
+from drydock.core.paths import GLOBAL_ENV_FILE
+from drydock.core.proxy_setup import SUPPORTED_PROXY_VARS
 
 
 def _write_env_file(content: str) -> None:

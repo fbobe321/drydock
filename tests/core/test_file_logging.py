@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from vibe.core.logger import StructuredLogFormatter, apply_logging_config
+from drydock.core.logger import StructuredLogFormatter, apply_logging_config
 
 
 @pytest.fixture
@@ -17,10 +17,10 @@ def mock_log_dir(tmp_path: Path):
     mock_dir = MagicMock()
     mock_dir.path = tmp_path
     mock_file = MagicMock()
-    mock_file.path = tmp_path / "vibe.log"
+    mock_file.path = tmp_path / "drydock.log"
     with (
-        patch("vibe.core.logger.LOG_DIR", mock_dir),
-        patch("vibe.core.logger.LOG_FILE", mock_file),
+        patch("drydock.core.logger.LOG_DIR", mock_dir),
+        patch("drydock.core.logger.LOG_FILE", mock_file),
     ):
         yield tmp_path
 
@@ -175,7 +175,7 @@ class TestApplyLoggingConfig:
         apply_logging_config(test_logger)
         test_logger.info("Test log entry")
 
-        log_file = mock_log_dir / "vibe.log"
+        log_file = mock_log_dir / "drydock.log"
         assert log_file.exists()
 
     def test_log_entry_format(
@@ -188,7 +188,7 @@ class TestApplyLoggingConfig:
         apply_logging_config(test_logger)
         test_logger.warning("Test warning message")
 
-        log_file = mock_log_dir / "vibe.log"
+        log_file = mock_log_dir / "drydock.log"
         content = log_file.read_text()
 
         assert "WARNING" in content
@@ -206,7 +206,7 @@ class TestApplyLoggingConfig:
         test_logger.info("Info message")
         test_logger.warning("Warning message")
 
-        log_file = mock_log_dir / "vibe.log"
+        log_file = mock_log_dir / "drydock.log"
         content = log_file.read_text()
 
         assert "Debug message" not in content
@@ -220,10 +220,10 @@ class TestApplyLoggingConfig:
         mock_dir = MagicMock()
         mock_dir.path = log_dir
         mock_file = MagicMock()
-        mock_file.path = log_dir / "vibe.log"
+        mock_file.path = log_dir / "drydock.log"
         with (
-            patch("vibe.core.logger.LOG_DIR", mock_dir),
-            patch("vibe.core.logger.LOG_FILE", mock_file),
+            patch("drydock.core.logger.LOG_DIR", mock_dir),
+            patch("drydock.core.logger.LOG_FILE", mock_file),
         ):
             monkeypatch.setenv("LOG_LEVEL", "DEBUG")
             test_logger = logging.getLogger("test_mkdir")
@@ -243,7 +243,7 @@ class TestApplyLoggingConfig:
         apply_logging_config(test_logger)
         test_logger.debug("Debug message")
 
-        log_file = mock_log_dir / "vibe.log"
+        log_file = mock_log_dir / "drydock.log"
         content = log_file.read_text()
 
         assert "Debug message" in content
@@ -259,7 +259,7 @@ class TestApplyLoggingConfig:
         test_logger.info("Info message")
         test_logger.warning("Warning message")
 
-        log_file = mock_log_dir / "vibe.log"
+        log_file = mock_log_dir / "drydock.log"
         content = log_file.read_text()
 
         assert "Info message" not in content

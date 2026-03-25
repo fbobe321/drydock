@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator, Callable, Iterable, Sequence
 from typing import cast
 
 from tests.mock.utils import mock_llm_chunk
-from vibe.core.types import LLMChunk, LLMMessage, Role
+from drydock.core.types import LLMChunk, LLMMessage, Role
 
 
 class FakeBackend:

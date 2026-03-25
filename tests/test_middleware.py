@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from tests.conftest import build_test_agent_loop, build_test_vibe_config
-from vibe.core.agents.models import BUILTIN_AGENTS, CHAT, AgentProfile, BuiltinAgentName
-from vibe.core.config import VibeConfig
-from vibe.core.middleware import (
+from drydock.core.agents.models import BUILTIN_AGENTS, CHAT, AgentProfile, BuiltinAgentName
+from drydock.core.config import VibeConfig
+from drydock.core.middleware import (
     CHAT_AGENT_EXIT,
     CHAT_AGENT_REMINDER,
     PLAN_AGENT_EXIT,
@@ -16,7 +16,7 @@ from vibe.core.middleware import (
     ResetReason,
     make_plan_agent_reminder,
 )
-from vibe.core.types import AgentStats, MessageList
+from drydock.core.types import AgentStats, MessageList
 
 REMINDER = "test reminder"
 EXIT_MSG = "test exit"

@@ -11,8 +11,8 @@ from pytest import raises
 
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
-from vibe.acp.acp_agent_loop import VibeAcpAgentLoop
-from vibe.core.types import Role
+from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.core.types import Role
 
 
 class TestMultiSessionCore:

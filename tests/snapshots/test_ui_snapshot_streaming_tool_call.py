@@ -8,10 +8,10 @@ from textual.containers import VerticalScroll
 from textual.pilot import Pilot
 
 from tests.snapshots.snap_compare import SnapCompare
-from vibe.cli.textual_ui.widgets.status_message import StatusMessage
-from vibe.cli.textual_ui.widgets.tools import ToolCallMessage
-from vibe.core.tools.builtins.read_file import ReadFile, ReadFileArgs
-from vibe.core.types import ToolCallEvent
+from drydock.cli.textual_ui.widgets.status_message import StatusMessage
+from drydock.cli.textual_ui.widgets.tools import ToolCallMessage
+from drydock.core.tools.builtins.read_file import ReadFile, ReadFileArgs
+from drydock.core.types import ToolCallEvent
 
 
 class ToolCallStreamingUpdateTest(App):

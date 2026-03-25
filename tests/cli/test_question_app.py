@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from vibe.core.tools.builtins.ask_user_question import (
+from drydock.core.tools.builtins.ask_user_question import (
     AskUserQuestionArgs,
     Choice,
     Question,
@@ -63,7 +63,7 @@ def multi_select_args():
 
 class TestQuestionAppState:
     def test_init_state(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
 
@@ -73,7 +73,7 @@ class TestQuestionAppState:
         assert len(app.other_texts) == 0
 
     def test_total_options_single_select(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
 
@@ -81,7 +81,7 @@ class TestQuestionAppState:
         assert app._total_options == 3
 
     def test_total_options_multi_select_includes_submit(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
 
@@ -91,7 +91,7 @@ class TestQuestionAppState:
         assert app._submit_option_idx == 4
 
     def test_is_other_selected(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
 
@@ -100,7 +100,7 @@ class TestQuestionAppState:
         assert app._is_other_selected is True
 
     def test_is_submit_selected(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
 
@@ -109,7 +109,7 @@ class TestQuestionAppState:
         assert app._is_submit_selected is True
 
     def test_is_submit_selected_false_for_single_select(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
 
@@ -118,7 +118,7 @@ class TestQuestionAppState:
         assert app._is_submit_selected is False
 
     def test_store_other_text_per_question(self, multi_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_question_args)
 
@@ -134,7 +134,7 @@ class TestQuestionAppState:
         assert app._get_other_text(1) == "Custom Framework"
 
     def test_save_regular_option_answer(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         app.selected_option = 0  # PostgreSQL
@@ -147,7 +147,7 @@ class TestQuestionAppState:
         assert is_other is False
 
     def test_save_other_option_answer(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         app.selected_option = 2  # Other
@@ -161,7 +161,7 @@ class TestQuestionAppState:
         assert is_other is True
 
     def test_save_other_option_empty_does_not_save(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         app.selected_option = 2  # Other
@@ -172,14 +172,14 @@ class TestQuestionAppState:
         assert 0 not in app.answers
 
     def test_all_answered_false_initially(self, multi_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_question_args)
 
         assert app._all_answered() is False
 
     def test_all_answered_true_when_complete(self, multi_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_question_args)
         app.answers[0] = ("PostgreSQL", False)
@@ -188,7 +188,7 @@ class TestQuestionAppState:
         assert app._all_answered() is True
 
     def test_multi_select_toggle(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
 
@@ -209,7 +209,7 @@ class TestQuestionAppState:
         assert 2 in app.multi_selections[0]
 
     def test_multi_select_save_answer(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         app.multi_selections[0] = {0, 2}  # Auth and Logging
@@ -223,7 +223,7 @@ class TestQuestionAppState:
         assert is_other is False
 
     def test_multi_select_with_other(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         app.multi_selections[0] = {0, 3}  # Auth and Other
@@ -240,7 +240,7 @@ class TestQuestionAppState:
 
 class TestQuestionAppActions:
     def test_action_move_down(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         assert app.selected_option == 0
@@ -255,7 +255,7 @@ class TestQuestionAppActions:
         assert app.selected_option == 0  # Wraps around
 
     def test_action_move_up(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         assert app.selected_option == 0
@@ -267,7 +267,7 @@ class TestQuestionAppActions:
         assert app.selected_option == 1
 
     def test_switch_question_preserves_other_text(self, multi_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_question_args)
         app.other_texts[0] = "Text for Q1"
@@ -281,7 +281,7 @@ class TestQuestionAppActions:
 
 class TestMultiSelectOtherBehavior:
     def test_multi_select_other_does_not_advance_on_save(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         app.selected_option = 3  # Other option (3 options + Other)
@@ -294,7 +294,7 @@ class TestMultiSelectOtherBehavior:
         assert app.current_question_idx == 0
 
     def test_multi_select_other_toggle_adds_to_selections(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         other_idx = len(app._current_question.options)  # 3
@@ -315,7 +315,7 @@ class TestMultiSelectOtherBehavior:
         assert 1 in app.multi_selections[0]
 
     def test_multi_select_save_with_other_and_regular_options(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         other_idx = len(app._current_question.options)
@@ -334,7 +334,7 @@ class TestMultiSelectOtherBehavior:
         assert is_other is True
 
     def test_multi_select_other_without_text_not_in_answer(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         other_idx = len(app._current_question.options)
@@ -352,7 +352,7 @@ class TestMultiSelectOtherBehavior:
         assert is_other is False  # No valid Other text
 
     def test_multi_select_can_toggle_after_selecting_other(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         other_idx = len(app._current_question.options)
@@ -375,7 +375,7 @@ class TestMultiSelectOtherBehavior:
         assert other_idx in app.multi_selections[0]
 
     def test_multi_select_empty_selections_does_not_save(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
 
@@ -387,7 +387,7 @@ class TestMultiSelectOtherBehavior:
 
 class TestSingleSelectOtherBehavior:
     def test_single_select_other_with_text_saves(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         app.selected_option = 2  # Other
@@ -401,7 +401,7 @@ class TestSingleSelectOtherBehavior:
         assert is_other is True
 
     def test_single_select_other_without_text_does_not_save(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         app.selected_option = 2  # Other
@@ -412,7 +412,7 @@ class TestSingleSelectOtherBehavior:
         assert 0 not in app.answers
 
     def test_single_select_regular_option_saves_immediately(self, single_question_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(single_question_args)
         app.selected_option = 1  # MongoDB
@@ -429,7 +429,7 @@ class TestMultiSelectAutoSelect:
     def test_typing_auto_selects_other(self, multi_select_args):
         from unittest.mock import MagicMock
 
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         app.other_input = MagicMock()
@@ -449,7 +449,7 @@ class TestMultiSelectAutoSelect:
     def test_clearing_auto_deselects_other(self, multi_select_args):
         from unittest.mock import MagicMock
 
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         app.other_input = MagicMock()
@@ -469,7 +469,7 @@ class TestMultiSelectAutoSelect:
     def test_auto_select_preserves_other_selections(self, multi_select_args):
         from unittest.mock import MagicMock
 
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         app.other_input = MagicMock()
@@ -491,7 +491,7 @@ class TestMultiSelectAutoSelect:
 
 class TestMultiSelectSubmit:
     def test_navigate_to_submit(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
 
@@ -503,7 +503,7 @@ class TestMultiSelectSubmit:
         assert app._is_submit_selected is True
 
     def test_submit_wraps_around(self, multi_select_args):
-        from vibe.cli.textual_ui.widgets.question_app import QuestionApp
+        from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 
         app = QuestionApp(multi_select_args)
         app.selected_option = 4  # Submit

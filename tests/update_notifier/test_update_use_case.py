@@ -6,13 +6,13 @@ from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
 )
 from tests.update_notifier.adapters.fake_update_gateway import FakeUpdateGateway
-from vibe.cli.update_notifier import (
+from drydock.cli.update_notifier import (
     Update,
     UpdateCache,
     UpdateGatewayCause,
     UpdateGatewayError,
 )
-from vibe.cli.update_notifier.update import UpdateError, get_update_if_available
+from drydock.cli.update_notifier.update import UpdateError, get_update_if_available
 
 
 @pytest.fixture

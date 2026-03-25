@@ -14,8 +14,8 @@ from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
 )
 from tests.update_notifier.adapters.fake_update_gateway import FakeUpdateGateway
-from vibe.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from vibe.cli.update_notifier import UpdateCache
+from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
+from drydock.cli.update_notifier import UpdateCache
 
 
 class SnapshotTestAppWithWhatsNew(BaseSnapshotTestApp):
@@ -97,7 +97,7 @@ def test_snapshot_shows_whats_new_message(
     async def run_before(pilot: Pilot) -> None:
         await pilot.pause(0.5)
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         assert snap_compare(
             "test_ui_snapshot_whats_new.py:SnapshotTestAppWithWhatsNew",
             terminal_size=(120, 36),
@@ -114,7 +114,7 @@ def test_snapshot_shows_upgrade_message(
     async def run_before(pilot: Pilot) -> None:
         await pilot.pause(0.5)
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         assert snap_compare(
             "test_ui_snapshot_whats_new.py:SnapshotTestAppWithPlanUpgradeCTA",
             terminal_size=(120, 36),
@@ -131,7 +131,7 @@ def test_snapshot_shows_switch_message(
     async def run_before(pilot: Pilot) -> None:
         await pilot.pause(0.5)
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         assert snap_compare(
             "test_ui_snapshot_whats_new.py:SnapshotTestAppWithSwitchKeyCTA",
             terminal_size=(120, 36),
@@ -148,7 +148,7 @@ def test_snapshot_shows_no_plan_message(
     async def run_before(pilot: Pilot) -> None:
         await pilot.pause(0.5)
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         assert snap_compare(
             "test_ui_snapshot_whats_new.py:SnapshotTestAppWithWhatsNewNoPlanCTA",
             terminal_size=(120, 36),

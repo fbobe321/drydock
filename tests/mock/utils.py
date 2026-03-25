@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 import json
 
-from vibe.core.types import (
+from drydock.core.types import (
     LLMChunk,
     LLMMessage,
     LLMUsage,

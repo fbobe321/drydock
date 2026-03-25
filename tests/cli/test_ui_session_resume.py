@@ -16,16 +16,16 @@ from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
 )
 from tests.update_notifier.adapters.fake_update_gateway import FakeUpdateGateway
-from vibe.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from vibe.cli.textual_ui.widgets.messages import (
+from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
+from drydock.cli.textual_ui.widgets.messages import (
     AssistantMessage,
     UserMessage,
     WhatsNewMessage,
 )
-from vibe.cli.textual_ui.widgets.tools import ToolCallMessage, ToolResultMessage
-from vibe.cli.update_notifier import UpdateCache
-from vibe.core.config import VibeConfig
-from vibe.core.types import FunctionCall, LLMMessage, Role, ToolCall
+from drydock.cli.textual_ui.widgets.tools import ToolCallMessage, ToolResultMessage
+from drydock.cli.update_notifier import UpdateCache
+from drydock.core.config import VibeConfig
+from drydock.core.types import FunctionCall, LLMMessage, Role, ToolCall
 
 
 @pytest.mark.asyncio
@@ -179,7 +179,7 @@ async def test_ui_rebuilds_history_when_whats_new_is_shown(
         config=config,
     )
 
-    with patch("vibe.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
         whats_new_file = tmp_path / "whats_new.md"
         whats_new_file.write_text("# What's New\n\n- Feature 1")
 

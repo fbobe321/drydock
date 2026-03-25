@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from vibe.cli.update_notifier.update import do_update
+from drydock.cli.update_notifier.update import do_update
 
 
 @pytest.mark.asyncio
@@ -14,10 +14,10 @@ async def test_do_update_returns_true_when_first_command_succeeds() -> None:
     mock_process.returncode = 0
 
     with patch(
-        "vibe.cli.update_notifier.update.UPDATE_COMMANDS", ["command_1", "command_2"]
+        "drydock.cli.update_notifier.update.UPDATE_COMMANDS", ["command_1", "command_2"]
     ):
         with patch(
-            "vibe.cli.update_notifier.update.asyncio.create_subprocess_shell"
+            "drydock.cli.update_notifier.update.asyncio.create_subprocess_shell"
         ) as mock_create:
             mock_create.return_value = mock_process
 
@@ -39,10 +39,10 @@ async def test_do_update_returns_true_when_second_command_succeeds() -> None:
     mock_process_success.returncode = 0
 
     with patch(
-        "vibe.cli.update_notifier.update.UPDATE_COMMANDS", ["command_1", "command_2"]
+        "drydock.cli.update_notifier.update.UPDATE_COMMANDS", ["command_1", "command_2"]
     ):
         with patch(
-            "vibe.cli.update_notifier.update.asyncio.create_subprocess_shell"
+            "drydock.cli.update_notifier.update.asyncio.create_subprocess_shell"
         ) as mock_create:
             mock_create.side_effect = [mock_process_fail, mock_process_success]
 
@@ -61,10 +61,10 @@ async def test_do_update_returns_false_when_all_commands_fail() -> None:
     mock_process.returncode = 1
 
     with patch(
-        "vibe.cli.update_notifier.update.UPDATE_COMMANDS", ["command_1", "command_2"]
+        "drydock.cli.update_notifier.update.UPDATE_COMMANDS", ["command_1", "command_2"]
     ):
         with patch(
-            "vibe.cli.update_notifier.update.asyncio.create_subprocess_shell"
+            "drydock.cli.update_notifier.update.asyncio.create_subprocess_shell"
         ) as mock_create:
             mock_create.return_value = mock_process
 

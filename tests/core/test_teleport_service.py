@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import zstandard
 
-from vibe.core.teleport.errors import (
+from drydock.core.teleport.errors import (
     ServiceTeleportError,
     ServiceTeleportNotSupportedError,
 )
-from vibe.core.teleport.git import GitRepoInfo
-from vibe.core.teleport.nuage import TeleportSession
-from vibe.core.teleport.teleport import _NUAGE_EXECUTION_URL_TEMPLATE, TeleportService
-from vibe.core.teleport.types import (
+from drydock.core.teleport.git import GitRepoInfo
+from drydock.core.teleport.nuage import TeleportSession
+from drydock.core.teleport.teleport import _NUAGE_EXECUTION_URL_TEMPLATE, TeleportService
+from drydock.core.teleport.types import (
     TeleportAuthCompleteEvent,
     TeleportAuthRequiredEvent,
     TeleportCheckingGitEvent,
@@ -32,10 +32,10 @@ from vibe.core.teleport.types import (
 
 
 def _reimport_agent_loop() -> Any:
-    to_clear = ("vibe.core.agent_loop", "git", "vibe.core.teleport")
+    to_clear = ("drydock.core.agent_loop", "git", "drydock.core.teleport")
     for k in [k for k in sys.modules if any(k.startswith(m) for m in to_clear)]:
         del sys.modules[k]
-    return importlib.import_module("vibe.core.agent_loop")
+    return importlib.import_module("drydock.core.agent_loop")
 
 
 class TestTeleportServiceCompressDiff:

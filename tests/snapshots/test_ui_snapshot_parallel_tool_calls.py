@@ -8,10 +8,10 @@ from textual.pilot import Pilot
 from textual.widget import Widget
 
 from tests.snapshots.snap_compare import SnapCompare
-from vibe.cli.textual_ui.handlers.event_handler import EventHandler
-from vibe.cli.textual_ui.widgets.tools import ToolCallMessage
-from vibe.core.tools.builtins.read_file import ReadFile, ReadFileArgs, ReadFileResult
-from vibe.core.types import ToolCallEvent, ToolResultEvent
+from drydock.cli.textual_ui.handlers.event_handler import EventHandler
+from drydock.cli.textual_ui.widgets.tools import ToolCallMessage
+from drydock.core.tools.builtins.read_file import ReadFile, ReadFileArgs, ReadFileResult
+from drydock.core.types import ToolCallEvent, ToolResultEvent
 
 
 class ParallelToolCallsApp(App):

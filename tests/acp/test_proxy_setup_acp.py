@@ -9,8 +9,8 @@ import pytest
 from tests.acp.conftest import _create_acp_agent
 from tests.conftest import build_test_vibe_config
 from tests.stubs.fake_client import FakeClient
-from vibe.acp.acp_agent_loop import VibeAcpAgentLoop
-from vibe.core.agent_loop import AgentLoop
+from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.core.agent_loop import AgentLoop
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def acp_agent_loop(backend) -> VibeAcpAgentLoop:
             self._base_config = config
             self.agent_manager.invalidate_config()
 
-    patch("vibe.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgentLoop).start()
+    patch("drydock.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgentLoop).start()
 
     return _create_acp_agent()
 
@@ -70,7 +70,7 @@ class TestProxySetupCommand:
             path = env_file
 
         monkeypatch.setattr(
-            "vibe.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
+            "drydock.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
         )
 
         session_response = await acp_agent_loop.new_session(
@@ -110,7 +110,7 @@ class TestProxySetupCommand:
             path = env_file
 
         monkeypatch.setattr(
-            "vibe.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
+            "drydock.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
         )
 
         session_response = await acp_agent_loop.new_session(
@@ -160,7 +160,7 @@ class TestProxySetupCommand:
             path = env_file
 
         monkeypatch.setattr(
-            "vibe.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
+            "drydock.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
         )
 
         session_response = await acp_agent_loop.new_session(
@@ -203,7 +203,7 @@ class TestProxySetupCommand:
             path = env_file
 
         monkeypatch.setattr(
-            "vibe.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
+            "drydock.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
         )
 
         session_response = await acp_agent_loop.new_session(
@@ -245,7 +245,7 @@ class TestProxySetupCommand:
             path = env_file
 
         monkeypatch.setattr(
-            "vibe.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
+            "drydock.core.proxy_setup.GLOBAL_ENV_FILE", FakeGlobalEnvFile()
         )
 
         session_response = await acp_agent_loop.new_session(

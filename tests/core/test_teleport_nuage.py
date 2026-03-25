@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from vibe.core.auth import EncryptedPayload
-from vibe.core.teleport.errors import ServiceTeleportError
-from vibe.core.teleport.nuage import (
+from drydock.core.auth import EncryptedPayload
+from drydock.core.teleport.errors import ServiceTeleportError
+from drydock.core.teleport.nuage import (
     CreateLeChatThreadInput,
     GitRepoConfig,
     NuageClient,
@@ -196,7 +196,7 @@ class TestNuageClientSendGithubToken:
             encrypted_key="enc_key", nonce="nonce", ciphertext="cipher"
         )
         monkeypatch.setattr(
-            "vibe.core.teleport.nuage.encrypt", lambda _token, _key: encrypted
+            "drydock.core.teleport.nuage.encrypt", lambda _token, _key: encrypted
         )
 
         await nuage.send_github_token("exec-123", "ghp_token")
@@ -279,7 +279,7 @@ class TestNuageClientCreateLeChatThread:
             encrypted_key="enc_key", nonce="nonce", ciphertext="cipher"
         )
         monkeypatch.setattr(
-            "vibe.core.teleport.nuage.encrypt", lambda _token, _key: encrypted
+            "drydock.core.teleport.nuage.encrypt", lambda _token, _key: encrypted
         )
 
         url = await nuage.create_le_chat_thread("exec-123", "test message")
@@ -320,7 +320,7 @@ class TestNuageClientCreateLeChatThread:
             encrypted_key="enc_key", nonce="nonce", ciphertext="cipher"
         )
         monkeypatch.setattr(
-            "vibe.core.teleport.nuage.encrypt", lambda _token, _key: encrypted
+            "drydock.core.teleport.nuage.encrypt", lambda _token, _key: encrypted
         )
 
         with pytest.raises(

@@ -6,9 +6,9 @@ import pytest
 
 from tests.conftest import build_test_vibe_config
 from tests.skills.conftest import create_skill
-from vibe.core.config import VibeConfig
-from vibe.core.skills.manager import SkillManager
-from vibe.core.trusted_folders import trusted_folders_manager
+from drydock.core.config import VibeConfig
+from drydock.core.skills.manager import SkillManager
+from drydock.core.trusted_folders import trusted_folders_manager
 
 
 @pytest.fixture

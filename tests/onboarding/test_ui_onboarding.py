@@ -6,9 +6,9 @@ import pytest
 from textual.pilot import Pilot
 from textual.widgets import Input
 
-from vibe.core.paths import GLOBAL_ENV_FILE
-from vibe.setup.onboarding import OnboardingApp
-from vibe.setup.onboarding.screens.api_key import ApiKeyScreen
+from drydock.core.paths import GLOBAL_ENV_FILE
+from drydock.setup.onboarding import OnboardingApp
+from drydock.setup.onboarding.screens.api_key import ApiKeyScreen
 
 
 async def _wait_for(

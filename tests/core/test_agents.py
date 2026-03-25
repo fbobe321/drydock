@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from tests.conftest import build_test_vibe_config
-from vibe.core.agents.manager import AgentManager
-from vibe.core.agents.models import BUILTIN_AGENTS, EXPLORE, AgentSafety, AgentType
+from drydock.core.agents.manager import AgentManager
+from drydock.core.agents.models import BUILTIN_AGENTS, EXPLORE, AgentSafety, AgentType
 
 
 class TestAgentProfile:

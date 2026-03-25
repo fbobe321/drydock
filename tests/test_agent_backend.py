@@ -13,8 +13,8 @@ import pytest
 from tests.conftest import build_test_agent_loop, build_test_vibe_config
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
-from vibe.core.config import Backend, ModelConfig, ProviderConfig, VibeConfig
-from vibe.core.types import EntrypointMetadata
+from drydock.core.config import Backend, ModelConfig, ProviderConfig, VibeConfig
+from drydock.core.types import EntrypointMetadata
 
 
 def _two_model_vibe_config(active_model: str) -> VibeConfig:

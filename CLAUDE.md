@@ -28,12 +28,12 @@ python3 -c "import ast; ast.parse(open('path/to/file.py').read())"
 
 ## Key Architecture
 
-- `vibe/core/agent_loop.py` — Main agent loop. Loop detection, message ordering, tool execution. **Most changes go here.**
-- `vibe/core/programmatic.py` — Headless API entry point used by SWE-bench harness
-- `vibe/core/tools/builtins/bash.py` — Shell tool with allowlist/denylist, conda support
-- `vibe/core/tools/builtins/search_replace.py` — File editing tool with fuzzy matching
-- `vibe/core/prompts/cli.md` — System prompt (two-phase workflow, SWE-bench rules)
-- `vibe/core/types.py` — `MessageList` (custom Sequence, use `.reset()` not `=[]`)
+- `drydock/core/agent_loop.py` — Main agent loop. Loop detection, message ordering, tool execution. **Most changes go here.**
+- `drydock/core/programmatic.py` — Headless API entry point used by SWE-bench harness
+- `drydock/core/tools/builtins/bash.py` — Shell tool with allowlist/denylist, conda support
+- `drydock/core/tools/builtins/search_replace.py` — File editing tool with fuzzy matching
+- `drydock/core/prompts/cli.md` — System prompt (two-phase workflow, SWE-bench rules)
+- `drydock/core/types.py` — `MessageList` (custom Sequence, use `.reset()` not `=[]`)
 
 ## Critical Constraints
 

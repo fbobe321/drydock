@@ -5,7 +5,7 @@ from dataclasses import asdict
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from vibe.core.auth import EncryptedPayload, decrypt, encrypt
+from drydock.core.auth import EncryptedPayload, decrypt, encrypt
 
 
 def _generate_test_key_pair() -> tuple[bytes, bytes]:
