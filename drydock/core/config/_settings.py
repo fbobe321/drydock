@@ -310,6 +310,14 @@ class VibeConfig(BaseSettings):
     enable_notifications: bool = True
     api_timeout: float = 720.0
     auto_compact_threshold: int = 200_000
+    consultant_model: str = Field(
+        default="",
+        description=(
+            "Model name for the /consult command. Must match a model defined in "
+            "your config. The consultant provides read-only advice — it never "
+            "calls tools. Leave empty to disable. Example: 'gemini-2.5-pro'"
+        ),
+    )
 
     # TODO(vibe-nuage): remove exclude=True once the feature is publicly available
     nuage_enabled: bool = Field(default=False, exclude=True)

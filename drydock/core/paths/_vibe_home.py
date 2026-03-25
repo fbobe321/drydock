@@ -17,8 +17,35 @@ class GlobalPath:
 
 
 _DEFAULT_DRYDOCK_HOME = Path.home() / ".drydock"
-# Fall back to ~/.vibe if it exists and ~/.drydock doesn't (migration support)
 _DEFAULT_VIBE_HOME = Path.home() / ".vibe"
+
+_migration_done = False
+
+
+def _migrate_vibe_to_drydock() -> None:
+    """Auto-migrate ~/.vibe → ~/.drydock if the user hasn't migrated yet."""
+    global _migration_done
+    if _migration_done:
+        return
+    _migration_done = True
+
+    if not _DEFAULT_VIBE_HOME.exists() or _DEFAULT_DRYDOCK_HOME.exists():
+        return  # Nothing to migrate, or already migrated
+
+    import shutil
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        shutil.copytree(_DEFAULT_VIBE_HOME, _DEFAULT_DRYDOCK_HOME)
+        logger.info("Migrated ~/.vibe → ~/.drydock")
+        # Leave a note in the old directory
+        (_DEFAULT_VIBE_HOME / "MIGRATED.txt").write_text(
+            "This config has been migrated to ~/.drydock/\n"
+            "You can safely delete this .vibe directory.\n"
+        )
+    except (OSError, PermissionError) as e:
+        logger.warning("Could not migrate ~/.vibe → ~/.drydock: %s", e)
 
 
 def _get_vibe_home() -> Path:
@@ -27,11 +54,12 @@ def _get_vibe_home() -> Path:
         return Path(drydock_home).expanduser().resolve()
     if vibe_home := os.getenv("VIBE_HOME"):
         return Path(vibe_home).expanduser().resolve()
-    # Default: use ~/.drydock, fall back to ~/.vibe if it exists
+
+    # Auto-migrate ~/.vibe → ~/.drydock on first run
+    _migrate_vibe_to_drydock()
+
     if _DEFAULT_DRYDOCK_HOME.exists():
         return _DEFAULT_DRYDOCK_HOME
-    if _DEFAULT_VIBE_HOME.exists():
-        return _DEFAULT_VIBE_HOME
     return _DEFAULT_DRYDOCK_HOME
 
 

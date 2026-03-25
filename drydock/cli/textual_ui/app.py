@@ -948,22 +948,24 @@ class VibeApp(App):  # noqa: PLR0904
             )
             return
 
-        # Get consultant model from config or env
+        # Get consultant model from config, CLI flag, or env
         import os
-        consultant_model = os.environ.get("DRYDOCK_CONSULTANT_MODEL", "")
-        if not consultant_model:
-            # Check config for consultant_model setting
-            try:
-                consultant_model = getattr(self.agent_loop.config, "consultant_model", "")
-            except Exception:
-                pass
+        consultant_model = (
+            getattr(self.agent_loop.config, "consultant_model", "")
+            or os.environ.get("DRYDOCK_CONSULTANT_MODEL", "")
+        )
 
         if not consultant_model:
+            # List available models to help the user
+            model_names = [m.name for m in self.agent_loop.config.models]
             await self._mount_and_scroll(
                 ErrorMessage(
-                    "No consultant model configured.\n"
-                    "Set via: `drydock --consultant gemini-2.5-pro` or "
-                    "`export DRYDOCK_CONSULTANT_MODEL=gemini-2.5-pro`",
+                    "No consultant model configured.\n\n"
+                    f"Available models: {', '.join(model_names)}\n\n"
+                    "Set in config.toml:\n"
+                    "  `consultant_model = \"gemini-2.5-pro\"`\n\n"
+                    "Or via CLI:\n"
+                    "  `drydock --consultant gemini-2.5-pro`",
                     collapsed=self._tools_collapsed,
                 )
             )
@@ -975,7 +977,11 @@ class VibeApp(App):  # noqa: PLR0904
 
         try:
             from drydock.core.consultant import ask_consultant
-            advice = await ask_consultant(question, model=consultant_model)
+            advice = await ask_consultant(
+                question,
+                config=self.agent_loop.config,
+                model=consultant_model,
+            )
 
             if not advice or advice.startswith("(Consultant unavailable"):
                 await self._mount_and_scroll(
