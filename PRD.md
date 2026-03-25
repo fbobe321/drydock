@@ -124,6 +124,40 @@ Diagnosed and fixed the remaining crash modes. Ran validation batches (51 tasks 
 - **Full rebrand** — Mistral Vibe → Drydock throughout CLI, TUI, docs, config
 - **Published to GitHub** — https://github.com/fbobe321/drydock
 
+### Phase 5: UX Overhaul & Regression Tests (Mar 24)
+
+User-reported issues from real usage testing, all fixed:
+
+| Fix | Details |
+|-----|---------|
+| Wave spinner | ~≈~ animation with ocean blue colors, replaces snake |
+| .drydock config | Default config dir is ~/.drydock (falls back to ~/.vibe) |
+| Double Ctrl-C to quit | Single cancels operation, double within 1s exits |
+| --dangerously-skip-permissions | CLI flag for auto-approve from start |
+| Nautical Easter eggs | Removed all French terms (chocolatine, Proust, etc.) |
+| Slower state switching | Deque maxlen 2→5, no rapid flickering |
+| Write file timeout | 30s anyio.fail_after on all file I/O (read, write, search_replace) |
+| Binary file guard | write_file rejects .pptx/.xlsx/.pdf with guidance for python-pptx |
+| pptx skill | Bundled create-presentation skill with template handling & verification |
+| Bash abuse detection | Nudge after 10+ bash calls without editing |
+| search_replace failure guidance | After 3+ failures, tells model to re-read the file |
+| Alternating loop detection | Catches A→B→A→B→A→B→A→B patterns |
+| Progressive budget warnings | Nudges at 50, 100, 150 tool calls |
+| Ambiguous prompt guard | "test"/"check" → asks for clarification instead of exploring |
+| Unknown tool error | Lists available tools (fixes "Ralph tool" hallucination) |
+| SSL proxy for websearch | HTTPS_PROXY and SSL_CERT_FILE support |
+| Message queuing | New input queued during agent work, processed after completion |
+| Resume message fixed | Says "drydock --resume" not "vibe --resume" |
+| Mouse scroll | MOUSE_SUPPORT enabled for chat window |
+| Ocean blue onboarding | Welcome screen gradient updated from orange to blue |
+
+### Phase 5b: Testing & CI (Mar 24)
+
+- **64 regression tests** in 2 test files (0.12s total runtime)
+- **Tests gate all deploys** — deploy_to_github.sh and publish_to_pypi.sh abort on failure
+- **Continuous SWE-bench loop** — 320/500 tasks tested, 45.3% pass rate, auto-restarts on reboot
+- **PyPI published** — drydock-cli v0.4.1
+
 ---
 
 ## Architecture
