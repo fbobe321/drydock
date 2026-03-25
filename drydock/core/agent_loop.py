@@ -835,20 +835,57 @@ class AgentLoop:
                 )
             )
 
-    def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
-        """Block exact-duplicate tool calls. Returns cached result or None."""
+    def _get_attempted_summary(self) -> str:
+        """Build a summary of what the agent has already tried."""
+        if not self._tool_call_history:
+            return ""
+        attempts = []
+        for sig, (count, result) in self._tool_call_history.items():
+            if count >= 2:
+                attempts.append(f"  - Ran {count}x, result: {result[:80]}")
+        if attempts:
+            return "ALREADY ATTEMPTED (do NOT repeat):\n" + "\n".join(attempts[:10])
+        return ""
+
+    async def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
+        """Block exact-duplicate tool calls. Returns cached result or None.
+        On 3rd attempt, auto-consults the smarter model if available."""
         sig = hashlib.md5(
             f"{tool_call.tool_name}:{tool_call.raw_arguments}".encode()
         ).hexdigest()
 
         count, last_result = self._tool_call_history.get(sig, (0, ""))
         if count >= 2:
-            return (
-                f"CIRCUIT BREAKER: You already ran this exact command {count} times "
-                f"and got the same result. Previous result: {last_result[:300]}\n\n"
-                f"Do NOT repeat. Try a DIFFERENT approach, different arguments, "
-                f"or a different tool."
+            attempted = self._get_attempted_summary()
+            msg = (
+                f"CIRCUIT BREAKER: You already ran `{tool_call.tool_name}` with these "
+                f"exact arguments {count} times and got the same result each time.\n\n"
+                f"Previous result: {last_result[:200]}\n\n"
+                f"{attempted}\n\n"
+                f"STOP repeating. You MUST try something DIFFERENT:\n"
+                f"- Different arguments or search terms\n"
+                f"- A completely different tool\n"
+                f"- Ask the user for clarification"
             )
+
+            # Auto-consult smarter model if available
+            if count == 2:
+                try:
+                    from drydock.core.consultant import is_consultant_available, ask_consultant
+                    if is_consultant_available():
+                        question = (
+                            f"I'm stuck in a loop. I keep running `{tool_call.tool_name}` "
+                            f"with args: {tool_call.raw_arguments[:100]} "
+                            f"and getting: {last_result[:200]}. "
+                            f"What should I do differently?"
+                        )
+                        advice = await ask_consultant(question)
+                        if advice:
+                            msg += f"\n\nCONSULTANT ADVICE: {advice}"
+                except Exception as e:
+                    logger.debug("Consultant call failed: %s", e)
+
+            return msg
         return None
 
     def _circuit_breaker_record(self, tool_call: ResolvedToolCall, result_text: str) -> None:
@@ -863,7 +900,7 @@ class AgentLoop:
         self, tool_call: ResolvedToolCall
     ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent]:
         # Circuit breaker: block exact duplicate calls after 2 attempts
-        if blocked := self._circuit_breaker_check(tool_call):
+        if blocked := await self._circuit_breaker_check(tool_call):
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,

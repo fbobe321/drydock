@@ -391,6 +391,7 @@ class TestCircuitBreaker:
     """Prevents exact duplicate tool calls."""
 
     def test_circuit_breaker_blocks_after_2(self):
+        import asyncio
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
         from types import SimpleNamespace
@@ -399,21 +400,19 @@ class TestCircuitBreaker:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        # Mock tool call with same name+args
         tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -ltr"}')
 
-        # First two calls: no block
-        assert al._circuit_breaker_check(tc) is None
+        assert asyncio.run(al._circuit_breaker_check(tc)) is None
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
-        assert al._circuit_breaker_check(tc) is None
+        assert asyncio.run(al._circuit_breaker_check(tc)) is None
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
 
-        # Third call: BLOCKED
-        result = al._circuit_breaker_check(tc)
+        result = asyncio.run(al._circuit_breaker_check(tc))
         assert result is not None
         assert "CIRCUIT BREAKER" in result
 
     def test_different_args_not_blocked(self):
+        import asyncio
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
         from types import SimpleNamespace
@@ -427,9 +426,8 @@ class TestCircuitBreaker:
 
         al._circuit_breaker_record(tc1, "result1")
         al._circuit_breaker_record(tc1, "result1")
-        # tc1 blocked, tc2 still works
-        assert al._circuit_breaker_check(tc1) is not None
-        assert al._circuit_breaker_check(tc2) is None
+        assert asyncio.run(al._circuit_breaker_check(tc1)) is not None
+        assert asyncio.run(al._circuit_breaker_check(tc2)) is None
 
 
 # ============================================================================
