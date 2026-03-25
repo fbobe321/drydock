@@ -72,6 +72,11 @@ class CommandRegistry:
                 description="Configure proxy and SSL certificate settings",
                 handler="_show_proxy_setup",
             ),
+            "consult": Command(
+                aliases=frozenset(["/consult"]),
+                description="Ask a smarter model for advice (response visible to local model)",
+                handler="_consult_command",
+            ),
             "resume": Command(
                 aliases=frozenset(["/resume", "/continue"]),
                 description="Browse and resume past sessions",
@@ -92,7 +97,20 @@ class CommandRegistry:
         return self.commands.get(cmd_name) if cmd_name else None
 
     def get_command_name(self, user_input: str) -> str | None:
-        return self._alias_map.get(user_input.lower().strip())
+        stripped = user_input.lower().strip()
+        # Exact match first
+        if stripped in self._alias_map:
+            return self._alias_map[stripped]
+        # Prefix match for commands that take arguments (e.g., /consult <question>)
+        first_word = stripped.split()[0] if stripped else ""
+        if first_word in self._alias_map:
+            return self._alias_map[first_word]
+        return None
+
+    def get_command_args(self, user_input: str) -> str:
+        """Extract arguments after the command name."""
+        parts = user_input.strip().split(None, 1)
+        return parts[1] if len(parts) > 1 else ""
 
     def get_help_text(self) -> str:
         lines: list[str] = [

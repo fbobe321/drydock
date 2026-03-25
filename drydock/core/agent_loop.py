@@ -847,9 +847,8 @@ class AgentLoop:
             return "ALREADY ATTEMPTED (do NOT repeat):\n" + "\n".join(attempts[:10])
         return ""
 
-    async def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
-        """Block exact-duplicate tool calls. Returns cached result or None.
-        On 3rd attempt, auto-consults the smarter model if available."""
+    def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
+        """Block exact-duplicate tool calls. Returns cached result or None."""
         sig = hashlib.md5(
             f"{tool_call.tool_name}:{tool_call.raw_arguments}".encode()
         ).hexdigest()
@@ -868,22 +867,16 @@ class AgentLoop:
                 f"- Ask the user for clarification"
             )
 
-            # Auto-consult smarter model if available
-            if count == 2:
-                try:
-                    from drydock.core.consultant import is_consultant_available, ask_consultant
-                    if is_consultant_available():
-                        question = (
-                            f"I'm stuck in a loop. I keep running `{tool_call.tool_name}` "
-                            f"with args: {tool_call.raw_arguments[:100]} "
-                            f"and getting: {last_result[:200]}. "
-                            f"What should I do differently?"
-                        )
-                        advice = await ask_consultant(question)
-                        if advice:
-                            msg += f"\n\nCONSULTANT ADVICE: {advice}"
-                except Exception as e:
-                    logger.debug("Consultant call failed: %s", e)
+            # Suggest using /consult if a consultant model is configured
+            try:
+                from drydock.core.consultant import is_consultant_available
+                if is_consultant_available():
+                    msg += (
+                        "\n\nTIP: A consultant model is available. "
+                        "The user can type `/consult <question>` to ask it for advice."
+                    )
+            except Exception:
+                pass
 
             return msg
         return None
@@ -900,7 +893,7 @@ class AgentLoop:
         self, tool_call: ResolvedToolCall
     ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent]:
         # Circuit breaker: block exact duplicate calls after 2 attempts
-        if blocked := await self._circuit_breaker_check(tool_call):
+        if blocked := self._circuit_breaker_check(tool_call):
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,

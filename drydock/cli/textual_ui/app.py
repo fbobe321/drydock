@@ -520,10 +520,18 @@ class VibeApp(App):  # noqa: PLR0904
                 )
             await self._mount_and_scroll(UserMessage(user_input))
             handler = getattr(self, command.handler)
+            # Pass command args to handlers that accept them
+            cmd_args = self.commands.get_command_args(user_input)
             if asyncio.iscoroutinefunction(handler):
-                await handler()
+                try:
+                    await handler(cmd_args)
+                except TypeError:
+                    await handler()  # Handler doesn't accept args
             else:
-                handler()
+                try:
+                    handler(cmd_args)
+                except TypeError:
+                    handler()
             return True
         return False
 
@@ -926,6 +934,78 @@ class VibeApp(App):  # noqa: PLR0904
 - **Cost**: ${stats.session_cost:.4f}
 """
         await self._mount_and_scroll(UserCommandMessage(status_text))
+
+    async def _consult_command(self, question: str = "") -> None:
+        """Ask a consultant model for advice. Response goes into context."""
+        if not question:
+            await self._mount_and_scroll(
+                UserCommandMessage(
+                    "Usage: `/consult <your question>`\n\n"
+                    "Asks a smarter model for advice. The response appears in the "
+                    "conversation so the local model can see and act on it.\n\n"
+                    "Configure: set `consultant_model` in config.toml or use `--consultant MODEL`"
+                )
+            )
+            return
+
+        # Get consultant model from config or env
+        import os
+        consultant_model = os.environ.get("DRYDOCK_CONSULTANT_MODEL", "")
+        if not consultant_model:
+            # Check config for consultant_model setting
+            try:
+                consultant_model = getattr(self.agent_loop.config, "consultant_model", "")
+            except Exception:
+                pass
+
+        if not consultant_model:
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    "No consultant model configured.\n"
+                    "Set via: `drydock --consultant gemini-2.5-pro` or "
+                    "`export DRYDOCK_CONSULTANT_MODEL=gemini-2.5-pro`",
+                    collapsed=self._tools_collapsed,
+                )
+            )
+            return
+
+        await self._mount_and_scroll(
+            UserCommandMessage(f"Consulting {consultant_model}...")
+        )
+
+        try:
+            from drydock.core.consultant import ask_consultant
+            advice = await ask_consultant(question, model=consultant_model)
+
+            if not advice or advice.startswith("(Consultant unavailable"):
+                await self._mount_and_scroll(
+                    ErrorMessage(
+                        f"Consultant ({consultant_model}) unavailable: {advice}",
+                        collapsed=self._tools_collapsed,
+                    )
+                )
+                return
+
+            # Show the advice in the UI
+            response_text = f"**Consultant ({consultant_model}):**\n\n{advice}"
+            await self._mount_and_scroll(UserCommandMessage(response_text))
+
+            # Inject into the message history so the LOCAL model can see it
+            from drydock.core.types import LLMMessage, Role
+            self.agent_loop.messages.append(
+                LLMMessage(
+                    role=Role.user,
+                    content=f"[CONSULTANT ADVICE from {consultant_model}]: {advice}"
+                )
+            )
+
+        except Exception as e:
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    f"Consultant error: {e}",
+                    collapsed=self._tools_collapsed,
+                )
+            )
 
     async def _show_config(self) -> None:
         """Switch to the configuration app in the bottom panel."""

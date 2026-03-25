@@ -402,12 +402,12 @@ class TestCircuitBreaker:
 
         tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -ltr"}')
 
-        assert asyncio.run(al._circuit_breaker_check(tc)) is None
+        assert al._circuit_breaker_check(tc) is None
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
-        assert asyncio.run(al._circuit_breaker_check(tc)) is None
+        assert al._circuit_breaker_check(tc) is None
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
 
-        result = asyncio.run(al._circuit_breaker_check(tc))
+        result = al._circuit_breaker_check(tc)
         assert result is not None
         assert "CIRCUIT BREAKER" in result
 
@@ -426,8 +426,8 @@ class TestCircuitBreaker:
 
         al._circuit_breaker_record(tc1, "result1")
         al._circuit_breaker_record(tc1, "result1")
-        assert asyncio.run(al._circuit_breaker_check(tc1)) is not None
-        assert asyncio.run(al._circuit_breaker_check(tc2)) is None
+        assert al._circuit_breaker_check(tc1) is not None
+        assert al._circuit_breaker_check(tc2) is None
 
 
 # ============================================================================
