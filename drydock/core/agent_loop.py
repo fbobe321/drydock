@@ -188,6 +188,10 @@ class AgentLoop:
         self.middleware_pipeline = MiddlewarePipeline()
         self._setup_middleware()
 
+        # Circuit breaker: track tool call signatures to prevent exact repeats
+        # Key: hash(tool_name + args), Value: (count, last_result_snippet)
+        self._tool_call_history: dict[str, tuple[int, str]] = {}
+
         system_prompt = get_universal_system_prompt(
             self.tool_manager, self.config, self.skill_manager, self.agent_manager
         )
@@ -831,9 +835,44 @@ class AgentLoop:
                 )
             )
 
+    def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
+        """Block exact-duplicate tool calls. Returns cached result or None."""
+        sig = hashlib.md5(
+            f"{tool_call.tool_name}:{tool_call.raw_arguments}".encode()
+        ).hexdigest()
+
+        count, last_result = self._tool_call_history.get(sig, (0, ""))
+        if count >= 2:
+            return (
+                f"CIRCUIT BREAKER: You already ran this exact command {count} times "
+                f"and got the same result. Previous result: {last_result[:300]}\n\n"
+                f"Do NOT repeat. Try a DIFFERENT approach, different arguments, "
+                f"or a different tool."
+            )
+        return None
+
+    def _circuit_breaker_record(self, tool_call: ResolvedToolCall, result_text: str) -> None:
+        """Record a tool call execution for circuit breaker tracking."""
+        sig = hashlib.md5(
+            f"{tool_call.tool_name}:{tool_call.raw_arguments}".encode()
+        ).hexdigest()
+        count, _ = self._tool_call_history.get(sig, (0, ""))
+        self._tool_call_history[sig] = (count + 1, result_text[:500])
+
     async def _process_one_tool_call(
         self, tool_call: ResolvedToolCall
     ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent]:
+        # Circuit breaker: block exact duplicate calls after 2 attempts
+        if blocked := self._circuit_breaker_check(tool_call):
+            yield ToolResultEvent(
+                tool_name=tool_call.tool_name,
+                tool_class=tool_call.tool_class,
+                error=blocked,
+                tool_call_id=tool_call.call_id,
+            )
+            self._handle_tool_response(tool_call, blocked, "failure")
+            return
+
         try:
             tool_instance = self.tool_manager.get(tool_call.tool_name)
         except Exception as exc:
@@ -902,6 +941,8 @@ class AgentLoop:
 
             result_dict = result_model.model_dump()
             text = "\n".join(f"{k}: {v}" for k, v in result_dict.items())
+            # Record for circuit breaker
+            self._circuit_breaker_record(tool_call, text)
             self._handle_tool_response(
                 tool_call, text, "success", decision, result_dict
             )

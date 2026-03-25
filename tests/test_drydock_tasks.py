@@ -16,6 +16,7 @@ These catch the issues users find when actually using the application:
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -380,6 +381,86 @@ class TestDeviationHandling:
         assert "Architectural decision" in content
         assert "Scope change" in content
         assert "Auto-fix" in content or "Auto-resolve" in content
+
+
+# ============================================================================
+# Circuit Breaker
+# ============================================================================
+
+class TestCircuitBreaker:
+    """Prevents exact duplicate tool calls."""
+
+    def test_circuit_breaker_blocks_after_2(self):
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import MessageList
+        from types import SimpleNamespace
+
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        al._tool_call_history = {}
+
+        # Mock tool call with same name+args
+        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -ltr"}')
+
+        # First two calls: no block
+        assert al._circuit_breaker_check(tc) is None
+        al._circuit_breaker_record(tc, "file1.py\nfile2.py")
+        assert al._circuit_breaker_check(tc) is None
+        al._circuit_breaker_record(tc, "file1.py\nfile2.py")
+
+        # Third call: BLOCKED
+        result = al._circuit_breaker_check(tc)
+        assert result is not None
+        assert "CIRCUIT BREAKER" in result
+
+    def test_different_args_not_blocked(self):
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import MessageList
+        from types import SimpleNamespace
+
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        al._tool_call_history = {}
+
+        tc1 = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -ltr"}')
+        tc2 = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -la"}')
+
+        al._circuit_breaker_record(tc1, "result1")
+        al._circuit_breaker_record(tc1, "result1")
+        # tc1 blocked, tc2 still works
+        assert al._circuit_breaker_check(tc1) is not None
+        assert al._circuit_breaker_check(tc2) is None
+
+
+# ============================================================================
+# Insecure Flag
+# ============================================================================
+
+class TestInsecureFlag:
+    def test_insecure_flag_exists(self):
+        from drydock.cli.entrypoint import parse_arguments
+        import sys
+        with patch.object(sys, "argv", ["drydock", "-k", "-p", "test"]):
+            args = parse_arguments()
+            assert args.insecure is True
+
+    def test_consultant_flag_exists(self):
+        from drydock.cli.entrypoint import parse_arguments
+        import sys
+        with patch.object(sys, "argv", ["drydock", "--consultant", "gemini-2.5-pro", "-p", "test"]):
+            args = parse_arguments()
+            assert args.consultant == "gemini-2.5-pro"
+
+
+# ============================================================================
+# Thinking Flicker Throttle
+# ============================================================================
+
+class TestThinkingThrottle:
+    def test_status_change_interval_exists(self):
+        from drydock.cli.textual_ui.widgets.loading import LoadingWidget
+        assert hasattr(LoadingWidget, "_STATUS_CHANGE_INTERVAL")
+        assert LoadingWidget._STATUS_CHANGE_INTERVAL >= 3.0
 
 
 class TestEasterEggs:

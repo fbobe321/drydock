@@ -90,6 +90,19 @@ def parse_arguments() -> argparse.Namespace:
         help="Skip all tool permission checks. Equivalent to --agent auto-approve. "
         "Use with caution — tools will execute without confirmation.",
     )
+    parser.add_argument(
+        "-k", "--insecure",
+        action="store_true",
+        help="Disable SSL certificate verification for web searches and API calls. "
+        "Useful behind corporate proxies with self-signed certificates.",
+    )
+    parser.add_argument(
+        "--consultant",
+        metavar="MODEL",
+        help="Enable consultant mode: when the agent is uncertain or stuck in a loop, "
+        "it can call a more capable model (e.g., 'gemini-2.5-pro') for single-turn advice. "
+        "The consultant is NOT used for tool calls, only reasoning.",
+    )
 
     # Feature flag for teleport, not exposed to the user yet
     parser.add_argument("--teleport", action="store_true", help=argparse.SUPPRESS)
@@ -159,6 +172,18 @@ def main() -> None:
     # --dangerously-skip-permissions → force auto-approve agent
     if args.dangerously_skip_permissions:
         args.agent = BuiltinAgentName.AUTO_APPROVE
+
+    # --insecure → disable SSL verification globally
+    if args.insecure:
+        os.environ["DRYDOCK_INSECURE"] = "1"
+        os.environ["CURL_CA_BUNDLE"] = ""
+        os.environ["REQUESTS_CA_BUNDLE"] = ""
+        import ssl
+        ssl._create_default_https_context = ssl._create_unverified_context
+
+    # --consultant → store for agent loop to use
+    if args.consultant:
+        os.environ["DRYDOCK_CONSULTANT_MODEL"] = args.consultant
 
     is_interactive = args.prompt is None
     if is_interactive:

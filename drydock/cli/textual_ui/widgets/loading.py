@@ -64,6 +64,9 @@ class LoadingWidget(SpinnerMixin, Static):
         "Stocking the galley",
     ]
 
+    # Minimum seconds between status word changes (prevents flicker)
+    _STATUS_CHANGE_INTERVAL = 4.0
+
     def __init__(self, status: str | None = None) -> None:
         super().__init__(classes="loading-widget")
         self.init_spinner()
@@ -77,6 +80,7 @@ class LoadingWidget(SpinnerMixin, Static):
         self._last_elapsed: int = -1
         self._paused_total: float = 0.0
         self._pause_start: float | None = None
+        self._last_status_change: float = 0.0
 
     def _get_easter_egg(self) -> str | None:
         EASTER_EGG_PROBABILITY = 0.10
@@ -111,6 +115,11 @@ class LoadingWidget(SpinnerMixin, Static):
             self._pause_start = None
 
     def set_status(self, status: str) -> None:
+        # Throttle status word changes to prevent flicker
+        now = time()
+        if now - self._last_status_change < self._STATUS_CHANGE_INTERVAL:
+            return  # Too soon — keep current word
+        self._last_status_change = now
         self.status = self._apply_easter_egg(status)
         self._update_animation()
 

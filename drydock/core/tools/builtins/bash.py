@@ -110,11 +110,25 @@ def _get_base_env() -> dict[str, str]:
 
         # Enable conda in non-interactive shells by setting BASH_ENV
         # to source conda's setup script. Without this, `conda activate`
-        # fails because it's a shell function defined in .bashrc (which
-        # isn't sourced for non-interactive shell commands).
+        # fails because it's a shell function defined in .bashrc.
+        #
+        # IMPORTANT: We also preserve the user's active conda env to avoid
+        # interfering with other environments and losing their aliases.
         conda_sh = _get_conda_setup_script()
         if conda_sh:
-            base_env["BASH_ENV"] = conda_sh
+            # Create a wrapper that sources conda.sh then re-activates the user's env
+            active_env = os.environ.get("CONDA_DEFAULT_ENV", "")
+            if active_env and active_env != "base":
+                # Write a temp script that initializes conda AND activates the user's env
+                import tempfile
+                wrapper = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".sh", delete=False, prefix="drydock_conda_"
+                )
+                wrapper.write(f'source "{conda_sh}"\nconda activate "{active_env}" 2>/dev/null\n')
+                wrapper.close()
+                base_env["BASH_ENV"] = wrapper.name
+            else:
+                base_env["BASH_ENV"] = conda_sh
 
     return base_env
 

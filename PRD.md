@@ -153,10 +153,32 @@ User-reported issues from real usage testing, all fixed:
 
 ### Phase 5b: Testing & CI (Mar 24)
 
-- **64 regression tests** in 2 test files (0.12s total runtime)
-- **Tests gate all deploys** — deploy_to_github.sh and publish_to_pypi.sh abort on failure
-- **Continuous SWE-bench loop** — 320/500 tasks tested, 45.3% pass rate, auto-restarts on reboot
-- **PyPI published** — drydock-cli v0.4.1
+- **76 regression tests** gating all deploys
+- **Continuous SWE-bench loop** — 500/500 tasks tested, 49.0% pass rate (+9.4% from baseline)
+- **vibe/ → drydock/** package rename (908 imports updated)
+- **PyPI published** — drydock-cli v0.5.2
+
+### Phase 6: GSD Integration & Performance (Mar 25)
+
+GSD-inspired features (from [get-shit-done](https://github.com/gsd-build/get-shit-done)):
+
+| Feature | Details |
+|---------|---------|
+| Tiered context warnings | 4 levels at 50/65/75/85% usage, debounced every 5 calls |
+| Prompt injection guard | Detects role overrides, invisible Unicode, hidden instructions in file writes |
+| Structured state file | `.drydock/state.md` persists task, files, decisions across sessions |
+| Deviation handling rules | Auto-fix bugs/imports, ask user for architecture/scope decisions |
+
+Performance and loop fixes:
+
+| Fix | Details |
+|-----|---------|
+| Circuit breaker | Blocks exact same tool call after 2 attempts, returns cached result |
+| Thinking flicker fix | Status words change every 4s, not every token |
+| Conda env protection | Preserves user's active conda environment in subprocesses |
+| `--insecure` / `-k` flag | Disables SSL verification for corporate proxy environments |
+| `--consultant MODEL` flag | Allows calling a smarter model for single-turn advice when stuck |
+| 81 regression tests | Circuit breaker, injection guard, state file, context tiers all tested |
 
 ---
 
