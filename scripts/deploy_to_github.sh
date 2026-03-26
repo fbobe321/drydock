@@ -37,7 +37,7 @@ AUTH_URL="https://${GITHUB_TOKEN}@github.com/fbobe321/drydock.git"
 
 log "Running regression tests..."
 cd "$DRYDOCK_SRC"
-if ! python3 -m pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py tests/test_loop_detection.py \
+if ! python3 -m pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py tests/test_loop_detection.py tests/test_agent_tasks.py \
     -p no:xdist -p no:cov --override-ini="addopts=" -q 2>&1; then
     log "TESTS FAILED — deploy aborted. Fix the tests before deploying."
     exit 1
