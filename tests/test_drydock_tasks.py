@@ -400,7 +400,7 @@ class TestCircuitBreaker:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -ltr"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
 
         assert al._circuit_breaker_check(tc) is None
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
@@ -421,8 +421,8 @@ class TestCircuitBreaker:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        tc1 = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -ltr"}')
-        tc2 = SimpleNamespace(tool_name="bash", raw_arguments='{"command": "ls -la"}')
+        tc1 = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
+        tc2 = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -la"})
 
         al._circuit_breaker_record(tc1, "result1")
         al._circuit_breaker_record(tc1, "result1")

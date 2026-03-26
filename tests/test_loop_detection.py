@@ -59,18 +59,18 @@ class TestCircuitBreaker:
 
     def test_first_call_allowed(self):
         al = _make_agent()
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -ltr"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -ltr"})
         assert al._circuit_breaker_check(tc) is None
 
     def test_second_call_allowed(self):
         al = _make_agent()
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -ltr"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -ltr"})
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
         assert al._circuit_breaker_check(tc) is None
 
     def test_third_call_blocked(self):
         al = _make_agent()
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -ltr"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -ltr"})
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
         result = al._circuit_breaker_check(tc)
@@ -79,7 +79,7 @@ class TestCircuitBreaker:
 
     def test_blocked_message_contains_previous_result(self):
         al = _make_agent()
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -ltr"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -ltr"})
         al._circuit_breaker_record(tc, "important_file.py")
         al._circuit_breaker_record(tc, "important_file.py")
         result = al._circuit_breaker_check(tc)
@@ -87,7 +87,7 @@ class TestCircuitBreaker:
 
     def test_blocked_message_contains_alternatives(self):
         al = _make_agent()
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -ltr"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -ltr"})
         al._circuit_breaker_record(tc, "output")
         al._circuit_breaker_record(tc, "output")
         result = al._circuit_breaker_check(tc)
@@ -95,8 +95,8 @@ class TestCircuitBreaker:
 
     def test_different_args_not_blocked(self):
         al = _make_agent()
-        tc1 = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -ltr"}')
-        tc2 = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -la"}')
+        tc1 = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -ltr"})
+        tc2 = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -la"})
         al._circuit_breaker_record(tc1, "r1")
         al._circuit_breaker_record(tc1, "r1")
         assert al._circuit_breaker_check(tc1) is not None  # Blocked
@@ -104,8 +104,8 @@ class TestCircuitBreaker:
 
     def test_different_tools_not_blocked(self):
         al = _make_agent()
-        tc1 = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls"}')
-        tc2 = SimpleNamespace(tool_name="grep", raw_arguments='{"pattern":"foo"}')
+        tc1 = SimpleNamespace(tool_name="bash", args_dict={"command":"ls"})
+        tc2 = SimpleNamespace(tool_name="grep", args_dict={"pattern":"foo"})
         al._circuit_breaker_record(tc1, "r1")
         al._circuit_breaker_record(tc1, "r1")
         assert al._circuit_breaker_check(tc1) is not None
@@ -113,7 +113,7 @@ class TestCircuitBreaker:
 
     def test_already_attempted_summary(self):
         al = _make_agent()
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command":"ls"})
         al._circuit_breaker_record(tc, "output1")
         al._circuit_breaker_record(tc, "output1")
         result = al._circuit_breaker_check(tc)
@@ -327,7 +327,7 @@ class TestRealWorldLoops:
     def test_ls_ltr_loop(self):
         """User reports: `ls -ltr` runs 5+ times."""
         al = _make_agent()
-        tc = SimpleNamespace(tool_name="bash", raw_arguments='{"command":"ls -ltr"}')
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -ltr"})
 
         # First 2 calls go through
         al._circuit_breaker_record(tc, "total 48\n-rw-r--r-- 1 user user 1234 auth.py")

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from drydock.core.types import ToolCallEvent, ToolResultEvent
 
 
-_HONEST_USER_AGENT = "vibe-cli"
+_HONEST_USER_AGENT = "drydock-cli"
 _HTTP_FORBIDDEN = 403
 
 
@@ -146,8 +146,10 @@ class WebFetch(
     async def _do_fetch(
         self, url: str, timeout: int, headers: dict[str, str]
     ) -> httpx.Response:
+        import os
+        verify_ssl = os.environ.get("DRYDOCK_INSECURE") != "1"
         async with httpx.AsyncClient(
-            follow_redirects=True, timeout=httpx.Timeout(timeout)
+            follow_redirects=True, timeout=httpx.Timeout(timeout), verify=verify_ssl
         ) as client:
             response = await client.get(url, headers=headers)
 

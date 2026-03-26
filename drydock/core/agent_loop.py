@@ -849,8 +849,9 @@ class AgentLoop:
 
     def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
         """Block exact-duplicate tool calls. Returns cached result or None."""
+        args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
         sig = hashlib.md5(
-            f"{tool_call.tool_name}:{tool_call.raw_arguments}".encode()
+            f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
 
         count, last_result = self._tool_call_history.get(sig, (0, ""))
@@ -883,8 +884,9 @@ class AgentLoop:
 
     def _circuit_breaker_record(self, tool_call: ResolvedToolCall, result_text: str) -> None:
         """Record a tool call execution for circuit breaker tracking."""
+        args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
         sig = hashlib.md5(
-            f"{tool_call.tool_name}:{tool_call.raw_arguments}".encode()
+            f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
         count, _ = self._tool_call_history.get(sig, (0, ""))
         self._tool_call_history[sig] = (count + 1, result_text[:500])
