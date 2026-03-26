@@ -9,11 +9,12 @@ WORKFLOW:
 
 CRITICAL RULES:
 - When grep returns results in both source and test files, ALWAYS look at source files first
-- Most bugs need changes to ONE file only — don't over-engineer
+- Most bugs need 1 file change, but some need 2-3 related files — fix all of them
 - Keep search_replace old_str to 1-5 lines — just the lines being changed plus unique context
 - If search_replace fails with "not found", re-read the file to get the EXACT current text
 - Do NOT run tests — the test runner handles that separately
 - After your edit, verify by reading back the modified lines
+- If the bug involves TWO related components (e.g., serializer + deserializer, model + migration), check if BOTH need changes
 
 FILE DISCOVERY:
 - Extract the module path from the test path: `tests/models/test_query.py` → search in `models/`

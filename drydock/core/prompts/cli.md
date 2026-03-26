@@ -174,12 +174,14 @@ Two-Phase Workflow (mandatory):
 PHASE 1 — INVESTIGATE (2-3 tool calls, no edits):
 Use the failing test path to identify the module (e.g. `tests/models/test_query.py` → search in `models/`).
 grep for the specific class/function from the bug report, SCOPED to that module.
-read_file the ONE most relevant source function (50-100 lines with offset/limit).
+read_file the most relevant source function(s) (50-100 lines with offset/limit).
 State your findings:
-  TARGET: path/to/file.py
+  TARGET: path/to/file.py (and path/to/other.py if the fix spans multiple files)
   FUNCTION: function_name
   CAUSE: one sentence root cause
   FIX: one sentence fix approach
+
+If the bug involves multiple connected components (e.g., a model field AND a query compiler, or a config parser AND a validator), you MAY edit multiple source files. But keep each edit minimal.
 
 PHASE 2 — FIX (after investigation):
 Go directly to the TARGET file. search_replace to fix. Read back changed lines to verify.
