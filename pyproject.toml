@@ -1,6 +1,6 @@
 [project]
 name = "drydock-cli"
-version = "0.7.1"
+version = "0.7.2"
 description = "Drydock — nautical CLI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -76,6 +76,7 @@ include = ["drydock/"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "drydock/skills/create-presentation" = "drydock/skills/create-presentation"
+"drydock/skills/deep-research" = "drydock/skills/deep-research"
 
 
 [project.scripts]

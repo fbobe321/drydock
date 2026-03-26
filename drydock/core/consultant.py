@@ -28,6 +28,7 @@ async def ask_consultant(
     question: str,
     config: object | None = None,
     model: str | None = None,
+    conversation_history: str = "",
 ) -> str:
     """Ask the consultant model a question using DryDock's backend.
 
@@ -52,10 +53,15 @@ async def ask_consultant(
     if not model_name:
         return ""
 
+    history_section = ""
+    if conversation_history:
+        history_section = f"\nCONVERSATION CONTEXT (recent messages):\n{conversation_history[:3000]}\n"
+
     prompt = (
         "You are a senior software engineering consultant. An AI coding agent is "
         "asking for your advice. Give concise, actionable guidance. Do NOT provide "
-        "code unless specifically asked — just say WHAT to do and WHERE to look.\n\n"
+        "code unless specifically asked — just say WHAT to do and WHERE to look.\n"
+        f"{history_section}\n"
         f"QUESTION:\n{question}"
     )
 

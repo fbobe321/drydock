@@ -977,10 +977,18 @@ class VibeApp(App):  # noqa: PLR0904
 
         try:
             from drydock.core.consultant import ask_consultant
+            # Build conversation history for context
+            history_lines = []
+            for msg in self.agent_loop.messages[-10:]:  # Last 10 messages
+                if msg.role.value in ("user", "assistant") and msg.content:
+                    history_lines.append(f"[{msg.role.value}]: {msg.content[:200]}")
+            conversation_history = "\n".join(history_lines)
+
             advice = await ask_consultant(
                 question,
                 config=self.agent_loop.config,
                 model=consultant_model,
+                conversation_history=conversation_history,
             )
 
             if not advice or advice.startswith("(Consultant unavailable"):

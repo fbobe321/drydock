@@ -1518,7 +1518,7 @@ class AgentLoop:
 
         last_msg = self.messages[-1]
         if last_msg.role is Role.tool:
-            empty_assistant_msg = LLMMessage(role=Role.assistant, content="Understood.")
+            empty_assistant_msg = LLMMessage(role=Role.assistant, content="Continuing...")
             self.messages.append(empty_assistant_msg)
 
     def _reset_session(self) -> None:

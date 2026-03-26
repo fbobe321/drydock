@@ -114,6 +114,17 @@ export MISTRAL_API_KEY="your_key"            # Or set env var
 
 Keys are saved to `~/.drydock/.env`.
 
+### Consultant Model
+
+Set a smarter model for the `/consult` command:
+
+```toml
+# In ~/.drydock/config.toml
+consultant_model = "gemini-2.5-pro"
+```
+
+The consultant provides read-only advice — it never calls tools. Use `/consult <question>` to ask it. The response appears in your conversation so the local model can see it.
+
 ### Custom Agents
 
 Create agent configs in `~/.drydock/agents/`:
