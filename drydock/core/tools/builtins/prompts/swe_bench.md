@@ -29,3 +29,10 @@ COMMON PATTERNS:
 - Missing import: grep for where the symbol is defined, add the import
 - Off-by-one: check loop bounds and slice indices
 - Unhashable type: wrap mutable container in tuple() before hashing
+
+AFTER YOUR FIRST EDIT:
+After making your first edit, ALWAYS check:
+1. grep for other files that import/use the function you changed
+2. If you edited a base class, check if subclasses override the method
+3. If you edited a config/settings file, check if there's a related migration
+4. If you edited a backend, check if other backends need the same fix
