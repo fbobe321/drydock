@@ -178,3 +178,17 @@ Show the user what the agent has planned in its execution pipeline.
 
 ### P4: Support more LLM backends
 Test with Claude, GPT-4, Gemini to understand which improvements are model-specific.
+
+### Phase 7: Real Test-Driven Fixes (Mar 26)
+
+Shifted to test-driven development with real vLLM backend — no more mocks for critical bugs.
+
+| Issue | Test Result (before fix) | Fix | Test Result (after fix) |
+|-------|------------------------|-----|----------------------|
+| Circuit breaker fires but model keeps calling | FAILED: 20 bash calls, 17 breaker fires ignored | Force-stop conversation after 3 consecutive breaker fires + break tool loop | PASSED: stops within 3 calls |
+
+**Testing methodology changed:**
+- All critical tests run against real vLLM at localhost:8000
+- Tests must FAIL first (proving the bug exists)
+- Then fix code, re-run until PASS
+- 166 total tests (155 mock + 11 real backend)
