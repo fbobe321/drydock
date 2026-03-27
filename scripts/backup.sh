@@ -62,9 +62,9 @@ rsync -rlpt --no-group --no-owner \
 log "Bench state backed up."
 
 # Backup 3: Config files
-mkdir -p "$BACKUP_DIR/config"
-cp -a ~/.config/drydock/ "$BACKUP_DIR/config/drydock_config/" 2>/dev/null || true
-cp -a ~/.drydock/ "$BACKUP_DIR/config/drydock_home/" 2>/dev/null || true
+mkdir -p "$BACKUP_DIR/config/drydock_config" "$BACKUP_DIR/config/drydock_home"
+rsync -rlpt --no-group --no-owner "$HOME/.config/drydock/" "$BACKUP_DIR/config/drydock_config/" 2>/dev/null || true
+rsync -rlpt --no-group --no-owner --exclude='logs/' "$HOME/.drydock/" "$BACKUP_DIR/config/drydock_home/" 2>/dev/null || true
 
 log "Config backed up."
 
