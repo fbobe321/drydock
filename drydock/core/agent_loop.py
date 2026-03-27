@@ -550,6 +550,7 @@ class AgentLoop:
                                 if not tc.function:
                                     continue
                                 if tc.function.name in ("search_replace", "write_file"):
+                                    first_edit = not has_made_edit
                                     has_made_edit = True
                                     bash_count = 0  # Reset on successful edit
                                     # Track blast radius
@@ -559,7 +560,18 @@ class AgentLoop:
                                         if edit_path and edit_path not in files_modified:
                                             files_modified.append(edit_path)
                                     except (json.JSONDecodeError, AttributeError):
-                                        pass
+                                        edit_path = ""
+
+                                    # After first edit: prompt to check related files
+                                    if first_edit and edit_path:
+                                        self._inject_system_note(
+                                            f"Good — you edited {edit_path}. Now check: "
+                                            f"does this bug have a RELATED file that also needs changes? "
+                                            f"Common patterns: if you edited a model, check the serializer/migration. "
+                                            f"If you edited a base class, check subclasses. "
+                                            f"If you edited a util, check callers. "
+                                            f"Use grep to search for imports of the function/class you changed."
+                                        )
                                 if tc.function.name == "read_file":
                                     try:
                                         args = json.loads(tc.function.arguments or "{}")
