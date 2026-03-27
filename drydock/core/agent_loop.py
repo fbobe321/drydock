@@ -191,6 +191,7 @@ class AgentLoop:
         # Circuit breaker: track tool call signatures to prevent exact repeats
         # Key: hash(tool_name + args), Value: (count, last_result_snippet)
         self._tool_call_history: dict[str, tuple[int, str]] = {}
+        self._consecutive_circuit_breaker_fires: int = 0
 
         system_prompt = get_universal_system_prompt(
             self.tool_manager, self.config, self.skill_manager, self.agent_manager
@@ -512,11 +513,16 @@ class AgentLoop:
                 self.stats.steps += 1
                 user_cancelled = False
                 try:
+                    force_stopped = False
                     async for event in self._perform_llm_turn():
                         if is_user_cancellation_event(event):
                             user_cancelled = True
+                        if isinstance(event, AssistantEvent) and event.stopped_by_middleware:
+                            force_stopped = True
                         yield event
                         await self._save_messages()
+                    if force_stopped:
+                        return
                     # Reset API error count on successful turn
                     api_error_count = 0
                 except (RuntimeError, AgentLoopLLMResponseError) as e:
@@ -896,6 +902,29 @@ class AgentLoop:
     ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent]:
         # Circuit breaker: block exact duplicate calls after 2 attempts
         if blocked := self._circuit_breaker_check(tool_call):
+            self._consecutive_circuit_breaker_fires += 1
+
+            if self._consecutive_circuit_breaker_fires >= 3:
+                # Model is ignoring the circuit breaker — force stop
+                force_msg = (
+                    f"FORCED STOP: You ignored the circuit breaker {self._consecutive_circuit_breaker_fires} times. "
+                    f"The session is being terminated because you keep running the same command. "
+                    f"You MUST try a completely different approach."
+                )
+                yield ToolResultEvent(
+                    tool_name=tool_call.tool_name,
+                    tool_class=tool_call.tool_class,
+                    error=force_msg,
+                    tool_call_id=tool_call.call_id,
+                )
+                self._handle_tool_response(tool_call, force_msg, "failure")
+                # Inject stop signal into messages
+                yield AssistantEvent(
+                    content=f"\n\n[{force_msg}]\n",
+                    stopped_by_middleware=True,
+                )
+                return
+
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,
@@ -904,6 +933,9 @@ class AgentLoop:
             )
             self._handle_tool_response(tool_call, blocked, "failure")
             return
+        else:
+            # Reset consecutive fires when a non-blocked call happens
+            self._consecutive_circuit_breaker_fires = 0
 
         try:
             tool_instance = self.tool_manager.get(tool_call.tool_name)
@@ -1060,10 +1092,14 @@ class AgentLoop:
 
     async def _handle_tool_calls(
         self, resolved: ResolvedMessage
-    ) -> AsyncGenerator[ToolCallEvent | ToolResultEvent | ToolStreamEvent]:
+    ) -> AsyncGenerator[ToolCallEvent | ToolResultEvent | ToolStreamEvent | AssistantEvent]:
         async for event in self._emit_failed_tool_events(resolved.failed_calls):
             yield event
         for tool_call in resolved.tool_calls:
+            # Stop processing more tool calls if circuit breaker force-stopped
+            if self._consecutive_circuit_breaker_fires >= 3:
+                break
+
             yield ToolCallEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,
