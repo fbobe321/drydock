@@ -482,6 +482,7 @@ class AgentLoop:
             bash_count = 0  # Track consecutive bash calls without an edit
             search_replace_failures = 0  # Track failed search_replace attempts
             files_explored: list[str] = []  # Track files read for context state
+            files_modified: list[str] = []  # Track files edited for blast radius
             context_summary_injected = False
             while not should_break_loop:
                 # Loop protection: prevent infinite tool-call loops
@@ -551,6 +552,14 @@ class AgentLoop:
                                 if tc.function.name in ("search_replace", "write_file"):
                                     has_made_edit = True
                                     bash_count = 0  # Reset on successful edit
+                                    # Track blast radius
+                                    try:
+                                        edit_args = json.loads(tc.function.arguments or "{}")
+                                        edit_path = edit_args.get("file_path", edit_args.get("path", ""))
+                                        if edit_path and edit_path not in files_modified:
+                                            files_modified.append(edit_path)
+                                    except (json.JSONDecodeError, AttributeError):
+                                        pass
                                 if tc.function.name == "read_file":
                                     try:
                                         args = json.loads(tc.function.arguments or "{}")
@@ -569,6 +578,15 @@ class AgentLoop:
                             if "search_replace" in content.lower() and "error" in content.lower():
                                 search_replace_failures += 1
 
+                # Blast radius check: warn when touching 5+ files
+                if len(files_modified) >= 5 and len(files_modified) % 5 == 0:
+                    self._inject_system_note(
+                        f"BLAST RADIUS WARNING: You have modified {len(files_modified)} files. "
+                        f"Files: {', '.join(files_modified[-5:])}. "
+                        f"This is a large change. Are you sure all these edits are needed? "
+                        f"Consider stopping to verify your approach."
+                    )
+
                 # Bash abuse detection: if model keeps using bash instead of
                 # search_replace/read_file, redirect it to the proper tools
                 if not has_made_edit and bash_count >= 10 and bash_count % 5 == 0:
@@ -579,14 +597,26 @@ class AgentLoop:
                         "Call search_replace NOW with your fix."
                     )
 
-                # search_replace keeps failing — suggest re-reading the file
-                if search_replace_failures >= 3 and search_replace_failures % 2 == 1:
-                    self._inject_system_note(
-                        f"Your search_replace has failed {search_replace_failures} times. "
-                        "The text you're searching for doesn't match the file. STOP guessing. "
-                        "Use read_file with offset/limit to see the EXACT current text, "
-                        "then copy it precisely into search_replace old_str."
-                    )
+                # 3-Strike Rule: search_replace keeps failing
+                if search_replace_failures >= 3:
+                    if search_replace_failures == 3:
+                        # Strike 3: STOP and ask user
+                        self.messages.append(LLMMessage(
+                            role=Role.user,
+                            content=(
+                                f"3-STRIKE RULE: Your search_replace has failed {search_replace_failures} times. "
+                                "You have exhausted your attempts. STOP trying the same approach. "
+                                "Either: (1) use read_file to get the EXACT text first, "
+                                "(2) try a completely different file, or "
+                                "(3) ask the user for help with /consult."
+                            )
+                        ))
+                    elif search_replace_failures % 3 == 0:
+                        # Every 3 more failures, escalate
+                        self.messages.append(LLMMessage(
+                            role=Role.user,
+                            content=f"STOP: {search_replace_failures} failed edits. You are stuck. Ask the user for help."
+                        ))
 
                 # Context budget warning: after 7 tool turns without an edit,
                 # warn that context is being consumed without progress

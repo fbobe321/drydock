@@ -11,7 +11,7 @@ import keyring.errors
 
 GITHUB_CLIENT_ID = "Ov23liJ7sk5kFDMEyvDT"
 
-_SERVICE_NAME = "vibe"
+_SERVICE_NAME = "drydock"
 _KEYRING_USERNAME = "github_token"
 _DEVICE_CODE_URL = "https://github.com/login/device/code"
 _TOKEN_URL = "https://github.com/login/oauth/access_token"

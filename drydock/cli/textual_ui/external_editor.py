@@ -16,7 +16,7 @@ class ExternalEditor:
 
     def edit(self, initial_content: str = "") -> str | None:
         editor = self.get_editor()
-        fd, filepath = tempfile.mkstemp(suffix=".md", prefix="vibe_")
+        fd, filepath = tempfile.mkstemp(suffix=".md", prefix="drydock_")
         try:
             with os.fdopen(fd, "w") as f:
                 f.write(initial_content)

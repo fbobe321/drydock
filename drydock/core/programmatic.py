@@ -21,7 +21,7 @@ from drydock.core.types import (
 )
 from drydock.core.utils import ConversationLimitException
 
-_DEFAULT_CLIENT_METADATA = ClientMetadata(name="vibe_programmatic", version=__version__)
+_DEFAULT_CLIENT_METADATA = ClientMetadata(name="drydock_programmatic", version=__version__)
 
 
 def run_programmatic(

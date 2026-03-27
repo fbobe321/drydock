@@ -9,7 +9,7 @@ from drydock.core.paths import LOG_DIR, LOG_FILE
 
 LOG_DIR.path.mkdir(parents=True, exist_ok=True)
 
-logger = logging.getLogger("vibe")
+logger = logging.getLogger("drydock")
 
 
 class StructuredLogFormatter(logging.Formatter):

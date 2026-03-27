@@ -196,7 +196,7 @@ def run_cli(args: argparse.Namespace) -> None:
                 entrypoint_metadata=EntrypointMetadata(
                     agent_entrypoint="cli",
                     agent_version=__version__,
-                    client_name="vibe_cli",
+                    client_name="drydock_cli",
                     client_version=__version__,
                 ),
             )
