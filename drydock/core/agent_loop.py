@@ -647,7 +647,11 @@ class AgentLoop:
                         should_break_loop = True
                         nudge_text = None
                     if nudge_text:
-                        self._inject_system_note(nudge_text)
+                        # Inject as user message so the model actually sees it
+                        # (inject_system_note buries it in old tool results)
+                        self.messages.append(
+                            LLMMessage(role=Role.user, content=nudge_text)
+                        )
                         logger.info("Model gave text without editing — nudging (attempt %d)", text_without_action)
 
                 # If model has been investigating for too long without making an edit,
