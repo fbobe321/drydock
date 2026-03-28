@@ -65,11 +65,21 @@ class HarnessFilesManager:
         bundled = VIBE_ROOT / "skills"
         if bundled.is_dir():
             dirs.append(bundled)
+        # Project skills in .drydock/skills/ (current directory)
+        project_skills = Path.cwd() / ".drydock" / "skills"
+        if project_skills.is_dir():
+            dirs.append(project_skills)
         # User skills in ~/.drydock/skills/
         if "user" in self.sources:
             d = GLOBAL_SKILLS_DIR.path
             if d.is_dir():
                 dirs.append(d)
+        # Plugin skills
+        try:
+            from drydock.core.plugins import get_plugin_skill_dirs
+            dirs.extend(get_plugin_skill_dirs())
+        except Exception:
+            pass
         return dirs
 
     @property

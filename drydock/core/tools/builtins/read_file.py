@@ -72,6 +72,26 @@ class ReadFile(
     ) -> AsyncGenerator[ToolStreamEvent | ReadFileResult, None]:
         file_path = self._prepare_and_validate_path(args)
 
+        # Handle PDF files
+        if file_path.suffix.lower() == ".pdf":
+            content = self._read_pdf(file_path)
+            yield ReadFileResult(
+                path=str(file_path), content=content,
+                lines_read=content.count("\n"), was_truncated=False,
+            )
+            return
+
+        # Handle image files (describe what we can)
+        if file_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"):
+            import os
+            size = os.path.getsize(file_path)
+            content = f"[Image file: {file_path.name}, {size} bytes, format: {file_path.suffix}]"
+            yield ReadFileResult(
+                path=str(file_path), content=content,
+                lines_read=1, was_truncated=False,
+            )
+            return
+
         read_result = await self._read_file(args, file_path)
 
         yield ReadFileResult(
@@ -80,6 +100,22 @@ class ReadFile(
             lines_read=len(read_result.lines),
             was_truncated=read_result.was_truncated,
         )
+
+    def _read_pdf(self, file_path: Path) -> str:
+        """Extract text from a PDF file."""
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(str(file_path))
+            pages = []
+            for i, page in enumerate(reader.pages[:20]):  # Max 20 pages
+                text = page.extract_text()
+                if text:
+                    pages.append(f"--- Page {i+1} ---\n{text}")
+            return "\n\n".join(pages) if pages else "[PDF has no extractable text]"
+        except ImportError:
+            return "[PDF reading requires pypdf: pip install pypdf]"
+        except Exception as e:
+            return f"[Error reading PDF: {e}]"
 
     def resolve_permission(self, args: ReadFileArgs) -> ToolPermission | None:
         return resolve_file_tool_permission(

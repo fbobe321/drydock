@@ -40,10 +40,19 @@ logger = logging.getLogger(__name__)
 class HookEvent(StrEnum):
     PRE_TOOL_USE = auto()
     POST_TOOL_USE = auto()
+    POST_TOOL_USE_FAILURE = auto()
     SESSION_START = auto()
     SESSION_END = auto()
     PRE_EDIT = auto()
     POST_EDIT = auto()
+    USER_PROMPT_SUBMIT = auto()
+    STOP = auto()
+    FILE_CHANGED = auto()
+    CWD_CHANGED = auto()
+    PRE_COMPACT = auto()
+    POST_COMPACT = auto()
+    SUBAGENT_START = auto()
+    SUBAGENT_STOP = auto()
 
 
 class HookDecision(StrEnum):

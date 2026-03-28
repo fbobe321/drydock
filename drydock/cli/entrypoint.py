@@ -70,6 +70,11 @@ def parse_arguments() -> argparse.Namespace:
         "'streaming' for newline-delimited JSON per message.",
     )
     parser.add_argument(
+        "--json-schema",
+        metavar="FILE",
+        help="Path to JSON Schema file. Constrains the final output to match the schema.",
+    )
+    parser.add_argument(
         "--agent",
         metavar="NAME",
         default=BuiltinAgentName.DEFAULT,

@@ -178,20 +178,28 @@ AUTO_APPROVE = AgentProfile(
 EXPLORE = AgentProfile(
     name=BuiltinAgentName.EXPLORE,
     display_name="Explore",
-    description="Read-only subagent for codebase exploration",
+    description=(
+        "Read-only subagent for codebase exploration. Use when you need to "
+        "understand a project with 3+ files, map architecture, or find where "
+        "a function/class is defined. Has grep and read_file only — cannot edit."
+    ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
-    overrides={"enabled_tools": ["grep", "read_file"], "system_prompt_id": "explore"},
+    overrides={"enabled_tools": ["grep", "read_file", "glob"], "system_prompt_id": "explore"},
 )
 
 DIAGNOSTIC = AgentProfile(
     name=BuiltinAgentName.DIAGNOSTIC,
     display_name="Diagnostic",
-    description="Subagent that analyzes test failures and suggests fixes",
+    description=(
+        "Subagent that analyzes test failures, error traces, and runtime issues. "
+        "Use when tests fail and you need to understand WHY before fixing. "
+        "Can run tests via bash and read source code."
+    ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
     overrides={
-        "enabled_tools": ["grep", "read_file", "bash"],
+        "enabled_tools": ["grep", "read_file", "bash", "glob"],
         "system_prompt_id": "diagnostic",
     },
 )
@@ -199,11 +207,15 @@ DIAGNOSTIC = AgentProfile(
 PLANNER = AgentProfile(
     name=BuiltinAgentName.PLANNER,
     display_name="Planner",
-    description="Read-only subagent that analyzes bugs and identifies target files",
+    description=(
+        "Read-only subagent that creates implementation plans before coding. "
+        "Use for complex changes that touch multiple modules — the planner "
+        "identifies target files, dependencies, and change order."
+    ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
     overrides={
-        "enabled_tools": ["grep", "read_file"],
+        "enabled_tools": ["grep", "read_file", "glob"],
         "system_prompt_id": "planner",
     },
 )

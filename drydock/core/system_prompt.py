@@ -291,4 +291,40 @@ def get_universal_system_prompt(
         if project_doc.strip():
             sections.append(project_doc)
 
+    # Load DRYDOCK.md per-project instructions (like CLAUDE.md)
+    drydock_md = _load_project_instructions()
+    if drydock_md:
+        sections.append(f"## Project Instructions\n\n{drydock_md}")
+
     return "\n\n".join(sections)
+
+
+def _load_project_instructions(max_bytes: int = 16_000) -> str:
+    """Load DRYDOCK.md and .drydock/rules/*.md for per-project instructions."""
+    parts: list[str] = []
+
+    # Check for DRYDOCK.md in project root
+    for name in ["DRYDOCK.md", "drydock.md", ".drydock/DRYDOCK.md"]:
+        path = Path.cwd() / name
+        try:
+            if path.is_file():
+                content = path.read_text("utf-8", errors="ignore")[:max_bytes]
+                parts.append(content)
+                break
+        except (OSError, PermissionError):
+            pass
+
+    # Load .drydock/rules/*.md for modular instructions
+    rules_dir = Path.cwd() / ".drydock" / "rules"
+    try:
+        if rules_dir.is_dir():
+            for rule_file in sorted(rules_dir.glob("*.md")):
+                try:
+                    content = rule_file.read_text("utf-8", errors="ignore")[:4000]
+                    parts.append(f"### {rule_file.stem}\n{content}")
+                except (OSError, PermissionError):
+                    pass
+    except (OSError, PermissionError):
+        pass
+
+    return "\n\n".join(parts)
