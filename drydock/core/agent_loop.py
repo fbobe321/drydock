@@ -599,15 +599,35 @@ class AgentLoop:
                         f"Consider stopping to verify your approach."
                     )
 
-                # Bash abuse detection: if model keeps using bash instead of
-                # search_replace/read_file, redirect it to the proper tools
-                if not has_made_edit and bash_count >= 10 and bash_count % 5 == 0:
-                    self._inject_system_note(
-                        f"STOP using bash. You have run {bash_count} bash commands without making an edit. "
-                        "Use search_replace to edit files, not bash. Use read_file to read files, not cat/head. "
-                        "Use grep (the tool) to search, not bash grep. "
-                        "Call search_replace NOW with your fix."
-                    )
+                # Bash abuse detection: model uses bash instead of proper tools
+                # This is the #1 cause of no-patch failures (88% of cases)
+                if not has_made_edit and bash_count >= 5:
+                    if bash_count == 5:
+                        self.messages.append(LLMMessage(
+                            role=Role.user,
+                            content=(
+                                "You have run 5 bash commands without making any edit. "
+                                "STOP using bash for reading/searching. Use the proper tools: "
+                                "read_file (not cat), grep (not bash grep), search_replace (not sed). "
+                                "Call search_replace NOW to fix the bug."
+                            )
+                        ))
+                    elif bash_count == 8:
+                        self.messages.append(LLMMessage(
+                            role=Role.user,
+                            content=(
+                                "WARNING: 8 bash commands, ZERO edits. You are wasting context. "
+                                "Bash does NOT fix bugs — search_replace does. "
+                                "Use search_replace on your NEXT response or the session ends."
+                            )
+                        ))
+                    elif bash_count >= 12:
+                        # Force stop — model is clearly stuck in bash loop
+                        yield AssistantEvent(
+                            content="\n\n[STOPPED: 12+ bash commands without any edit. Use search_replace.]\n",
+                            stopped_by_middleware=True,
+                        )
+                        return
 
                 # 3-Strike Rule: search_replace keeps failing
                 if search_replace_failures >= 3:

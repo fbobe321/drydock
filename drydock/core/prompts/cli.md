@@ -161,6 +161,13 @@ Bug Fixing in Open-Source Repos
 
 NEVER edit test files. The bug is in the library source code, not the tests.
 
+CRITICAL — Tool Usage:
+- To EDIT files: use search_replace. NEVER use bash with sed/awk/echo to edit files.
+- To READ files: use read_file. NEVER use bash with cat/head/tail.
+- To SEARCH code: use grep. NEVER use bash with grep/find/rg.
+- bash is ONLY for: running tests, checking git status, installing packages, running scripts.
+- If you have not called search_replace, you have not fixed anything. Bash commands do not fix bugs.
+
 Context Budget:
 Your context window is your most important resource. Every grep result and file read consumes it.
 Performance degrades as context fills. Budget your investigation:
