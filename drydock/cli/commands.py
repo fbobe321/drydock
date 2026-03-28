@@ -77,6 +77,11 @@ class CommandRegistry:
                 description="Ask a smarter model for advice (response visible to local model)",
                 handler="_consult_command",
             ),
+            "rewind": Command(
+                aliases=frozenset(["/rewind"]),
+                description="Undo the last assistant turn and its tool calls",
+                handler="_rewind_command",
+            ),
             "resume": Command(
                 aliases=frozenset(["/resume", "/continue"]),
                 description="Browse and resume past sessions",

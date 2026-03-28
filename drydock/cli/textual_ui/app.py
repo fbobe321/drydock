@@ -143,11 +143,31 @@ class BottomApp(StrEnum):
 
 
 class ChatScroll(VerticalScroll):
-    """Optimized scroll container that skips cascading style recalculations."""
+    """Scroll container for chat messages.
+
+    Captures mouse scroll to scroll chat history (not terminal history).
+    Auto-scrolls to bottom when new messages arrive, unless user has
+    scrolled up to review previous messages.
+    """
+
+    can_focus = True  # Required for mouse scroll capture
 
     @property
     def is_at_bottom(self) -> bool:
         return self.scroll_offset.y >= (self.max_scroll_y - 3)
+
+    def on_mount(self) -> None:
+        self.focus()  # Focus on mount so scroll events go here
+
+    def on_mouse_scroll_down(self, event: object) -> None:
+        """Scroll down in chat history."""
+        self.scroll_down(3)
+        event.stop()  # Prevent terminal from scrolling
+
+    def on_mouse_scroll_up(self, event: object) -> None:
+        """Scroll up in chat history."""
+        self.scroll_up(3)
+        event.stop()  # Prevent terminal from scrolling
 
     def update_node_styles(self, animate: bool = True) -> None:
         pass
@@ -921,6 +941,34 @@ class VibeApp(App):  # noqa: PLR0904
     async def _show_help(self) -> None:
         help_text = self.commands.get_help_text()
         await self._mount_and_scroll(UserCommandMessage(help_text))
+
+    async def _rewind_command(self, args: str = "") -> None:
+        """Undo the last assistant turn and its tool calls."""
+        if self._agent_running:
+            await self._mount_and_scroll(
+                ErrorMessage("Cannot rewind while agent is running.", collapsed=self._tools_collapsed)
+            )
+            return
+
+        # Find and remove the last assistant turn (assistant + tool messages)
+        removed = 0
+        while len(self.agent_loop.messages) > 1:
+            last = self.agent_loop.messages[-1]
+            if last.role == Role.system:
+                break
+            if last.role == Role.user and removed > 0:
+                break  # Stop before the user message that triggered the turn
+            self.agent_loop.messages.reset(list(self.agent_loop.messages[:-1]))
+            removed += 1
+
+        if removed > 0:
+            await self._mount_and_scroll(
+                UserCommandMessage(f"Rewound {removed} messages. You can now re-prompt.")
+            )
+        else:
+            await self._mount_and_scroll(
+                UserCommandMessage("Nothing to rewind.")
+            )
 
     async def _show_status(self) -> None:
         stats = self.agent_loop.stats
