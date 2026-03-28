@@ -171,3 +171,16 @@ class TestCommands:
         actual = set(registry.commands.keys())
         missing = expected - actual
         assert not missing, f"Missing commands: {missing}"
+
+
+class TestVersionSync:
+    def test_version_matches_pyproject(self):
+        """TUI version must match pyproject.toml version."""
+        from drydock import __version__
+        import tomllib
+        with open(Path(__file__).parent.parent / "pyproject.toml", "rb") as f:
+            pyproject_version = tomllib.load(f)["project"]["version"]
+        # In dev (running from source without pip install), __version__ may be "dev"
+        if __version__ != "dev":
+            assert __version__ == pyproject_version, \
+                f"TUI shows {__version__} but pyproject.toml has {pyproject_version}"
