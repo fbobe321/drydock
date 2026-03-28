@@ -136,32 +136,28 @@ class ReadFile(
         return file_path
 
     async def _read_file(self, args: ReadFileArgs, file_path: Path) -> _ReadResult:
-        try:
+        import asyncio
+
+        def _sync_read() -> _ReadResult:
             lines_to_return: list[str] = []
             bytes_read = 0
             was_truncated = False
 
-            with anyio.fail_after(30):  # Prevent hangs on NFS/locked files
-                async with await anyio.Path(file_path).open(
-                    encoding="utf-8", errors="ignore"
-                ) as f:
-                    line_index = 0
-                    async for line in f:
-                        if line_index < args.offset:
-                            line_index += 1
-                            continue
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
+                for line_index, line in enumerate(f):
+                    if line_index < args.offset:
+                        continue
 
-                        if args.limit is not None and len(lines_to_return) >= args.limit:
-                            break
+                    if args.limit is not None and len(lines_to_return) >= args.limit:
+                        break
 
-                        line_bytes = len(line.encode("utf-8"))
-                        if bytes_read + line_bytes > self.config.max_read_bytes:
-                            was_truncated = True
-                            break
+                    line_bytes = len(line.encode("utf-8"))
+                    if bytes_read + line_bytes > self.config.max_read_bytes:
+                        was_truncated = True
+                        break
 
-                        lines_to_return.append(line)
-                        bytes_read += line_bytes
-                        line_index += 1
+                    lines_to_return.append(line)
+                    bytes_read += line_bytes
 
             return _ReadResult(
                 lines=lines_to_return,
@@ -169,8 +165,13 @@ class ReadFile(
                 was_truncated=was_truncated,
             )
 
-        except TimeoutError:
-            raise ToolError(f"Timed out reading {file_path} after 30s.")
+        try:
+            loop = asyncio.get_running_loop()
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, _sync_read), timeout=10,
+            )
+        except asyncio.TimeoutError:
+            raise ToolError(f"Timed out reading {file_path} after 10s.")
         except OSError as exc:
             raise ToolError(f"Error reading {file_path}: {exc}") from exc
 

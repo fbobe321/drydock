@@ -226,12 +226,19 @@ class SearchReplace(
         return file_path, search_replace_blocks
 
     async def _read_file(self, file_path: Path) -> str:
+        import asyncio
+
+        def _sync_read():
+            with open(file_path, encoding="utf-8") as f:
+                return f.read()
+
         try:
-            with anyio.fail_after(30):
-                async with await anyio.Path(file_path).open(encoding="utf-8") as f:
-                    return await f.read()
-        except TimeoutError:
-            raise ToolError(f"Timed out reading {file_path} after 30s.")
+            loop = asyncio.get_running_loop()
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, _sync_read), timeout=10,
+            )
+        except asyncio.TimeoutError:
+            raise ToolError(f"Timed out reading {file_path} after 10s.")
         except UnicodeDecodeError as e:
             raise ToolError(f"Unicode decode error reading {file_path}: {e}") from e
         except PermissionError:
@@ -243,17 +250,19 @@ class SearchReplace(
         shutil.copy2(file_path, file_path.with_suffix(file_path.suffix + ".bak"))
 
     async def _write_file(self, file_path: Path, content: str) -> None:
+        import asyncio
+
+        def _sync_write():
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
         try:
-            with anyio.fail_after(30):
-                async with await anyio.Path(file_path).open(
-                    mode="w", encoding="utf-8"
-                ) as f:
-                    await f.write(content)
-        except TimeoutError:
-            raise ToolError(
-                f"Timed out writing {file_path} after 30s. "
-                f"The file may be locked or on a slow filesystem."
+            loop = asyncio.get_running_loop()
+            await asyncio.wait_for(
+                loop.run_in_executor(None, _sync_write), timeout=10,
             )
+        except asyncio.TimeoutError:
+            raise ToolError(f"Timed out writing {file_path} after 10s.")
         except PermissionError:
             raise ToolError(f"Permission denied writing to file: {file_path}")
         except OSError as e:

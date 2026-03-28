@@ -147,16 +147,25 @@ class WriteFile(
         return file_path, file_existed, content_bytes
 
     async def _write_file(self, args: WriteFileArgs, file_path: Path) -> None:
+        import asyncio
+        import concurrent.futures
+
+        def _sync_write():
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(args.content)
+
         try:
-            with anyio.fail_after(30):  # 30s timeout prevents hangs on NFS/locks
-                async with await anyio.Path(file_path).open(
-                    mode="w", encoding="utf-8"
-                ) as f:
-                    await f.write(args.content)
-        except TimeoutError:
+            # Use a thread with a real timeout — anyio.fail_after doesn't
+            # cancel thread-pool I/O, which is why writes hung for 45+ minutes
+            loop = asyncio.get_running_loop()
+            await asyncio.wait_for(
+                loop.run_in_executor(None, _sync_write),
+                timeout=10,  # 10 seconds is generous for a text file write
+            )
+        except asyncio.TimeoutError:
             raise ToolError(
-                f"Timed out writing {file_path} after 30s. "
-                f"The file may be locked by another process or on a slow filesystem."
+                f"Timed out writing {file_path} after 10s. "
+                f"The file may be locked by another process."
             )
         except Exception as e:
             raise ToolError(f"Error writing {file_path}: {e}") from e
