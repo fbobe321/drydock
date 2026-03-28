@@ -122,7 +122,7 @@ class TestBuildEasy:
             "as command line args. Print the generated passwords."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert (tmp_path / "passgen.py").exists() or count_python_files(tmp_path) >= 1
         broken = check_syntax_all(tmp_path)
         assert not broken, f"Syntax errors: {broken}"
@@ -143,7 +143,7 @@ class TestBuildEasy:
             "most common word, and longest sentence."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         broken = check_syntax_all(tmp_path)
         assert not broken, f"Syntax errors: {broken}"
 
@@ -157,7 +157,7 @@ class TestBuildEasy:
             "Run it to convert 100 celsius to fahrenheit (should be 212)."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         broken = check_syntax_all(tmp_path)
         assert not broken
 
@@ -175,7 +175,7 @@ class TestBuildEasy:
             "Don't use any external libraries."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         broken = check_syntax_all(tmp_path)
         assert not broken
 
@@ -189,7 +189,7 @@ class TestBuildEasy:
             "Do NOT use eval(). Test it with: python3 calc.py '(2 + 3) * 4'"
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         broken = check_syntax_all(tmp_path)
         assert not broken
 
@@ -264,7 +264,7 @@ class TestBuildMedium:
             "Test: set a key, get it back, list all keys."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         missing = check_files_exist(tmp_path, ["kvstore/__init__.py", "kvstore/store.py"])
         assert len(missing) <= 1, f"Missing files: {missing}"
         broken = check_syntax_all(tmp_path)
@@ -285,7 +285,7 @@ class TestBuildMedium:
             "Test url_parser by parsing 'http://example.com:8080/api/v1'."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 2
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -318,7 +318,7 @@ class TestBuildMedium:
             "Test it by running: python3 runner.py lint"
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 1
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -340,7 +340,7 @@ class TestBuildMedium:
             "and does CRUD operations. Run the demo."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 3
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -358,7 +358,7 @@ class TestBuildMedium:
             "Run the example."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 3
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -377,7 +377,7 @@ class TestBuildMedium:
             "Test it."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 1
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -397,7 +397,7 @@ class TestBuildMedium:
             "Create demo.py showing both sync and async usage. Run it."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 2
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -423,7 +423,7 @@ class TestBuildMedium:
             "Test: show average salary by department."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 1
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -477,7 +477,7 @@ class TestBuildHard:
             "Run: python3 -m minitest tests/"
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 5
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -505,7 +505,7 @@ class TestBuildHard:
             "Verify output/ directory has HTML files."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 4
         broken = check_syntax_all(tmp_path)
         assert not broken
@@ -525,7 +525,7 @@ class TestBuildHard:
             "and prints the chat history. Run it."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         assert count_python_files(tmp_path) >= 4
         broken = check_syntax_all(tmp_path)
         assert not broken

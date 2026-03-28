@@ -792,7 +792,13 @@ class AgentLoop:
                         elif stuck_tool in ("grep",):
                             nudge = " You have been SEARCHING repeatedly. Pick the most relevant file from your search results and READ it, then make your edit."
                         elif stuck_tool in ("bash", "run_command"):
-                            nudge = " You have been running bash commands repeatedly without making progress. STOP testing and make your code edit with search_replace now. If your fix doesn't work, try a DIFFERENT approach."
+                            nudge = (
+                                " You have been running the SAME bash command repeatedly. "
+                                "Running the same command again will give the same result. "
+                                "If it succeeded but didn't do what you expected, READ the source code "
+                                "to understand WHY, then FIX the code with search_replace. "
+                                "If it failed, try a DIFFERENT command or approach."
+                            )
                         if repeat_warnings >= 4:
                             # Escalated: replace tool result with strong directive
                             warning_text = (

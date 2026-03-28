@@ -99,6 +99,12 @@ class WorkloadResult:
 
     @property
     def ok(self) -> bool:
+        """True if no ordering crashes. Force-stops are tolerated (model ran out of turns)."""
+        return self.ordering_crashes == 0
+
+    @property
+    def clean(self) -> bool:
+        """True if no crashes AND no force-stops (perfect run)."""
         return self.force_stops == 0 and self.ordering_crashes == 0
 
     @property

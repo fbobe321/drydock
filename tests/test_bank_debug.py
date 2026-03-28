@@ -48,7 +48,7 @@ class TestDebugEasy:
             "Verify by running: python3 calculator.py"
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 calculator.py")
         assert ok, f"Still broken: {out}"
 
@@ -61,7 +61,7 @@ class TestDebugEasy:
             "Verify it runs correctly."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 main.py")
         assert ok, f"Still broken: {out}"
         assert "Alice" in out, f"Expected 'Alice' in output: {out}"
@@ -76,7 +76,7 @@ class TestDebugEasy:
             "then fix the bug in sorter.py."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 test_sorter.py")
         assert ok, f"Tests still failing: {out}"
         assert "FAIL" not in out, f"Still has failures: {out}"
@@ -125,7 +125,7 @@ class TestDebugEasy:
             "Verify it runs without errors."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 config.py")
         assert ok, f"Still crashes: {out}"
 
@@ -161,7 +161,7 @@ class TestDebugEasy:
             "Verify it works with both even and odd lists."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 processor.py")
         assert ok, f"Still crashes: {out}"
 
@@ -204,7 +204,7 @@ class TestDebugEasy:
             "Fix it and verify it prints correct statistics."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 scores.py grades.txt")
         assert ok, f"Still crashes: {out}"
         # Mean of [85,92,78,95,88,76,91,83] = 86.0
@@ -246,7 +246,7 @@ class TestDebugEasy:
             "Expected output: Depth: 3, Count: 6"
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 tree.py")
         assert ok, f"Still crashes: {out}"
 
@@ -287,7 +287,7 @@ class TestDebugEasy:
             "Test: python3 merger.py output.txt file1.txt file2.txt missing.txt"
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 merger.py output.txt file1.txt file2.txt")
         assert ok, f"Still broken: {out}"
 
@@ -302,7 +302,7 @@ class TestDebugMedium:
     async def test_fix_off_by_one(self, tmp_path):
         """Fix off-by-one pagination bug (classic interview question)."""
         scaffold_buggy_project(tmp_path, "off_by_one_pagination")
-        agent = make_agent(tmp_path, max_turns=20)
+        agent = make_agent(tmp_path, max_turns=25)
         r = await run_workload(agent,
             "python3 test_paginator.py shows test failures. "
             "The pagination is returning wrong items. "
@@ -310,7 +310,7 @@ class TestDebugMedium:
             "All tests should pass."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 test_paginator.py")
         assert ok, f"Tests still failing: {out}"
         assert "FAIL" not in out, f"Still has failures: {out}"
@@ -318,14 +318,14 @@ class TestDebugMedium:
     async def test_fix_data_pipeline(self, tmp_path):
         """Fix type coercion bug in data pipeline."""
         scaffold_buggy_project(tmp_path, "data_pipeline_crash")
-        agent = make_agent(tmp_path, max_turns=20)
+        agent = make_agent(tmp_path, max_turns=25)
         r = await run_workload(agent,
             "Run: python3 -m pipeline.cli sample_data.csv --group-by department --sum-col salary\n"
             "It crashes. Find and fix the bug. The output should show salary "
             "totals per department."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path,
             "python3 -m pipeline.cli sample_data.csv --group-by department --sum-col salary")
         assert ok, f"Still crashes: {out}"
@@ -333,14 +333,14 @@ class TestDebugMedium:
     async def test_fix_state_machine(self, tmp_path):
         """Fix state machine history recording."""
         scaffold_buggy_project(tmp_path, "state_machine_bug")
-        agent = make_agent(tmp_path, max_turns=20)
+        agent = make_agent(tmp_path, max_turns=25)
         r = await run_workload(agent,
             "python3 test_statemachine.py has a failing test (test_history). "
             "The state machine's history should include the event name but it doesn't. "
             "Fix statemachine.py so history entries are (from_state, event, to_state)."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 test_statemachine.py")
         assert ok, f"Tests still failing: {out}"
         assert "FAIL" not in out, f"Still has failures: {out}"
@@ -355,7 +355,7 @@ class TestDebugMedium:
             "to the handler function. Find and fix the bug."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 test_app.py")
         assert ok, f"Tests still failing: {out}"
         assert "FAIL" not in out, f"Still has failures: {out}"
@@ -415,7 +415,7 @@ class TestDebugMedium:
             "Fix the race condition. Verify by running it."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 counter.py")
         assert ok, f"Still broken: {out}"
         assert "PASS" in out, f"Race condition not fixed: {out}"
@@ -460,7 +460,7 @@ class TestDebugMedium:
             "Verify all three test cases work."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 textproc.py")
         assert ok, f"Still crashes: {out}"
 
@@ -503,7 +503,7 @@ class TestDebugMedium:
                 print(u.greet())
             ''',
         })
-        agent = make_agent(tmp_path, max_turns=20)
+        agent = make_agent(tmp_path, max_turns=25)
         r = await run_workload(agent,
             "python3 main.py crashes with ImportError (circular import). "
             "Fix the circular dependency between app/models.py and app/validators.py. "
@@ -511,7 +511,7 @@ class TestDebugMedium:
             "Verify main.py runs correctly."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 main.py")
         assert ok, f"Still crashes: {out}"
         assert "Hello" in out, f"Expected greeting in output: {out}"
@@ -660,7 +660,7 @@ class TestDebugHard:
             "correctly on sales.csv."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 -m pipeline.run sales.csv")
         assert ok, f"Pipeline still crashes: {out}"
         assert "summary.json" in out.lower() or (tmp_path / "summary.json").exists()
@@ -675,7 +675,7 @@ class TestDebugHard:
             "and fix all bugs. All 4 tests must pass."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 test_app.py")
         assert ok, f"Tests still failing: {out}"
         assert out.count("PASS") >= 3, f"Not enough tests passing: {out}"
@@ -826,7 +826,7 @@ class TestDebugHard:
             "All tests must pass."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 test_notifications.py")
         assert ok, f"Tests still failing: {out}"
         assert "FAIL" not in out, f"Still has failures: {out}"
@@ -978,7 +978,7 @@ class TestDebugHard:
             "Fix config/loader.py so all tests pass."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         ok, out = check_runs(tmp_path, "python3 test_config.py")
         assert ok, f"Tests still failing: {out}"
 
@@ -1100,7 +1100,7 @@ class TestDebugHard:
             "loading from the saved JSON file."
         )
 
-        assert r.ok
+        assert r.ok, f"Ordering crash: {r.summary()}"
         # Run twice — should work both times
         ok1, out1 = check_runs(tmp_path, "python3 main.py")
         assert ok1, f"First run failed: {out1}"
