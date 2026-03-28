@@ -935,19 +935,10 @@ class AgentLoop:
             f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
 
-        # Determine threshold based on tool type
-        if tool_call.tool_name in ("grep", "read_file", "glob", "tool_search", "lsp"):
-            threshold = 4  # Read-only tools get more room
-        elif tool_call.tool_name == "bash":
-            # Check if it's a read-only bash command
-            cmd = args_str.lower()
-            read_only = any(k in cmd for k in ["ls ", "pwd", "cat ", "head ", "tail ",
-                           "git status", "git log", "git diff", "echo ", "which ", "whoami"])
-            threshold = 4 if read_only else 3
-        elif tool_call.tool_name in ("search_replace", "write_file"):
-            threshold = 2  # Write tools — strict
-        else:
-            threshold = 3
+        # Only block truly excessive repetition — the loop detection system
+        # (_check_tool_call_repetition) handles pattern-based loops separately.
+        # The circuit breaker is a last resort for exact same call repeated many times.
+        threshold = 5  # Allow reasonable repetition before blocking
 
         count, last_result = self._tool_call_history.get(sig, (0, ""))
         if count >= threshold:
@@ -993,7 +984,7 @@ class AgentLoop:
         if blocked := self._circuit_breaker_check(tool_call):
             self._consecutive_circuit_breaker_fires += 1
 
-            if self._consecutive_circuit_breaker_fires >= 3:
+            if self._consecutive_circuit_breaker_fires >= 5:
                 # Model is ignoring the circuit breaker — force stop
                 force_msg = (
                     f"FORCED STOP: You ignored the circuit breaker {self._consecutive_circuit_breaker_fires} times. "
@@ -1190,7 +1181,7 @@ class AgentLoop:
             yield event
         for tool_call in resolved.tool_calls:
             # Stop processing more tool calls if circuit breaker force-stopped
-            if self._consecutive_circuit_breaker_fires >= 3:
+            if self._consecutive_circuit_breaker_fires >= 5:
                 break
 
             yield ToolCallEvent(

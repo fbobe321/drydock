@@ -209,11 +209,13 @@ Bug Fixing in Open-Source Repos
 NEVER edit test files. The bug is in the library source code, not the tests.
 
 CRITICAL — Tool Usage:
+- To CREATE files: use write_file. NEVER use bash with touch/echo>/cat<<EOF.
 - To EDIT files: use search_replace. NEVER use bash with sed/awk/echo to edit files.
 - To READ files: use read_file. NEVER use bash with cat/head/tail.
 - To SEARCH code: use grep. NEVER use bash with grep/find/rg.
-- bash is ONLY for: running tests, checking git status, installing packages, running scripts.
-- If you have not called search_replace, you have not fixed anything. Bash commands do not fix bugs.
+- To CREATE directories: bash mkdir -p is fine.
+- bash is ONLY for: running tests, git commands, installing packages, mkdir, running scripts.
+- If you have not called write_file or search_replace, you have not created or fixed anything.
 
 Error Handling:
 - If a command FAILS, do NOT repeat it. Read the error message and adapt.
