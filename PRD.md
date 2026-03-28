@@ -229,3 +229,22 @@ drydock/
 4. **Users find different bugs than benchmarks.** SWE-bench finds agent logic bugs. Real usage finds UI/UX bugs.
 5. **Fix the #1 failure mode.** Bash abuse caused 88% of failures — one fix doubled the pass rate.
 6. **I can't test the TUI.** I write code changes based on docs but can't verify visually. The user is the only tester for UI.
+
+### Phase 10 (Mar 28): Multi-Agent Actually Works
+
+The agent was NOT using subagents despite having them available since Phase 2.
+Every previous "fix" added code but never told the model WHEN to use it.
+
+**Test result (real backend, no hint in prompt):**
+- Before fix: FAILED — 0 subagent calls for 5-file project review
+- After fix: PASSED — model naturally calls `task(agent="explore")`
+
+**Root cause:** System prompt had no instructions about multi-agent delegation.
+Adding Python tools/agents doesn't matter if the prompt doesn't tell the model to use them.
+
+**Fix:** Added comprehensive "Multi-Agent Delegation" section to system prompt:
+- Lists all available agents (explore, diagnostic, planner)
+- Lists all available skills (investigate, review, ship, batch, simplify, deep-research)
+- Shows exact syntax for delegation
+- Explicit WHEN to delegate rules (3+ files, reviews, bugs, planning)
+- WHEN NOT to delegate (simple fixes, quick questions)
