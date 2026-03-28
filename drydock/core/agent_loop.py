@@ -192,6 +192,7 @@ class AgentLoop:
         # Key: hash(tool_name + args), Value: (count, last_result_snippet)
         self._tool_call_history: dict[str, tuple[int, str]] = {}
         self._consecutive_circuit_breaker_fires: int = 0
+        self._empty_responses: int = 0
 
         system_prompt = get_universal_system_prompt(
             self.tool_manager, self.config, self.skill_manager, self.agent_manager
@@ -534,9 +535,19 @@ class AgentLoop:
                             stopped_by_middleware=True,
                         )
                         return
-                    # Inject error notice — ALWAYS append to last tool result
-                    # vLLM/Mistral rejects user messages after tool messages
-                    error_text = f"API error occurred: {e}. Please continue with your task."
+                    # Check if the error is about invalid function/tool name
+                    error_str = str(e)
+                    if "Function name" in error_str or "function" in error_str.lower() and "must be" in error_str.lower():
+                        # Model hallucinated a tool name — give it the correct list
+                        available = ", ".join(sorted(self.tool_manager.available_tools.keys())[:15])
+                        error_text = (
+                            f"ERROR: You tried to call a tool that does not exist. "
+                            f"Available tools: {available}. "
+                            f"Use one of these exact tool names. "
+                            f"For subagent delegation, use 'task'. For file search, use 'grep'."
+                        )
+                    else:
+                        error_text = f"API error occurred: {e}. Please continue with your task."
                     self._inject_system_note(error_text)
                     continue
 
@@ -670,10 +681,26 @@ class AgentLoop:
 
                 should_break_loop = last_message.role != Role.tool
 
+                # Handle empty response (no content AND no tools) — retry
+                if (should_break_loop and last_message.role == Role.assistant
+                        and not last_message.content and not last_message.tool_calls):
+                    empty_response_count = getattr(self, '_empty_responses', 0) + 1
+                    self._empty_responses = empty_response_count
+                    if empty_response_count <= 3:
+                        should_break_loop = False
+                        self._inject_system_note(
+                            "Your response was empty. You MUST call a tool. "
+                            "Start by reading the relevant file with read_file, "
+                            "or run the failing command with bash to see the error."
+                        )
+                        logger.warning("Empty model response — nudging (attempt %d)", empty_response_count)
+                        continue
+                    # After 3 empty responses, let it exit
+
                 # If model gives text without tool calls and hasn't edited anything,
                 # nudge it to make an edit instead of just describing what to do.
                 # Never let the agent exit without at least attempting an edit.
-                if should_break_loop and not has_made_edit and tool_turns >= 2:
+                if should_break_loop and not has_made_edit and tool_turns >= 1:
                     text_without_action += 1
                     # Always continue — don't let the agent exit without editing
                     should_break_loop = False
@@ -1175,6 +1202,19 @@ class AgentLoop:
                     "\n\n[RECOVERY: Your search text matches multiple locations. "
                     "Add more surrounding context lines to old_str to make it unique.]"
                 )
+
+            # RECOVERY: After bash failure with traceback, extract file/line and nudge
+            if tool_call.tool_name in ("bash", "run_command") and "Traceback" in str(exc):
+                import re
+                # Extract last File "path", line N from traceback
+                tb_matches = re.findall(r'File "([^"]+)", line (\d+)', str(exc))
+                if tb_matches:
+                    tb_file, tb_line = tb_matches[-1]
+                    if not tb_file.startswith("/home") and not "site-packages" in tb_file:
+                        error_msg += (
+                            f"\n\n[NEXT STEP: Read the source at {tb_file} around line {tb_line} "
+                            f"with read_file to understand the bug, then fix it with search_replace.]"
+                        )
 
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,

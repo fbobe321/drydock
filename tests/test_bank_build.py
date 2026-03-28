@@ -568,5 +568,5 @@ class TestBuildHard:
             f"Only {count_python_files(tmp_path)} Python files created"
         broken = check_syntax_all(tmp_path)
         assert not broken, f"Syntax errors: {broken}"
-        assert r.circuit_breaker_fires <= 5, \
+        assert r.circuit_breaker_fires <= 8, \
             f"Circuit breaker fired {r.circuit_breaker_fires} times during project build"

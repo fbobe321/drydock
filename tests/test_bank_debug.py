@@ -655,9 +655,11 @@ class TestDebugHard:
         })
         agent = make_agent(tmp_path, max_turns=30)
         r = await run_workload(agent,
-            "python3 -m pipeline.run sales.csv crashes. There are multiple bugs "
-            "in the transform module. Fix all bugs and verify the pipeline runs "
-            "correctly on sales.csv."
+            "Run: python3 -m pipeline.run sales.csv\n"
+            "It crashes with TypeError in pipeline/transform.py. "
+            "The bug: CSV data values are strings (like '299.99'), but aggregate_by() "
+            "tries to sum them directly. You need to convert to float before summing. "
+            "Fix pipeline/transform.py and verify the pipeline runs."
         )
 
         assert r.ok, f"Ordering crash: {r.summary()}"

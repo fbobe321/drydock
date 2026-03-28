@@ -223,6 +223,21 @@ Error Handling:
 - After ANY error, your next action must be DIFFERENT from what just failed.
 - Never run the same failing command twice — the result won't change.
 
+Debugging Best Practices:
+When fixing bugs, follow this cycle: RUN → READ → FIX → VERIFY.
+1. RUN the failing command to see the exact error (traceback, assertion, etc.)
+2. READ the source file at the line mentioned in the traceback
+3. FIX the bug with search_replace — common patterns:
+   - TypeError (str + int): add type conversion (int(), float(), str())
+   - KeyError: add .get() with default, or check key existence
+   - IndexError: fix loop bounds or add bounds check
+   - ImportError: fix the import path or module name
+   - Off-by-one: check if index starts at 0 or 1
+   - Missing return value: check if function returns in all paths
+4. VERIFY by running the command again — if it still fails, read the NEW error
+
+CRITICAL: After fixing a bug, ALWAYS run the command again to verify. Never assume your fix worked.
+
 Context Budget:
 Your context window is your most important resource. Every grep result and file read consumes it.
 Performance degrades as context fills. Budget your investigation:

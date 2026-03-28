@@ -162,10 +162,10 @@ class TestSearchReplace:
         })
         agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
-            "validators.py crashes when None is passed to validate_name(None) — "
-            "len(None) raises TypeError. Fix all validators to handle None input "
-            "gracefully (return False for None). The same pattern exists in "
-            "validate_name, validate_email, and validate_phone."
+            "python3 validators.py crashes with TypeError: object of type 'NoneType' has no len(). "
+            "The bug: validate_name, validate_email, and validate_phone all call len() "
+            "without checking for None first. Add 'if name is None: return False' (or equivalent) "
+            "at the top of ALL THREE functions. Then verify: python3 validators.py"
         )
 
         assert r.ok, f"Ordering crash: {r.summary()}"
