@@ -923,14 +923,34 @@ class AgentLoop:
         return ""
 
     def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
-        """Block exact-duplicate tool calls. Returns cached result or None."""
+        """Block exact-duplicate tool calls. Returns cached result or None.
+
+        Thresholds:
+        - Read-only tools (grep, read_file, ls, pwd, git status): block after 4
+        - Write/edit tools (search_replace, write_file): block after 2
+        - Other (bash with commands): block after 3
+        """
         args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
         sig = hashlib.md5(
             f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
 
+        # Determine threshold based on tool type
+        if tool_call.tool_name in ("grep", "read_file", "glob", "tool_search", "lsp"):
+            threshold = 4  # Read-only tools get more room
+        elif tool_call.tool_name == "bash":
+            # Check if it's a read-only bash command
+            cmd = args_str.lower()
+            read_only = any(k in cmd for k in ["ls ", "pwd", "cat ", "head ", "tail ",
+                           "git status", "git log", "git diff", "echo ", "which ", "whoami"])
+            threshold = 4 if read_only else 3
+        elif tool_call.tool_name in ("search_replace", "write_file"):
+            threshold = 2  # Write tools — strict
+        else:
+            threshold = 3
+
         count, last_result = self._tool_call_history.get(sig, (0, ""))
-        if count >= 2:
+        if count >= threshold:
             attempted = self._get_attempted_summary()
             msg = (
                 f"CIRCUIT BREAKER: You already ran `{tool_call.tool_name}` with these "
