@@ -11,3 +11,7 @@ python3 -m pytest tests/test_smoke.py -p no:xdist -p no:cov --override-ini="addo
 echo ""
 echo "=== FULL REGRESSION (real backend) ==="
 python3 -m pytest tests/test_full_regression.py -v -p no:xdist -p no:cov --override-ini="addopts="
+
+echo ""
+echo "=== BUILD PROJECT TESTS (real backend, 30-60 min) ==="
+python3 -m pytest tests/test_build_projects.py -v -s -p no:xdist -p no:cov --override-ini="addopts="
