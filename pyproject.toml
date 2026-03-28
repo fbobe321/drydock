@@ -1,6 +1,6 @@
 [project]
 name = "drydock-cli"
-version = "0.8.2"
+version = "0.9.0"
 description = "Drydock — nautical CLI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -81,6 +81,8 @@ include = ["drydock/"]
 "drydock/skills/investigate" = "drydock/skills/investigate"
 "drydock/skills/review" = "drydock/skills/review"
 "drydock/skills/ship" = "drydock/skills/ship"
+"drydock/skills/batch" = "drydock/skills/batch"
+"drydock/skills/simplify" = "drydock/skills/simplify"
 
 
 [project.scripts]
