@@ -1118,6 +1118,10 @@ class AgentLoop:
         except (ToolError, ToolPermissionError) as exc:
             error_msg = f"<{TOOL_ERROR_TAG}>{tool_instance.get_name()} failed: {exc}</{TOOL_ERROR_TAG}>"
 
+            # Record FAILED calls in circuit breaker too — prevents repeating
+            # the same failing command (e.g., pip install -r requirements.txt x5)
+            self._circuit_breaker_record(tool_call, f"FAILED: {str(exc)[:200]}")
+
             # RECOVERY: Warn when editing test files
             if tool_call.tool_name == "search_replace":
                 try:
