@@ -28,8 +28,6 @@ TextArea > .text-area--cursor {
     width: 100%;
     background: transparent;
     padding: 0;
-    overflow-y: scroll;
-    scrollbar-size-vertical: 1;
 }
 
 #loading-area {

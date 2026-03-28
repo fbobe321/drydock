@@ -145,29 +145,26 @@ class BottomApp(StrEnum):
 class ChatScroll(VerticalScroll):
     """Scroll container for chat messages.
 
-    Captures mouse scroll to scroll chat history (not terminal history).
-    Auto-scrolls to bottom when new messages arrive, unless user has
-    scrolled up to review previous messages.
+    VerticalScroll already handles mouse scroll natively.
+    We just need the right CSS and to not interfere with Textual's handling.
+
+    For copy/paste: hold Shift while selecting text to bypass Textual's
+    mouse capture and use the terminal's native selection.
     """
 
-    can_focus = True  # Required for mouse scroll capture
+    DEFAULT_CSS = """
+    ChatScroll {
+        layout: vertical;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-size-vertical: 1;
+        min-height: 5;
+    }
+    """
 
     @property
     def is_at_bottom(self) -> bool:
         return self.scroll_offset.y >= (self.max_scroll_y - 3)
-
-    def on_mount(self) -> None:
-        self.focus()  # Focus on mount so scroll events go here
-
-    def on_mouse_scroll_down(self, event: object) -> None:
-        """Scroll down in chat history."""
-        self.scroll_down(3)
-        event.stop()  # Prevent terminal from scrolling
-
-    def on_mouse_scroll_up(self, event: object) -> None:
-        """Scroll up in chat history."""
-        self.scroll_up(3)
-        event.stop()  # Prevent terminal from scrolling
 
     def update_node_styles(self, animate: bool = True) -> None:
         pass
@@ -216,7 +213,6 @@ async def prune_oldest_children(
 class VibeApp(App):  # noqa: PLR0904
     ENABLE_COMMAND_PALETTE = False
     CSS_PATH = "app.tcss"
-    MOUSE_SUPPORT = True  # Enable mouse scroll in the chat window
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+c", "clear_quit", "Quit", show=False),
