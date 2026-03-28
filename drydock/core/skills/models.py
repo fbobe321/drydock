@@ -44,6 +44,24 @@ class SkillMetadata(BaseModel):
         validation_alias="user-invocable",
         description="Controls whether the skill appears in the slash command menu.",
     )
+    # New fields for Claude Code parity
+    context: str = Field(
+        default="",
+        description="'fork' to run in a subagent with its own context window.",
+    )
+    agent: str = Field(
+        default="",
+        description="Subagent type to use when context is 'fork' (e.g., 'explore').",
+    )
+    model: str = Field(
+        default="",
+        description="Model to use for this skill (overrides active_model).",
+    )
+    disable_model_invocation: bool = Field(
+        default=False,
+        validation_alias="disable-model-invocation",
+        description="If true, only users can invoke this skill (not the model).",
+    )
 
     @field_validator("allowed_tools", mode="before")
     @classmethod

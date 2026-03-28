@@ -53,11 +53,22 @@ class AgentProfile:
     safety: AgentSafety
     agent_type: AgentType = AgentType.AGENT
     overrides: dict[str, Any] = field(default_factory=dict)
+    # New fields for feature parity with Claude Code
+    model: str = ""  # Per-subagent model selection (e.g., "gemini-2.5-pro")
+    max_turns: int | None = None  # Per-subagent turn limit
+    background: bool = False  # Run in background (non-blocking)
+    isolation: str = ""  # "worktree" for git worktree isolation
+    initial_prompt: str = ""  # Auto-run this prompt on start
+    allowed_tools: list[str] = field(default_factory=list)  # Restrict tools
+    hooks: list[str] = field(default_factory=list)  # Hook configs
 
     def apply_to_config(self, base: VibeConfig) -> VibeConfig:
         from drydock.core.config import VibeConfig as VC
 
         merged = _deep_merge(base.model_dump(), self.overrides)
+        # Apply per-subagent model if set
+        if self.model:
+            merged["active_model"] = self.model
         return VC.model_validate(merged)
 
     @classmethod
@@ -70,7 +81,43 @@ class AgentProfile:
             description=data.pop("description", ""),
             safety=AgentSafety(data.pop("safety", AgentSafety.NEUTRAL)),
             agent_type=AgentType(data.pop("agent_type", AgentType.AGENT)),
+            model=data.pop("model", ""),
+            max_turns=data.pop("max_turns", None),
+            background=data.pop("background", False),
+            isolation=data.pop("isolation", ""),
+            initial_prompt=data.pop("initial_prompt", ""),
+            allowed_tools=data.pop("allowed_tools", []),
+            hooks=data.pop("hooks", []),
             overrides=data,
+        )
+
+    @classmethod
+    def from_markdown(cls, path: Path) -> AgentProfile:
+        """Load agent profile from Markdown with YAML frontmatter."""
+        import yaml
+        content = path.read_text(encoding="utf-8")
+        if not content.startswith("---"):
+            raise ValueError(f"No YAML frontmatter in {path}")
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            raise ValueError(f"Invalid frontmatter in {path}")
+        meta = yaml.safe_load(parts[1]) or {}
+        body = parts[2].strip()
+
+        return cls(
+            name=meta.get("name", path.stem),
+            display_name=meta.get("display_name", meta.get("name", path.stem)),
+            description=meta.get("description", body[:200]),
+            safety=AgentSafety(meta.get("safety", AgentSafety.NEUTRAL)),
+            agent_type=AgentType(meta.get("agent_type", AgentType.SUBAGENT)),
+            model=meta.get("model", ""),
+            max_turns=meta.get("max_turns"),
+            background=meta.get("background", False),
+            isolation=meta.get("isolation", ""),
+            initial_prompt=meta.get("initial_prompt", ""),
+            allowed_tools=meta.get("allowed_tools") or meta.get("allowed-tools") or [],
+            hooks=meta.get("hooks", []),
+            overrides=meta.get("overrides", {}),
         )
 
 
