@@ -620,24 +620,18 @@ class AgentLoop:
                 # This is the #1 cause of no-patch failures (88% of cases)
                 if not has_made_edit and bash_count >= 5:
                     if bash_count == 5:
-                        self.messages.append(LLMMessage(
-                            role=Role.user,
-                            content=(
-                                "You have run 5 bash commands without making any edit. "
-                                "STOP using bash for reading/searching. Use the proper tools: "
-                                "read_file (not cat), grep (not bash grep), search_replace (not sed). "
-                                "Call search_replace NOW to fix the bug."
-                            )
-                        ))
+                        self._inject_system_note(
+                            "You have run 5 bash commands without making any edit. "
+                            "STOP using bash for reading/searching. Use the proper tools: "
+                            "read_file (not cat), grep (not bash grep), search_replace (not sed). "
+                            "Call search_replace NOW to fix the bug."
+                        )
                     elif bash_count == 8:
-                        self.messages.append(LLMMessage(
-                            role=Role.user,
-                            content=(
-                                "WARNING: 8 bash commands, ZERO edits. You are wasting context. "
-                                "Bash does NOT fix bugs — search_replace does. "
-                                "Use search_replace on your NEXT response or the session ends."
-                            )
-                        ))
+                        self._inject_system_note(
+                            "WARNING: 8 bash commands, ZERO edits. You are wasting context. "
+                            "Bash does NOT fix bugs — search_replace does. "
+                            "Use search_replace on your NEXT response or the session ends."
+                        )
                     elif bash_count >= 12:
                         # Force stop — model is clearly stuck in bash loop
                         yield AssistantEvent(
@@ -649,23 +643,17 @@ class AgentLoop:
                 # 3-Strike Rule: search_replace keeps failing
                 if search_replace_failures >= 3:
                     if search_replace_failures == 3:
-                        # Strike 3: STOP and ask user
-                        self.messages.append(LLMMessage(
-                            role=Role.user,
-                            content=(
-                                f"3-STRIKE RULE: Your search_replace has failed {search_replace_failures} times. "
-                                "You have exhausted your attempts. STOP trying the same approach. "
-                                "Either: (1) use read_file to get the EXACT text first, "
-                                "(2) try a completely different file, or "
-                                "(3) ask the user for help with /consult."
-                            )
-                        ))
+                        self._inject_system_note(
+                            f"3-STRIKE RULE: Your search_replace has failed {search_replace_failures} times. "
+                            "STOP trying the same approach. "
+                            "Either: (1) use read_file to get the EXACT text first, "
+                            "(2) try a completely different file, or "
+                            "(3) ask the user for help with /consult."
+                        )
                     elif search_replace_failures % 3 == 0:
-                        # Every 3 more failures, escalate
-                        self.messages.append(LLMMessage(
-                            role=Role.user,
-                            content=f"STOP: {search_replace_failures} failed edits. You are stuck. Ask the user for help."
-                        ))
+                        self._inject_system_note(
+                            f"STOP: {search_replace_failures} failed edits. You are stuck. Ask the user for help."
+                        )
 
                 # Context budget warning: after 7 tool turns without an edit,
                 # warn that context is being consumed without progress
@@ -726,11 +714,9 @@ class AgentLoop:
                         should_break_loop = True
                         nudge_text = None
                     if nudge_text:
-                        # Inject as user message so the model actually sees it
-                        # (inject_system_note buries it in old tool results)
-                        self.messages.append(
-                            LLMMessage(role=Role.user, content=nudge_text)
-                        )
+                        # Use _inject_system_note (appends to last tool/user message)
+                        # User messages cause 'tool after user' ordering violations
+                        self._inject_system_note(nudge_text)
                         logger.info("Model gave text without editing — nudging (attempt %d)", text_without_action)
 
                 # If model has been investigating for too long without making an edit,
