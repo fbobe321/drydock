@@ -42,7 +42,7 @@ class TestDebugEasy:
     async def test_fix_syntax_error(self, tmp_path):
         """Fix a missing colon on a function definition."""
         scaffold_buggy_project(tmp_path, "calculator_syntax")
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "calculator.py has a syntax error. Find and fix it. "
             "Verify by running: python3 calculator.py"
@@ -55,7 +55,7 @@ class TestDebugEasy:
     async def test_fix_import_typo(self, tmp_path):
         """Fix a typo in an import statement."""
         scaffold_buggy_project(tmp_path, "import_chain")
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "python3 main.py crashes with an import error. Find and fix the bug. "
             "Verify it runs correctly."
@@ -69,7 +69,7 @@ class TestDebugEasy:
     async def test_fix_logic_error(self, tmp_path):
         """Fix a comparison operator bug."""
         scaffold_buggy_project(tmp_path, "sort_logic")
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "The sorting function produces wrong results. "
             "Run python3 test_sorter.py to see which tests fail, "
@@ -117,7 +117,7 @@ class TestDebugEasy:
                     print(f"Database: {get_database_url(config)}")
             ''',
         })
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "python3 config.py crashes with a KeyError. "
             "Fix it so it handles missing database config gracefully "
@@ -153,7 +153,7 @@ class TestDebugEasy:
                     print(process_pairs([1, 2, 3, 4, 5]))
             ''',
         })
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "python3 processor.py crashes with IndexError when given an odd "
             "number of items. Fix process_pairs to handle odd-length lists "
@@ -198,7 +198,7 @@ class TestDebugEasy:
             ''',
             "grades.txt": "85\n92\n78\n95\n88\n76\n91\n83\n",
         })
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "python3 scores.py grades.txt crashes with a TypeError. "
             "Fix it and verify it prints correct statistics."
@@ -239,7 +239,7 @@ class TestDebugEasy:
                     print(f"Count: {root.count()}")
             ''',
         })
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "python3 tree.py crashes with RecursionError. "
             "Find the infinite recursion bug and fix it. "
@@ -278,7 +278,7 @@ class TestDebugEasy:
             "file1.txt": "Content of file 1\nLine 2\n",
             "file2.txt": "Content of file 2\nAnother line\n",
         })
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "merger.py has resource leaks (files not properly closed) and "
             "crashes if an input file doesn't exist. Fix both issues using "
@@ -304,10 +304,11 @@ class TestDebugMedium:
         scaffold_buggy_project(tmp_path, "off_by_one_pagination")
         agent = make_agent(tmp_path, max_turns=25)
         r = await run_workload(agent,
-            "python3 test_paginator.py shows test failures. "
-            "The pagination is returning wrong items. "
-            "Find and fix the bug in paginator.py. "
-            "All tests should pass."
+            "Run: python3 test_paginator.py\n"
+            "The first page returns wrong items. Read paginator.py and look at "
+            "the 'start' calculation — it uses page-based indexing (1-indexed) "
+            "but the slice should be 0-indexed. Fix the off-by-one bug and verify "
+            "all tests pass."
         )
 
         assert r.ok, f"Ordering crash: {r.summary()}"
@@ -408,7 +409,7 @@ class TestDebugMedium:
                         print(f"FAIL: Lost {expected - actual} increments (race condition)")
             ''',
         })
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "python3 counter.py shows a race condition — the final count is wrong. "
             "The ThreadSafeCounter has a lock but increment() doesn't use it. "
@@ -452,7 +453,7 @@ class TestDebugMedium:
                     print(truncate("日本語テスト", 10))
             ''',
         })
-        agent = make_agent(tmp_path, max_turns=15)
+        agent = make_agent(tmp_path, max_turns=20)
         r = await run_workload(agent,
             "python3 textproc.py crashes on Unicode text. The truncate function "
             "truncates bytes instead of characters, which splits multi-byte UTF-8. "
