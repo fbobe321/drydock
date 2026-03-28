@@ -215,6 +215,12 @@ CRITICAL — Tool Usage:
 - bash is ONLY for: running tests, checking git status, installing packages, running scripts.
 - If you have not called search_replace, you have not fixed anything. Bash commands do not fix bugs.
 
+Error Handling:
+- If a command FAILS, do NOT repeat it. Read the error message and adapt.
+- If a file doesn't exist, don't keep trying to use it. Create it or skip it.
+- After ANY error, your next action must be DIFFERENT from what just failed.
+- Never run the same failing command twice — the result won't change.
+
 Context Budget:
 Your context window is your most important resource. Every grep result and file read consumes it.
 Performance degrades as context fills. Budget your investigation:
