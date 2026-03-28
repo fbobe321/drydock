@@ -93,12 +93,11 @@ class TestSafety:
         assert hasattr(WriteFile, "_BINARY_EXTENSIONS")
         assert ".pptx" in WriteFile._BINARY_EXTENSIONS
 
-    def test_test_file_blocked(self):
-        from drydock.core.tools.base import ToolError
+    def test_injection_guard_in_search_replace(self):
         from drydock.core.tools.builtins.search_replace import SearchReplace
         import inspect
         src = inspect.getsource(SearchReplace.run)
-        assert "BLOCKED" in src  # Test files should be blocked
+        assert "injection" in src.lower()  # Injection guard should be present
 
 
 # ============================================================================

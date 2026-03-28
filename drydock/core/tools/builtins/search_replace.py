@@ -119,16 +119,6 @@ class SearchReplace(
     ) -> AsyncGenerator[ToolStreamEvent | SearchReplaceResult, None]:
         file_path, search_replace_blocks = self._prepare_and_validate_args(args)
 
-        # BLOCK editing test files — the bug is in source code, not tests
-        file_str = str(file_path)
-        if ("/tests/" in file_str or "/test_" in file_str or
-                file_str.endswith("_test.py") or "/testing/" in file_str):
-            raise ToolError(
-                f"BLOCKED: You are trying to edit a test file ({file_path.name}). "
-                f"The bug is in LIBRARY SOURCE code, not tests. "
-                f"Use grep to find the corresponding source file and edit that instead."
-            )
-
         # Injection guard: scan replacement content for suspicious patterns
         from drydock.core.tools.injection_guard import check_content_for_injection
         if warning := check_content_for_injection(args.content, args.file_path):

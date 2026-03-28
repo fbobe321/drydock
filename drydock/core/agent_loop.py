@@ -124,8 +124,8 @@ class ToolDecision(BaseModel):
 
 MAX_TOOL_TURNS = 200  # Bug fixes rarely need more than 50 turns; 200 is generous ceiling
 MAX_API_ERRORS = 5
-REPEAT_WARNING_THRESHOLD = 8  # Same exact call 8+ times before warning
-REPEAT_FORCE_STOP_THRESHOLD = 25  # Same exact call 25+ times before force-stop
+REPEAT_WARNING_THRESHOLD = 4  # Same exact call 4+ times before warning
+REPEAT_FORCE_STOP_THRESHOLD = 8  # Same exact call 8+ times before force-stop
 
 logger = logging.getLogger(__name__)
 
@@ -742,8 +742,8 @@ class AgentLoop:
                     if rep == "FORCE_STOP":
                         repeat_warnings += 1
                         logger.warning("Detected infinite loop: same tool call %d+ times (warning %d)", REPEAT_FORCE_STOP_THRESHOLD, repeat_warnings)
-                        if repeat_warnings >= 12:
-                            # True last resort — only stop after many redirects
+                        if repeat_warnings >= 5:
+                            # Stop after 5 redirects — model is not recovering
                             yield AssistantEvent(
                                 content="\n\n[Stopping: exhausted all retry attempts.]\n",
                                 stopped_by_middleware=True,
@@ -773,7 +773,7 @@ class AgentLoop:
                         else:
                             repeat_warnings += 1
                         logger.warning("Detected repeated tool calls (warning %.1f, investigation=%s)", repeat_warnings, is_investigation_warning)
-                        if repeat_warnings >= 15:
+                        if repeat_warnings >= 6:
                             yield AssistantEvent(
                                 content="\n\n[Stopping: too many repeated actions despite warnings.]\n",
                                 stopped_by_middleware=True,
@@ -935,10 +935,19 @@ class AgentLoop:
         count, last_result = self._tool_call_history.get(sig, (0, ""))
         is_failed = last_result.startswith("FAILED:") if last_result else False
 
-        # ONLY block commands that FAILED — successful commands are allowed to repeat.
-        # The model legitimately runs ls, git status, etc. multiple times during work.
-        # Loop detection (_check_tool_call_repetition) handles pattern-based loops.
-        if not (is_failed and count >= 2):
+        # Block failed commands after 2 repeats.
+        # Block SUCCESSFUL commands after 4 repeats — the model should not
+        # run the exact same command with the exact same args 5+ times.
+        # Read-only checks (ls, pwd, git status) get a higher threshold.
+        tool_name = tool_call.tool_name
+        is_readonly = tool_name in ("grep", "read_file", "glob", "ls")
+        success_threshold = 6 if is_readonly else 4
+
+        if is_failed and count >= 2:
+            pass  # will be blocked below
+        elif not is_failed and count >= success_threshold:
+            pass  # will be blocked below
+        else:
             return None
 
         if count >= 2:
@@ -1485,11 +1494,11 @@ class AgentLoop:
         # Lower thresholds catch loops where the model uses the same tool
         # with slightly different args (e.g., grep with different paths).
         if last_tool in ("bash", "run_command"):
-            same_tool_limit = 8
+            same_tool_limit = 5
         elif last_tool in ("grep", "read_file"):
-            same_tool_limit = 10  # investigation tools need some room
+            same_tool_limit = 7  # investigation tools need some room
         else:
-            same_tool_limit = 6
+            same_tool_limit = 5
         if (
             len(tool_names) >= same_tool_limit
             and all(n == tool_names[-1] for n in tool_names[-same_tool_limit:])
