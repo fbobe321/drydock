@@ -617,25 +617,22 @@ class AgentLoop:
                     )
 
                 # Bash abuse detection: model uses bash instead of proper tools
-                # This is the #1 cause of no-patch failures (88% of cases)
-                if not has_made_edit and bash_count >= 5:
-                    if bash_count == 5:
+                if not has_made_edit and bash_count >= 3:
+                    if bash_count == 3:
                         self._inject_system_note(
-                            "You have run 5 bash commands without making any edit. "
-                            "STOP using bash for reading/searching. Use the proper tools: "
-                            "read_file (not cat), grep (not bash grep), search_replace (not sed). "
-                            "Call search_replace NOW to fix the bug."
+                            "You have run 3 bash commands without creating or editing any files. "
+                            "STOP running bash. Start CREATING files with write_file or "
+                            "EDITING files with search_replace. bash does not create code."
                         )
-                    elif bash_count == 8:
+                    elif bash_count == 6:
                         self._inject_system_note(
-                            "WARNING: 8 bash commands, ZERO edits. You are wasting context. "
-                            "Bash does NOT fix bugs — search_replace does. "
-                            "Use search_replace on your NEXT response or the session ends."
+                            "WARNING: 6 bash commands, ZERO file edits. You are stuck in a loop. "
+                            "Your NEXT action MUST be write_file to create a file or "
+                            "search_replace to edit one. Do NOT run any more bash commands."
                         )
-                    elif bash_count >= 12:
-                        # Force stop — model is clearly stuck in bash loop
+                    elif bash_count >= 10:
                         yield AssistantEvent(
-                            content="\n\n[STOPPED: 12+ bash commands without any edit. Use search_replace.]\n",
+                            content="\n\n[STOPPED: 10+ bash commands without creating any files. Use write_file.]\n",
                             stopped_by_middleware=True,
                         )
                         return
