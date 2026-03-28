@@ -1854,5 +1854,9 @@ def run_textual_ui(
         update_cache_repository=update_cache_repository,
         plan_offer_gateway=plan_offer_gateway,
     )
-    session_id = app.run()
+    # mouse=False lets the terminal handle mouse events natively:
+    # - Mouse wheel scrolls the chat (not captured by Textual)
+    # - Click-drag selects text for copy/paste
+    # - Shift+Up/Down still works for keyboard scrolling
+    session_id = app.run(mouse=False)
     _print_session_resume_message(session_id)
