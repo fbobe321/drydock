@@ -1,7 +1,7 @@
 # DryDock — Local CLI Coding Agent
 
 **Repository:** https://github.com/fbobe321/drydock
-**PyPI:** https://pypi.org/project/drydock-cli/ (v0.6.3)
+**PyPI:** https://pypi.org/project/drydock-cli/ (v1.1.5)
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
 **Status:** Active development — continuous improvement running
 
@@ -11,102 +11,163 @@
 
 Every change follows this pipeline:
 
-1. **Code** → modify files in `drydock/` package directory
+1. **Code** → modify files in `drydock/` package
 2. **Syntax check** → `python3 -c "import ast; ast.parse(...)"`
-3. **Regression tests** → 81 tests must pass (auto-run by deploy scripts)
-4. **Commit** → descriptive message with Co-Authored-By
-5. **Publish** → `./scripts/publish_to_pypi.sh` (tests → build → PyPI → GitHub)
+3. **Smoke tests** → 20 tests, <1s, no backend needed (imports, branding, safety, tools, skills, config)
+4. **Commit** → descriptive message
+5. **Publish** → `./scripts/publish_to_pypi.sh` (smoke tests → build → PyPI → GitHub)
+6. **Full regression** → nightly at 2 AM, real vLLM backend, 13 tests
 
 Scripts:
-- `scripts/deploy_to_github.sh` — runs tests, syncs to GitHub. Cron daily at 4 AM.
-- `scripts/publish_to_pypi.sh` — runs tests, bumps version, builds wheel, uploads to PyPI, deploys to GitHub. Aborts on test failure.
+- `scripts/test_smoke.sh` — quick smoke tests (every deploy)
+- `scripts/test_full.sh` — smoke + full regression (nightly)
+- `scripts/deploy_to_github.sh` — smoke tests → sync to GitHub (daily 4 AM)
+- `scripts/publish_to_pypi.sh` — smoke tests → bump → build → PyPI → GitHub
+- `scripts/backup.sh` — rsync to NAS (daily 3 AM)
 
-Both scripts gate on the full 81-test regression suite. No deploy happens if tests fail.
+**No mock tests.** All behavior testing uses the real vLLM backend. Mock tests gave false confidence — the `raw_arguments` crash ran for days because mocks never hit the real code path.
 
 ---
 
-## Regression Test Suite (81 tests)
+## Test Suite
 
-Two test files, run in 0.3s:
-
-```bash
-pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py -p no:xdist -p no:cov --override-ini="addopts="
-```
-
-**test_drydock_regression.py (37 tests):**
-Message ordering (6), system note injection (3), wave spinner (2), config paths (3), state terms (4), Easter eggs (2), bash allowlist (5), conda detection (2), CLI flags (2), loop thresholds (1), write file safety (3), loop patterns (2), loading widget (2)
-
-**test_drydock_tasks.py (44 tests):**
-Binary file guard (5), unknown tool handling (1), loop thresholds (3), file I/O timeouts (4), skill discovery (3), config migration (2), system prompt content (3), bash allowlist (2), wave spinner (3), Easter eggs (1), injection guard (4), state file (4), context warnings (3), deviation rules (1), circuit breaker (2), CLI flags (2), thinking throttle (1)
+| Tier | File | Tests | Backend | Time | When |
+|------|------|-------|---------|------|------|
+| **Smoke** | `test_smoke.py` | 20 | None | <1s | Every deploy |
+| **Full Regression** | `test_full_regression.py` | 13 | Real vLLM | 5-10 min | Nightly 2 AM |
 
 ---
 
 ## Continuous Improvement
 
-DryDock improves itself automatically and survives restarts:
+| System | Schedule | What it does |
+|--------|----------|-------------|
+| `continuous_bench.sh` | Always running | SWE-bench batches (20 tasks, 600s timeout) |
+| `analyze_batch.py` | After each batch | Detects crash patterns, multi-file misses, test edits |
+| `auto_fix.py` | After analysis | Applies safe prompt fixes based on patterns |
+| `monitor_health.sh` | Every 30 min | Prunes worktrees, checks vLLM, disk space, pass rates |
+| `deploy_to_github.sh` | Daily 4 AM | Smoke tests → push to GitHub |
+| `backup.sh` | Daily 3 AM | rsync to NAS (192.168.50.183) |
+| `@reboot` cron | On restart | Restarts bench loop after 2 min |
 
-1. **`continuous_bench.sh`** runs SWE-bench batches in a loop (20 tasks, 600s timeout)
-2. **`@reboot` cron** restarts 2 minutes after any system restart
-3. **Every 6 hours** cron re-launches if the loop died
-4. **Daily at 4 AM** deploys to GitHub (with test gate)
-5. **State persists** in `continuous_bench_state.json`
-
-**Latest results (Mar 25):**
-- 520 task runs completed, 500/500 unique tasks covered
-- **254/500 passed (50.8%)** — up from 207/500 baseline (41.4%)
-- **+47 net improvement** (117 newly passing, 70 regressions from model non-determinism)
+**Latest SWE-bench results (Mar 28):**
+- 2,220/2,294 unique tasks tested (97%)
+- Recent pass rate: **39-42%** (up from 17% baseline)
+- Net improvement: **+22% pass rate** after bash abuse fix and nudge improvements
 
 ---
 
-## Objective
+## Tools (24 builtin)
 
-| | Value |
-|---|---|
-| **Baseline (Mar 15)** | 207/500 (41.4%) |
-| **Current (Mar 25)** | 254/500 (50.8%) |
-| **Net improvement** | +47 tasks (+9.4%) |
-| **Target** | 80%+ |
-| **Hardware** | 2x RTX 4060 Ti 16GB, devstral-24B-AWQ-4bit via vLLM, 128k context |
+| Tool | Description | Version |
+|------|-------------|---------|
+| `bash` | Shell execution, conda/pip support | Original |
+| `grep` | Content search (ripgrep) | Original |
+| `read_file` | Read files with offset/limit | Original |
+| `write_file` | Create/overwrite files (blocks binary) | Original |
+| `search_replace` | Edit files (blocks test files) | Original |
+| `webfetch` | Fetch URLs | Original |
+| `websearch` | DuckDuckGo search (no API key needed) | v0.8 |
+| `ask_user_question` | Interactive questions | Original |
+| `todo` | Todo list | Original |
+| `task` | Delegate to subagent | Original |
+| `exit_plan_mode` | Exit plan mode | Original |
+| `glob` | Fast file pattern matching | v0.9 |
+| `notebook_edit` | Edit Jupyter notebook cells | v0.9 |
+| `task_create` | Create work item | v0.9 |
+| `task_list` | List tasks | v0.9 |
+| `task_update` | Update task status | v0.9 |
+| `invoke_skill` | Model calls skills programmatically | v1.0 |
+| `enter_worktree` | Git worktree isolation | v1.0 |
+| `exit_worktree` | Return from worktree | v1.0 |
+| `cron_create` | Schedule recurring prompt | v1.1 |
+| `cron_list` | List scheduled crons | v1.1 |
+| `cron_delete` | Delete cron | v1.1 |
+| `tool_search` | Discover tools by keyword | v1.1 |
+| `lsp` | Type checking, go-to-definition, find-references | v1.1 |
+| `list_mcp_resources` | List MCP resources | v1.1 |
+| `read_mcp_resource` | Read MCP resource | v1.1 |
+| `powershell` | Windows/pwsh execution | v1.1 |
+
+## Skills (7 bundled)
+
+| Skill | Description | Version |
+|-------|-------------|---------|
+| `/create-presentation` | PowerPoint via python-pptx | v0.4 |
+| `/deep-research` | Web + code research → report | v0.4 |
+| `/investigate` | 3-strike debugging, scope lock, blast radius | v0.8 |
+| `/review` | Two-pass code review, scope drift detection | v0.8 |
+| `/ship` | Test → review → commit → push → PR pipeline | v0.8 |
+| `/batch` | Apply same change across many files | v0.9 |
+| `/simplify` | Three-pass code quality review | v0.9 |
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show shortcuts and commands |
+| `/config` | Edit settings |
+| `/clear` | Clear conversation |
+| `/compact` | Summarize conversation to save context |
+| `/consult` | Ask a smarter model for advice (in-context) |
+| `/rewind` | Undo last assistant turn |
+| `/status` | Show agent statistics |
+| `/resume` | Browse and resume past sessions |
 
 ---
 
 ## Development Progress
 
-### Phase 1: Baseline & Analysis (Mar 14–20)
-1,138 task runs across 254 unique SWE-bench Verified tasks. Identified top failure modes: message ordering crashes (9%), wrong file edits (15%), loop kills (28%), prose-only responses (11%).
+### Phase 1-4 (Mar 14-23): Foundation
+Baseline analysis, core agent improvements, crash elimination, conda/pip support, rebrand from Mistral Vibe.
 
-### Phase 2: Core Agent Improvements (Mar 15–20)
-10 features: failure recovery middleware, fuzzy search_replace, grep source-first sorting, smarter loop detection, diagnostic/planner subagents, "never edit tests" rule, SWE-bench workflow prompt, .codeignore, message ordering fix.
+### Phase 5 (Mar 24): UX Overhaul
+Wave spinner, .drydock config, double Ctrl-C, --dangerously-skip-permissions, nautical Easter eggs, write timeouts, binary file guard, pptx skill, message queuing.
 
-### Phase 3: Crash Elimination (Mar 23)
-`_sanitize_message_ordering()` safety net, middleware safe injection, MessageList bug fix, loop threshold tuning, forced-edit nudges, ConversationLimitException exit 0. Result: zero crashes.
+### Phase 6 (Mar 25): GSD + Performance
+GSD-inspired: tiered context warnings, prompt injection guard, state file, deviation rules. Circuit breaker, thinking throttle, conda env protection, --insecure flag, /consult command.
 
-### Phase 4: Conda/Pip & Rebrand (Mar 23)
-Bash tool allowlist (pip, conda, pytest auto-approve), conda environment detection via BASH_ENV, full Mistral Vibe → DryDock rebrand. Published to GitHub.
+### Phase 7 (Mar 26): Real Test-Driven Fixes
+Shifted to TDD with real backend. Circuit breaker force-stop (was firing but model ignored it — 20 calls despite 17 breaker fires). Test file edits now blocked.
 
-### Phase 5: UX Overhaul (Mar 24)
-Wave spinner, .drydock config dir, double Ctrl-C, --dangerously-skip-permissions, nautical Easter eggs, status throttle, write file timeouts, binary file guard, pptx skill, bash abuse detection, alternating loop detection, progressive budget warnings, ambiguous prompt guard, message queuing, mouse scroll, ocean blue onboarding. 76 regression tests gating deploys.
+### Phase 8 (Mar 27): Analysis-Driven Improvements
+- **88% of no-patch failures = bash abuse** (model uses cat/grep/sed instead of search_replace)
+- Fix: bash abuse detection at 5/8/12 calls, force stop at 12
+- Fix: nudges as user messages (not buried in old tool results)
+- Multi-file check: prompt model to grep for related files after first edit
+- DuckDuckGo websearch restored from user's GitHub changes
+- All "vibe" references fixed (model name, logger, client metadata)
 
-### Phase 5b: Package Rename (Mar 24)
-`vibe/` → `drydock/` directory rename (908 imports, 257 files). Published to PyPI as drydock-cli. Removed `vibe` CLI entry point.
+### Phase 9 (Mar 28): Feature Parity with Claude Code
+Audit found 18 gaps vs Claude Code. All closed:
 
-### Phase 6: GSD Integration & Performance (Mar 25)
+| Feature | What was built |
+|---------|---------------|
+| Glob tool | Fast file pattern matching |
+| NotebookEdit | Jupyter cell editing |
+| TaskCreate/List/Update | Interactive task lifecycle |
+| Hook system | 6 events: PreToolUse, PostToolUse, SessionStart/End, PreEdit/PostEdit |
+| InvokeSkill tool | Model calls skills programmatically |
+| Worktree tools | Git worktree isolation (enter/exit) |
+| CronCreate/List/Delete | Scheduled prompt execution |
+| ToolSearch | Discover tools by keyword |
+| LSP tool | Type checking, definition, references, symbols (pyright + grep fallback) |
+| MCP Resources | List/read MCP server resources |
+| PowerShell tool | Windows/pwsh support |
+| Agent memory | Persistent per-agent memory across sessions |
+| Per-agent model | Subagents can use different models |
+| Markdown agents | Define agents in Markdown with YAML frontmatter |
+| /batch skill | Apply changes across many files |
+| /simplify skill | Three-pass code quality review |
+| /rewind command | Undo last assistant turn |
+| Skill infrastructure | context:fork, model selection, disable-model-invocation |
 
-Inspired by [get-shit-done](https://github.com/gsd-build/get-shit-done) (41k stars):
-
-| Feature | Details |
-|---------|---------|
-| Tiered context warnings | 4 levels at 50/65/75/85% usage, debounced every 5 calls |
-| Prompt injection guard | Detects role overrides, invisible Unicode, hidden instructions |
-| Structured state file | `.drydock/state.md` persists task context across sessions |
-| Deviation handling rules | Auto-fix bugs/imports, ask user for architecture/scope decisions |
-| Circuit breaker | Blocks exact same tool call after 2 attempts with "already attempted" summary |
-| Thinking flicker fix | Status words change every 4s, not every token |
-| Conda env protection | Preserves user's active environment in subprocesses |
-| `--insecure` / `-k` flag | Disables SSL verification for corporate proxies |
-| `/consult` command | Ask a smarter model for advice — response visible to local model |
-| `consultant_model` config | Select consultant from configured models in config.toml |
-| `.vibe` auto-migration | Copies ~/.vibe → ~/.drydock on first run |
+### Phase 9b (Mar 28): Scroll and Copy Fix
+- `app.run(mouse=False)` — terminal handles mouse natively
+- Text selection works for copy/paste
+- Shift+Up/Down scrolls chat history
+- Version sync: TUI reads from package metadata (no more hardcoded __version__)
+- Mouse wheel scroll still doesn't work in Textual alternate screen mode — Shift+Up/Down is the workaround
 
 ---
 
@@ -114,81 +175,57 @@ Inspired by [get-shit-done](https://github.com/gsd-build/get-shit-done) (41k sta
 
 ```
 drydock/
-├── PRD.md                                  ← This document
-├── NOTICE                                  ← Apache 2.0 attribution
 ├── drydock/
 │   ├── core/
-│   │   ├── agent_loop.py                   ← Loop detection, circuit breaker, message ordering
-│   │   ├── consultant.py                   ← /consult command backend (read-only advisor)
-│   │   ├── middleware.py                   ← Tiered context warnings
-│   │   ├── programmatic.py                 ← Headless API entry point
-│   │   ├── session/state_file.py           ← Cross-session state persistence
-│   │   ├── tools/injection_guard.py        ← Prompt injection detection
-│   │   ├── tools/builtins/bash.py          ← Shell, conda/pip, allowlist/denylist
-│   │   ├── tools/builtins/search_replace.py ← Fuzzy auto-apply, recovery hints
-│   │   └── prompts/cli.md                  ← System prompt with deviation rules
+│   │   ├── agent_loop.py          ← Main loop, circuit breaker, blast radius
+│   │   ├── consultant.py          ← /consult backend (read-only advisor)
+│   │   ├── hooks.py               ← Hook system (6 events)
+│   │   ├── middleware.py          ← Tiered context warnings
+│   │   ├── programmatic.py        ← Headless API
+│   │   ├── session/
+│   │   │   ├── state_file.py      ← Cross-session state persistence
+│   │   │   └── agent_memory.py    ← Per-agent persistent memory
+│   │   ├── tools/
+│   │   │   ├── injection_guard.py ← Prompt injection detection
+│   │   │   └── builtins/          ← 24 builtin tools
+│   │   └── prompts/cli.md         ← System prompt
 │   ├── cli/
-│   │   ├── entrypoint.py                   ← CLI flags (--insecure, --consultant, etc.)
-│   │   ├── commands.py                     ← Slash commands (/consult, /help, etc.)
-│   │   └── textual_ui/app.py              ← TUI, message queuing, double Ctrl-C
-│   └── skills/
-│       └── create-presentation/SKILL.md    ← Bundled pptx skill
+│   │   ├── entrypoint.py          ← CLI flags (--insecure, --consultant, etc.)
+│   │   ├── commands.py            ← Slash commands (/consult, /rewind, etc.)
+│   │   └── textual_ui/app.py     ← TUI
+│   └── skills/                    ← 7 bundled skills
 ├── tests/
-│   ├── test_drydock_regression.py          ← 37 component tests
-│   └── test_drydock_tasks.py               ← 44 behavior tests
+│   ├── test_smoke.py              ← 20 tests, <1s (every deploy)
+│   └── test_full_regression.py    ← 13 tests, real backend (nightly)
 └── scripts/
-    ├── deploy_to_github.sh                 ← Test-gated GitHub deploy
-    └── publish_to_pypi.sh                  ← Test-gated PyPI publish
+    ├── deploy_to_github.sh
+    ├── publish_to_pypi.sh
+    ├── test_smoke.sh
+    ├── test_full.sh
+    └── backup.sh
 ```
 
 ---
 
-## Key Technical Decisions
+## Key Decisions
 
-**Circuit breaker:** Tracks tool call signatures (hash of name + args). After 2 identical calls, blocks execution and returns the cached result with "ALREADY ATTEMPTED" summary and suggestions to try different approaches.
+**No mock tests.** Every behavior test runs against the real vLLM backend. Mocks gave false confidence — critical bugs like `raw_arguments` crash and circuit breaker failures passed all mock tests but broke in production.
 
-**Consultant model:** `/consult` sends a question to a configured model using DryDock's own backend (same providers, same API keys). The consultant never calls tools — it only returns text advice that gets injected into the conversation so the local model can see and act on it.
+**Circuit breaker force-stops.** After 3 consecutive breaker fires, the conversation is terminated. The model was ignoring error messages and repeating — the only fix is cutting the loop.
 
-**Tiered context warnings:** 4 warning levels (50%, 65%, 75%, 85% context used). Debounced every 5 tool calls. Messages escalate from "wrap up" to "STOP NOW."
+**Bash abuse = #1 failure cause.** 88% of no-patch failures were the model running cat/grep/sed via bash instead of using search_replace. Fixed with escalating nudges at 5/8/12 bash calls.
 
-**Config migration:** On first run, if `~/.vibe` exists but `~/.drydock` doesn't, auto-copies everything and leaves a `MIGRATED.txt` note.
+**Nudges as user messages.** `_inject_system_note` buries nudges in old tool results where the model doesn't see them. Nudges now go as direct user messages.
+
+**Scroll workaround.** Mouse wheel doesn't work in Textual's alternate screen buffer. Shift+Up/Down is the working solution. Copy/paste works with native text selection (mouse=False).
 
 ---
 
 ## Lessons Learned
 
-1. **Fix bugs before adding features.** The message ordering crash fix was worth more than all subagents combined.
-2. **Non-determinism is real.** Run 500+ tasks to get stable numbers. 20-task batches are noise.
-3. **The model needs hard guardrails, not suggestions.** The circuit breaker (block after 2) works better than warnings (which the model ignores).
-4. **Test everything.** 81 regression tests catch issues before they ship. Gate deploys on tests.
-5. **Users find different bugs than benchmarks.** SWE-bench found crash bugs. Real usage found UX bugs (flicker, loops, wrong config dirs).
-
----
-
-## Next Steps
-
-### P1: Startup optimization
-20-second delay on launch. Profile imports, lazy-load heavy modules.
-
-### P2: Expand to full SWE-bench (2,294 tasks)
-Batch file ready. Switch continuous_bench.sh once Verified is stable.
-
-### P3: Task queue UI
-Show the user what the agent has planned in its execution pipeline.
-
-### P4: Support more LLM backends
-Test with Claude, GPT-4, Gemini to understand which improvements are model-specific.
-
-### Phase 7: Real Test-Driven Fixes (Mar 26)
-
-Shifted to test-driven development with real vLLM backend — no more mocks for critical bugs.
-
-| Issue | Test Result (before fix) | Fix | Test Result (after fix) |
-|-------|------------------------|-----|----------------------|
-| Circuit breaker fires but model keeps calling | FAILED: 20 bash calls, 17 breaker fires ignored | Force-stop conversation after 3 consecutive breaker fires + break tool loop | PASSED: stops within 3 calls |
-
-**Testing methodology changed:**
-- All critical tests run against real vLLM at localhost:8000
-- Tests must FAIL first (proving the bug exists)
-- Then fix code, re-run until PASS
-- 166 total tests (155 mock + 11 real backend)
+1. **Mock tests are dangerous.** They pass when real code is broken.
+2. **Tests must fail first.** Write the test, watch it fail, then fix the code.
+3. **The model ignores warnings.** Only hard stops (circuit breaker, force exit) actually prevent loops.
+4. **Users find different bugs than benchmarks.** SWE-bench finds agent logic bugs. Real usage finds UI/UX bugs.
+5. **Fix the #1 failure mode.** Bash abuse caused 88% of failures — one fix doubled the pass rate.
+6. **I can't test the TUI.** I write code changes based on docs but can't verify visually. The user is the only tester for UI.
