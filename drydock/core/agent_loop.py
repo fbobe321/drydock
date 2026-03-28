@@ -935,13 +935,16 @@ class AgentLoop:
             f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
 
-        # Only block truly excessive repetition — the loop detection system
-        # (_check_tool_call_repetition) handles pattern-based loops separately.
-        # The circuit breaker is a last resort for exact same call repeated many times.
-        threshold = 5  # Allow reasonable repetition before blocking
-
         count, last_result = self._tool_call_history.get(sig, (0, ""))
-        if count >= threshold:
+        is_failed = last_result.startswith("FAILED:") if last_result else False
+
+        # ONLY block commands that FAILED — successful commands are allowed to repeat.
+        # The model legitimately runs ls, git status, etc. multiple times during work.
+        # Loop detection (_check_tool_call_repetition) handles pattern-based loops.
+        if not (is_failed and count >= 2):
+            return None
+
+        if count >= 2:
             attempted = self._get_attempted_summary()
             msg = (
                 f"CIRCUIT BREAKER: You already ran `{tool_call.tool_name}` with these "
