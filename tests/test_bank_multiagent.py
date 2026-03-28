@@ -479,7 +479,7 @@ class TestMultiAgentDelegation:
         )
 
         assert r.ok, f"Ordering crash: {r.summary()}"
-        ok, out = check_runs(tmp_path, "python3 tests/test_geometry.py")
+        ok, out = check_runs(tmp_path, f"PYTHONPATH={tmp_path} python3 tests/test_geometry.py")
         assert ok, f"Tests still failing: {out}"
 
     async def test_plan_then_implement(self, tmp_path):

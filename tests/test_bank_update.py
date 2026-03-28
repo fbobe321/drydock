@@ -15,6 +15,7 @@ Run: pytest tests/test_bank_update.py -v -s --timeout=1800
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
