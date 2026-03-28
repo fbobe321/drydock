@@ -562,6 +562,23 @@ class AgentLoop:
                                     except (json.JSONDecodeError, AttributeError):
                                         edit_path = ""
 
+                                    # Auto-run diagnostics on edited Python files
+                                    if edit_path and edit_path.endswith(".py"):
+                                        try:
+                                            import asyncio
+                                            import subprocess
+                                            diag_result = subprocess.run(
+                                                ["python3", "-c", f"import ast; ast.parse(open('{edit_path}').read()); print('OK')"],
+                                                capture_output=True, text=True, timeout=5,
+                                            )
+                                            if diag_result.returncode != 0:
+                                                self._inject_system_note(
+                                                    f"SYNTAX ERROR in {edit_path}: {diag_result.stderr.strip()[:200]}. "
+                                                    f"Fix the syntax error before continuing."
+                                                )
+                                        except Exception:
+                                            pass
+
                                     # After first edit: prompt to check related files
                                     if first_edit and edit_path:
                                         self._inject_system_note(

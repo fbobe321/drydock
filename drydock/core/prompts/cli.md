@@ -38,9 +38,16 @@ HOW to delegate:
 task(task="Explore the project structure and list all modules", agent="explore")
 task(task="Analyze why test_auth fails with KeyError", agent="diagnostic")
 task(task="Plan the refactoring of the auth module", agent="planner")
+task(task="Review the auth module for security issues", agent="explore", background=true)
 invoke_skill(skill_name="review")
 invoke_skill(skill_name="investigate", arguments="Fix the login timeout bug")
 ```
+
+Background subagents (background=true):
+- Run without blocking your main conversation
+- Results saved to task list — check with task_list
+- Use for parallel work: launch multiple subagents, then check results
+- Example: `task(task="Explore module A", agent="explore", background=true)` then `task(task="Explore module B", agent="explore", background=true)` — both run simultaneously
 
 WHEN to delegate (ALWAYS do this):
 - Project has 3+ files to examine → `task(..., agent="explore")` FIRST

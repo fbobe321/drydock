@@ -38,6 +38,10 @@ class TaskArgs(BaseModel):
         default="explore",
         description="Name of the agent profile to use (must be a subagent)",
     )
+    background: bool = Field(
+        default=False,
+        description="Run in background (non-blocking). Results available via task_list.",
+    )
 
 
 class TaskResult(BaseModel):
@@ -128,15 +132,56 @@ class Task(
             enabled=ctx.session_dir is not None,
         )
         base_config = VibeConfig.load(session_logging=session_logging)
+
+        # Apply per-agent model if configured
+        if agent_profile.model:
+            base_config = agent_profile.apply_to_config(base_config)
+
         subagent_loop = AgentLoop(
             config=base_config,
             agent_name=args.agent,
+            max_turns=agent_profile.max_turns,
             entrypoint_metadata=ctx.entrypoint_metadata,
         )
 
         if ctx and ctx.approval_callback:
             subagent_loop.set_approval_callback(ctx.approval_callback)
 
+        # Background execution: launch and return immediately
+        if args.background:
+            import asyncio
+            from drydock.core.tools.builtins.task_manager import _TASKS
+
+            task_id = f"bg-{args.agent}-{len(_TASKS)+1}"
+            _TASKS[task_id] = {
+                "id": task_id,
+                "title": f"[background] {args.task[:60]}",
+                "description": args.task,
+                "status": "in_progress",
+                "agent": args.agent,
+            }
+
+            async def _run_background():
+                response_parts = []
+                try:
+                    async for event in subagent_loop.act(args.task):
+                        if isinstance(event, AssistantEvent) and event.content:
+                            response_parts.append(event.content)
+                except Exception as e:
+                    response_parts.append(f"[Error: {e}]")
+                _TASKS[task_id]["status"] = "completed"
+                _TASKS[task_id]["result"] = "".join(response_parts)
+
+            asyncio.create_task(_run_background())
+
+            yield TaskResult(
+                response=f"Subagent '{args.agent}' launched in background (task {task_id}). Check status with task_list.",
+                turns_used=0,
+                completed=False,
+            )
+            return
+
+        # Foreground execution: block and collect results
         accumulated_response: list[str] = []
         completed = True
         try:
