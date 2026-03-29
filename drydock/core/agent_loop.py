@@ -627,6 +627,41 @@ class AgentLoop:
                         f"Consider stopping to verify your approach."
                     )
 
+                # Post-edit bash loop: model made edits but now loops on bash
+                # trying to test code that keeps failing
+                if has_made_edit and bash_count >= 3:
+                    # Count consecutive bash calls at end of tool history
+                    consecutive_bash = 0
+                    for tc_name in reversed(self._recent_tool_names()):
+                        if tc_name in ("bash", "run_command"):
+                            consecutive_bash += 1
+                        else:
+                            break
+                    if consecutive_bash >= 4:
+                        self._inject_system_note(
+                            "You have run 4+ bash commands in a row after editing files. "
+                            "Each one failed or gave the same result. STOP running bash. "
+                            "Read the error message carefully, then use search_replace "
+                            "to fix the actual code. Running the same command again will "
+                            "not give a different result."
+                        )
+
+                # Detect bash file creation (touch, echo >, cat <<)
+                for msg in reversed(self.messages[-3:]):
+                    if msg.role == Role.assistant and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            if tc.function and tc.function.name in ("bash", "run_command"):
+                                cmd = ""
+                                try:
+                                    cmd = json.loads(tc.function.arguments or "{}").get("command", "")
+                                except (json.JSONDecodeError, AttributeError):
+                                    pass
+                                if any(kw in cmd for kw in ("touch ", "echo ", "cat <<", "printf ", "> ")):
+                                    self._inject_system_note(
+                                        f"Do NOT use bash to create files. Use write_file instead. "
+                                        f"bash touch/echo/cat does not create proper code files."
+                                    )
+
                 # Bash abuse detection: model uses bash instead of proper tools
                 if not has_made_edit and bash_count >= 3:
                     if bash_count == 3:
@@ -1203,17 +1238,33 @@ class AgentLoop:
                     "Add more surrounding context lines to old_str to make it unique.]"
                 )
 
-            # RECOVERY: After bash failure with traceback, extract file/line and nudge
+            # RECOVERY: Relative import error — tell model to use absolute imports or -m
+            if tool_call.tool_name in ("bash", "run_command") and "relative import with no known parent" in str(exc):
+                self._inject_system_note(
+                    "The error 'relative import with no known parent package' means you are "
+                    "running a package file directly (python3 pkg/file.py). Fix: either "
+                    "(1) change 'from .module import X' to 'from pkg.module import X' (absolute imports), or "
+                    "(2) run with 'python3 -m pkg' instead of 'python3 pkg/file.py'. "
+                    "Use search_replace to change the imports to absolute imports NOW."
+                )
+
+            # RECOVERY: After bash failure with traceback, extract file/line and
+            # inject a STRONG system note (not just error text) to force read→fix
             if tool_call.tool_name in ("bash", "run_command") and "Traceback" in str(exc):
                 import re
-                # Extract last File "path", line N from traceback
                 tb_matches = re.findall(r'File "([^"]+)", line (\d+)', str(exc))
                 if tb_matches:
                     tb_file, tb_line = tb_matches[-1]
-                    if not tb_file.startswith("/home") and not "site-packages" in tb_file:
+                    if not tb_file.startswith("/home") and "site-packages" not in tb_file:
                         error_msg += (
-                            f"\n\n[NEXT STEP: Read the source at {tb_file} around line {tb_line} "
-                            f"with read_file to understand the bug, then fix it with search_replace.]"
+                            f"\n\n[NEXT STEP: Read {tb_file} around line {tb_line} "
+                            f"with read_file, then fix it with search_replace.]"
+                        )
+                        # Also inject as system note — harder for model to ignore
+                        self._inject_system_note(
+                            f"STOP running bash. The error is at {tb_file}:{tb_line}. "
+                            f"Use read_file to read that file, then search_replace to fix the bug. "
+                            f"Do NOT run another bash command until you have fixed the code."
                         )
 
             yield ToolResultEvent(
@@ -1583,6 +1634,19 @@ class AgentLoop:
                     return f"WARNING|{last_tool}"
 
         return None
+
+    def _recent_tool_names(self, limit: int = 10) -> list[str]:
+        """Return recent tool names from message history (most recent last)."""
+        names: list[str] = []
+        for msg in reversed(self.messages):
+            if msg.role == Role.assistant and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc.function and tc.function.name:
+                        names.append(tc.function.name)
+            if len(names) >= limit:
+                break
+        names.reverse()
+        return names
 
     def _prune_repeated_tool_calls(self) -> None:
         """Remove duplicate tool call/result pairs from recent history.

@@ -223,6 +223,13 @@ Error Handling:
 - After ANY error, your next action must be DIFFERENT from what just failed.
 - Never run the same failing command twice — the result won't change.
 
+Python Package Rules:
+When creating Python packages (directories with __init__.py):
+- Use ABSOLUTE imports, not relative. Write `from mypackage.module import X`, NOT `from .module import X`
+- To run a package: `python3 -m mypackage` (requires __main__.py), NOT `python3 mypackage/main.py`
+- Relative imports (from .foo) ONLY work with `python3 -m`, not direct file execution
+- If you get "attempted relative import with no known parent package", switch to absolute imports
+
 Debugging Best Practices:
 When fixing bugs, follow this cycle: RUN → READ → FIX → VERIFY.
 1. RUN the failing command to see the exact error (traceback, assertion, etc.)
@@ -231,7 +238,7 @@ When fixing bugs, follow this cycle: RUN → READ → FIX → VERIFY.
    - TypeError (str + int): add type conversion (int(), float(), str())
    - KeyError: add .get() with default, or check key existence
    - IndexError: fix loop bounds or add bounds check
-   - ImportError: fix the import path or module name
+   - ImportError: fix the import path, use absolute imports, or run with python3 -m
    - Off-by-one: check if index starts at 0 or 1
    - Missing return value: check if function returns in all paths
 4. VERIFY by running the command again — if it still fails, read the NEW error
