@@ -193,6 +193,7 @@ class AgentLoop:
         self._tool_call_history: dict[str, tuple[int, str]] = {}
         self._consecutive_circuit_breaker_fires: int = 0
         self._empty_responses: int = 0
+        self._successful_test_runs: int = 0
 
         system_prompt = get_universal_system_prompt(
             self.tool_manager, self.config, self.skill_manager, self.agent_manager
@@ -571,6 +572,10 @@ class AgentLoop:
                                     first_edit = not has_made_edit
                                     has_made_edit = True
                                     bash_count = 0  # Reset on successful edit
+                                    # Reset circuit breaker — the world changed after an edit,
+                                    # so previously-failing commands may now succeed
+                                    self._tool_call_history.clear()
+                                    self._consecutive_circuit_breaker_fires = 0
                                     # Track blast radius
                                     try:
                                         edit_args = json.loads(tc.function.arguments or "{}")
@@ -644,13 +649,13 @@ class AgentLoop:
                             consecutive_bash += 1
                         else:
                             break
-                    if consecutive_bash >= 4:
+                    if consecutive_bash >= 3:
                         self._inject_system_note(
-                            "You have run 4+ bash commands in a row after editing files. "
-                            "Each one failed or gave the same result. STOP running bash. "
-                            "Read the error message carefully, then use search_replace "
-                            "to fix the actual code. Running the same command again will "
-                            "not give a different result."
+                            "You have run 3+ bash commands in a row. "
+                            "If your project is WORKING, you are DONE — tell the user the project "
+                            "is complete and what commands they can use. "
+                            "If it is FAILING, STOP running bash and use read_file + search_replace "
+                            "to fix the code. Do NOT keep running the same test."
                         )
 
                 # Detect bash file creation (touch, echo >, cat <<)
@@ -1169,6 +1174,17 @@ class AgentLoop:
 
             result_dict = result_model.model_dump()
             text = "\n".join(f"{k}: {v}" for k, v in result_dict.items())
+
+            # After a successful bash test of built code, nudge to wrap up
+            if tool_call.tool_name in ("bash", "run_command"):
+                self._successful_test_runs += 1
+                if self._successful_test_runs >= 3:
+                    self._inject_system_note(
+                        "Your project is WORKING. You have verified it successfully. "
+                        "STOP testing. Summarize what you built and tell the user "
+                        "how to use it. Do NOT run any more bash commands."
+                    )
+
             # Record for circuit breaker
             self._circuit_breaker_record(tool_call, text)
             self._handle_tool_response(
