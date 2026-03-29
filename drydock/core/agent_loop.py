@@ -473,6 +473,13 @@ class AgentLoop:
 
         yield UserMessageEvent(content=user_msg, message_id=user_message.message_id)
 
+        # === AUTO-DELEGATION ===
+        # Inject context automatically so the model doesn't have to choose to delegate.
+        # This replaces relying on the model to call task()/invoke_skill().
+        auto_context = self._build_auto_context(user_msg)
+        if auto_context:
+            self._inject_system_note(auto_context)
+
         try:
             should_break_loop = False
             tool_turns = 0
@@ -1634,6 +1641,93 @@ class AgentLoop:
                     return f"WARNING|{last_tool}"
 
         return None
+
+    def _build_auto_context(self, user_msg: str) -> str | None:
+        """Build auto-delegation context based on the prompt and project state.
+
+        Instead of hoping the model calls task()/invoke_skill(), we inject:
+        1. Project file listing (if files exist) — replaces explore subagent
+        2. Skill content (if prompt matches a skill) — replaces invoke_skill
+        3. Planning prompt (if complex build task) — replaces planner subagent
+        """
+        parts: list[str] = []
+        msg_lower = user_msg.lower()
+
+        # 1. Auto-explore: list project files so model doesn't have to
+        try:
+            cwd = Path.cwd()
+            py_files = sorted(cwd.rglob("*.py"))
+            py_files = [f for f in py_files if ".logs" not in str(f) and ".venv" not in str(f)]
+            if len(py_files) >= 3:
+                listing = "\n".join(f"  {f.relative_to(cwd)}" for f in py_files[:30])
+                parts.append(f"PROJECT FILES ({len(py_files)} Python files):\n{listing}")
+                if len(py_files) > 30:
+                    parts.append(f"  ... and {len(py_files) - 30} more")
+        except Exception:
+            pass
+
+        # Also list non-Python files of interest
+        try:
+            for pattern in ("*.md", "*.txt", "*.json", "*.yaml", "*.yml", "*.toml", "*.csv"):
+                for f in sorted(cwd.glob(pattern))[:5]:
+                    if f.name not in (".logs",):
+                        parts.append(f"  {f.name} ({f.stat().st_size} bytes)")
+        except Exception:
+            pass
+
+        # 2. Skill routing: match prompt to skill and inject content
+        skill_name = None
+        if any(kw in msg_lower for kw in ("review this", "review the", "code review", "audit")):
+            skill_name = "review"
+        elif any(kw in msg_lower for kw in ("investigate", "debug", "why does", "why is", "broken", "diagnose")):
+            skill_name = "investigate"
+        elif any(kw in msg_lower for kw in ("ship it", "commit and push", "create a pr", "open a pr")):
+            skill_name = "ship"
+        elif any(kw in msg_lower for kw in ("simplify", "clean up", "reduce complexity")):
+            skill_name = "simplify"
+
+        if skill_name:
+            skill_info = self.skill_manager.get_skill(skill_name)
+            if skill_info and skill_info.path:
+                try:
+                    content = skill_info.path.read_text(encoding="utf-8")
+                    # Strip frontmatter
+                    if content.startswith("---"):
+                        end = content.find("---", 3)
+                        if end > 0:
+                            content = content[end + 3:].strip()
+                    parts.append(f"FOLLOW THIS WORKFLOW ({skill_name} skill):\n{content[:2000]}")
+                except Exception:
+                    pass
+
+        # 3. Planning nudge for complex build tasks
+        is_build = any(kw in msg_lower for kw in (
+            "build", "create", "implement", "make a", "write a",
+            "set up", "scaffold", "get started", "prd",
+        ))
+        is_complex = len(user_msg) > 100 or any(kw in msg_lower for kw in (
+            "multiple", "modules", "package", "api", "database",
+            "features", "cli", "commands",
+        ))
+        if is_build and is_complex:
+            parts.append(
+                "PLANNING REQUIRED — This is a complex build task. Before writing code:\n"
+                "1. List ALL files you will create (with brief purpose)\n"
+                "2. Define the package structure\n"
+                "3. Use ABSOLUTE imports (from pkg.module import X), NOT relative imports\n"
+                "4. Create files in dependency order (utilities first, then modules that import them)\n"
+                "5. After creating all files, test with: python3 -m package_name\n"
+                "6. If tests fail, READ the error, then FIX with search_replace"
+            )
+        elif is_build:
+            parts.append(
+                "REMINDER: Use write_file to create files. Use absolute imports. "
+                "Test with python3 -m package_name (not python3 package/file.py)."
+            )
+
+        if not parts:
+            return None
+        return "\n\n".join(parts)
 
     def _recent_tool_names(self, limit: int = 10) -> list[str]:
         """Return recent tool names from message history (most recent last)."""
