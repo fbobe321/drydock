@@ -1,9 +1,12 @@
 # DryDock — Local CLI Coding Agent
 
 **Repository:** https://github.com/fbobe321/drydock
-**PyPI:** https://pypi.org/project/drydock-cli/ (v1.5.0)
+**PyPI:** https://pypi.org/project/drydock-cli/ (v1.5.3)
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
-**Status:** Active development — continuous improvement running
+**Status:** Active development
+**Current version:** 1.5.3
+**Hardware:** 2x RTX 4060 Ti 16GB, devstral-24B-AWQ-4bit via vLLM at localhost:8000
+**Server:** remus (Ubuntu 22.04, user: bobef)
 
 ---
 
@@ -67,31 +70,106 @@ PYTHON="/home/bobef/miniconda3/bin/python3"
 
 ---
 
-## Test Suite
+## File Locations (CRITICAL for session continuity)
 
-| Tier | File | Tests | Backend | Time | When |
-|------|------|-------|---------|------|------|
-| **Smoke** | `test_smoke.py` | 20 | None | <1s | Every deploy |
-| **Full Regression** | `test_full_regression.py` | 13 | Real vLLM | 5-10 min | Nightly 2 AM |
+```
+/data3/drydock/                    ← Main repo (git)
+├── drydock/                       ← Python package (source code)
+│   ├── core/
+│   │   ├── agent_loop.py          ← THE most important file. Loop detection, circuit breaker, auto-delegation
+│   │   ├── prompts/cli.md         ← System prompt (debugging rules, tool usage, import rules)
+│   │   ├── tools/builtins/        ← 24 builtin tools
+│   │   ├── agents/                ← Subagent definitions (explore, diagnostic, planner)
+│   │   └── skills/                ← Skill framework
+│   ├── cli/textual_ui/app.py     ← TUI application
+│   └── skills/                    ← 7 bundled skill markdown files
+├── tests/
+│   ├── test_smoke.py              ← 20 fast tests (imports, branding, safety)
+│   ├── test_loop_detection.py     ← 38 loop/circuit breaker tests
+│   ├── test_drydock_*.py          ← ~100 regression tests
+│   ├── test_bank_prd.py           ← 15 PRD-driven tests (CORE usability tests)
+│   ├── test_bank_prd_extended.py  ← 50 extended PRD tests (overnight battery)
+│   ├── test_bank_build.py         ← 25 build tests
+│   ├── test_bank_debug.py         ← 20 debug tests
+│   ├── test_bank_update.py        ← 15 update tests
+│   ├── test_bank_multiagent.py    ← 10 multi-agent tests
+│   ├── test_bank_tools.py         ← 13 tool integration tests
+│   └── testbank_helpers.py        ← Shared test infrastructure
+├── scripts/
+│   ├── deploy_to_github.sh        ← Clone GitHub, sync, push (daily 4 AM)
+│   ├── publish_to_pypi.sh         ← Tests → build → PyPI → tag → integration test
+│   ├── test_full.sh               ← Smoke + real backend regression (nightly 2 AM)
+│   ├── test_bank.sh               ← 83-test bank runner with category selection
+│   ├── monitor_test_battery.sh    ← Cron monitor: restart stuck tests, skip repeat failures
+│   ├── backup.sh                  ← rsync to NAS (daily 3 AM)
+│   └── install.sh                 ← User installation script
+├── test_bank_results/             ← Test logs (overnight runs, partial results)
+├── pyproject.toml                 ← Version, dependencies, build config
+├── CLAUDE.md                      ← Instructions for AI assistants working on this repo
+└── PRD.md                         ← This file
+```
+
+```
+/data3/swe_bench_runs/             ← SWE-bench infrastructure (SEPARATE from drydock repo)
+├── harness.py                     ← Runs drydock on SWE-bench tasks
+├── continuous_bench.sh            ← Continuous improvement loop (CURRENTLY PAUSED)
+├── analyze_batch.py               ← Post-batch analysis
+├── auto_fix.py                    ← Auto-apply prompt fixes
+└── monitor_health.sh              ← Worktree cleanup (CURRENTLY PAUSED)
+```
+
+```
+~/.config/drydock/
+├── github_token                   ← GitHub PAT for push/deploy
+└── pypi_token                     ← PyPI API token for publishing
+```
+
+### Key Paths
+- **vLLM server:** http://localhost:8000 (devstral-24B-AWQ-4bit)
+- **NAS backup:** 192.168.50.183 via rsync
+- **Conda env:** `/home/bobef/miniconda3/bin/python3` (ALWAYS use this, never bare `python3`)
+- **Git remotes:** `drydock` → github.com/fbobe321/drydock, `origin` → github.com/mistralai/mistral-vibe
+- **Main branch:** `main` (push to `drydock` remote, not `origin`)
 
 ---
 
-## Continuous Improvement
+## Test Suite
 
-| System | Schedule | What it does |
-|--------|----------|-------------|
-| `continuous_bench.sh` | Always running | SWE-bench batches (20 tasks, 600s timeout) |
-| `analyze_batch.py` | After each batch | Detects crash patterns, multi-file misses, test edits |
-| `auto_fix.py` | After analysis | Applies safe prompt fixes based on patterns |
-| `monitor_health.sh` | Every 30 min | Prunes worktrees, checks vLLM, disk space, pass rates |
-| `deploy_to_github.sh` | Daily 4 AM | Smoke tests → push to GitHub |
-| `backup.sh` | Daily 3 AM | rsync to NAS (192.168.50.183) |
-| `@reboot` cron | On restart | Restarts bench loop after 2 min |
+| Tier | File(s) | Tests | Backend | Time | When |
+|------|---------|-------|---------|------|------|
+| **Smoke** | `test_smoke.py` | 20 | None | <1s | Every deploy |
+| **Loop Detection** | `test_loop_detection.py` | 38 | None | <1s | Every deploy |
+| **Regression** | `test_drydock_*.py` | ~100 | None | ~1min | Every deploy |
+| **Full Regression** | `test_full_regression.py` | 13 | Real vLLM | 5-10 min | Nightly 2 AM |
+| **PRD Battery** | `test_bank_prd.py` | 15 | Real vLLM | ~20 min | On demand |
+| **Extended PRD** | `test_bank_prd_extended.py` | 50 | Real vLLM | ~3-6 hours | Overnight |
+| **Build/Debug/Update** | `test_bank_*.py` | 83 | Real vLLM | ~90 min | On demand |
 
-**Latest SWE-bench results (Mar 28):**
+**Run commands:**
+```bash
+# Quick smoke (every change)
+python3 -m pytest tests/test_smoke.py tests/test_loop_detection.py -q
+
+# All fast tests (before commit)
+python3 -m pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py tests/test_loop_detection.py tests/test_smoke.py -q
+
+# PRD battery (user-realistic, needs vLLM)
+python3 -m pytest tests/test_bank_prd.py -v -s
+
+# Overnight (needs vLLM, 3-6 hours)
+nohup python3 -m pytest tests/test_bank_prd.py tests/test_bank_prd_extended.py -v --tb=short > test_bank_results/run.log 2>&1 &
+```
+
+---
+
+## SWE-bench (CURRENTLY PAUSED)
+
+Infrastructure at `/data3/swe_bench_runs/` (not in drydock repo). Paused to focus on usability testing.
+
+**Latest results (Mar 28):**
 - 2,220/2,294 unique tasks tested (97%)
-- Recent pass rate: **39-42%** (up from 17% baseline)
-- Net improvement: **+22% pass rate** after bash abuse fix and nudge improvements
+- Pass rate: **39-42%** (up from 17% baseline)
+- Crons removed — re-enable with `continuous_bench.sh` when ready
 
 ---
 
@@ -316,3 +394,20 @@ User reported DryDock was unusable — model looped 12+ times running the same c
 Run with: `./scripts/test_bank.sh` (full) or `./scripts/test_bank.sh quick` (easy only, ~2h)
 
 **Removed:** False-positive test file guard in search_replace that blocked any file in a directory containing "test" in its name.
+
+### Phase 12 (Mar 29): Configuration Management + Auto-Delegation + PRD Tests
+
+**Config management crisis:** Overnight test battery crashed for 8 hours because cron used system Python (no pytest). All scripts now use explicit `/home/bobef/miniconda3/bin/python3`.
+
+**Auto-delegation:** Model wasn't using subagents despite prompt instructions. Fixed by injecting context automatically before the model's first turn:
+- Project file listing (replaces explore subagent)
+- Skill content injection (matches prompt keywords to skills)
+- Planning prompt for complex builds (forces absolute imports, python3 -m)
+
+**Circuit breaker reset:** After write_file/search_replace, circuit breaker history clears. Previously-failing commands can be retried after code changes.
+
+**Post-success stop:** After 3 successful bash runs, model is told to stop testing and summarize.
+
+**PRD-driven test bank:** 65 tests (15 core + 50 extended) that give DryDock a PRD and verify the built project RUNS. Core 15 pass at 100%.
+
+**Relative import auto-fix:** When model gets "relative import with no known parent package", agent loop explains absolute imports vs python3 -m and forces search_replace.
