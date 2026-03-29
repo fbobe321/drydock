@@ -1,7 +1,7 @@
 # DryDock — Local CLI Coding Agent
 
 **Repository:** https://github.com/fbobe321/drydock
-**PyPI:** https://pypi.org/project/drydock-cli/ (v1.1.5)
+**PyPI:** https://pypi.org/project/drydock-cli/ (v1.5.0)
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
 **Status:** Active development — continuous improvement running
 
@@ -21,6 +21,7 @@ Every change follows this pipeline:
 Scripts:
 - `scripts/test_smoke.sh` — quick smoke tests (every deploy)
 - `scripts/test_full.sh` — smoke + full regression (nightly)
+- `scripts/test_bank.sh` — 83-test regression bank (10-18 hours, real vLLM)
 - `scripts/deploy_to_github.sh` — smoke tests → sync to GitHub (daily 4 AM)
 - `scripts/publish_to_pypi.sh` — smoke tests → bump → build → PyPI → GitHub
 - `scripts/backup.sh` — rsync to NAS (daily 3 AM)
@@ -248,3 +249,33 @@ Adding Python tools/agents doesn't matter if the prompt doesn't tell the model t
 - Shows exact syntax for delegation
 - Explicit WHEN to delegate rules (3+ files, reviews, bugs, planning)
 - WHEN NOT to delegate (simple fixes, quick questions)
+
+### Phase 11 (Mar 28): Agent Loop Hardening + 83-Test Regression Bank
+
+User reported DryDock was unusable — model looped 12+ times running the same command, search_replace blocked legitimate files, basic tasks couldn't complete.
+
+**Agent loop fixes (5 bugs):**
+- Empty model response: retry 3x with nudge (model sometimes returns nothing)
+- Invalid tool name recovery: model hallucinates `task_agent:`, now gets correct tool list
+- Bash traceback guidance: extracts file:line from crash, directs model to read source
+- Circuit breaker for successful repeats: blocks after 4 identical bash calls (was unlimited)
+- Tighter loop detection: warning at 4 (was 8), force-stop at 8 (was 25)
+
+**System prompt improvements:**
+- Added debugging best practices: RUN → READ → FIX → VERIFY cycle
+- Common bug pattern hints (TypeError, KeyError, IndexError, off-by-one)
+
+**83-test regression bank (real vLLM backend, ~90 min):**
+
+| Suite | Tests | Pass Rate |
+|---|---|---|
+| BUILD (easy/medium/hard) | 25 | 100% |
+| DEBUG (easy/medium/hard) | 20 | 75% |
+| UPDATE (easy/medium/hard) | 15 | 100% |
+| MULTIAGENT | 10 | 100% |
+| TOOLS | 13 | 100% |
+| **Total** | **83** | **94%** |
+
+Run with: `./scripts/test_bank.sh` (full) or `./scripts/test_bank.sh quick` (easy only, ~2h)
+
+**Removed:** False-positive test file guard in search_replace that blocked any file in a directory containing "test" in its name.
