@@ -480,8 +480,17 @@ class AgentLoop:
         if self._is_build_task(user_msg):
             try:
                 from drydock.core.build_orchestrator import run_build_pipeline
+                # Include PRD content if it exists — the user prompt is usually
+                # just "review the PRD and get started", not the PRD itself
+                build_prompt = user_msg
+                for prd_name in ("PRD.md", "prd.md", "PRD.txt"):
+                    prd_path = Path.cwd() / prd_name
+                    if prd_path.exists():
+                        prd_content = prd_path.read_text()[:8000]
+                        build_prompt = f"{user_msg}\n\nPRD CONTENT:\n{prd_content}"
+                        break
                 summary = await run_build_pipeline(
-                    user_prompt=user_msg,
+                    user_prompt=build_prompt,
                     config=self.config,
                     base_dir=Path.cwd(),
                 )

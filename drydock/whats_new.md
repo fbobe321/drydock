@@ -1,4 +1,7 @@
-# What's new in v2.4.2
+# What's new in v1.6.0
 
-- **Skill arguments**: Skills now extract arguments when invoked, allowing you to pass arguments
-- **Auto-compact fallback**: Auto-compact threshold falls back to the global setting when not defined at model level
+- **Multi-phase build orchestrator**: Complex projects are built in phases (plan, scaffold, implement) with separate contexts per file — no more import loops or wasted turns
+- **Auto-fix packaging**: `__main__.py` and absolute imports are handled automatically
+- **Smarter circuit breaker**: Resets after code edits so retries work after fixing bugs
+- **7 bundled skills**: /investigate, /review, /ship, /batch, /simplify, /deep-research, /create-presentation
+- **65 PRD-driven tests**: Real-world project building verified against live backend
