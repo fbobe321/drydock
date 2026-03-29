@@ -30,6 +30,43 @@ Scripts:
 
 ---
 
+## Configuration Management
+
+**CRITICAL: Every script and cron MUST follow these rules.**
+
+### Python Path
+All scripts use explicit Python path, never bare `python3`:
+```bash
+export PATH="/home/bobef/miniconda3/bin:$PATH"
+PYTHON="/home/bobef/miniconda3/bin/python3"
+```
+**Why:** Cron environment doesn't inherit shell PATH. Bare `python3` resolves to `/usr/bin/python3` (system Python, no packages). This caused an 8-hour crash loop where the test battery restarted every 10 minutes and immediately failed.
+
+### Version Tracking
+- `pyproject.toml` is the single source of truth for version
+- `publish_to_pypi.sh` creates git tags (`v1.5.3`, etc.)
+- `publish_to_pypi.sh` runs post-publish integration test (install in venv, verify version)
+- Test scripts log version before running
+
+### Cron Jobs (DryDock)
+| Schedule | Script | Purpose |
+|---|---|---|
+| 2 AM daily | `test_full.sh` | Nightly regression (smoke + real backend) |
+| 3 AM daily | `backup.sh` | rsync to NAS |
+| 4 AM daily | `deploy_to_github.sh` | Sync code to GitHub |
+| Every 10 min | `monitor_test_battery.sh` | Monitor/restart long test runs |
+
+### Pre-Publish Checklist
+1. All smoke tests pass (169 tests)
+2. Version bumped in pyproject.toml
+3. Build succeeds
+4. Upload to PyPI
+5. Git tag created
+6. Integration test: install from wheel in temp venv, verify version matches
+7. Deploy to GitHub
+
+---
+
 ## Test Suite
 
 | Tier | File | Tests | Backend | Time | When |
