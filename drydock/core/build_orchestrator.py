@@ -22,10 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from drydock.core.agent_loop import AgentLoop
-from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import Backend, ModelConfig, ProviderConfig, SessionLoggingConfig, VibeConfig
-from drydock.core.types import AssistantEvent, ToolResultEvent
+from drydock.core.config import VibeConfig
 
 if TYPE_CHECKING:
     from drydock.core.agents.manager import AgentManager
@@ -121,23 +118,41 @@ def extract_plan(response_text: str) -> BuildPlan:
 async def run_planner(
     user_prompt: str,
     config: VibeConfig,
-    max_turns: int = 8,
 ) -> BuildPlan:
-    """Phase 1: Spawn a planner subagent to create a build plan."""
+    """Phase 1: Direct API call to create a build plan. No AgentLoop needed."""
+    import httpx
+
     plan_prompt = PLAN_PROMPT.format(user_prompt=user_prompt)
 
-    planner = AgentLoop(
-        config=config,
-        agent_name=BuiltinAgentName.AUTO_APPROVE,
-        max_turns=max_turns,
-    )
+    provider = config.providers[0] if config.providers else None
+    if not provider:
+        raise RuntimeError("No provider configured")
 
-    response_parts = []
-    async for event in planner.act(plan_prompt):
-        if isinstance(event, AssistantEvent) and event.content:
-            response_parts.append(event.content)
+    messages = [
+        {"role": "system", "content": "You are a project planner. Output ONLY a JSON build plan."},
+        {"role": "user", "content": plan_prompt},
+    ]
 
-    full_response = "\n".join(response_parts)
+    # Truncate very long prompts to avoid timeout
+    if len(plan_prompt) > 6000:
+        plan_prompt = plan_prompt[:6000] + "\n\n[TRUNCATED — focus on the core features listed above]"
+
+    messages[1]["content"] = plan_prompt
+
+    async with httpx.AsyncClient(timeout=300) as client:
+        resp = await client.post(
+            f"{provider.api_base}/chat/completions",
+            json={
+                "model": config.active_model,
+                "messages": messages,
+                "max_tokens": 2048,
+                "temperature": 0.2,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    full_response = data["choices"][0]["message"]["content"]
     logger.info("Planner response length: %d chars", len(full_response))
 
     return extract_plan(full_response)
@@ -206,12 +221,17 @@ async def implement_file(
     file_spec: FileSpec,
     plan: BuildPlan,
     config: VibeConfig,
+    base_dir: Path,
 ) -> bool:
-    """Spawn a builder subagent to implement one file."""
-    # Build module listing
+    """Ask the LLM to generate code for one file via direct API call.
+
+    Instead of spawning a full AgentLoop (which causes recursion issues),
+    we make a direct chat completion call and write the result to disk.
+    This is much lighter — no tools, no loop, no context management.
+    """
     module_lines = []
     for f in plan.files:
-        marker = " ← THIS FILE" if f.path == file_spec.path else ""
+        marker = " <-- THIS FILE" if f.path == file_spec.path else ""
         module_lines.append(f"  {f.path}: {f.purpose}{marker}")
     module_listing = "\n".join(module_lines)
 
@@ -227,19 +247,71 @@ async def implement_file(
         import_note=import_note,
     )
 
-    builder = AgentLoop(
-        config=config,
-        agent_name=BuiltinAgentName.AUTO_APPROVE,
-        max_turns=6,
-    )
+    # Direct API call — no AgentLoop overhead
+    try:
+        import httpx
 
-    wrote_file = False
-    async for event in builder.act(prompt):
-        if isinstance(event, ToolResultEvent) and event.tool_name == "write_file":
-            if not event.error:
-                wrote_file = True
+        # Find the provider config
+        provider = config.providers[0] if config.providers else None
+        if not provider:
+            return False
 
-    return wrote_file
+        messages = [
+            {"role": "system", "content": (
+                "You are a code implementation agent. Write the COMPLETE Python file. "
+                "Output ONLY the Python code, no markdown fences, no explanation. "
+                "Use absolute imports (from package.module import X, NOT from .module import X)."
+            )},
+            {"role": "user", "content": prompt},
+        ]
+
+        async with httpx.AsyncClient(timeout=300) as client:
+            resp = await client.post(
+                f"{provider.api_base}/chat/completions",
+                json={
+                    "model": config.active_model,
+                    "messages": messages,
+                    "max_tokens": 4096,
+                    "temperature": 0.3,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        content = data["choices"][0]["message"]["content"]
+
+        # Strip markdown fences if present
+        if "```python" in content:
+            content = content.split("```python", 1)[1]
+            if "```" in content:
+                content = content.split("```", 1)[0]
+        elif "```" in content:
+            parts = content.split("```")
+            if len(parts) >= 3:
+                content = parts[1]
+                if content.startswith("python\n"):
+                    content = content[7:]
+
+        content = content.strip() + "\n"
+
+        # Write the file
+        file_path = base_dir / file_spec.path
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content)
+
+        # Verify syntax
+        import ast
+        try:
+            ast.parse(content)
+        except SyntaxError as e:
+            logger.warning("Syntax error in generated %s: %s", file_spec.path, e)
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning("Failed to implement %s: %s", file_spec.path, e)
+        return False
 
 
 # ============================================================================
@@ -278,15 +350,19 @@ async def run_build_pipeline(
     results = []
     for i, file_spec in enumerate(plan.files):
         logger.info("  Implementing [%d/%d]: %s", i + 1, len(plan.files), file_spec.path)
-        try:
-            success = await implement_file(file_spec, plan, config)
-            results.append((file_spec.path, success))
-            if success:
-                # Post-fix: ensure absolute imports
-                _fix_imports(base_dir / file_spec.path, plan.package_name)
-        except Exception as e:
-            logger.warning("  Failed to implement %s: %s", file_spec.path, e)
-            results.append((file_spec.path, False))
+        # Try up to 2 times per file
+        success = False
+        for attempt in range(2):
+            try:
+                success = await implement_file(file_spec, plan, config, base_dir)
+                if success:
+                    _fix_imports(base_dir / file_spec.path, plan.package_name)
+                    break
+                else:
+                    logger.warning("  Attempt %d failed for %s, retrying...", attempt + 1, file_spec.path)
+            except Exception as e:
+                logger.warning("  Attempt %d error for %s: %s", attempt + 1, file_spec.path, e)
+        results.append((file_spec.path, success))
 
     # Build summary
     succeeded = sum(1 for _, ok in results if ok)
