@@ -14,9 +14,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-pip install -q "pytest>=9.0" pytest-asyncio httpx 2>/dev/null
+export PATH="/home/bobef/miniconda3/bin:$PATH"
+PYTHON="/home/bobef/miniconda3/bin/python3"
 
-COMMON_ARGS="-v -s -p no:xdist -p no:cov --override-ini=addopts="
+$PYTHON -m pip install -q "pytest>=9.0" pytest-asyncio httpx 2>/dev/null
+
+# Version gate — log what we're testing
+VERSION=$($PYTHON -c "import tomli; print(tomli.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null || echo "unknown")
+echo "Testing drydock source version: $VERSION"
+echo "Python: $($PYTHON --version)"
+echo "vLLM: $(curl -s http://localhost:8000/v1/models | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])' 2>/dev/null || echo 'NOT RUNNING')"
+echo ""
+
+COMMON_ARGS="-v -p no:xdist -p no:cov --override-ini=addopts="
 CATEGORY="${1:-all}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_DIR="test_bank_results"

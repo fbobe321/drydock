@@ -7,6 +7,9 @@
 
 set -euo pipefail
 
+export PATH="/home/bobef/miniconda3/bin:$PATH"
+PYTHON="/home/bobef/miniconda3/bin/python3"
+
 DRYDOCK_SRC="/data3/drydock"
 GITHUB_REPO="https://github.com/fbobe321/drydock.git"
 TOKEN_FILE="$HOME/.config/drydock/github_token"
@@ -37,8 +40,8 @@ AUTH_URL="https://${GITHUB_TOKEN}@github.com/fbobe321/drydock.git"
 
 log "Running regression tests..."
 cd "$DRYDOCK_SRC"
-python3 -m pip install -q "pytest>=9.0" 2>/dev/null
-if ! python3 -m pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py tests/test_loop_detection.py tests/test_agent_tasks.py tests/test_integration.py tests/test_user_issues.py tests/test_real_issues.py \
+$PYTHON -m pip install -q "pytest>=9.0" 2>/dev/null
+if ! $PYTHON -m pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py tests/test_loop_detection.py tests/test_agent_tasks.py tests/test_integration.py tests/test_user_issues.py tests/test_real_issues.py \
     -p no:xdist -p no:cov --override-ini="addopts=" -q 2>&1; then
     log "TESTS FAILED — deploy aborted. Fix the tests before deploying."
     exit 1

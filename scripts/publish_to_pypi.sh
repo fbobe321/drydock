@@ -9,7 +9,8 @@ set -euo pipefail
 
 DRYDOCK_SRC="/data3/drydock"
 TOKEN_FILE="$HOME/.config/drydock/pypi_token"
-PYTHON="python3"
+PYTHON="/home/bobef/miniconda3/bin/python3"
+export PATH="/home/bobef/miniconda3/bin:$PATH"
 
 cd "$DRYDOCK_SRC"
 
@@ -70,5 +71,25 @@ if [ -x "$DRYDOCK_SRC/scripts/deploy_to_github.sh" ]; then
     log "Deploying to GitHub..."
     "$DRYDOCK_SRC/scripts/deploy_to_github.sh" 2>&1 || log "GitHub deploy failed (non-fatal)"
 fi
+
+# --- Git tag ---
+git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION" 2>/dev/null || true
+log "Tagged v$NEW_VERSION"
+
+# --- Quick integration test (install in temp venv and verify) ---
+log "Running integration test..."
+TMPVENV=$(mktemp -d)
+$PYTHON -m venv "$TMPVENV/venv" 2>/dev/null
+if "$TMPVENV/venv/bin/pip" install -q "dist/drydock_cli-${NEW_VERSION}-py3-none-any.whl" 2>/dev/null; then
+    INSTALLED_VER=$("$TMPVENV/venv/bin/python3" -c "from importlib.metadata import version; print(version('drydock-cli'))" 2>/dev/null || echo "unknown")
+    if [ "$INSTALLED_VER" = "$NEW_VERSION" ]; then
+        log "Integration test PASSED: installed version $INSTALLED_VER matches"
+    else
+        log "WARNING: version mismatch — expected $NEW_VERSION, got $INSTALLED_VER"
+    fi
+else
+    log "WARNING: integration test failed to install (non-fatal)"
+fi
+rm -rf "$TMPVENV"
 
 log "Published drydock-cli $NEW_VERSION to PyPI"
