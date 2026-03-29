@@ -63,7 +63,7 @@ class TestCondaEnv:
 
 class TestCircuitBreakerEnforcement:
     def test_circuit_breaker_blocks_not_just_warns(self):
-        """After 2 identical calls, the 3rd must return an ERROR, not execute."""
+        """After threshold identical calls, the next must return an ERROR, not execute."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -71,9 +71,10 @@ class TestCircuitBreakerEnforcement:
         al.messages = MessageList()
         al._tool_call_history = {}
 
+        # Non-readonly bash: success threshold is 4
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
-        al._circuit_breaker_record(tc, "file1.py")
-        al._circuit_breaker_record(tc, "file1.py")
+        for _ in range(4):
+            al._circuit_breaker_record(tc, "file1.py")
 
         result = al._circuit_breaker_check(tc)
         assert result is not None, "Circuit breaker should block"
@@ -90,9 +91,10 @@ class TestCircuitBreakerEnforcement:
         al.messages = MessageList()
         al._tool_call_history = {}
 
+        # Non-readonly bash: success threshold is 4
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls"})
-        al._circuit_breaker_record(tc, "r1")
-        al._circuit_breaker_record(tc, "r1")
+        for _ in range(4):
+            al._circuit_breaker_record(tc, "r1")
         assert al._circuit_breaker_check(tc) is not None  # Blocked
 
         # Simulate new conversation — history should be clearable
@@ -128,9 +130,10 @@ class TestCircuitBreakerSensitivity:
         al.messages = MessageList()
         al._tool_call_history = {}
 
+        # Non-readonly bash: success threshold is 4
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "git status"})
-        al._circuit_breaker_record(tc, "clean")
-        al._circuit_breaker_record(tc, "clean")
+        for _ in range(4):
+            al._circuit_breaker_record(tc, "clean")
         assert al._circuit_breaker_check(tc) is not None  # Blocked
 
         # After clearing (simulating passage of time / new task), should work again
@@ -199,7 +202,7 @@ class TestConsultantConfig:
 
 class TestAutoConsult:
     def test_circuit_breaker_suggests_consult(self):
-        """When circuit breaker fires, it should mention /consult."""
+        """When circuit breaker fires, it should mention /consult or different approach."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -207,11 +210,13 @@ class TestAutoConsult:
         al.messages = MessageList()
         al._tool_call_history = {}
 
+        # Non-readonly bash: success threshold is 4
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls"})
-        al._circuit_breaker_record(tc, "output")
-        al._circuit_breaker_record(tc, "output")
+        for _ in range(4):
+            al._circuit_breaker_record(tc, "output")
         result = al._circuit_breaker_check(tc)
-        # Should suggest using /consult or mention consultant
+        assert result is not None, "Circuit breaker should have fired"
+        # Should suggest using /consult or mention consultant or different approach
         assert "/consult" in result or "consultant" in result.lower() or "different" in result.lower()
 
 

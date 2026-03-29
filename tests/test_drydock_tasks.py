@@ -143,25 +143,25 @@ class TestFileTimeout:
         assert "fail_after" in source
 
     def test_read_file_has_timeout(self):
-        """read_file._read_file should use anyio.fail_after."""
+        """read_file._read_file should use asyncio.wait_for or anyio.fail_after."""
         import inspect
         from drydock.core.tools.builtins.read_file import ReadFile
         source = inspect.getsource(ReadFile._read_file)
-        assert "fail_after" in source
+        assert "fail_after" in source or "wait_for" in source
 
     def test_search_replace_read_has_timeout(self):
-        """search_replace._read_file should use anyio.fail_after."""
+        """search_replace._read_file should use asyncio.wait_for or anyio.fail_after."""
         import inspect
         from drydock.core.tools.builtins.search_replace import SearchReplace
         source = inspect.getsource(SearchReplace._read_file)
-        assert "fail_after" in source
+        assert "fail_after" in source or "wait_for" in source
 
     def test_search_replace_write_has_timeout(self):
-        """search_replace._write_file should use anyio.fail_after."""
+        """search_replace._write_file should use asyncio.wait_for or anyio.fail_after."""
         import inspect
         from drydock.core.tools.builtins.search_replace import SearchReplace
         source = inspect.getsource(SearchReplace._write_file)
-        assert "fail_after" in source
+        assert "fail_after" in source or "wait_for" in source
 
 
 class TestSkillDiscovery:
@@ -390,7 +390,8 @@ class TestDeviationHandling:
 class TestCircuitBreaker:
     """Prevents exact duplicate tool calls."""
 
-    def test_circuit_breaker_blocks_after_2(self):
+    def test_circuit_breaker_blocks_after_threshold(self):
+        """Non-readonly successful bash calls block after 4 repeats."""
         import asyncio
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
@@ -402,16 +403,38 @@ class TestCircuitBreaker:
 
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
 
+        # Non-readonly bash: success threshold is 4
+        for _ in range(4):
+            assert al._circuit_breaker_check(tc) is None
+            al._circuit_breaker_record(tc, "file1.py\nfile2.py")
+
+        result = al._circuit_breaker_check(tc)
+        assert result is not None
+        assert "CIRCUIT BREAKER" in result
+
+    def test_circuit_breaker_blocks_failed_after_2(self):
+        """Failed tool calls still block after 2 repeats."""
+        import asyncio
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import MessageList
+        from types import SimpleNamespace
+
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        al._tool_call_history = {}
+
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "bad_cmd"})
+
+        al._circuit_breaker_record(tc, "FAILED: command not found")
         assert al._circuit_breaker_check(tc) is None
-        al._circuit_breaker_record(tc, "file1.py\nfile2.py")
-        assert al._circuit_breaker_check(tc) is None
-        al._circuit_breaker_record(tc, "file1.py\nfile2.py")
+        al._circuit_breaker_record(tc, "FAILED: command not found")
 
         result = al._circuit_breaker_check(tc)
         assert result is not None
         assert "CIRCUIT BREAKER" in result
 
     def test_different_args_not_blocked(self):
+        """Different arguments should not be blocked even if one arg set is."""
         import asyncio
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
@@ -424,8 +447,9 @@ class TestCircuitBreaker:
         tc1 = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
         tc2 = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -la"})
 
-        al._circuit_breaker_record(tc1, "result1")
-        al._circuit_breaker_record(tc1, "result1")
+        # Non-readonly bash needs 4 repeats to block
+        for _ in range(4):
+            al._circuit_breaker_record(tc1, "result1")
         assert al._circuit_breaker_check(tc1) is not None
         assert al._circuit_breaker_check(tc2) is None
 

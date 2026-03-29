@@ -370,9 +370,9 @@ class TestLoopDetection:
 
         assert MAX_TOOL_TURNS <= 200, "MAX_TOOL_TURNS should not be too high"
         assert MAX_TOOL_TURNS >= 50, "MAX_TOOL_TURNS should allow reasonable exploration"
-        assert REPEAT_WARNING_THRESHOLD >= 6, "Warning threshold too aggressive"
+        assert REPEAT_WARNING_THRESHOLD >= 4, "Warning threshold too aggressive"
         assert REPEAT_FORCE_STOP_THRESHOLD > REPEAT_WARNING_THRESHOLD
-        assert REPEAT_FORCE_STOP_THRESHOLD <= 30, "Force stop should eventually trigger"
+        assert REPEAT_FORCE_STOP_THRESHOLD <= 10, "Force stop should eventually trigger"
 
 
 # ============================================================================
