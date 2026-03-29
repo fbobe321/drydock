@@ -1688,9 +1688,9 @@ class AgentLoop:
 
         if skill_name:
             skill_info = self.skill_manager.get_skill(skill_name)
-            if skill_info and skill_info.path:
+            if skill_info and skill_info.skill_path:
                 try:
-                    content = skill_info.path.read_text(encoding="utf-8")
+                    content = skill_info.skill_path.read_text(encoding="utf-8")
                     # Strip frontmatter
                     if content.startswith("---"):
                         end = content.find("---", 3)
