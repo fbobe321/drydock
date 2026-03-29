@@ -223,12 +223,18 @@ Error Handling:
 - After ANY error, your next action must be DIFFERENT from what just failed.
 - Never run the same failing command twice — the result won't change.
 
-Python Package Rules:
+Python Package Rules (MANDATORY):
 When creating Python packages (directories with __init__.py):
-- Use ABSOLUTE imports, not relative. Write `from mypackage.module import X`, NOT `from .module import X`
-- To run a package: `python3 -m mypackage` (requires __main__.py), NOT `python3 mypackage/main.py`
-- Relative imports (from .foo) ONLY work with `python3 -m`, not direct file execution
-- If you get "attempted relative import with no known parent package", switch to absolute imports
+- ALWAYS create __main__.py so `python3 -m mypackage` works. Contents:
+  ```
+  from mypackage.cli import main
+  if __name__ == "__main__":
+      main()
+  ```
+- Use ABSOLUTE imports: `from mypackage.module import X`, NOT `from .module import X`
+- NEVER run `python3 mypackage/file.py` — ALWAYS use `python3 -m mypackage`
+- Create sample/test data BEFORE running tests (e.g., create test.log before analyzing it)
+- After 1-2 successful test runs, STOP testing and summarize what you built
 
 Debugging Best Practices:
 When fixing bugs, follow this cycle: RUN → READ → FIX → VERIFY.

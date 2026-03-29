@@ -474,12 +474,29 @@ class AgentLoop:
 
         yield UserMessageEvent(content=user_msg, message_id=user_message.message_id)
 
-        # === AUTO-DELEGATION ===
-        # Inject context automatically so the model doesn't have to choose to delegate.
-        # This replaces relying on the model to call task()/invoke_skill().
-        auto_context = self._build_auto_context(user_msg)
-        if auto_context:
-            self._inject_system_note(auto_context)
+        # === BUILD ORCHESTRATION ===
+        # For complex build tasks (PRD + multiple files), run the multi-phase
+        # pipeline instead of letting the model do everything in one context.
+        if self._is_build_task(user_msg):
+            try:
+                from drydock.core.build_orchestrator import run_build_pipeline
+                summary = await run_build_pipeline(
+                    user_prompt=user_msg,
+                    config=self.config,
+                    base_dir=Path.cwd(),
+                )
+                self._inject_system_note(summary)
+                logger.info("Build orchestrator completed successfully")
+            except Exception as e:
+                logger.warning("Build orchestrator failed (%s), falling back to normal flow", e)
+                auto_context = self._build_auto_context(user_msg)
+                if auto_context:
+                    self._inject_system_note(auto_context)
+        else:
+            # Normal flow: inject context for non-build tasks
+            auto_context = self._build_auto_context(user_msg)
+            if auto_context:
+                self._inject_system_note(auto_context)
 
         try:
             should_break_loop = False
@@ -584,6 +601,10 @@ class AgentLoop:
                                             files_modified.append(edit_path)
                                     except (json.JSONDecodeError, AttributeError):
                                         edit_path = ""
+
+                                    # AUTO-FIX: Fix packaging issues the model gets wrong
+                                    if edit_path and edit_path.endswith(".py"):
+                                        self._auto_fix_package(edit_path)
 
                                     # Auto-run diagnostics on edited Python files
                                     if edit_path and edit_path.endswith(".py"):
@@ -1658,6 +1679,98 @@ class AgentLoop:
 
         return None
 
+    def _is_build_task(self, user_msg: str) -> bool:
+        """Detect if a user message is a complex build task that needs orchestration."""
+        msg_lower = user_msg.lower()
+        has_build_verb = any(kw in msg_lower for kw in (
+            "build", "create a", "implement", "get started",
+            "set up", "scaffold", "review the prd", "review prd",
+        ))
+        has_complexity = (
+            len(user_msg) > 200
+            or any(kw in msg_lower for kw in (
+                "prd", "multiple", "package", "modules", "cli",
+                "features", "commands", "architecture", "structure",
+            ))
+        )
+        # Check if a PRD.md exists in the working directory
+        has_prd = Path.cwd().joinpath("PRD.md").exists() or Path.cwd().joinpath("prd.md").exists()
+        return has_build_verb and (has_complexity or has_prd)
+
+    def _auto_fix_package(self, file_path: str) -> None:
+        """Silently fix common packaging mistakes after model writes a file.
+
+        The model (devstral-24B) consistently fails at:
+        1. Creating __main__.py for packages
+        2. Using relative imports instead of absolute
+        This runs after every write_file/search_replace and fixes both.
+        """
+        try:
+            fp = Path(file_path)
+            if not fp.exists() or not fp.is_file():
+                return
+
+            pkg_dir = fp.parent
+            init_file = pkg_dir / "__init__.py"
+
+            # Only fix files inside a package (has __init__.py)
+            if not init_file.exists():
+                return
+
+            pkg_name = pkg_dir.name
+
+            # 1. Create __main__.py if missing
+            main_file = pkg_dir / "__main__.py"
+            if not main_file.exists():
+                # Find the most likely entry point (cli.py, main.py, app.py)
+                entry = None
+                entry_func = "main"
+                for candidate in ["cli.py", "main.py", "app.py", "__init__.py"]:
+                    cand_path = pkg_dir / candidate
+                    if cand_path.exists() and candidate != "__init__.py":
+                        # Check if it has a main() function
+                        try:
+                            content = cand_path.read_text()
+                            if "def main(" in content:
+                                entry = candidate[:-3]  # strip .py
+                                break
+                        except Exception:
+                            pass
+                if entry:
+                    main_content = (
+                        f"from {pkg_name}.{entry} import {entry_func}\n\n"
+                        f"if __name__ == \"__main__\":\n"
+                        f"    {entry_func}()\n"
+                    )
+                    main_file.write_text(main_content)
+                    logger.info("Auto-created %s/__main__.py (entry: %s.%s)", pkg_name, entry, entry_func)
+
+            # 2. Fix relative imports → absolute imports
+            try:
+                content = fp.read_text()
+                if f"from .{'' if content else ''}" in content:
+                    import re
+                    # Replace from .module import X → from pkg.module import X
+                    fixed = re.sub(
+                        r"from \.([\w.]+) import",
+                        f"from {pkg_name}.\\1 import",
+                        content,
+                    )
+                    # Replace from . import X → from pkg import X
+                    fixed = re.sub(
+                        r"from \. import",
+                        f"from {pkg_name} import",
+                        fixed,
+                    )
+                    if fixed != content:
+                        fp.write_text(fixed)
+                        logger.info("Auto-fixed relative imports in %s", fp.name)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.debug("Auto-fix package failed for %s: %s", file_path, e)
+
     def _build_auto_context(self, user_msg: str) -> str | None:
         """Build auto-delegation context based on the prompt and project state.
 
@@ -1727,17 +1840,24 @@ class AgentLoop:
         ))
         if is_build and is_complex:
             parts.append(
-                "PLANNING REQUIRED — This is a complex build task. Before writing code:\n"
-                "1. List ALL files you will create (with brief purpose)\n"
-                "2. Define the package structure\n"
-                "3. Use ABSOLUTE imports (from pkg.module import X), NOT relative imports\n"
-                "4. Create files in dependency order (utilities first, then modules that import them)\n"
-                "5. After creating all files, test with: python3 -m package_name\n"
-                "6. If tests fail, READ the error, then FIX with search_replace"
+                "MANDATORY BUILD RULES:\n"
+                "1. Plan first: list ALL files you will create\n"
+                "2. ALWAYS create __main__.py so 'python3 -m package_name' works:\n"
+                "   ```python\n"
+                "   from package_name.cli import main\n"
+                "   if __name__ == '__main__':\n"
+                "       main()\n"
+                "   ```\n"
+                "3. Use ABSOLUTE imports: 'from pkg.module import X', NOT 'from .module import X'\n"
+                "4. Create test/sample data files BEFORE testing (the tool needs input to work)\n"
+                "5. Test with: python3 -m package_name (NOT python3 package/file.py)\n"
+                "6. If a test fails, read the error, fix with search_replace, then retry\n"
+                "7. After 1-2 successful tests, STOP and tell the user it's done"
             )
         elif is_build:
             parts.append(
-                "REMINDER: Use write_file to create files. Use absolute imports. "
+                "BUILD RULES: Use write_file to create files. Use absolute imports. "
+                "Create __main__.py for packages. Create test data before testing. "
                 "Test with python3 -m package_name (not python3 package/file.py)."
             )
 
