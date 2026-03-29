@@ -5,6 +5,8 @@
 
 set -euo pipefail
 
+export PATH="/home/bobef/miniconda3/bin:$PATH"
+PYTHON="/home/bobef/miniconda3/bin/python3"
 DRYDOCK="/data3/drydock"
 LOGDIR="$DRYDOCK/test_bank_results"
 LOGFILE="$LOGDIR/overnight_run2.log"
@@ -76,7 +78,7 @@ if [ -z "$TEST_PID" ]; then
         DESELECT="-k 'not _PLACEHOLDER_ $SKIP_TESTS'"
     fi
 
-    nohup python3 -m pytest tests/test_bank_prd.py tests/test_bank_prd_extended.py \
+    nohup $PYTHON -m pytest tests/test_bank_prd.py tests/test_bank_prd_extended.py \
         -v -p no:xdist -p no:cov --override-ini="addopts=" --tb=short \
         $DESELECT \
         > "$LOGFILE" 2>&1 &
