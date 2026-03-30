@@ -77,7 +77,7 @@ def bootstrap_config_files() -> None:
     if not history_file.exists():
         try:
             history_file.parent.mkdir(parents=True, exist_ok=True)
-            history_file.write_text("Hello Vibe!\n", "utf-8")
+            history_file.write_text("Hello Drydock!\n", "utf-8")
         except Exception as e:
             rprint(f"[yellow]Could not create history file: {e}[/]")
 

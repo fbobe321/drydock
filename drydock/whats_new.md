@@ -1,7 +1,8 @@
-# What's new in v1.6.0
+# What's new in v1.8.0
 
-- **Multi-phase build orchestrator**: Complex projects are built in phases (plan, scaffold, implement) with separate contexts per file — no more import loops or wasted turns
-- **Auto-fix packaging**: `__main__.py` and absolute imports are handled automatically
-- **Smarter circuit breaker**: Resets after code edits so retries work after fixing bugs
+- **Multi-phase build orchestrator**: PRDs are built in phases — plan, scaffold, implement per file, auto-fix imports. 83% pass rate on 6 project types
+- **Deterministic planning**: No LLM needed for project planning — PRD parsed directly
+- **Auto-fix**: `__main__.py`, absolute imports, circular imports, cross-file name matching
 - **7 bundled skills**: /investigate, /review, /ship, /batch, /simplify, /deep-research, /create-presentation
-- **65 PRD-driven tests**: Real-world project building verified against live backend
+- **Smart circuit breaker**: Only blocks failed commands, allows retries after fixes
+- **Vibe references removed**: All user-facing strings now say Drydock

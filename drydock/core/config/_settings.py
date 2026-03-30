@@ -595,7 +595,27 @@ class VibeConfig(BaseSettings):
     @classmethod
     def load(cls, **overrides: Any) -> VibeConfig:
         cls._migrate()
-        return cls(**(overrides or {}))
+        config = cls(**(overrides or {}))
+
+        # --local flag: inject local provider and model if env vars set
+        import os as _os
+        local_url = _os.environ.get("DRYDOCK_LOCAL_URL")
+        if local_url:
+            local_model = _os.environ.get("DRYDOCK_LOCAL_MODEL", "local")
+            from drydock.core.config._settings import ProviderConfig, ModelConfig, Backend
+            local_provider = ProviderConfig(
+                name="local-cli", api_base=local_url,
+                api_key_env_var="", backend=Backend.GENERIC,
+            )
+            local_model_cfg = ModelConfig(
+                name=local_model, provider="local-cli",
+                alias="local", input_price=0, output_price=0,
+            )
+            config.providers = [local_provider] + list(config.providers)
+            config.models = [local_model_cfg] + list(config.models)
+            config.active_model = local_model
+
+        return config
 
     @classmethod
     def create_default(cls) -> dict[str, Any]:

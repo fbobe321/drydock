@@ -200,3 +200,4 @@ result-*
 tests/playground/*
 .
 logs/
+test_bank_results/

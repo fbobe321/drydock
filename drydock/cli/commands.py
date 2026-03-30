@@ -87,6 +87,11 @@ class CommandRegistry:
                 description="Browse and resume past sessions",
                 handler="_show_session_picker",
             ),
+            "setup-model": Command(
+                aliases=frozenset(["/setup-model", "/add-model"]),
+                description="Configure a local LLM (vLLM, Ollama, LM Studio, etc.)",
+                handler="_setup_model_command",
+            ),
         }
 
         for command in excluded_commands:

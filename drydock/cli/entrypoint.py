@@ -109,6 +109,16 @@ def parse_arguments() -> argparse.Namespace:
         "The consultant is NOT used for tool calls, only reasoning.",
     )
 
+    parser.add_argument(
+        "--local",
+        metavar="URL",
+        nargs="?",
+        const="http://localhost:8000/v1",
+        help="Use a local LLM server (default: http://localhost:8000/v1). "
+        "Sets up a 'local' provider and model automatically. "
+        "Example: drydock --local http://localhost:11434/v1",
+    )
+
     # Feature flag for teleport, not exposed to the user yet
     parser.add_argument("--teleport", action="store_true", help=argparse.SUPPRESS)
 
@@ -189,6 +199,23 @@ def main() -> None:
     # --consultant → store for agent loop to use
     if args.consultant:
         os.environ["DRYDOCK_CONSULTANT_MODEL"] = args.consultant
+
+    # --local → set up local LLM provider without editing config
+    if getattr(args, "local", None):
+        os.environ["DRYDOCK_LOCAL_URL"] = args.local
+        # Detect model name from the server
+        try:
+            import httpx
+            resp = httpx.get(f"{args.local}/models", timeout=5)
+            if resp.status_code == 200:
+                models = resp.json().get("data", [])
+                if models:
+                    model_name = models[0]["id"]
+                    os.environ["DRYDOCK_LOCAL_MODEL"] = model_name
+                    rprint(f"[green]Using local model: {model_name} at {args.local}[/]")
+        except Exception:
+            os.environ["DRYDOCK_LOCAL_MODEL"] = "local"
+            rprint(f"[yellow]Using local server at {args.local} (couldn't detect model name)[/]")
 
     is_interactive = args.prompt is None
     if is_interactive:

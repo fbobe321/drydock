@@ -92,4 +92,8 @@ else
 fi
 rm -rf "$TMPVENV"
 
+# --- Send Telegram notification ---
+COMMIT_MSG=$(git log --oneline -1 2>/dev/null | cut -d' ' -f2-)
+$PYTHON "$DRYDOCK_SRC/scripts/notify_release.py" "$NEW_VERSION" "$COMMIT_MSG" 2>/dev/null || true
+
 log "Published drydock-cli $NEW_VERSION to PyPI"

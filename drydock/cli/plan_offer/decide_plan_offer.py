@@ -80,7 +80,7 @@ def plan_offer_cta(payload: PlanInfo | None) -> str | None:
     if payload.prompt_switching_to_pro_plan:
         return f"### Switch to your [Le Chat Pro API key]({SWITCH_TO_PRO_KEY_URL})"
     if payload.plan_type in {WhoAmIPlanType.API, WhoAmIPlanType.UNAUTHORIZED}:
-        return f"### Unlock more with Vibe - [Upgrade to Le Chat Pro]({UPGRADE_URL})"
+        return f"### Unlock more with Drydock - [Upgrade to Le Chat Pro]({UPGRADE_URL})"
 
 
 def plan_title(payload: PlanInfo | None) -> str | None:

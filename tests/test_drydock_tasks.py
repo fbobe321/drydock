@@ -388,11 +388,10 @@ class TestDeviationHandling:
 # ============================================================================
 
 class TestCircuitBreaker:
-    """Prevents exact duplicate tool calls."""
+    """Circuit breaker only blocks commands that FAILED 3+ times."""
 
-    def test_circuit_breaker_blocks_after_threshold(self):
-        """Non-readonly successful bash calls block after 4 repeats."""
-        import asyncio
+    def test_successful_commands_never_blocked(self):
+        """Successful commands are never blocked, no matter how many repeats."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
         from types import SimpleNamespace
@@ -403,18 +402,14 @@ class TestCircuitBreaker:
 
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
 
-        # Non-readonly bash: success threshold is 4
-        for _ in range(4):
+        for _ in range(10):
             assert al._circuit_breaker_check(tc) is None
             al._circuit_breaker_record(tc, "file1.py\nfile2.py")
 
-        result = al._circuit_breaker_check(tc)
-        assert result is not None
-        assert "CIRCUIT BREAKER" in result
+        assert al._circuit_breaker_check(tc) is None
 
-    def test_circuit_breaker_blocks_failed_after_2(self):
-        """Failed tool calls still block after 2 repeats."""
-        import asyncio
+    def test_circuit_breaker_blocks_failed_after_3(self):
+        """Failed tool calls block after 3 repeats."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
         from types import SimpleNamespace
@@ -428,14 +423,15 @@ class TestCircuitBreaker:
         al._circuit_breaker_record(tc, "FAILED: command not found")
         assert al._circuit_breaker_check(tc) is None
         al._circuit_breaker_record(tc, "FAILED: command not found")
+        assert al._circuit_breaker_check(tc) is None
+        al._circuit_breaker_record(tc, "FAILED: command not found")
 
         result = al._circuit_breaker_check(tc)
         assert result is not None
-        assert "CIRCUIT BREAKER" in result
+        assert "failed" in result
 
     def test_different_args_not_blocked(self):
-        """Different arguments should not be blocked even if one arg set is."""
-        import asyncio
+        """Different arguments should not be blocked even if one arg set failed 3x."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
         from types import SimpleNamespace
@@ -444,12 +440,11 @@ class TestCircuitBreaker:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        tc1 = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
+        tc1 = SimpleNamespace(tool_name="bash", args_dict={"command": "bad_cmd"})
         tc2 = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -la"})
 
-        # Non-readonly bash needs 4 repeats to block
-        for _ in range(4):
-            al._circuit_breaker_record(tc1, "result1")
+        for _ in range(3):
+            al._circuit_breaker_record(tc1, "FAILED: command not found")
         assert al._circuit_breaker_check(tc1) is not None
         assert al._circuit_breaker_check(tc2) is None
 

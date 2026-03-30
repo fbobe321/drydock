@@ -493,11 +493,40 @@ class AgentLoop:
                     user_prompt=build_prompt,
                     config=self.config,
                     base_dir=Path.cwd(),
+                    backend=self.backend,
                 )
-                self._inject_system_note(summary)
+                # Yield the summary directly to the user — don't let the model
+                # respond, because it will ignore the instructions and rebuild files.
+                yield AssistantEvent(content=summary)
+
+                # Auto-test: run python3 -m package and report result
+                import subprocess as _sp
+                pkg_name = summary.split("'")[1] if "'" in summary else "project"
+                test_result = _sp.run(
+                    f"python3 -m {pkg_name} --help",
+                    shell=True, cwd=str(Path.cwd()),
+                    capture_output=True, text=True, timeout=15,
+                )
+                if test_result.returncode == 0:
+                    yield AssistantEvent(
+                        content=f"\nTest passed: `python3 -m {pkg_name} --help` works.\n\n"
+                        f"```\n{test_result.stdout[:300]}\n```\n\n"
+                        f"Create sample data and test further, or ask me to fix any issues."
+                    )
+                else:
+                    err = (test_result.stderr or test_result.stdout)[:300]
+                    # Let the model fix this error
+                    self._inject_system_note(
+                        f"The project was built but has an error. Fix it:\n\n"
+                        f"```\n{err}\n```\n\n"
+                        f"Use read_file and search_replace to fix. Do NOT rewrite entire files."
+                    )
+
                 logger.info("Build orchestrator completed successfully")
             except Exception as e:
+                import traceback
                 logger.warning("Build orchestrator failed (%s), falling back to normal flow", e)
+                logger.warning("Traceback: %s", traceback.format_exc())
                 auto_context = self._build_auto_context(user_msg)
                 if auto_context:
                     self._inject_system_note(auto_context)
@@ -1030,6 +1059,26 @@ class AgentLoop:
         return ""
 
     def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
+        """Block exact-duplicate FAILED tool calls only.
+
+        Only blocks commands that failed before with the exact same args.
+        Successful commands are never blocked — the model legitimately
+        retries after fixing code.
+        """
+        args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
+        sig = hashlib.md5(f"{tool_call.tool_name}:{args_str}".encode()).hexdigest()
+        count, last_result = self._tool_call_history.get(sig, (0, ""))
+
+        # Only block if the SAME command FAILED 3+ times
+        is_failed = last_result.startswith("FAILED:") if last_result else False
+        if is_failed and count >= 3:
+            return (
+                f"This command has failed {count} times with the same error. "
+                f"Try a DIFFERENT command or approach."
+            )
+        return None
+
+    def _circuit_breaker_check_FULL(self, tool_call: ResolvedToolCall) -> str | None:
         """Block exact-duplicate tool calls. Returns cached result or None.
 
         Thresholds:

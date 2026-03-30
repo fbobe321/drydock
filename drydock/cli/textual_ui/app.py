@@ -246,7 +246,7 @@ class VibeApp(App):  # noqa: PLR0904
         self._terminal_notifier = terminal_notifier or TextualNotificationAdapter(
             self,
             get_enabled=lambda: self.config.enable_notifications,
-            default_title="Vibe",
+            default_title="Drydock",
         )
         self._agent_running = False
         self._interrupt_requested = False
@@ -1065,6 +1065,141 @@ class VibeApp(App):  # noqa: PLR0904
                 )
             )
 
+    async def _setup_model_command(self, args: str = "") -> None:
+        """Interactive wizard to configure a local LLM provider."""
+        import httpx
+        import tomli_w
+
+        args = args.strip().lower()
+
+        # If no args, show the menu
+        if not args:
+            await self._mount_and_scroll(
+                UserCommandMessage(
+                    "**Setup Local Model**\n\n"
+                    "Usage: `/setup-model <provider>`\n\n"
+                    "Providers:\n"
+                    "- `/setup-model vllm` — vLLM server (localhost:8000)\n"
+                    "- `/setup-model ollama` — Ollama (localhost:11434)\n"
+                    "- `/setup-model lmstudio` — LM Studio (localhost:1234)\n"
+                    "- `/setup-model custom` — Custom OpenAI-compatible server\n"
+                    "- `/setup-model detect` — Auto-detect running servers\n"
+                )
+            )
+            return
+
+        config_path = Path.home() / ".drydock" / "config.toml"
+
+        # Auto-detect
+        if args == "detect":
+            found = []
+            for name, url in [("vLLM", "http://localhost:8000/v1"),
+                              ("Ollama", "http://localhost:11434/v1"),
+                              ("LM Studio", "http://localhost:1234/v1")]:
+                try:
+                    resp = httpx.get(f"{url}/models", timeout=3)
+                    if resp.status_code == 200:
+                        models = resp.json().get("data", [])
+                        model_names = [m["id"] for m in models[:5]]
+                        found.append(f"  {name} at {url}: {', '.join(model_names)}")
+                except Exception:
+                    pass
+            if found:
+                await self._mount_and_scroll(
+                    UserCommandMessage(
+                        "**Detected servers:**\n\n" + "\n".join(found) +
+                        "\n\nRun `/setup-model <provider>` to configure."
+                    )
+                )
+            else:
+                await self._mount_and_scroll(
+                    ErrorMessage(
+                        "No local LLM servers detected on standard ports.\n\n"
+                        "Start your server first, then run `/setup-model detect` again.",
+                        collapsed=self._tools_collapsed,
+                    )
+                )
+            return
+
+        # Provider configs
+        providers = {
+            "vllm": ("http://localhost:8000/v1", "vllm"),
+            "ollama": ("http://localhost:11434/v1", "ollama"),
+            "lmstudio": ("http://localhost:1234/v1", "lmstudio"),
+            "custom": ("http://localhost:8000/v1", "custom"),
+        }
+
+        if args not in providers:
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    f"Unknown provider: {args}\n\nUse: vllm, ollama, lmstudio, custom, or detect",
+                    collapsed=self._tools_collapsed,
+                )
+            )
+            return
+
+        api_base, provider_name = providers[args]
+
+        # Try to detect model name
+        model_name = "local"
+        try:
+            resp = httpx.get(f"{api_base}/models", timeout=5)
+            if resp.status_code == 200:
+                models = resp.json().get("data", [])
+                if models:
+                    model_name = models[0]["id"]
+        except Exception:
+            pass
+
+        # Read existing config
+        import tomli
+        existing = {}
+        if config_path.exists():
+            try:
+                existing = tomli.loads(config_path.read_text())
+            except Exception:
+                pass
+
+        # Add/update provider and model
+        existing_providers = existing.get("providers", [])
+        # Remove old local provider if exists
+        existing_providers = [p for p in existing_providers if p.get("name") != provider_name]
+        existing_providers.append({
+            "name": provider_name,
+            "api_base": api_base,
+            "api_key_env_var": "",
+            "api_style": "openai",
+            "backend": "generic",
+        })
+        existing["providers"] = existing_providers
+
+        existing_models = existing.get("models", [])
+        existing_models = [m for m in existing_models if m.get("provider") != provider_name]
+        existing_models.append({
+            "name": model_name,
+            "provider": provider_name,
+            "alias": "local",
+            "temperature": 0.2,
+            "input_price": 0.0,
+            "output_price": 0.0,
+        })
+        existing["models"] = existing_models
+        existing["active_model"] = model_name
+
+        # Write config
+        config_path.write_text(tomli_w.dumps(existing))
+
+        await self._mount_and_scroll(
+            UserCommandMessage(
+                f"**Model configured!**\n\n"
+                f"Provider: {provider_name}\n"
+                f"URL: {api_base}\n"
+                f"Model: {model_name}\n"
+                f"Config: {config_path}\n\n"
+                f"Restart Drydock to use the new model."
+            )
+        )
+
     async def _show_config(self) -> None:
         """Switch to the configuration app in the bottom panel."""
         if self._current_bottom_app == BottomApp.Config:
@@ -1780,7 +1915,7 @@ class VibeApp(App):  # noqa: PLR0904
 
         if self.config.enable_auto_update and await do_update():
             self.notify(
-                f"{update_message_prefix}\nVibe was updated successfully. Please restart to use the new version.",
+                f"{update_message_prefix}\nDrydock was updated successfully. Please restart to use the new version.",
                 title="Update successful",
                 severity="information",
                 timeout=float("inf"),

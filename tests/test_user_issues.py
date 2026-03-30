@@ -62,8 +62,8 @@ class TestCondaEnv:
 # ============================================================================
 
 class TestCircuitBreakerEnforcement:
-    def test_circuit_breaker_blocks_not_just_warns(self):
-        """After threshold identical calls, the next must return an ERROR, not execute."""
+    def test_circuit_breaker_blocks_failed_commands(self):
+        """After 3 identical failed calls, the next must be blocked."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -71,16 +71,14 @@ class TestCircuitBreakerEnforcement:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        # Non-readonly bash: success threshold is 4
-        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls -ltr"})
-        for _ in range(4):
-            al._circuit_breaker_record(tc, "file1.py")
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "bad_cmd"})
+        for _ in range(3):
+            al._circuit_breaker_record(tc, "FAILED: command not found")
 
         result = al._circuit_breaker_check(tc)
-        assert result is not None, "Circuit breaker should block"
-        assert "CIRCUIT BREAKER" in result
-        # The blocked message should tell the model to STOP, not just warn
-        assert "STOP" in result or "Do NOT" in result or "MUST" in result
+        assert result is not None, "Circuit breaker should block failed commands after 3 repeats"
+        assert "failed" in result
+        assert "DIFFERENT" in result or "different" in result
 
     def test_circuit_breaker_resets_for_new_conversation(self):
         """Circuit breaker should reset between conversations, not cache forever."""
@@ -91,10 +89,9 @@ class TestCircuitBreakerEnforcement:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        # Non-readonly bash: success threshold is 4
-        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls"})
-        for _ in range(4):
-            al._circuit_breaker_record(tc, "r1")
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "bad_cmd"})
+        for _ in range(3):
+            al._circuit_breaker_record(tc, "FAILED: command not found")
         assert al._circuit_breaker_check(tc) is not None  # Blocked
 
         # Simulate new conversation — history should be clearable
@@ -121,8 +118,8 @@ class TestUnderstoodBug:
 # ============================================================================
 
 class TestCircuitBreakerSensitivity:
-    def test_circuit_breaker_should_have_decay(self):
-        """The circuit breaker should eventually allow re-running a command."""
+    def test_successful_commands_never_blocked(self):
+        """Successful commands are never blocked — only failed commands are."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -130,15 +127,24 @@ class TestCircuitBreakerSensitivity:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        # Non-readonly bash: success threshold is 4
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "git status"})
-        for _ in range(4):
+        for _ in range(10):
             al._circuit_breaker_record(tc, "clean")
-        assert al._circuit_breaker_check(tc) is not None  # Blocked
+        assert al._circuit_breaker_check(tc) is None  # Never blocked
 
-        # After clearing (simulating passage of time / new task), should work again
-        al._tool_call_history.clear()
-        assert al._circuit_breaker_check(tc) is None
+    def test_failed_commands_blocked_after_3(self):
+        """Failed commands are blocked after 3 repeats."""
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import MessageList
+
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        al._tool_call_history = {}
+
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "git status"})
+        for _ in range(3):
+            al._circuit_breaker_record(tc, "FAILED: not a git repo")
+        assert al._circuit_breaker_check(tc) is not None  # Blocked
 
 
 # ============================================================================
@@ -201,8 +207,8 @@ class TestConsultantConfig:
 # ============================================================================
 
 class TestAutoConsult:
-    def test_circuit_breaker_suggests_consult(self):
-        """When circuit breaker fires, it should mention /consult or different approach."""
+    def test_circuit_breaker_suggests_different_approach(self):
+        """When circuit breaker fires on failed commands, it should suggest a different approach."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -210,14 +216,12 @@ class TestAutoConsult:
         al.messages = MessageList()
         al._tool_call_history = {}
 
-        # Non-readonly bash: success threshold is 4
-        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "ls"})
-        for _ in range(4):
-            al._circuit_breaker_record(tc, "output")
+        tc = SimpleNamespace(tool_name="bash", args_dict={"command": "bad_cmd"})
+        for _ in range(3):
+            al._circuit_breaker_record(tc, "FAILED: command not found")
         result = al._circuit_breaker_check(tc)
-        assert result is not None, "Circuit breaker should have fired"
-        # Should suggest using /consult or mention consultant or different approach
-        assert "/consult" in result or "consultant" in result.lower() or "different" in result.lower()
+        assert result is not None, "Circuit breaker should have fired for failed command"
+        assert "different" in result.lower()
 
 
 # ============================================================================

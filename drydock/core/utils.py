@@ -136,7 +136,7 @@ def is_dangerous_directory(path: Path | str = ".") -> tuple[bool, str]:
 
 
 def get_user_agent(backend: Backend | None) -> str:
-    user_agent = f"Mistral-Vibe/{__version__}"
+    user_agent = f"Drydock/{__version__}"
     if backend == Backend.MISTRAL:
         mistral_sdk_prefix = "mistral-client-python/"
         user_agent = f"{mistral_sdk_prefix}{user_agent}"
