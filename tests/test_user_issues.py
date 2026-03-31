@@ -62,8 +62,8 @@ class TestCondaEnv:
 # ============================================================================
 
 class TestCircuitBreakerEnforcement:
-    def test_circuit_breaker_blocks_failed_commands(self):
-        """After 3 identical failed calls, the next must be blocked."""
+    def test_circuit_breaker_disabled(self):
+        """Circuit breaker is disabled — even failed commands are never blocked."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -75,13 +75,11 @@ class TestCircuitBreakerEnforcement:
         for _ in range(3):
             al._circuit_breaker_record(tc, "FAILED: command not found")
 
-        result = al._circuit_breaker_check(tc)
-        assert result is not None, "Circuit breaker should block failed commands after 3 repeats"
-        assert "failed" in result
-        assert "DIFFERENT" in result or "different" in result
+        # CB is disabled — always returns None
+        assert al._circuit_breaker_check(tc) is None
 
     def test_circuit_breaker_resets_for_new_conversation(self):
-        """Circuit breaker should reset between conversations, not cache forever."""
+        """Circuit breaker history is clearable between conversations."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -92,11 +90,12 @@ class TestCircuitBreakerEnforcement:
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "bad_cmd"})
         for _ in range(3):
             al._circuit_breaker_record(tc, "FAILED: command not found")
-        assert al._circuit_breaker_check(tc) is not None  # Blocked
+        # CB is disabled — returns None even before clearing
+        assert al._circuit_breaker_check(tc) is None
 
         # Simulate new conversation — history should be clearable
         al._tool_call_history.clear()
-        assert al._circuit_breaker_check(tc) is None  # Unblocked
+        assert al._circuit_breaker_check(tc) is None  # Still None
 
 
 # ============================================================================
@@ -119,7 +118,7 @@ class TestUnderstoodBug:
 
 class TestCircuitBreakerSensitivity:
     def test_successful_commands_never_blocked(self):
-        """Successful commands are never blocked — only failed commands are."""
+        """Successful commands are never blocked."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -132,8 +131,8 @@ class TestCircuitBreakerSensitivity:
             al._circuit_breaker_record(tc, "clean")
         assert al._circuit_breaker_check(tc) is None  # Never blocked
 
-    def test_failed_commands_blocked_after_3(self):
-        """Failed commands are blocked after 3 repeats."""
+    def test_failed_commands_not_blocked_cb_disabled(self):
+        """CB disabled — failed commands are NOT blocked even after 3 repeats."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -144,7 +143,7 @@ class TestCircuitBreakerSensitivity:
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "git status"})
         for _ in range(3):
             al._circuit_breaker_record(tc, "FAILED: not a git repo")
-        assert al._circuit_breaker_check(tc) is not None  # Blocked
+        assert al._circuit_breaker_check(tc) is None  # CB disabled
 
 
 # ============================================================================
@@ -207,8 +206,8 @@ class TestConsultantConfig:
 # ============================================================================
 
 class TestAutoConsult:
-    def test_circuit_breaker_suggests_different_approach(self):
-        """When circuit breaker fires on failed commands, it should suggest a different approach."""
+    def test_circuit_breaker_disabled_returns_none(self):
+        """CB is disabled — returns None even for repeatedly failed commands."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
 
@@ -219,9 +218,7 @@ class TestAutoConsult:
         tc = SimpleNamespace(tool_name="bash", args_dict={"command": "bad_cmd"})
         for _ in range(3):
             al._circuit_breaker_record(tc, "FAILED: command not found")
-        result = al._circuit_breaker_check(tc)
-        assert result is not None, "Circuit breaker should have fired for failed command"
-        assert "different" in result.lower()
+        assert al._circuit_breaker_check(tc) is None
 
 
 # ============================================================================

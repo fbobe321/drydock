@@ -408,8 +408,8 @@ class TestCircuitBreaker:
 
         assert al._circuit_breaker_check(tc) is None
 
-    def test_circuit_breaker_blocks_failed_after_3(self):
-        """Failed tool calls block after 3 repeats."""
+    def test_circuit_breaker_disabled_for_failed_commands(self):
+        """Circuit breaker is disabled — even failed commands are not blocked."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
         from types import SimpleNamespace
@@ -426,12 +426,11 @@ class TestCircuitBreaker:
         assert al._circuit_breaker_check(tc) is None
         al._circuit_breaker_record(tc, "FAILED: command not found")
 
-        result = al._circuit_breaker_check(tc)
-        assert result is not None
-        assert "failed" in result
+        # CB is disabled — always returns None
+        assert al._circuit_breaker_check(tc) is None
 
-    def test_different_args_not_blocked(self):
-        """Different arguments should not be blocked even if one arg set failed 3x."""
+    def test_circuit_breaker_disabled_for_all_args(self):
+        """Circuit breaker is disabled — no arguments are ever blocked."""
         from drydock.core.agent_loop import AgentLoop
         from drydock.core.types import MessageList
         from types import SimpleNamespace
@@ -445,7 +444,8 @@ class TestCircuitBreaker:
 
         for _ in range(3):
             al._circuit_breaker_record(tc1, "FAILED: command not found")
-        assert al._circuit_breaker_check(tc1) is not None
+        # CB is disabled — both return None
+        assert al._circuit_breaker_check(tc1) is None
         assert al._circuit_breaker_check(tc2) is None
 
 

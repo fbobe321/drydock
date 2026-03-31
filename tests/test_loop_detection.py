@@ -55,7 +55,7 @@ def _add_tool_call(al: AgentLoop, tool_name: str, arguments: str = "{}") -> None
 # ============================================================================
 
 class TestCircuitBreaker:
-    """Circuit breaker: only blocks commands that FAILED 3+ times."""
+    """Circuit breaker is fully disabled — always returns None."""
 
     def test_first_call_allowed(self):
         al = _make_agent()
@@ -68,18 +68,16 @@ class TestCircuitBreaker:
         al._circuit_breaker_record(tc, "file1.py\nfile2.py")
         assert al._circuit_breaker_check(tc) is None
 
-    def test_failed_blocked_after_3(self):
-        """Failed commands blocked after 3 repeats."""
+    def test_disabled_for_failed_after_3(self):
+        """CB disabled — failed commands are NOT blocked even after 3 repeats."""
         al = _make_agent()
         tc = SimpleNamespace(tool_name="bash", args_dict={"command":"bad_cmd"})
         for _ in range(3):
             al._circuit_breaker_record(tc, "FAILED: command not found")
-        result = al._circuit_breaker_check(tc)
-        assert result is not None
-        assert "failed" in result
+        assert al._circuit_breaker_check(tc) is None
 
     def test_failed_2_not_blocked(self):
-        """Failed commands with only 2 repeats are not blocked yet."""
+        """Failed commands with only 2 repeats are not blocked."""
         al = _make_agent()
         tc = SimpleNamespace(tool_name="bash", args_dict={"command":"bad_cmd"})
         al._circuit_breaker_record(tc, "FAILED: command not found")
@@ -102,39 +100,40 @@ class TestCircuitBreaker:
             al._circuit_breaker_record(tc, "match.py:10:foo")
         assert al._circuit_breaker_check(tc) is None
 
-    def test_blocked_message_suggests_different_approach(self):
+    def test_disabled_returns_none_even_for_failed(self):
+        """CB disabled — returns None even for commands that would have been blocked."""
         al = _make_agent()
         tc = SimpleNamespace(tool_name="bash", args_dict={"command":"python3 run.py"})
         for _ in range(3):
             al._circuit_breaker_record(tc, "FAILED: module not found")
-        result = al._circuit_breaker_check(tc)
-        assert result is not None
-        assert "DIFFERENT" in result or "different" in result
+        assert al._circuit_breaker_check(tc) is None
 
-    def test_blocked_message_mentions_failure_count(self):
+    def test_disabled_returns_none_for_repeated_failures(self):
+        """CB disabled — returns None regardless of failure count."""
         al = _make_agent()
         tc = SimpleNamespace(tool_name="bash", args_dict={"command":"python3 run.py"})
         for _ in range(3):
             al._circuit_breaker_record(tc, "FAILED: error")
-        result = al._circuit_breaker_check(tc)
-        assert "3" in result
+        assert al._circuit_breaker_check(tc) is None
 
-    def test_different_args_not_blocked(self):
+    def test_disabled_for_all_args(self):
+        """CB disabled — no args are blocked, even after repeated failures."""
         al = _make_agent()
         tc1 = SimpleNamespace(tool_name="bash", args_dict={"command":"bad_cmd"})
         tc2 = SimpleNamespace(tool_name="bash", args_dict={"command":"ls -la"})
         for _ in range(3):
             al._circuit_breaker_record(tc1, "FAILED: not found")
-        assert al._circuit_breaker_check(tc1) is not None  # Blocked (failed 3x)
-        assert al._circuit_breaker_check(tc2) is None       # Not blocked
+        assert al._circuit_breaker_check(tc1) is None
+        assert al._circuit_breaker_check(tc2) is None
 
-    def test_different_tools_not_blocked(self):
+    def test_disabled_for_all_tools(self):
+        """CB disabled — no tools are blocked, even after repeated failures."""
         al = _make_agent()
         tc1 = SimpleNamespace(tool_name="bash", args_dict={"command":"bad_cmd"})
         tc2 = SimpleNamespace(tool_name="grep", args_dict={"pattern":"foo"})
         for _ in range(3):
             al._circuit_breaker_record(tc1, "FAILED: not found")
-        assert al._circuit_breaker_check(tc1) is not None
+        assert al._circuit_breaker_check(tc1) is None
         assert al._circuit_breaker_check(tc2) is None
 
     def test_failed_then_success_not_blocked(self):
@@ -143,7 +142,6 @@ class TestCircuitBreaker:
         tc = SimpleNamespace(tool_name="bash", args_dict={"command":"python3 run.py"})
         al._circuit_breaker_record(tc, "FAILED: error")
         al._circuit_breaker_record(tc, "FAILED: error")
-        # Now it succeeds — last_result no longer starts with FAILED:
         al._circuit_breaker_record(tc, "output ok")
         assert al._circuit_breaker_check(tc) is None
 

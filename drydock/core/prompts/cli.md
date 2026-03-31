@@ -222,18 +222,21 @@ Error Handling:
 - After ANY error, your next action must be DIFFERENT from what just failed.
 - Never run the same failing command twice — the result won't change.
 
+Building Projects (multi-file):
+When asked to build a project from a PRD or requirements:
+1. Use `task(agent="planner")` to create an implementation plan FIRST
+2. Use `task(agent="explore")` to understand existing code (if any)
+3. Create files one at a time using `write_file`
+4. Test with `bash` after creating all files
+5. Fix errors with `search_replace`, then test again
+
 Python Package Rules (MANDATORY):
 When creating Python packages (directories with __init__.py):
-- ALWAYS create __main__.py so `python3 -m mypackage` works. Contents:
-  ```
-  from mypackage.cli import main
-  if __name__ == "__main__":
-      main()
-  ```
+- ALWAYS create `__init__.py` AND `__main__.py`
+- `__main__.py` contents: `from package.cli import main; main()` (if __name__ == "__main__")
 - Use ABSOLUTE imports: `from mypackage.module import X`, NOT `from .module import X`
-- NEVER run `python3 mypackage/file.py` — ALWAYS use `python3 -m mypackage`
-- Create sample/test data BEFORE running tests (e.g., create test.log before analyzing it)
-- After 1-2 successful test runs, STOP testing and summarize what you built
+- Run with `python3 -m mypackage`, NOT `python3 mypackage/file.py`
+- Create sample/test data BEFORE running tests
 
 Debugging Best Practices:
 When fixing bugs, follow this cycle: RUN → READ → FIX → VERIFY.

@@ -296,6 +296,12 @@ class AgentLoop:
     async def act(self, msg: str) -> AsyncGenerator[BaseEvent]:
         self._clean_message_history()
 
+        # Auto-create AGENTS.md if no project instructions exist.
+        # devstral needs per-project AGENTS.md to anchor its behavior —
+        # without it the model loops on ls/bash instead of using subagents.
+        if self.stats.steps <= 1:
+            self._ensure_agents_md()
+
         # Load project state for cross-session context
         try:
             from drydock.core.session.state_file import load_state
@@ -474,65 +480,10 @@ class AgentLoop:
 
         yield UserMessageEvent(content=user_msg, message_id=user_message.message_id)
 
-        # === BUILD ORCHESTRATION ===
-        # For complex build tasks (PRD + multiple files), run the multi-phase
-        # pipeline instead of letting the model do everything in one context.
-        if self._is_build_task(user_msg):
-            try:
-                from drydock.core.build_orchestrator import run_build_pipeline
-                # Include PRD content if it exists — the user prompt is usually
-                # just "review the PRD and get started", not the PRD itself
-                build_prompt = user_msg
-                for prd_name in ("PRD.md", "prd.md", "PRD.txt"):
-                    prd_path = Path.cwd() / prd_name
-                    if prd_path.exists():
-                        prd_content = prd_path.read_text()[:8000]
-                        build_prompt = f"{user_msg}\n\nPRD CONTENT:\n{prd_content}"
-                        break
-                summary = await run_build_pipeline(
-                    user_prompt=build_prompt,
-                    config=self.config,
-                    base_dir=Path.cwd(),
-                    backend=self.backend,
-                )
-                # Yield the summary directly to the user — don't let the model
-                # respond, because it will ignore the instructions and rebuild files.
-                yield AssistantEvent(content=summary)
-
-                # Auto-test: run python3 -m package and report result
-                import subprocess as _sp
-                pkg_name = summary.split("'")[1] if "'" in summary else "project"
-                test_result = _sp.run(
-                    f"python3 -m {pkg_name} --help",
-                    shell=True, cwd=str(Path.cwd()),
-                    capture_output=True, text=True, timeout=15,
-                )
-                if test_result.returncode == 0:
-                    yield AssistantEvent(
-                        content=f"\nTest passed: `python3 -m {pkg_name} --help` works.\n\n"
-                        f"```\n{test_result.stdout[:300]}\n```\n\n"
-                        f"Create sample data and test further, or ask me to fix any issues."
-                    )
-                else:
-                    err = (test_result.stderr or test_result.stdout)[:300]
-                    # Let the model fix this error
-                    self._inject_system_note(
-                        f"The project was built but has an error. Fix it:\n\n"
-                        f"```\n{err}\n```\n\n"
-                        f"Use read_file and search_replace to fix. Do NOT rewrite entire files."
-                    )
-
-                logger.info("Build orchestrator completed successfully")
-            except Exception as e:
-                import traceback
-                logger.warning("Build orchestrator failed (%s), falling back to normal flow", e)
-                logger.warning("Traceback: %s", traceback.format_exc())
-                auto_context = self._build_auto_context(user_msg)
-                if auto_context:
-                    self._inject_system_note(auto_context)
-        else:
-            # Smart task routing: auto-explore + skill injection
-            await self._auto_route_task(user_msg)
+        # === AUTO-CONTEXT ===
+        # Auto-explore project files + inject relevant skill for the task type.
+        # The model handles everything with subagents (v2.0.0 fixed delegation).
+        await self._auto_route_task(user_msg)
 
         try:
             should_break_loop = False
@@ -1057,23 +1008,12 @@ class AgentLoop:
         return ""
 
     def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
-        """Block exact-duplicate FAILED tool calls only.
+        """Disabled. Loop detection handles repetition.
 
-        Only blocks commands that failed before with the exact same args.
-        Successful commands are never blocked — the model legitimately
-        retries after fixing code.
+        The circuit breaker consistently caused more harm than good —
+        blocking valid retries after the model fixed code.
+        _check_tool_call_repetition() catches actual infinite loops.
         """
-        args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
-        sig = hashlib.md5(f"{tool_call.tool_name}:{args_str}".encode()).hexdigest()
-        count, last_result = self._tool_call_history.get(sig, (0, ""))
-
-        # Only block if the SAME command FAILED 3+ times
-        is_failed = last_result.startswith("FAILED:") if last_result else False
-        if is_failed and count >= 3:
-            return (
-                f"This command has failed {count} times with the same error. "
-                f"Try a DIFFERENT command or approach."
-            )
         return None
 
     def _circuit_breaker_check_FULL(self, tool_call: ResolvedToolCall) -> str | None:
@@ -1823,21 +1763,69 @@ class AgentLoop:
         if parts:
             self._inject_system_note("\n\n".join(parts))
 
+    def _ensure_agents_md(self) -> None:
+        """Auto-create AGENTS.md if no project instructions file exists.
+
+        devstral requires a per-project AGENTS.md to use subagents properly.
+        Without it, the model loops on bash/ls instead of delegating.
+        """
+        from drydock.core.paths import AGENTS_MD_FILENAMES
+
+        cwd = Path.cwd()
+        # Check if any project instructions file already exists
+        for name in AGENTS_MD_FILENAMES:
+            if (cwd / name).exists():
+                return  # Already has instructions
+
+        # Also check for CLAUDE.md (user might be using Claude Code convention)
+        if (cwd / "CLAUDE.md").exists():
+            return
+
+        # Create default AGENTS.md
+        agents_md = cwd / "AGENTS.md"
+        try:
+            agents_md.write_text(
+                "# Project Instructions\n\n"
+                "## Workflow\n"
+                "When building a project:\n"
+                "1. Use `task(agent=\"planner\")` to create an implementation plan first\n"
+                "2. Use `task(agent=\"explore\")` to understand existing code\n"
+                "3. Create files using `write_file` with absolute imports\n"
+                "4. Always create `__main__.py` so `python3 -m package_name` works\n"
+                "5. Test with `bash` after creating files\n\n"
+                "## Rules\n"
+                "- Use absolute imports: `from package.module import X`, NOT `from .module import X`\n"
+                "- Always create `__init__.py` and `__main__.py` for packages\n"
+                "- Create sample test data before testing\n"
+                "- Use `python3 -m package_name` to run, NOT `python3 package/file.py`\n"
+            )
+            logger.info("Auto-created AGENTS.md in %s", cwd)
+        except (OSError, PermissionError):
+            pass  # Non-critical — read-only filesystem or no permissions
+
     def _is_build_task(self, user_msg: str) -> bool:
-        """Detect if a user message is a complex build task that needs orchestration."""
+        """Detect if a user message is an explicit build task that needs orchestration.
+
+        Only triggers on clear build intent — NOT on "review" or "look at".
+        """
         msg_lower = user_msg.lower()
+
+        # Explicit build verbs — user clearly wants to create something
         has_build_verb = any(kw in msg_lower for kw in (
-            "build", "create a", "implement", "get started",
-            "set up", "scaffold", "review the prd", "review prd",
+            "build", "create a", "implement", "scaffold",
+            "build the project", "build this project",
+            "build from prd", "build it",
+            "get started building", "start building",
         ))
-        has_complexity = (
-            len(user_msg) > 200
-            or any(kw in msg_lower for kw in (
-                "prd", "multiple", "package", "modules", "cli",
-                "features", "commands", "architecture", "structure",
-            ))
-        )
-        # Check if a PRD.md exists in the working directory
+
+        # "review", "look at", "read" are NOT build verbs
+        is_review = any(kw in msg_lower for kw in (
+            "review", "look at", "read", "check", "analyze", "audit",
+            "what does", "explain", "summarize",
+        ))
+        if is_review and not has_build_verb:
+            return False
+
         has_prd = Path.cwd().joinpath("PRD.md").exists() or Path.cwd().joinpath("prd.md").exists()
         return has_build_verb and (has_complexity or has_prd)
 

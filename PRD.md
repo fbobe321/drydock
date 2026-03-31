@@ -390,6 +390,32 @@ For complex build tasks, the orchestrator makes direct API calls instead of goin
 | Circuit breaker blocks valid retries | Only block FAILED commands (3+ identical failures) |
 | Separate httpx calls get 404 from vLLM | Use `self.backend.complete()` (same connection) |
 
+### Upstream Alignment (Mistral Vibe docs)
+
+DryDock is a fork of mistralai/mistral-vibe. The upstream docs at docs.mistral.ai/mistral-vibe/ define:
+
+| Feature | Upstream | DryDock Status |
+|---|---|---|
+| Agent `.toml` profiles | `~/.vibe/agents/` | `~/.drydock/agents/` |
+| Skills with `SKILL.md` | `~/.vibe/skills/` + project + config | Same (7 bundled + user) |
+| `task` tool → subagents | explore, diagnostic, planner | Same (v2.0.0 fixed delegation) |
+| `AGENTS.md` / `VIBE.md` | Project-root instructions loaded into context | Now loads AGENTS.md, DRYDOCK.md, .drydock.md |
+| `DRYDOCK.md` | (our addition) | Per-project instructions |
+| `.drydock/rules/*.md` | (our addition) | Modular project rules |
+| Skill enable/disable | Glob + regex patterns | Same |
+| Agent handoffs | Cloud-only (agent-to-agent) | Not applicable (local) |
+| Cloud Agents API | `client.beta.agents` | Not used (local-first) |
+
+**Per-Project Instructions (loaded into system prompt):**
+- `AGENTS.md` — upstream standard, works in workspace root
+- `DRYDOCK.md` — our addition, same purpose
+- `.drydock/rules/*.md` — modular rules, all loaded
+
+**What we DON'T use from upstream:**
+- Mistral Cloud Agents API (requires mistral-medium/large, cloud-only)
+- Agent handoffs (cloud orchestration)
+- Teleport to Vibe Nuage (cloud feature)
+
 ---
 
 ## Key Decisions
@@ -521,11 +547,48 @@ Evidence: removing this one line improved `task(agent="explore")` usage from 1/5
 - Telegram release notifications
 - `whats_new.md` updated
 
+### Phase 15 (Mar 31): Meta-Harness Framework + SWE-bench Push
+
+**Paper:** "Meta-Harness: End-to-End Optimization of Model Harnesses" (arXiv:2603.28052)
+**Key insight:** Optimize the harness around the model, not the model itself. A harness change gave +18pp on TerminalBench-2.
+
+**What we implemented from Meta-Harness:**
+
+1. **Environment bootstrapping** — Single compound shell command before first LLM call gathers:
+   - Repo structure (`find . -name "*.py" | head -30`)
+   - Python version, test framework
+   - Top-level directories, recent commits
+   - Injected as `[Environment Snapshot]` in the prompt
+   - Eliminates 2-4 wasted exploratory turns
+
+2. **AGENTS.md per SWE-bench task** — Auto-created in each worktree with bug-fix workflow instructions
+
+3. **Additive-only changes** — Paper proved that modifying control flow regresses. Only ADD context before the agent loop. This validates our decision to disable the orchestrator and circuit breaker.
+
+**SWE-bench status:**
+- Baseline (v2.1.3 + AGENTS.md): 4/10 file matches (40%)
+- 50-task eval running with env bootstrapping
+- Previous "39-42% pass rate" was file-match only — actual test pass rate was 0%
+- Target: 68% (devstral-small-2 24B, per Mistral's published results)
+- Mistral achieved 68% with Vibe CLI + Cline harness
+
+**Meta-Harness techniques still to implement:**
+- Double-confirmation before completion (verify checklist)
+- Execution trace logging for systematic failure diagnosis
+- Repo-specific routing (different strategies per SWE-bench repo)
+- Draft-then-verify for patches
+- Contrastive examples for decision boundaries
+
+**Reference:** https://github.com/stanford-iris-lab/meta-harness-tbench2-artifact
+
 ### Lessons Learned (Updated)
 
 1. **One prompt line can block an entire feature.** "Restate the goal" prevented tool calling for months.
-2. **Don't rely on the model to delegate.** Force it structurally (orchestrator) or do it before the model responds.
-3. **Same-process API calls can fail.** httpx from inside DryDock got 404 from vLLM. Use the existing backend connection.
-4. **Test the installed package, not source.** Different Python envs (miniconda3 vs miniforge3) have different behavior.
-5. **Explicit Python paths everywhere.** Cron doesn't inherit PATH. Every script must use the full path.
-6. **The circuit breaker was net negative.** It blocked valid retries more than it prevented loops. Failed-only mode is the right balance.
+2. **AGENTS.md is essential for devstral.** Without per-project instructions file, model loops on ls/bash. Auto-created on first session.
+3. **Additive-only harness changes work best.** Every control flow modification (circuit breaker, orchestrator, nudges) caused regressions. Just inject better context.
+4. **The harness matters as much as the model.** Meta-Harness paper shows 6x performance gap from harness changes alone.
+5. **Environment bootstrapping saves turns.** Pre-gathering repo structure/versions eliminates 2-4 wasted exploration turns.
+6. **Plan→Edit workflow is Mistral's design.** Use plan mode first, then switch to accept-edits. Don't try to do everything in one agent shot.
+7. **Same-process API calls can fail.** httpx from inside DryDock got 404 from vLLM. Use the existing backend connection.
+8. **Test the installed package, not source.** Different Python envs (miniconda3 vs miniforge3) have different behavior.
+9. **Explicit Python paths everywhere.** Cron doesn't inherit PATH. Every script must use the full path.

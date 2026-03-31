@@ -303,6 +303,18 @@ def _load_project_instructions(max_bytes: int = 16_000) -> str:
     """Load DRYDOCK.md and .drydock/rules/*.md for per-project instructions."""
     parts: list[str] = []
 
+    # Check for AGENTS.md (per-project agent instructions, like Claude's CLAUDE.md)
+    from drydock.core.paths import AGENTS_MD_FILENAMES
+    for name in AGENTS_MD_FILENAMES:
+        path = Path.cwd() / name
+        try:
+            if path.is_file():
+                content = path.read_text("utf-8", errors="ignore")[:max_bytes]
+                parts.append(f"# Project Instructions ({name})\n{content}")
+                break
+        except (OSError, PermissionError):
+            pass
+
     # Check for DRYDOCK.md in project root
     for name in ["DRYDOCK.md", "drydock.md", ".drydock/DRYDOCK.md"]:
         path = Path.cwd() / name
