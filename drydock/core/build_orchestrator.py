@@ -539,10 +539,14 @@ async def run_build_pipeline(
                 logger.warning("  Attempt %d error for %s: %s", attempt + 1, file_spec.path, e)
         results.append((file_spec.path, success))
 
-    # Phase 3.5: Auto-fix cross-file import mismatches and circular imports
+    # Phase 3.5: Auto-fix imports
     logger.info("BUILD PHASE 3.5: Fixing imports...")
     _fix_cross_file_imports(plan, base_dir)
     _fix_circular_imports(plan, base_dir)
+
+    # Phase 3.75: Verify the package actually imports — fix errors iteratively
+    logger.info("BUILD PHASE 3.75: Verify & fix...")
+    _verify_and_fix_imports(plan, base_dir)
 
     # Build summary
     succeeded = sum(1 for _, ok in results if ok)

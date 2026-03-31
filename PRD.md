@@ -1,10 +1,10 @@
 # DryDock — Local CLI Coding Agent
 
 **Repository:** https://github.com/fbobe321/drydock
-**PyPI:** https://pypi.org/project/drydock-cli/ (v1.5.3)
+**PyPI:** https://pypi.org/project/drydock-cli/ (v2.0.0)
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
 **Status:** Active development
-**Current version:** 1.5.3
+**Current version:** 2.0.0
 **Hardware:** 2x RTX 4060 Ti 16GB, devstral-24B-AWQ-4bit via vLLM at localhost:8000
 **Server:** remus (Ubuntu 22.04, user: bobef)
 
@@ -323,15 +323,84 @@ drydock/
 
 ---
 
+## Mistral/devstral Tool Calling Design (CRITICAL)
+
+Understanding how devstral handles tools, agents, and skills is essential. Getting this wrong cost weeks of debugging.
+
+### How devstral Decides to Call Tools
+
+In `tool_choice="auto"` (default), the model **autonomously decides** whether to call a tool or respond with text. Key rules:
+
+1. **If the system prompt asks the model to output text first** (e.g., "Restate the goal"), the model generates text and SKIPS tool calling entirely
+2. **Tool descriptions matter** — the model picks tools based on description quality, not just name
+3. **`tool_choice="required"`** forces a tool call (useful for first-turn delegation)
+4. **`tool_choice={"type":"function","function":{"name":"task"}}`** forces a specific tool
+
+### The "Restate the Goal" Bug (v2.0.0 fix)
+
+The single line `"Restate the goal in one line."` in the system prompt caused devstral to output text instead of making tool calls. This blocked subagent delegation for months. Evidence: removing it improved task() tool usage from 1/5 to 5/5 across SWE-bench prompts.
+
+**Rule: Never ask the model to output text before its first tool call.** Any instruction that triggers text generation pre-empts tool calling.
+
+### Tool Definition Format
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "task",
+    "description": "Delegate to subagent (explore/diagnostic/planner)",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "task": {"type": "string"},
+        "agent": {"type": "string", "enum": ["explore","diagnostic","planner"]}
+      },
+      "required": ["task", "agent"]
+    }
+  }
+}
+```
+
+### Multi-Agent Pattern
+
+DryDock's subagents follow Mistral's agent-to-agent delegation pattern:
+- `explore` — read-only codebase exploration (grep, read_file, glob)
+- `diagnostic` — analyze test failures (grep, read_file, bash, glob)
+- `planner` — create implementation plans (grep, read_file, glob)
+
+Each spawns a separate AgentLoop with its own context window. The main agent sees results as tool responses.
+
+### Build Orchestrator (bypasses model entirely)
+
+For complex build tasks, the orchestrator makes direct API calls instead of going through the model:
+- Phase 1: Deterministic plan extraction from PRD (no LLM)
+- Phase 2: Scaffold package structure (no LLM)
+- Phase 3: One `backend.complete()` call per file (separate context each)
+- Phase 4: Model tests and fixes (standard agent loop)
+
+### Key Gotchas
+
+| Issue | Solution |
+|-------|----------|
+| Model outputs text instead of calling tools | Don't ask for text before first tool call |
+| vLLM rejects `user` after `tool` messages | `_sanitize_message_ordering()` before every LLM call |
+| `tool_choice="any"` not supported by vLLM | Use `"required"` instead |
+| Model hallucinates tool names (`task_agent:`) | Error handler shows available tool names |
+| Circuit breaker blocks valid retries | Only block FAILED commands (3+ identical failures) |
+| Separate httpx calls get 404 from vLLM | Use `self.backend.complete()` (same connection) |
+
+---
+
 ## Key Decisions
 
 **No mock tests.** Every behavior test runs against the real vLLM backend. Mocks gave false confidence — critical bugs like `raw_arguments` crash and circuit breaker failures passed all mock tests but broke in production.
 
-**Circuit breaker force-stops.** After 3 consecutive breaker fires, the conversation is terminated. The model was ignoring error messages and repeating — the only fix is cutting the loop.
+**Circuit breaker: failed-only.** Only blocks commands that FAILED 3+ times with identical args. Successful commands and retries-after-fix are never blocked. Loop detection handles pattern-based repetition separately.
 
-**Bash abuse = #1 failure cause.** 88% of no-patch failures were the model running cat/grep/sed via bash instead of using search_replace. Fixed with escalating nudges at 5/8/12 bash calls.
+**Bash abuse detection.** Model uses cat/grep/sed via bash instead of proper tools. Detected at 3/6/10 bash calls with escalating nudges.
 
-**Nudges as user messages.** `_inject_system_note` buries nudges in old tool results where the model doesn't see them. Nudges now go as direct user messages.
+**Auto-explore for all tasks.** Instead of relying on the model to call `task(agent="explore")`, the agent loop auto-reads project files and injects function/class signatures before the model's first turn.
 
 **Scroll workaround.** Mouse wheel doesn't work in Textual's alternate screen buffer. Shift+Up/Down is the working solution. Copy/paste works with native text selection (mouse=False).
 
@@ -411,3 +480,52 @@ Run with: `./scripts/test_bank.sh` (full) or `./scripts/test_bank.sh quick` (eas
 **PRD-driven test bank:** 65 tests (15 core + 50 extended) that give DryDock a PRD and verify the built project RUNS. Core 15 pass at 100%.
 
 **Relative import auto-fix:** When model gets "relative import with no known parent package", agent loop explains absolute imports vs python3 -m and forces search_replace.
+
+### Phase 13 (Mar 29-30): Multi-Phase Build Orchestrator (v1.6.0-v1.8.0)
+
+DryDock was unusable for building projects — broke within 2 minutes every time. Root causes:
+1. Model wasted context on `__init__.py`, relative imports, `__main__.py`
+2. Single context window for everything → model degraded by Phase 4
+3. Cross-file import name mismatches (each file built independently)
+
+**Solution: Multi-phase build orchestrator** (`drydock/core/build_orchestrator.py`):
+
+| Phase | What | LLM? |
+|---|---|---|
+| 1. PLAN | Parse PRD, extract package name + modules | No (regex) |
+| 2. SCAFFOLD | Create dirs, `__init__.py`, `__main__.py` | No (deterministic) |
+| 3. IMPLEMENT | One `backend.complete()` call per file | Yes (separate context each) |
+| 3.5 FIX | Cross-file import matching, circular import breaking, `from __future__ import annotations` | No (AST analysis) |
+| 4. TEST | Model runs `python3 -m package --help`, fixes errors | Yes (main loop) |
+
+**Results:** 79-83% pass rate on 6 PRD types over 24 rounds of automated testing.
+
+**Key issues solved along the way:**
+- Orchestrator was calling Mistral cloud API instead of local vLLM (wrong provider selection)
+- Separate httpx calls got 404 from vLLM → switched to `self.backend.complete()`
+- Plan extractor matched English words as package names ("with", "from") → 80+ word blocklist
+- Model rebuilt files in Phase 4 despite being told not to → yield summary directly to user
+- Circuit breaker blocked valid retries after fixes → disabled for successful commands
+
+### Phase 14 (Mar 30): Subagent Delegation Fixed + v2.0.0
+
+**ROOT CAUSE FOUND for subagent non-use:** The system prompt line `"Restate the goal in one line."` caused devstral to output text instead of making tool calls. This pre-empted the tool-calling mechanism entirely.
+
+Evidence: removing this one line improved `task(agent="explore")` usage from 1/5 to 5/5 across SWE-bench test prompts.
+
+**Other v2.0.0 changes:**
+- All user-visible "Vibe" references removed (interrupt, window title, onboarding, user agent)
+- `/setup-model` command: interactive wizard for local LLM setup (vLLM, Ollama, LM Studio)
+- `--local` CLI flag: `drydock --local http://localhost:8000/v1`
+- Auto-explore + skill routing for all task types (review, investigate, ship, simplify)
+- Telegram release notifications
+- `whats_new.md` updated
+
+### Lessons Learned (Updated)
+
+1. **One prompt line can block an entire feature.** "Restate the goal" prevented tool calling for months.
+2. **Don't rely on the model to delegate.** Force it structurally (orchestrator) or do it before the model responds.
+3. **Same-process API calls can fail.** httpx from inside DryDock got 404 from vLLM. Use the existing backend connection.
+4. **Test the installed package, not source.** Different Python envs (miniconda3 vs miniforge3) have different behavior.
+5. **Explicit Python paths everywhere.** Cron doesn't inherit PATH. Every script must use the full path.
+6. **The circuit breaker was net negative.** It blocked valid retries more than it prevented loops. Failed-only mode is the right balance.
