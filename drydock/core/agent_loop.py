@@ -531,10 +531,8 @@ class AgentLoop:
                 if auto_context:
                     self._inject_system_note(auto_context)
         else:
-            # Normal flow: inject context for non-build tasks
-            auto_context = self._build_auto_context(user_msg)
-            if auto_context:
-                self._inject_system_note(auto_context)
+            # Smart task routing: auto-explore + skill injection
+            await self._auto_route_task(user_msg)
 
         try:
             should_break_loop = False
@@ -1736,6 +1734,94 @@ class AgentLoop:
                     return f"WARNING|{last_tool}"
 
         return None
+
+    async def _auto_route_task(self, user_msg: str) -> None:
+        """Auto-explore the project and inject skill instructions.
+
+        Instead of hoping the model calls task(agent='explore'), we do
+        the exploration ourselves and inject the results + relevant skill.
+        """
+        msg_lower = user_msg.lower()
+        parts = []
+
+        # 1. Auto-explore: if project has files, read key ones
+        try:
+            cwd = Path.cwd()
+            py_files = sorted(
+                f for f in cwd.rglob("*.py")
+                if ".logs" not in str(f) and ".venv" not in str(f)
+                and "__pycache__" not in str(f)
+            )
+
+            if len(py_files) >= 3:
+                # List all files
+                listing = "\n".join(f"  {f.relative_to(cwd)}" for f in py_files[:30])
+                parts.append(f"PROJECT FILES ({len(py_files)} Python files):\n{listing}")
+
+                # Auto-read key files (entry points, __init__, small files)
+                files_read = 0
+                for f in py_files[:15]:
+                    if files_read >= 5:
+                        break
+                    if f.stat().st_size > 10000:
+                        continue  # Skip large files
+                    if f.name in ("__init__.py", "__main__.py"):
+                        continue  # Skip boilerplate
+                    try:
+                        content = f.read_text()[:2000]
+                        rel = f.relative_to(cwd)
+                        # Extract just function/class signatures
+                        import ast
+                        tree = ast.parse(content)
+                        sigs = []
+                        for node in ast.walk(tree):
+                            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                args = ", ".join(a.arg for a in node.args.args)
+                                sigs.append(f"  def {node.name}({args}) [line {node.lineno}]")
+                            elif isinstance(node, ast.ClassDef):
+                                sigs.append(f"  class {node.name} [line {node.lineno}]")
+                        if sigs:
+                            parts.append(f"{rel}:\n" + "\n".join(sigs[:10]))
+                            files_read += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # 2. Detect task type and inject skill content
+        skill_name = None
+        if any(kw in msg_lower for kw in ("review", "audit", "check the code", "code quality")):
+            skill_name = "review"
+        elif any(kw in msg_lower for kw in ("investigate", "debug", "why does", "why is", "broken", "failing")):
+            skill_name = "investigate"
+        elif any(kw in msg_lower for kw in ("ship", "commit and push", "create a pr", "open pr", "deploy")):
+            skill_name = "ship"
+        elif any(kw in msg_lower for kw in ("simplify", "clean up", "refactor", "reduce complexity")):
+            skill_name = "simplify"
+
+        if skill_name:
+            skill_info = self.skill_manager.get_skill(skill_name)
+            if skill_info and skill_info.skill_path:
+                try:
+                    content = skill_info.skill_path.read_text(encoding="utf-8")
+                    if content.startswith("---"):
+                        end = content.find("---", 3)
+                        if end > 0:
+                            content = content[end + 3:].strip()
+                    parts.append(f"FOLLOW THIS WORKFLOW ({skill_name} skill):\n{content[:2000]}")
+                except Exception:
+                    pass
+
+        # 3. Also list non-Python files of interest
+        try:
+            for pattern in ("*.md", "*.txt", "*.json", "*.yaml", "*.yml", "*.toml", "*.csv"):
+                for f in sorted(Path.cwd().glob(pattern))[:3]:
+                    parts.append(f"  {f.name} ({f.stat().st_size} bytes)")
+        except Exception:
+            pass
+
+        if parts:
+            self._inject_system_note("\n\n".join(parts))
 
     def _is_build_task(self, user_msg: str) -> bool:
         """Detect if a user message is a complex build task that needs orchestration."""

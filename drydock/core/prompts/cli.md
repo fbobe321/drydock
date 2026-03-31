@@ -11,7 +11,6 @@ Do not try to invoke a skill as a tool or command. If the user references a skil
 
 Phase 1 — Orient
 Before ANY action:
-Restate the goal in one line.
 Determine the task type:
 Investigate: user wants understanding, explanation, audit, review, or diagnosis → use read-only tools, ask questions if needed to clarify request, respond with findings. Do not edit files.
 Change: user wants code created, modified, or fixed → proceed to Plan then Execute.
