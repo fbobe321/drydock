@@ -398,7 +398,8 @@ class VibeApp(App):  # noqa: PLR0904
             if not hasattr(self, "_pending_messages"):
                 self._pending_messages: list[str] = []
             self._pending_messages.append(value)
-            self.notify(f"Queued — will process after current task ({len(self._pending_messages)} pending)")
+            preview = value[:60] + "..." if len(value) > 60 else value
+            self.notify(f"Queued: \"{preview}\" ({len(self._pending_messages)} pending)")
             return
 
         if value.startswith("!"):

@@ -592,3 +592,25 @@ Evidence: removing this one line improved `task(agent="explore")` usage from 1/5
 7. **Same-process API calls can fail.** httpx from inside DryDock got 404 from vLLM. Use the existing backend connection.
 8. **Test the installed package, not source.** Different Python envs (miniconda3 vs miniforge3) have different behavior.
 9. **Explicit Python paths everywhere.** Cron doesn't inherit PATH. Every script must use the full path.
+
+### Phase 16 (Mar 31): No More Session Kills + Meta-Harness Iteration
+
+**v2.2.0-2.2.1: Loop guidance overhaul**
+- ALL session-killing behavior removed from loop detection
+- Loop detection now only prunes duplicates and injects gentle nudges
+- API errors auto-retry after 10s instead of stopping
+- Queue shows actual command text
+- Only hard stop: MAX_TOOL_TURNS (200)
+
+**SWE-bench 50-task eval (v2.1.3 + env bootstrap):**
+- File matches: 15/50 (30%)
+- Patches generated: 19/50 (38%)
+- Strong on Django, weak on sympy/sphinx
+- 35/50 tasks produced NO patch — model explores but doesn't commit
+
+**Next: Meta-Harness iteration cycle**
+- Analyze the 35 no-patch failures
+- Improve prompt to be more directive ("you MUST make an edit")
+- Add repo-specific strategies
+- Implement draft-then-verify pattern
+- Target: 68% (devstral-small-2 published score)

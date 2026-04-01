@@ -542,11 +542,14 @@ class AgentLoop:
                 except (RuntimeError, AgentLoopLLMResponseError) as e:
                     api_error_count += 1
                     if api_error_count > MAX_API_ERRORS:
+                        # Don't stop — reset and let the user know
+                        import asyncio as _aio
                         yield AssistantEvent(
-                            content=f"\n\n[Too many consecutive API errors ({api_error_count}). Last error: {e}. Stopping.]\n",
-                            stopped_by_middleware=True,
+                            content=f"\n\n[{api_error_count} consecutive API errors. Waiting 10s then retrying. Last error: {str(e)[:200]}]\n",
                         )
-                        return
+                        await _aio.sleep(10)
+                        api_error_count = 0  # Reset — give it another chance
+                        continue
                     # Check if the error is about invalid function/tool name
                     error_str = str(e)
                     if "Function name" in error_str or "function" in error_str.lower() and "must be" in error_str.lower():
@@ -696,12 +699,12 @@ class AgentLoop:
                             "Your NEXT action MUST be write_file to create a file or "
                             "search_replace to edit one. Do NOT run any more bash commands."
                         )
-                    elif bash_count >= 10:
-                        yield AssistantEvent(
-                            content="\n\n[STOPPED: 10+ bash commands without creating any files. Use write_file.]\n",
-                            stopped_by_middleware=True,
+                    elif bash_count >= 10 and bash_count % 5 == 0:
+                        # Nudge every 5 bash calls, never stop
+                        self._inject_system_note(
+                            "You have run many bash commands. Consider using write_file "
+                            "or search_replace to create/edit files."
                         )
-                        return
 
                 # 3-Strike Rule: search_replace keeps failing
                 if search_replace_failures >= 3:
@@ -789,9 +792,11 @@ class AgentLoop:
                             "Pick the most likely file and function, and make a minimal edit."
                         )
                     else:
-                        # Give up after 5 futile nudges — the model can't/won't edit
-                        should_break_loop = True
-                        nudge_text = None
+                        # Keep nudging — never give up
+                        nudge_text = (
+                            "You MUST call a tool. Use grep to find the file, "
+                            "read_file to read it, then search_replace to fix."
+                        )
                     if nudge_text:
                         # Use _inject_system_note (appends to last tool/user message)
                         # User messages cause 'tool after user' ordering violations
@@ -818,54 +823,26 @@ class AgentLoop:
                     if nudge_text:
                         self._inject_system_note(nudge_text)
 
-                # Check for repeated tool calls (loop detection)
+                # Loop guidance — prune duplicates and nudge, NEVER stop
                 if not should_break_loop:
                     rep = self._check_tool_call_repetition()
-                    if rep == "FORCE_STOP":
-                        repeat_warnings += 1
-                        logger.warning("Detected infinite loop: same tool call %d+ times (warning %d)", REPEAT_FORCE_STOP_THRESHOLD, repeat_warnings)
-                        if repeat_warnings >= 5:
-                            # Stop after 5 redirects — model is not recovering
-                            yield AssistantEvent(
-                                content="\n\n[Stopping: exhausted all retry attempts.]\n",
-                                stopped_by_middleware=True,
-                            )
-                            return
-                        # Redirect instead of kill — force an edit attempt
-                        self._inject_system_note(
-                            "CRITICAL: You are in an infinite loop. STOP all searching/reading. "
-                            "Based on what you have already seen, use search_replace RIGHT NOW to make "
-                            "your best fix attempt. If you don't know the exact text, use read_file ONE MORE TIME "
-                            "on the specific function, then search_replace immediately.",
-                            replace_last_tool=True,
-                        )
-                        self._prune_repeated_tool_calls()
-                    elif rep and rep.startswith("WARNING"):
-                        # During investigation (no edit yet), soft-count warnings from
-                        # investigation tools — they need room to explore.
+                    if rep == "FORCE_STOP" or (rep and rep.startswith("WARNING")):
                         stuck_tool = ""
-                        if "|" in rep:
+                        if rep and "|" in rep:
                             stuck_tool = rep.split("|", 1)[1]
-                        is_investigation_warning = (
-                            not has_made_edit
-                            and stuck_tool in ("grep", "read_file")
-                        )
-                        if is_investigation_warning:
-                            repeat_warnings += 0.3  # Count less — investigation needs room
-                        else:
-                            repeat_warnings += 1
-                        logger.warning("Detected repeated tool calls (warning %.1f, investigation=%s)", repeat_warnings, is_investigation_warning)
-                        if repeat_warnings >= 6:
-                            yield AssistantEvent(
-                                content="\n\n[Stopping: too many repeated actions despite warnings.]\n",
-                                stopped_by_middleware=True,
-                            )
-                            return
 
-                        # On 3rd warning: prune duplicate tool calls from history
-                        # This gives the model a "fresh start" with less repetitive context
-                        if repeat_warnings == 3:
-                            self._prune_repeated_tool_calls()
+                        # Prune duplicate tool calls to give model fresh context
+                        self._prune_repeated_tool_calls()
+
+                        # Gentle nudge — just suggest a different approach
+                        nudge = "Try a different approach."
+                        if stuck_tool in ("read_file",):
+                            nudge = "You already read this. Try search_replace or a different file."
+                        elif stuck_tool in ("grep",):
+                            nudge = "Try a different search term or read a file you found."
+                        elif stuck_tool in ("bash", "run_command"):
+                            nudge = "If the command failed, read the error and fix the code."
+                        self._inject_system_note(nudge)
 
                         # Extract tool-specific nudge
                         nudge = ""
