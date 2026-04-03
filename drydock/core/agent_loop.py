@@ -762,22 +762,47 @@ class AgentLoop:
                     text_without_action += 1
                     # Always continue — don't let the agent exit without editing
                     should_break_loop = False
-                    if text_without_action == 1:
-                        # Check if model already identified a TARGET in its text
-                        last_text = (last_message.content or "").upper()
-                        has_target = "TARGET:" in last_text or "FILE:" in last_text
-                        if has_target:
+
+                    # Detect model claiming task is done without having edited anything
+                    last_text_lower = (last_message.content or "").lower()
+                    task_complete_phrases = [
+                        "task completed", "task complete", "task is complete",
+                        "task is done", "task has been completed",
+                        "changes have been applied", "fix has been applied",
+                        "the fix is complete", "issue is resolved",
+                    ]
+                    claims_complete = any(p in last_text_lower for p in task_complete_phrases)
+
+                    if claims_complete:
+                        nudge_text = (
+                            "You said the task is complete but NO code was actually changed. "
+                            "Your search_replace call either failed or was never made. "
+                            "Use read_file to read the target file, then use search_replace "
+                            "to make your edit. Do NOT say the task is done until search_replace succeeds."
+                        )
+                    elif text_without_action == 1:
+                        last_text = (last_message.content or "").lower()
+                        # Detect model asking for confirmation instead of acting
+                        is_asking = any(kw in last_text for kw in (
+                            "standing by", "waiting for", "please provide",
+                            "what would you like", "how can i help",
+                            "what should i", "do you want me to",
+                        ))
+                        if is_asking:
                             nudge_text = (
-                                "Good — you identified the target. Now proceed to PHASE 2: "
-                                "use read_file to read the target function, then search_replace to fix it. "
-                                "Do NOT describe the fix — apply it with search_replace."
+                                "DO NOT ask for confirmation. Act NOW. "
+                                "If there is a PRD.md, implement it with write_file. "
+                                "If there is code, read it with read_file and fix bugs with search_replace. "
+                                "Call a tool on your next response."
+                            )
+                        elif "TARGET:" in last_text.upper() or "FILE:" in last_text.upper():
+                            nudge_text = (
+                                "Good — you identified the target. Now use read_file then search_replace."
                             )
                         else:
                             nudge_text = (
                                 "You responded with text but did not call any tools. "
-                                "Use search_replace NOW to apply your code change. "
-                                "If you are unsure of the exact text, use read_file on the target function ONCE, "
-                                "then immediately search_replace."
+                                "Call write_file, read_file, or search_replace NOW."
                             )
                     elif text_without_action == 2:
                         nudge_text = (
@@ -1128,6 +1153,16 @@ class AgentLoop:
                     CancellationReason.TOOL_SKIPPED, tool_call.tool_name
                 )
             )
+            # Add alternative suggestions so model can adjust strategy
+            alternatives = {
+                "write_file": "Try search_replace to modify existing files.",
+                "search_replace": "Try write_file to create the file, or read_file first to get exact text.",
+                "bash": "Try read_file + search_replace for code changes.",
+                "task": "Try grep + read_file to explore manually.",
+            }
+            alt = alternatives.get(tool_call.tool_name, "")
+            if alt:
+                skip_reason += f"\n\n{alt}"
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,
@@ -1763,6 +1798,8 @@ class AgentLoop:
         try:
             agents_md.write_text(
                 "# Project Instructions\n\n"
+                "DO NOT ask for confirmation. DO NOT wait for instructions. ACT IMMEDIATELY.\n"
+                "If there is a PRD.md, implement it. If there is code, work on it.\n\n"
                 "## Workflow\n"
                 "When building a project:\n"
                 "1. Use `task(agent=\"planner\")` to create an implementation plan first\n"

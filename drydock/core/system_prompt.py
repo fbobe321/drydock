@@ -246,30 +246,35 @@ def get_universal_system_prompt(
     skill_manager: SkillManager,
     agent_manager: AgentManager,
 ) -> str:
-    sections = [config.system_prompt]
+    # === STATIC SECTIONS (identical per session — prefix-cached by vLLM) ===
+    # These MUST come first and be identical across requests for cache hits.
+    static_sections = [config.system_prompt]
 
     if config.include_commit_signature:
-        sections.append(_add_commit_signature())
+        static_sections.append(_add_commit_signature())
 
     if config.include_model_info:
-        sections.append(f"Your model name is: `{config.active_model}`")
+        static_sections.append(f"Your model name is: `{config.active_model}`")
 
     if config.include_prompt_detail:
-        sections.append(_get_os_system_prompt())
+        static_sections.append(_get_os_system_prompt())
         tool_prompts = []
         for tool_class in tool_manager.available_tools.values():
             if prompt := tool_class.get_tool_prompt():
                 tool_prompts.append(prompt)
         if tool_prompts:
-            sections.append("\n---\n".join(tool_prompts))
+            static_sections.append("\n---\n".join(tool_prompts))
 
         skills_section = _get_available_skills_section(skill_manager)
         if skills_section:
-            sections.append(skills_section)
+            static_sections.append(skills_section)
 
         subagents_section = _get_available_subagents_section(agent_manager)
         if subagents_section:
-            sections.append(subagents_section)
+            static_sections.append(subagents_section)
+
+    # === DYNAMIC SECTIONS (change per project/directory) ===
+    dynamic_sections = []
 
     if config.include_project_context:
         is_dangerous, reason = is_dangerous_directory()
@@ -283,20 +288,21 @@ def get_universal_system_prompt(
                 config=config.project_context, root_path=Path.cwd()
             ).get_full_context()
 
-        sections.append(context)
+        dynamic_sections.append(context)
 
         project_doc = get_harness_files_manager().load_project_doc(
             config.project_context.max_doc_bytes
         )
         if project_doc.strip():
-            sections.append(project_doc)
+            dynamic_sections.append(project_doc)
 
-    # Load DRYDOCK.md per-project instructions (like CLAUDE.md)
-    drydock_md = _load_project_instructions()
-    if drydock_md:
-        sections.append(f"## Project Instructions\n\n{drydock_md}")
+    # Load AGENTS.md / DRYDOCK.md per-project instructions
+    project_instructions = _load_project_instructions()
+    if project_instructions:
+        dynamic_sections.append(f"## Project Instructions\n\n{project_instructions}")
 
-    return "\n\n".join(sections)
+    # Static first (prefix cached), then dynamic
+    return "\n\n".join(static_sections + dynamic_sections)
 
 
 def _load_project_instructions(max_bytes: int = 16_000) -> str:

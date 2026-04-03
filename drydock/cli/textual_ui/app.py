@@ -1706,6 +1706,9 @@ class VibeApp(App):  # noqa: PLR0904
             self.agent_loop.agent_profile
         )
         self._update_profile_widgets(new_profile)
+        # Hide any active loading/spinner widget before switching mode
+        # to prevent the old animation from showing behind the new spinner
+        await self._remove_loading_widget()
         if self._chat_input_container:
             self._chat_input_container.switching_mode = True
 

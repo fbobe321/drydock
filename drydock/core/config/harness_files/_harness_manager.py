@@ -69,11 +69,15 @@ class HarnessFilesManager:
         project_skills = Path.cwd() / ".drydock" / "skills"
         if project_skills.is_dir():
             dirs.append(project_skills)
-        # User skills in ~/.drydock/skills/
+        # User skills in ~/.drydock/skills/ (and ~/.vibe/skills/ for backward compat)
         if "user" in self.sources:
             d = GLOBAL_SKILLS_DIR.path
             if d.is_dir():
                 dirs.append(d)
+            # Always check legacy ~/.vibe/skills/ in case migration didn't complete
+            legacy_skills = Path.home() / ".vibe" / "skills"
+            if legacy_skills.is_dir() and legacy_skills != d:
+                dirs.append(legacy_skills)
         # Plugin skills
         try:
             from drydock.core.plugins import get_plugin_skill_dirs
