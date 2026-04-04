@@ -822,6 +822,10 @@ class AgentLoop:
                             "standing by", "waiting for", "please provide",
                             "what would you like", "how can i help",
                             "what should i", "do you want me to",
+                            "ready to begin", "i will start",
+                            "shall i", "would you like me to",
+                            "let me know", "please confirm",
+                            "i am ready", "ready to proceed",
                         ))
                         if is_asking:
                             nudge_text = (

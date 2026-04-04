@@ -157,92 +157,57 @@ def run_cli(args: argparse.Namespace) -> None:
         loaded_session = load_session(args, config)
 
         stdin_prompt = get_prompt_from_stdin()
+
+        # -p flag feeds prompt into the TUI (headless mode removed)
         if args.prompt is not None:
-            # Disable tools that Gemma 4 can't handle
-            gemma_disabled = []
-            try:
-                active = config.get_active_model()
-                if "gemma" in active.name.lower():
-                    gemma_disabled = ["todo", "task_create", "task_update", "task", "invoke_skill", "tool_search"]
-            except Exception:
-                pass
-            config.disabled_tools = [*config.disabled_tools, "ask_user_question", *gemma_disabled]
-            programmatic_prompt = args.prompt or stdin_prompt
-            if not programmatic_prompt:
-                print(
-                    "Error: No prompt provided for programmatic mode", file=sys.stderr
-                )
-                sys.exit(1)
-            output_format = OutputFormat(
-                args.output if hasattr(args, "output") else "text"
-            )
+            if not hasattr(args, 'initial_prompt') or not args.initial_prompt:
+                args.initial_prompt = args.prompt or stdin_prompt
 
-            try:
-                final_response = run_programmatic(
-                    config=config,
-                    prompt=programmatic_prompt,
-                    max_turns=args.max_turns,
-                    max_price=args.max_price,
-                    output_format=output_format,
-                    previous_messages=loaded_session[0] if loaded_session else None,
-                    agent_name=initial_agent_name,
-                )
-                if final_response:
-                    print(final_response)
-                sys.exit(0)
-            except ConversationLimitException as e:
-                print(e, file=sys.stderr)
-                sys.exit(1)
-            except RuntimeError as e:
-                print(f"Error: {e}", file=sys.stderr)
-                sys.exit(1)
-        else:
-            # Disable problematic tools for models that can't handle complex schemas
-            try:
-                active = config.get_active_model()
-                if "gemma" in active.name.lower():
-                    config.disabled_tools = [
-                        *config.disabled_tools,
-                        "ask_user_question",  # Gemma sends empty {} args
-                        "todo",  # Gemma sends empty {} args
-                        "task_create",  # Gemma loops on task management instead of coding
-                        "task_update",  # Gemma sends invalid args, loops 64+ times
-                        "task",  # Subagent delegation — Gemma can't use it properly
-                        "invoke_skill",  # Gemma loads wrong skills, leaks templates
-                        "tool_search",  # Not useful for local models
-                    ]
-            except (ValueError, AttributeError):
-                pass
+        # Disable problematic tools for models that can't handle complex schemas
+        try:
+            active = config.get_active_model()
+            if "gemma" in active.name.lower():
+                config.disabled_tools = [
+                    *config.disabled_tools,
+                    "ask_user_question",
+                    "todo",
+                    "task_create",
+                    "task_update",
+                    "task",
+                    "invoke_skill",
+                    "tool_search",
+                ]
+        except (ValueError, AttributeError):
+            pass
 
-            # Disable streaming for Gemma 4 — streaming tool call accumulation
-            # produces empty arguments (14 write_file calls → 0 files).
-            # Headless (non-streaming) works perfectly with same model.
-            use_streaming = True
-            try:
-                if "gemma" in config.get_active_model().name.lower():
-                    use_streaming = False
-            except Exception:
-                pass
+        # Disable streaming for Gemma 4 — streaming tool call accumulation
+        # produces empty arguments (14 write_file calls → 0 files)
+        use_streaming = True
+        try:
+            if "gemma" in config.get_active_model().name.lower():
+                use_streaming = False
+        except Exception:
+            pass
 
-            agent_loop = AgentLoop(
-                config,
-                agent_name=initial_agent_name,
-                enable_streaming=use_streaming,
-                entrypoint_metadata=EntrypointMetadata(
-                    agent_entrypoint="cli",
-                    agent_version=__version__,
-                    client_name="drydock_cli",
-                    client_version=__version__,
-                ),
-            )
+        agent_loop = AgentLoop(
+            config,
+            agent_name=initial_agent_name,
+            enable_streaming=use_streaming,
+            entrypoint_metadata=EntrypointMetadata(
+                agent_entrypoint="cli",
+                agent_version=__version__,
+                client_name="drydock_cli",
+                client_version=__version__,
+            ),
+        )
 
-            if loaded_session:
-                _resume_previous_session(agent_loop, *loaded_session)
+        if loaded_session:
+            _resume_previous_session(agent_loop, *loaded_session)
 
-            run_textual_ui(
-                agent_loop=agent_loop,
-                initial_prompt=args.initial_prompt or stdin_prompt,
-                teleport_on_start=args.teleport,
+        run_textual_ui(
+            agent_loop=agent_loop,
+            initial_prompt=args.initial_prompt or stdin_prompt,
+            teleport_on_start=args.teleport,
             )
 
     except (KeyboardInterrupt, EOFError):

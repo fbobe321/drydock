@@ -24,7 +24,7 @@ class WriteFileArgs(BaseModel):
     path: str
     content: str
     overwrite: bool = Field(
-        default=False, description="Must be set to true to overwrite an existing file."
+        default=True, description="Whether to overwrite an existing file."
     )
 
 
