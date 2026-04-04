@@ -544,12 +544,21 @@ class AgentLoop:
                 except (RuntimeError, AgentLoopLLMResponseError) as e:
                     api_error_count += 1
                     if api_error_count > MAX_API_ERRORS:
-                        # Don't stop — reset and let the user know
+                        # Track total error rounds — stop after 3 rounds
+                        if not hasattr(self, '_total_error_rounds'):
+                            self._total_error_rounds = 0
+                        self._total_error_rounds += 1
+                        if self._total_error_rounds >= 3:
+                            yield AssistantEvent(
+                                content=f"\n\n[Stopping: {self._total_error_rounds * MAX_API_ERRORS}+ API errors. The model cannot process this request. Try /compact or /clear to free context.]\n",
+                            )
+                            return
+
                         import asyncio as _aio
                         yield AssistantEvent(
-                            content=f"\n\n[{api_error_count} consecutive API errors. Waiting 10s then retrying. Last error: {str(e)[:200]}]\n",
+                            content=f"\n\n[{api_error_count} consecutive API errors (round {self._total_error_rounds}/3). Compacting and retrying. Last error: {str(e)[:200]}]\n",
                         )
-                        await _aio.sleep(10)
+                        await _aio.sleep(5)
                         api_error_count = 0  # Reset — give it another chance
                         continue
                     # Check if the error is about invalid function/tool name
@@ -563,19 +572,30 @@ class AgentLoop:
                             f"Use one of these exact tool names. "
                             f"For subagent delegation, use 'task'. For file search, use 'grep'."
                         )
-                    elif "context length" in error_str.lower() or "maximum context" in error_str.lower():
-                        # Context limit hit — truncate old tool results to free space
+                    elif ("context length" in error_str.lower()
+                          or "maximum context" in error_str.lower()
+                          or "400 bad request" in error_str.lower()
+                          or "status: 400" in error_str.lower()):
+                        # Context limit or malformed request — aggressively compact
                         try:
+                            compacted = 0
                             for i, msg in enumerate(self.messages):
-                                if i >= len(self.messages) - 6:
-                                    break  # Keep recent messages intact
+                                if i >= len(self.messages) - 4:
+                                    break  # Keep last 4 messages
                                 if msg.role == Role.tool and hasattr(msg, 'content'):
                                     content = str(msg.content) if msg.content else ""
+                                    if len(content) > 200:
+                                        msg.content = content[:100] + "\n[truncated]\n" + content[-50:]
+                                        compacted += 1
+                                elif msg.role == Role.assistant and hasattr(msg, 'content'):
+                                    content = str(msg.content) if msg.content else ""
                                     if len(content) > 500:
-                                        msg.content = content[:200] + "\n[truncated]\n" + content[-100:]
+                                        msg.content = content[:200] + "\n[truncated]"
+                                        compacted += 1
+                            logger.info("Emergency compaction: truncated %d messages", compacted)
                         except Exception:
                             pass
-                        error_text = "Context limit approached — compacted old messages. Continue with your task."
+                        error_text = "Context compacted due to API error. Continue with your task."
                     else:
                         error_text = f"API error occurred: {e}. Please continue with your task."
                     self._inject_system_note(error_text)
