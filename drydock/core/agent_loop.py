@@ -1814,7 +1814,12 @@ class AgentLoop:
         """Lightweight auto-context: list project files and key docs.
 
         Kept minimal to avoid bloating context — just filenames, no content.
+        Skip if prompt already has embedded content (TUI path_prompt does this).
         """
+        # Skip if the prompt already contains embedded file content (from render_path_prompt)
+        if "[SKILL:" in user_msg or "```" in user_msg[:500]:
+            return
+
         parts = []
 
         try:

@@ -589,8 +589,35 @@ class VibeApp(App):  # noqa: PLR0904
             )
             return True
 
-        if len(parts) > 1:
-            skill_content = f"{user_input}\n\n{skill_content}"
+        # Strip frontmatter — don't send raw YAML to the model
+        if skill_content.startswith("---"):
+            fm_parts = skill_content.split("---", 2)
+            if len(fm_parts) >= 3:
+                skill_content = fm_parts[2].strip()
+
+        # Substitute arguments ($ARGUMENTS, $0, $1)
+        arguments = parts[1] if len(parts) > 1 else ""
+        if arguments:
+            skill_content = skill_content.replace("$ARGUMENTS", arguments)
+            for i, arg in enumerate(arguments.split()[:10]):
+                skill_content = skill_content.replace(f"$ARGUMENTS[{i}]", arg)
+                skill_content = skill_content.replace(f"${i}", arg)
+        else:
+            # Clean up unreplaced placeholders
+            skill_content = skill_content.replace("$ARGUMENTS", "")
+            import re
+            for i in range(10):
+                skill_content = skill_content.replace(f"$ARGUMENTS[{i}]", "")
+                skill_content = skill_content.replace(f"${i}", "")
+
+        # Wrap as instruction, not raw content
+        skill_content = (
+            f"[SKILL: /{skill_name}] Follow these instructions:\n\n"
+            f"{skill_content}"
+        )
+
+        if arguments:
+            skill_content = f"{arguments}\n\n{skill_content}"
 
         await self._handle_user_message(skill_content)
         return True
@@ -746,7 +773,15 @@ class VibeApp(App):  # noqa: PLR0904
         await loading_area.mount(loading)
 
         try:
-            rendered_prompt = render_path_prompt(prompt, base_dir=Path.cwd())
+            # Limit path embedding to 16KB for local models (default 256KB causes context bloat)
+            max_embed = 16 * 1024
+            try:
+                active_model = self.agent_loop.config.get_active_model()
+                if "gemma" in active_model.name.lower():
+                    max_embed = 8 * 1024  # Even less for Gemma 4
+            except Exception:
+                pass
+            rendered_prompt = render_path_prompt(prompt, base_dir=Path.cwd(), max_embed_bytes=max_embed)
             async for event in self.agent_loop.act(rendered_prompt):
                 if self.event_handler:
                     await self.event_handler.handle_event(

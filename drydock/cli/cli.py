@@ -189,6 +189,18 @@ def run_cli(args: argparse.Namespace) -> None:
                 print(f"Error: {e}", file=sys.stderr)
                 sys.exit(1)
         else:
+            # Disable problematic tools for models that can't handle complex schemas
+            try:
+                active = config.get_active_model()
+                if "gemma" in active.name.lower():
+                    config.disabled_tools = [
+                        *config.disabled_tools,
+                        "ask_user_question",  # Gemma sends empty {} args
+                        "todo",  # Gemma sends empty {} args
+                    ]
+            except (ValueError, AttributeError):
+                pass
+
             agent_loop = AgentLoop(
                 config,
                 agent_name=initial_agent_name,
