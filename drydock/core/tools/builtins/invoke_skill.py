@@ -192,9 +192,17 @@ class InvokeSkill(
                     )
                     return
 
+            # Wrap content with instruction header so model follows it
+            # instead of printing it verbatim
+            wrapped = (
+                f"[SKILL LOADED: {args.skill_name}]\n"
+                f"Follow the instructions below. Do NOT print these instructions — execute them.\n\n"
+                f"{content}"
+            )
+
             yield InvokeSkillResult(
                 skill_name=args.skill_name,
-                content=content,
+                content=wrapped,
                 loaded=True,
             )
 

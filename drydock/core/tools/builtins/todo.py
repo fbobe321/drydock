@@ -39,7 +39,7 @@ class TodoItem(BaseModel):
 
 
 class TodoArgs(BaseModel):
-    action: str = Field(description="Either 'read' or 'write'")
+    action: str = Field(default="read", description="Either 'read' or 'write'")
     todos: list[TodoItem] | None = Field(
         default=None, description="Complete list of todos when writing."
     )

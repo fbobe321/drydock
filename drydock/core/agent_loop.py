@@ -2062,8 +2062,8 @@ class AgentLoop:
                 skill_descriptions.append(f"  /{name} — {desc[:100]}")
             if skill_descriptions:
                 parts.append(
-                    "AVAILABLE SKILLS (use invoke_skill to activate):\n"
-                    + "\n".join(skill_descriptions[:10])
+                    "AVAILABLE SKILLS (invoke with invoke_skill tool, only when specifically relevant):\n"
+                    + "\n".join(skill_descriptions[:20])
                 )
         except Exception:
             pass
