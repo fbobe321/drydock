@@ -1811,72 +1811,32 @@ class AgentLoop:
         return None
 
     async def _auto_route_task(self, user_msg: str) -> None:
-        """Auto-explore the project and inject skill instructions.
+        """Lightweight auto-context: list project files and key docs.
 
-        Instead of hoping the model calls task(agent='explore'), we do
-        the exploration ourselves and inject the results + relevant skill.
+        Kept minimal to avoid bloating context — just filenames, no content.
         """
-        msg_lower = user_msg.lower()
         parts = []
 
-        # 1. Auto-explore: if project has files, read key ones
         try:
             cwd = Path.cwd()
+            # List project files (names only, no content)
             py_files = sorted(
                 f for f in cwd.rglob("*.py")
-                if ".logs" not in str(f) and ".venv" not in str(f)
-                and "__pycache__" not in str(f)
+                if ".venv" not in str(f) and "__pycache__" not in str(f)
             )
+            if py_files:
+                listing = "\n".join(f"  {f.relative_to(cwd)}" for f in py_files[:20])
+                parts.append(f"PROJECT FILES ({len(py_files)} .py files):\n{listing}")
 
-            if len(py_files) >= 3:
-                # List all files
-                listing = "\n".join(f"  {f.relative_to(cwd)}" for f in py_files[:30])
-                parts.append(f"PROJECT FILES ({len(py_files)} Python files):\n{listing}")
-
-                # Auto-read key files (entry points, __init__, small files)
-                files_read = 0
-                for f in py_files[:15]:
-                    if files_read >= 5:
-                        break
-                    if f.stat().st_size > 10000:
-                        continue  # Skip large files
-                    if f.name in ("__init__.py", "__main__.py"):
-                        continue  # Skip boilerplate
-                    try:
-                        content = f.read_text()[:2000]
-                        rel = f.relative_to(cwd)
-                        # Extract just function/class signatures
-                        import ast
-                        tree = ast.parse(content)
-                        sigs = []
-                        for node in ast.walk(tree):
-                            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                                args = ", ".join(a.arg for a in node.args.args)
-                                sigs.append(f"  def {node.name}({args}) [line {node.lineno}]")
-                            elif isinstance(node, ast.ClassDef):
-                                sigs.append(f"  class {node.name} [line {node.lineno}]")
-                        if sigs:
-                            parts.append(f"{rel}:\n" + "\n".join(sigs[:10]))
-                            files_read += 1
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-        # Skill routing removed — handled by _build_auto_context description injection
-        # The model discovers skills from the auto-context skill list and
-        # invokes them via invoke_skill when relevant
-
-        # 3. Also list non-Python files of interest
-        try:
-            for pattern in ("*.md", "*.txt", "*.json", "*.yaml", "*.yml", "*.toml", "*.csv"):
-                for f in sorted(Path.cwd().glob(pattern))[:3]:
-                    parts.append(f"  {f.name} ({f.stat().st_size} bytes)")
+            # List docs/config files
+            for pattern in ("*.md", "*.toml", "*.json", "*.yaml"):
+                for f in sorted(cwd.glob(pattern))[:3]:
+                    parts.append(f"  {f.name} ({f.stat().st_size}b)")
         except Exception:
             pass
 
         if parts:
-            self._inject_system_note("\n\n".join(parts))
+            self._inject_system_note("\n".join(parts))
 
     def _ensure_agents_md(self) -> None:
         """Auto-create AGENTS.md if no project instructions file exists.
