@@ -122,6 +122,14 @@ class InvokeSkill(
                 )
 
             skill_info = skills[args.skill_name]
+
+            # Check if skill blocks model invocation
+            if getattr(skill_info, 'disable_model_invocation', False):
+                raise ToolError(
+                    f"Skill '{args.skill_name}' can only be invoked by the user via /{args.skill_name}. "
+                    f"Use your tools directly instead."
+                )
+
             raw_content = skill_info.skill_path.read_text(encoding="utf-8") if skill_info.skill_path else ""
 
             # Strip frontmatter, keep it for metadata check

@@ -2053,24 +2053,14 @@ class AgentLoop:
         except Exception:
             pass
 
-        # 2. Skill discovery: inject all skill descriptions so the model
-        # can decide when to use them (replaces hardcoded keyword matching)
-        try:
-            skill_descriptions = []
-            for name, info in self.skill_manager.list_skills().items():
-                desc = info.description or name
-                skill_descriptions.append(f"  /{name} — {desc[:100]}")
-            if skill_descriptions:
-                parts.append(
-                    "AVAILABLE SKILLS (invoke with invoke_skill tool, only when specifically relevant):\n"
-                    + "\n".join(skill_descriptions[:20])
-                )
-        except Exception:
-            pass
+        # 2. Skill list removed from auto-context — Gemma 4 auto-invokes skills
+        # when it sees them listed, causing template leaks and wasted turns.
+        # Skills are available via /slash commands and invoke_skill tool but
+        # the model should focus on using tools directly.
 
         # 3. Subagent descriptions for delegation
         parts.append(
-            "SUBAGENTS (use task tool to delegate):\n"
+            "SUBAGENTS (use task tool to delegate complex exploration):\n"
             "  task(task='...', agent='explore') — Read-only codebase exploration\n"
             "  task(task='...', agent='diagnostic') — Debug/investigate with bash access\n"
             "  task(task='...', agent='planner') — Plan multi-file changes before coding"

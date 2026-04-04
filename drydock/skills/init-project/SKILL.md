@@ -3,6 +3,7 @@ name: init-project
 description: Initialize a new project with standard structure, README, tests, CI config.
 allowed-tools: bash write_file read_file
 user-invocable: true
+disable-model-invocation: true
 ---
 
 # Project Initialization

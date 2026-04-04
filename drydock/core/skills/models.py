@@ -91,6 +91,7 @@ class SkillInfo(BaseModel):
     context: str = ""  # 'fork' to run in subagent
     agent: str = ""  # subagent type when context='fork'
     model: str = ""  # model override
+    disable_model_invocation: bool = False  # only user can invoke
     skill_path: Path
 
     model_config = {"arbitrary_types_allowed": True}
@@ -112,5 +113,6 @@ class SkillInfo(BaseModel):
             context=meta.context,
             agent=meta.agent,
             model=meta.model,
+            disable_model_invocation=meta.disable_model_invocation,
             skill_path=skill_path.resolve(),
         )
