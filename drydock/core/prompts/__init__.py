@@ -22,6 +22,8 @@ class SystemPrompt(Prompt):
     EXPLORE = auto()
     TESTS = auto()
     BUILDER = auto()
+    PLANNER = auto()
+    DIAGNOSTIC = auto()
 
 
 class UtilityPrompt(Prompt):
