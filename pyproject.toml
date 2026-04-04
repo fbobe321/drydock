@@ -1,6 +1,6 @@
 [project]
 name = "drydock-cli"
-version = "2.3.1"
+version = "2.3.2"
 description = "Drydock — nautical CLI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
