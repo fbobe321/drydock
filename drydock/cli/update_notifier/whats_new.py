@@ -24,7 +24,17 @@ def load_whats_new_content() -> str | None:
         return None
     try:
         content = whats_new_file.read_text(encoding="utf-8").strip()
-        return content if content else None
+        if not content:
+            return None
+        # Dynamically replace version in header with current version
+        import re
+        from drydock import __version__
+        content = re.sub(
+            r"^#\s*What's new in v[\d.]+",
+            f"# What's new in v{__version__}",
+            content,
+        )
+        return content
     except OSError:
         return None
 

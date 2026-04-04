@@ -1,8 +1,7 @@
-# What's new in v1.8.0
+# What's new in v2.2.6
 
-- **Multi-phase build orchestrator**: PRDs are built in phases — plan, scaffold, implement per file, auto-fix imports. 83% pass rate on 6 project types
-- **Deterministic planning**: No LLM needed for project planning — PRD parsed directly
-- **Auto-fix**: `__main__.py`, absolute imports, circular imports, cross-file name matching
-- **7 bundled skills**: /investigate, /review, /ship, /batch, /simplify, /deep-research, /create-presentation
-- **Smart circuit breaker**: Only blocks failed commands, allows retries after fixes
-- **Vibe references removed**: All user-facing strings now say Drydock
+- **Gemma 4 support**: Tool calling with Gemma 4 26B MoE via vLLM Docker — 3-4x faster inference
+- **search_replace compatibility**: Accepts JSON, separator, and block formats for any model
+- **Planner/diagnostic subagents**: Fixed missing prompt registration that crashed subagent delegation
+- **Context-limit recovery**: Auto-truncates old tool results on 400 errors instead of looping
+- **SWE-bench 70%**: File match rate up from 60% (devstral) to 70% (Gemma 4), 8x faster
