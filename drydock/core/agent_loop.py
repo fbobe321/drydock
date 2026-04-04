@@ -1896,25 +1896,24 @@ class AgentLoop:
         if (cwd / "CLAUDE.md").exists():
             return
 
-        # Create default AGENTS.md
+        # Create default AGENTS.md — simplified for Gemma 4
         agents_md = cwd / "AGENTS.md"
         try:
             agents_md.write_text(
                 "# Project Instructions\n\n"
-                "DO NOT ask for confirmation. DO NOT wait for instructions. ACT IMMEDIATELY.\n"
-                "If there is a PRD.md, implement it. If there is code, work on it.\n\n"
+                "DO NOT ask for confirmation. ACT IMMEDIATELY. Start writing code NOW.\n"
+                "If there is a PRD.md, read it then create the files.\n\n"
                 "## Workflow\n"
-                "When building a project:\n"
-                "1. Use `task(agent=\"planner\")` to create an implementation plan first\n"
-                "2. Use `task(agent=\"explore\")` to understand existing code\n"
-                "3. Create files using `write_file` with absolute imports\n"
-                "4. Always create `__main__.py` so `python3 -m package_name` works\n"
-                "5. Test with `bash` after creating files\n\n"
+                "1. Read requirements (PRD.md, README, etc.)\n"
+                "2. Create __init__.py and __main__.py first\n"
+                "3. Create each module file with write_file\n"
+                "4. Test: python3 -m package_name --help\n"
+                "5. Fix errors and verify\n\n"
                 "## Rules\n"
-                "- Use absolute imports: `from package.module import X`, NOT `from .module import X`\n"
-                "- Always create `__init__.py` and `__main__.py` for packages\n"
-                "- Create sample test data before testing\n"
-                "- Use `python3 -m package_name` to run, NOT `python3 package/file.py`\n"
+                "- Use absolute imports: `from package.module import X`\n"
+                "- Always create `__init__.py` and `__main__.py`\n"
+                "- NEVER ask 'should I proceed' or 'would you like me to' — JUST DO IT\n"
+                "- After creating a file, immediately create the next one\n"
             )
             logger.info("Auto-created AGENTS.md in %s", cwd)
         except (OSError, PermissionError):

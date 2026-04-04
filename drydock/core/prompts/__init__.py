@@ -24,6 +24,7 @@ class SystemPrompt(Prompt):
     BUILDER = auto()
     PLANNER = auto()
     DIAGNOSTIC = auto()
+    GEMMA4 = auto()
 
 
 class UtilityPrompt(Prompt):
