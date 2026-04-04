@@ -158,7 +158,15 @@ def run_cli(args: argparse.Namespace) -> None:
 
         stdin_prompt = get_prompt_from_stdin()
         if args.prompt is not None:
-            config.disabled_tools = [*config.disabled_tools, "ask_user_question"]
+            # Disable tools that Gemma 4 can't handle
+            gemma_disabled = []
+            try:
+                active = config.get_active_model()
+                if "gemma" in active.name.lower():
+                    gemma_disabled = ["todo", "task_create", "task_update", "task", "invoke_skill", "tool_search"]
+            except Exception:
+                pass
+            config.disabled_tools = [*config.disabled_tools, "ask_user_question", *gemma_disabled]
             programmatic_prompt = args.prompt or stdin_prompt
             if not programmatic_prompt:
                 print(
@@ -197,14 +205,29 @@ def run_cli(args: argparse.Namespace) -> None:
                         *config.disabled_tools,
                         "ask_user_question",  # Gemma sends empty {} args
                         "todo",  # Gemma sends empty {} args
+                        "task_create",  # Gemma loops on task management instead of coding
+                        "task_update",  # Gemma sends invalid args, loops 64+ times
+                        "task",  # Subagent delegation — Gemma can't use it properly
+                        "invoke_skill",  # Gemma loads wrong skills, leaks templates
+                        "tool_search",  # Not useful for local models
                     ]
             except (ValueError, AttributeError):
+                pass
+
+            # Disable streaming for Gemma 4 — streaming tool call accumulation
+            # produces empty arguments (14 write_file calls → 0 files).
+            # Headless (non-streaming) works perfectly with same model.
+            use_streaming = True
+            try:
+                if "gemma" in config.get_active_model().name.lower():
+                    use_streaming = False
+            except Exception:
                 pass
 
             agent_loop = AgentLoop(
                 config,
                 agent_name=initial_agent_name,
-                enable_streaming=True,
+                enable_streaming=use_streaming,
                 entrypoint_metadata=EntrypointMetadata(
                     agent_entrypoint="cli",
                     agent_version=__version__,

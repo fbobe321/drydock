@@ -1524,6 +1524,18 @@ class AgentLoop:
                 )
             self._update_stats(usage=usage, time_seconds=end_time - start_time)
 
+            # DEBUG: dump accumulated message for diagnosis
+            msg = chunk_agg.message
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc.function:
+                        logger.warning(
+                            "ACCUMULATED TOOL CALL: name=%s args_len=%d args_first100=%s",
+                            tc.function.name,
+                            len(tc.function.arguments or ""),
+                            (tc.function.arguments or "")[:100],
+                        )
+
             self.messages.append(chunk_agg.message)
 
         except Exception as e:

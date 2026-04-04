@@ -106,10 +106,36 @@ class APIToolFormatHandler:
         for tc in api_tool_calls:
             if not (function_call := tc.function):
                 continue
+            raw_json = function_call.arguments or "{}"
+            # Debug: log raw args for diagnosis
+            import logging
+            _fmt_logger = logging.getLogger(__name__)
+            _fmt_logger.info(
+                "Tool call %s: args_len=%d, first_100=%s",
+                function_call.name, len(raw_json), raw_json[:100]
+            )
             try:
-                args = json.loads(function_call.arguments or "{}")
+                args = json.loads(raw_json)
             except json.JSONDecodeError:
-                args = {}
+                # Don't silently use {} — log the malformed args and skip
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Malformed tool call JSON for %s: %s",
+                    function_call.name,
+                    (function_call.arguments or "")[:200],
+                )
+                # Try to salvage partial JSON by closing brackets
+                raw = (function_call.arguments or "").strip()
+                if raw:
+                    # Count open/close braces and try to fix
+                    opens = raw.count('{') - raw.count('}')
+                    raw_fixed = raw + '}' * max(0, opens)
+                    try:
+                        args = json.loads(raw_fixed)
+                    except json.JSONDecodeError:
+                        args = {"_parse_error": f"Malformed JSON: {raw[:100]}..."}
+                else:
+                    args = {}
 
             tool_calls.append(
                 ParsedToolCall(
