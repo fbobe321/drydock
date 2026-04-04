@@ -446,21 +446,56 @@ class SearchReplace(
     def _parse_search_replace_blocks(content: str) -> list[SearchReplaceBlock]:
         """Parse SEARCH/REPLACE blocks from content.
 
-        Supports two formats:
-        1. With code block fences (```...```)
-        2. Without code block fences
+        Supports multiple formats for model compatibility:
+        1. Standard: <<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE
+        2. With code fences: ```...<<<<<<< SEARCH...```
+        3. Simple separator: old_text\n=======\nnew_text (Gemma 4 style)
+        4. JSON: {"old_string": "...", "new_string": "..."} or {"search": "...", "replace": "..."}
         """
+        # Try standard format first
         matches = SEARCH_REPLACE_BLOCK_WITH_FENCE_RE.findall(content)
-
         if not matches:
             matches = SEARCH_REPLACE_BLOCK_RE.findall(content)
 
-        return [
-            SearchReplaceBlock(
-                search=search.rstrip("\r\n"), replace=replace.rstrip("\r\n")
-            )
-            for search, replace in matches
-        ]
+        if matches:
+            return [
+                SearchReplaceBlock(
+                    search=search.rstrip("\r\n"), replace=replace.rstrip("\r\n")
+                )
+                for search, replace in matches
+            ]
+
+        # Fallback: try JSON format (some models send structured args)
+        import json
+        try:
+            data = json.loads(content)
+            if isinstance(data, dict):
+                old = data.get("old_string") or data.get("search") or data.get("old")
+                new = data.get("new_string") or data.get("replace") or data.get("new")
+                if old is not None and new is not None:
+                    return [SearchReplaceBlock(search=str(old), replace=str(new))]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Fallback: simple ======= separator (Gemma 4 often uses this)
+        if "\n=======\n" in content:
+            parts = content.split("\n=======\n", 1)
+            if len(parts) == 2:
+                search = parts[0].strip()
+                replace = parts[1].strip()
+                if search:
+                    return [SearchReplaceBlock(search=search, replace=replace)]
+
+        # Fallback: --- separator
+        if "\n---\n" in content:
+            parts = content.split("\n---\n", 1)
+            if len(parts) == 2:
+                search = parts[0].strip()
+                replace = parts[1].strip()
+                if search:
+                    return [SearchReplaceBlock(search=search, replace=replace)]
+
+        return []
 
     @final
     @staticmethod

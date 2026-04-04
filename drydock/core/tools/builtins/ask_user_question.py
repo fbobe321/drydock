@@ -46,6 +46,7 @@ class Question(BaseModel):
 
 class AskUserQuestionArgs(BaseModel):
     questions: list[Question] = Field(
+        default_factory=lambda: [Question(text="What would you like to do?")],
         description="Questions to ask (1-4). Displayed as tabs if multiple.",
         min_length=1,
         max_length=4,

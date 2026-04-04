@@ -561,6 +561,19 @@ class AgentLoop:
                             f"Use one of these exact tool names. "
                             f"For subagent delegation, use 'task'. For file search, use 'grep'."
                         )
+                    elif "context length" in error_str.lower() or "maximum context" in error_str.lower():
+                        # Context limit hit — truncate old tool results to free space
+                        try:
+                            for i, msg in enumerate(self.messages):
+                                if i >= len(self.messages) - 6:
+                                    break  # Keep recent messages intact
+                                if msg.role == Role.tool and hasattr(msg, 'content'):
+                                    content = str(msg.content) if msg.content else ""
+                                    if len(content) > 500:
+                                        msg.content = content[:200] + "\n[truncated]\n" + content[-100:]
+                        except Exception:
+                            pass
+                        error_text = "Context limit approached — compacted old messages. Continue with your task."
                     else:
                         error_text = f"API error occurred: {e}. Please continue with your task."
                     self._inject_system_note(error_text)
