@@ -421,8 +421,12 @@ class VibeConfig(BaseSettings):
     def system_prompt(self) -> str:
         # Auto-select simplified prompt for Gemma 4 (complex prompts cause loops)
         prompt_id = self.system_prompt_id
-        if prompt_id == "cli" and "gemma" in self.active_model.lower():
-            prompt_id = "gemma4"
+        try:
+            active = self.get_active_model()
+            if "gemma" in active.name.lower() and prompt_id not in ("gemma4",):
+                prompt_id = "gemma4"
+        except (ValueError, AttributeError):
+            pass
 
         try:
             return SystemPrompt[prompt_id.upper()].read()
