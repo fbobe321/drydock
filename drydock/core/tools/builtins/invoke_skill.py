@@ -28,13 +28,18 @@ from drydock.core.types import ToolStreamEvent, ToolResultEvent
 
 def _substitute_arguments(content: str, arguments: str, skill_dir: str = "") -> str:
     """Replace $ARGUMENTS, $0, $1, ${SKILL_DIR} in skill content."""
-    if not arguments:
-        return content
-    content = content.replace("$ARGUMENTS", arguments)
-    arg_parts = arguments.split()
-    for i, arg in enumerate(arg_parts[:10]):
-        content = content.replace(f"$ARGUMENTS[{i}]", arg)
-        content = content.replace(f"${i}", arg)
+    if arguments:
+        content = content.replace("$ARGUMENTS", arguments)
+        arg_parts = arguments.split()
+        for i, arg in enumerate(arg_parts[:10]):
+            content = content.replace(f"$ARGUMENTS[{i}]", arg)
+            content = content.replace(f"${i}", arg)
+    else:
+        # No arguments — clean up unreplaced placeholders
+        content = content.replace("$ARGUMENTS", "(no arguments provided)")
+        for i in range(10):
+            content = content.replace(f"$ARGUMENTS[{i}]", "")
+            content = content.replace(f"${i}", "")
     if skill_dir:
         content = content.replace("${SKILL_DIR}", skill_dir)
     return content

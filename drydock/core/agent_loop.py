@@ -1863,29 +1863,9 @@ class AgentLoop:
         except Exception:
             pass
 
-        # 2. Detect task type and inject skill content
-        skill_name = None
-        if any(kw in msg_lower for kw in ("review", "audit", "check the code", "code quality")):
-            skill_name = "review"
-        elif any(kw in msg_lower for kw in ("investigate", "debug", "why does", "why is", "broken", "failing")):
-            skill_name = "investigate"
-        elif any(kw in msg_lower for kw in ("ship", "commit and push", "create a pr", "open pr", "deploy")):
-            skill_name = "ship"
-        elif any(kw in msg_lower for kw in ("simplify", "clean up", "refactor", "reduce complexity")):
-            skill_name = "simplify"
-
-        if skill_name:
-            skill_info = self.skill_manager.get_skill(skill_name)
-            if skill_info and skill_info.skill_path:
-                try:
-                    content = skill_info.skill_path.read_text(encoding="utf-8")
-                    if content.startswith("---"):
-                        end = content.find("---", 3)
-                        if end > 0:
-                            content = content[end + 3:].strip()
-                    parts.append(f"FOLLOW THIS WORKFLOW ({skill_name} skill):\n{content[:2000]}")
-                except Exception:
-                    pass
+        # Skill routing removed — handled by _build_auto_context description injection
+        # The model discovers skills from the auto-context skill list and
+        # invokes them via invoke_skill when relevant
 
         # 3. Also list non-Python files of interest
         try:
