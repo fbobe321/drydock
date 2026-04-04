@@ -84,6 +84,11 @@ def run_tui_test(prompt: str, cwd: str = ".", timeout: int = 300):
                     clean = re.sub(r'\x1b\[[0-9;]*[?][0-9]*[a-zA-Z]', '', clean)
                     clean = clean.replace('\r', '')
 
+                    # Auto-approve: press Enter when approval prompt shows
+                    if "Enter select" in clean or "always allow" in clean:
+                        child.send('\r')
+                        time.sleep(0.5)
+
                     # Detect patterns
                     if "Overwritten" in clean or "overwritten" in clean:
                         overwrites += 1
