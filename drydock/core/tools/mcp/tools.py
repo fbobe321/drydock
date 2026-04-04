@@ -410,3 +410,109 @@ def create_mcp_stdio_proxy_tool_class(
 
     MCPStdioProxyTool.__name__ = f"MCP_STDIO_{computed_alias}__{remote.name}"
     return MCPStdioProxyTool
+
+
+# ── MCP Resource listing/reading ─────────────────────────────────────────
+
+class MCPResource:
+    """Simple container for an MCP resource."""
+    def __init__(self, uri: str, name: str, description: str = "", mime_type: str = "", server: str = ""):
+        self.uri = uri
+        self.name = name
+        self.description = description
+        self.mime_type = mime_type
+        self.server = server
+
+
+async def list_resources_http(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    startup_timeout_sec: float | None = None,
+) -> list[MCPResource]:
+    timeout = timedelta(seconds=startup_timeout_sec) if startup_timeout_sec else None
+    async with streamablehttp_client(url, headers=headers) as (read, write, _):
+        async with ClientSession(read, write, read_timeout_seconds=timeout) as session:
+            await session.initialize()
+            resp = await session.list_resources()
+            return [
+                MCPResource(
+                    uri=str(r.uri), name=r.name,
+                    description=getattr(r, 'description', '') or '',
+                    mime_type=getattr(r, 'mimeType', '') or '',
+                    server=url,
+                )
+                for r in resp.resources
+            ]
+
+
+async def list_resources_stdio(
+    command: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    startup_timeout_sec: float | None = None,
+) -> list[MCPResource]:
+    params = StdioServerParameters(command=command[0], args=command[1:], env=env)
+    timeout = timedelta(seconds=startup_timeout_sec) if startup_timeout_sec else None
+    async with (
+        _mcp_stderr_capture() as errlog,
+        stdio_client(params, errlog=errlog) as (read, write),
+        ClientSession(read, write, read_timeout_seconds=timeout) as session,
+    ):
+        await session.initialize()
+        resp = await session.list_resources()
+        return [
+            MCPResource(
+                uri=str(r.uri), name=r.name,
+                description=getattr(r, 'description', '') or '',
+                mime_type=getattr(r, 'mimeType', '') or '',
+                server=" ".join(command),
+            )
+            for r in resp.resources
+        ]
+
+
+async def read_resource_http(
+    url: str,
+    resource_uri: str,
+    *,
+    headers: dict[str, str] | None = None,
+    startup_timeout_sec: float | None = None,
+) -> str:
+    timeout = timedelta(seconds=startup_timeout_sec) if startup_timeout_sec else None
+    async with streamablehttp_client(url, headers=headers) as (read, write, _):
+        async with ClientSession(read, write, read_timeout_seconds=timeout) as session:
+            await session.initialize()
+            resp = await session.read_resource(resource_uri)
+            parts = []
+            for content in resp.contents:
+                if hasattr(content, 'text'):
+                    parts.append(content.text)
+                elif hasattr(content, 'blob'):
+                    parts.append(f"[binary data: {len(content.blob)} bytes]")
+            return "\n".join(parts)
+
+
+async def read_resource_stdio(
+    command: list[str],
+    resource_uri: str,
+    *,
+    env: dict[str, str] | None = None,
+    startup_timeout_sec: float | None = None,
+) -> str:
+    params = StdioServerParameters(command=command[0], args=command[1:], env=env)
+    timeout = timedelta(seconds=startup_timeout_sec) if startup_timeout_sec else None
+    async with (
+        _mcp_stderr_capture() as errlog,
+        stdio_client(params, errlog=errlog) as (read, write),
+        ClientSession(read, write, read_timeout_seconds=timeout) as session,
+    ):
+        await session.initialize()
+        resp = await session.read_resource(resource_uri)
+        parts = []
+        for content in resp.contents:
+            if hasattr(content, 'text'):
+                parts.append(content.text)
+            elif hasattr(content, 'blob'):
+                parts.append(f"[binary data: {len(content.blob)} bytes]")
+        return "\n".join(parts)

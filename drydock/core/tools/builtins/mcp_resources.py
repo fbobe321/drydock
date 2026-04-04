@@ -6,6 +6,7 @@ These tools let the agent discover and read them.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from typing import ClassVar, final
 
@@ -62,25 +63,55 @@ class ListMcpResources(
     async def run(
         self, args: ListMcpResourcesArgs, ctx: InvokeContext | None = None
     ) -> AsyncGenerator[ToolStreamEvent | ListMcpResourcesResult, None]:
-        # MCP resource listing is handled by the MCP registry
-        # For now, return empty — full implementation requires MCP protocol changes
         resources: list[McpResource] = []
 
         try:
             if ctx and hasattr(ctx, 'agent_manager') and ctx.agent_manager:
-                # Try to list resources from connected MCP servers
-                from drydock.core.tools.mcp import MCPRegistry
-                # This would need MCP servers to implement resources
-                pass
-        except Exception:
-            pass
+                config = ctx.agent_manager.config
+                servers = config.mcp_servers or []
+
+                from drydock.core.tools.mcp.tools import (
+                    list_resources_http, list_resources_stdio,
+                )
+                from drydock.core.config import MCPStdio, MCPHttp
+
+                tasks = []
+                for srv in servers:
+                    if args.server_name and getattr(srv, 'alias', '') != args.server_name:
+                        continue
+                    if isinstance(srv, MCPHttp):
+                        tasks.append(list_resources_http(
+                            srv.url,
+                            headers=srv.headers,
+                            startup_timeout_sec=srv.startup_timeout_seconds,
+                        ))
+                    elif isinstance(srv, MCPStdio):
+                        tasks.append(list_resources_stdio(
+                            srv.command,
+                            env=srv.env,
+                            startup_timeout_sec=srv.startup_timeout_seconds,
+                        ))
+
+                if tasks:
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    for result in results:
+                        if isinstance(result, list):
+                            for r in result:
+                                resources.append(McpResource(
+                                    uri=r.uri, name=r.name,
+                                    description=r.description,
+                                    mime_type=r.mime_type,
+                                    server=r.server,
+                                ))
+        except Exception as e:
+            raise ToolError(f"Failed to list MCP resources: {e}") from e
 
         yield ListMcpResourcesResult(resources=resources, count=len(resources))
 
 
 class ReadMcpResourceArgs(BaseModel):
     uri: str = Field(description="Resource URI to read")
-    server_name: str = Field(default="", description="MCP server name")
+    server_name: str = Field(default="", description="MCP server name (required if multiple servers)")
 
 
 class ReadMcpResourceResult(BaseModel):
@@ -107,12 +138,57 @@ class ReadMcpResource(
     def get_status_text(cls) -> str:
         return "Reading MCP resource"
 
+    def resolve_permission(self, args: ReadMcpResourceArgs) -> ToolPermission | None:
+        return ToolPermission.ALWAYS
+
     @final
     async def run(
         self, args: ReadMcpResourceArgs, ctx: InvokeContext | None = None
     ) -> AsyncGenerator[ToolStreamEvent | ReadMcpResourceResult, None]:
-        # Full MCP resource reading requires protocol-level support
+        if not ctx or not hasattr(ctx, 'agent_manager') or not ctx.agent_manager:
+            raise ToolError("No agent manager available for MCP resource reading")
+
+        config = ctx.agent_manager.config
+        servers = config.mcp_servers or []
+
+        if not servers:
+            raise ToolError("No MCP servers configured. Add servers to ~/.drydock/config.toml")
+
+        from drydock.core.tools.mcp.tools import read_resource_http, read_resource_stdio
+        from drydock.core.config import MCPStdio, MCPHttp
+
+        # Try each server until we find the resource
+        last_error = None
+        for srv in servers:
+            if args.server_name and getattr(srv, 'alias', '') != args.server_name:
+                continue
+            try:
+                if isinstance(srv, MCPHttp):
+                    content = await read_resource_http(
+                        srv.url, args.uri,
+                        headers=srv.headers,
+                        startup_timeout_sec=srv.startup_timeout_seconds,
+                    )
+                elif isinstance(srv, MCPStdio):
+                    content = await read_resource_stdio(
+                        srv.command, args.uri,
+                        env=srv.env,
+                        startup_timeout_sec=srv.startup_timeout_seconds,
+                    )
+                else:
+                    continue
+
+                yield ReadMcpResourceResult(
+                    uri=args.uri,
+                    content=content,
+                    mime_type="",
+                )
+                return
+            except Exception as e:
+                last_error = e
+                continue
+
         raise ToolError(
-            f"MCP resource reading not yet connected to MCP servers. "
-            f"URI: {args.uri}. Configure an MCP server that exposes resources."
+            f"Could not read resource '{args.uri}' from any MCP server. "
+            f"Last error: {last_error}"
         )

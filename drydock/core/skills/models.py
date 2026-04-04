@@ -88,6 +88,9 @@ class SkillInfo(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
     allowed_tools: list[str] = Field(default_factory=list)
     user_invocable: bool = True
+    context: str = ""  # 'fork' to run in subagent
+    agent: str = ""  # subagent type when context='fork'
+    model: str = ""  # model override
     skill_path: Path
 
     model_config = {"arbitrary_types_allowed": True}
@@ -106,5 +109,8 @@ class SkillInfo(BaseModel):
             metadata=meta.metadata,
             allowed_tools=meta.allowed_tools,
             user_invocable=meta.user_invocable,
+            context=meta.context,
+            agent=meta.agent,
+            model=meta.model,
             skill_path=skill_path.resolve(),
         )
