@@ -185,6 +185,7 @@ EXPLORE = AgentProfile(
     ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
+    max_turns=15,
     overrides={"enabled_tools": ["grep", "read_file", "glob"], "system_prompt_id": "explore"},
 )
 
@@ -198,6 +199,7 @@ DIAGNOSTIC = AgentProfile(
     ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
+    max_turns=15,
     overrides={
         "enabled_tools": ["grep", "read_file", "bash", "glob"],
         "system_prompt_id": "diagnostic",
@@ -214,6 +216,7 @@ PLANNER = AgentProfile(
     ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
+    max_turns=10,
     overrides={
         "enabled_tools": ["grep", "read_file", "glob"],
         "system_prompt_id": "planner",
