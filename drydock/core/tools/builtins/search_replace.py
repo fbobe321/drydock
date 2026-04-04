@@ -23,11 +23,12 @@ from drydock.core.tools.utils import resolve_file_tool_permission
 from drydock.core.types import ToolResultEvent, ToolStreamEvent
 
 SEARCH_REPLACE_BLOCK_RE = re.compile(
-    r"<{5,} SEARCH\r?\n(.*?)\r?\n?={5,}\r?\n(.*?)\r?\n?>{5,} REPLACE", flags=re.DOTALL
+    r"<{5,}\s*(?:SEARCH\s*)+\r?\n(.*?)\r?\n?={5,}\r?\n(.*?)\r?\n?>{5,}\s*(?:REPLACE\s*)+",
+    flags=re.DOTALL,
 )
 
 SEARCH_REPLACE_BLOCK_WITH_FENCE_RE = re.compile(
-    r"```[\s\S]*?\n<{5,} SEARCH\r?\n(.*?)\r?\n?={5,}\r?\n(.*?)\r?\n?>{5,} REPLACE\s*\n```",
+    r"```[\s\S]*?\n<{5,}\s*(?:SEARCH\s*)+\r?\n(.*?)\r?\n?={5,}\r?\n(.*?)\r?\n?>{5,}\s*(?:REPLACE\s*)+\s*\n```",
     flags=re.DOTALL,
 )
 
@@ -212,6 +213,16 @@ class SearchReplace(
                 "[new content to replace with]\n"
                 ">>>>>>> REPLACE"
             )
+
+        # Detect garbled token output (common with some models/parsers)
+        for block in search_replace_blocks:
+            if re.search(r'(.)\1{4,}', block.search) or re.search(r'<{3,}[a-z]', block.search):
+                raise ToolError(
+                    "Your search text appears garbled (repeated/corrupted characters). "
+                    "This happens when regex or special characters confuse the tool call parser. "
+                    "WORKAROUND: Use read_file to get the exact line numbers, then use write_file "
+                    "to rewrite the entire function instead of search_replace on complex regex patterns."
+                )
 
         return file_path, search_replace_blocks
 

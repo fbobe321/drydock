@@ -861,57 +861,18 @@ class AgentLoop:
                     if nudge_text:
                         self._inject_system_note(nudge_text)
 
-                # Loop guidance — prune duplicates and nudge, NEVER stop
+                # Loop guidance — retrospection, NEVER stop
                 if not should_break_loop:
                     rep = self._check_tool_call_repetition()
                     if rep == "FORCE_STOP" or (rep and rep.startswith("WARNING")):
-                        stuck_tool = ""
-                        if rep and "|" in rep:
-                            stuck_tool = rep.split("|", 1)[1]
-
                         # Prune duplicate tool calls to give model fresh context
                         self._prune_repeated_tool_calls()
 
-                        # Gentle nudge — just suggest a different approach
-                        nudge = "Try a different approach."
-                        if stuck_tool in ("read_file",):
-                            nudge = "You already read this. Try search_replace or a different file."
-                        elif stuck_tool in ("grep",):
-                            nudge = "Try a different search term or read a file you found."
-                        elif stuck_tool in ("bash", "run_command"):
-                            nudge = "If the command failed, read the error and fix the code."
-                        self._inject_system_note(nudge)
-
-                        # Extract tool-specific nudge
-                        nudge = ""
-                        if stuck_tool in ("read_file",):
-                            nudge = " You have been READING the same code repeatedly. You already know what it says. Make your EDIT now using search_replace or write_file."
-                        elif stuck_tool in ("grep",):
-                            nudge = " You have been SEARCHING repeatedly. Pick the most relevant file from your search results and READ it, then make your edit."
-                        elif stuck_tool in ("bash", "run_command"):
-                            nudge = (
-                                " You have been running the SAME bash command repeatedly. "
-                                "Running the same command again will give the same result. "
-                                "If it succeeded but didn't do what you expected, READ the source code "
-                                "to understand WHY, then FIX the code with search_replace. "
-                                "If it failed, try a DIFFERENT command or approach."
-                            )
-                        if repeat_warnings >= 4:
-                            # Escalated: replace tool result with strong directive
-                            warning_text = (
-                                "BLOCKED: Your tool call was not executed because you have been repeating the same action. "
-                                "You already have all the information you need from previous tool results. "
-                                "Your ONLY valid next action is: use search_replace to make your code fix. "
-                                "Do NOT read, grep, or bash. Use search_replace NOW."
-                            )
-                            self._inject_system_note(warning_text, replace_last_tool=True)
-                        else:
-                            warning_text = (
-                                "WARNING: You are repeating the same tool call with the same arguments. "
-                                "This is not making progress. Try a DIFFERENT approach, use a different tool, "
-                                "or tell the user what's blocking you." + nudge
-                            )
-                            self._inject_system_note(warning_text)
+                        # RETROSPECTION: Summarize recent actions and let the model
+                        # decide its own next step — no hardcoded nudges
+                        retro = self._build_retrospection()
+                        if retro:
+                            self._inject_system_note(retro)
 
                 if user_cancelled:
                     return
@@ -1583,6 +1544,55 @@ class AgentLoop:
                     approval_type=ToolPermission.ASK,
                     feedback=feedback,
                 )
+
+    def _build_retrospection(self) -> str | None:
+        """Build a retrospection summary of recent tool calls.
+
+        Instead of hardcoded nudges, show the model what it's been doing
+        and let it decide on a different approach. The model is better at
+        self-correcting when it can see its own pattern of behavior.
+        """
+        # Collect last 8 tool calls with their results (truncated)
+        recent: list[str] = []
+        count = 0
+        for msg in reversed(self.messages):
+            if count >= 8:
+                break
+            if msg.role == Role.assistant and msg.tool_calls:
+                for tc in reversed(msg.tool_calls or []):
+                    if tc.function:
+                        name = tc.function.name or "?"
+                        args_str = tc.function.arguments or ""
+                        # Truncate args for readability
+                        if len(args_str) > 120:
+                            args_str = args_str[:120] + "..."
+                        recent.append(f"  {count+1}. {name}({args_str})")
+                        count += 1
+                        if count >= 8:
+                            break
+            elif msg.role == Role.tool and recent:
+                # Add result summary to last entry
+                result = str(msg.content or "")[:150]
+                if "error" in result.lower() or "Error" in result:
+                    recent[-1] += f" → ERROR"
+                elif "not found" in result.lower():
+                    recent[-1] += f" → NOT FOUND"
+                else:
+                    recent[-1] += f" → ok"
+
+        if len(recent) < 3:
+            return None
+
+        recent.reverse()
+        summary = "\n".join(recent)
+
+        return (
+            f"RETROSPECTION — Your last {len(recent)} tool calls:\n"
+            f"{summary}\n\n"
+            f"You are repeating a pattern that is not making progress. "
+            f"Review the sequence above. What went wrong? What should you do differently? "
+            f"Choose a different approach on your own."
+        )
 
     def _inject_system_note(self, text: str, replace_last_tool: bool = False) -> None:
         """Safely inject a system note into conversation without breaking message ordering.
