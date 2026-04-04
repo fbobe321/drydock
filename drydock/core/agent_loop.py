@@ -497,6 +497,8 @@ class AgentLoop:
             files_explored: list[str] = []  # Track files read for context state
             files_modified: list[str] = []  # Track files edited for blast radius
             context_summary_injected = False
+            self._temp_override: float | None = None  # Temperature bump on loop detection
+            self._failed_approaches: list[str] = []  # Persistent failed approach tracker
             while not should_break_loop:
                 # Loop protection: prevent infinite tool-call loops
                 tool_turns += 1
@@ -868,11 +870,24 @@ class AgentLoop:
                         # Prune duplicate tool calls to give model fresh context
                         self._prune_repeated_tool_calls()
 
+                        # Temperature bump: force model to explore different paths
+                        self._temp_override = 0.5
+
+                        # Track failed approach for accumulator
+                        self._record_failed_approach()
+
                         # RETROSPECTION: Summarize recent actions and let the model
                         # decide its own next step — no hardcoded nudges
                         retro = self._build_retrospection()
                         if retro:
+                            # Include failed approaches if any
+                            if self._failed_approaches:
+                                approaches = "\n".join(f"  - {a}" for a in self._failed_approaches[-5:])
+                                retro += f"\n\nApproaches already tried (don't repeat these):\n{approaches}"
                             self._inject_system_note(retro)
+                    else:
+                        # Loop broken — reset temperature to normal
+                        self._temp_override = None
 
                 if user_cancelled:
                     return
@@ -1252,11 +1267,31 @@ class AgentLoop:
                         )
                 except (json.JSONDecodeError, AttributeError):
                     pass
+                # AUTO-READ: Automatically read the target file so the model has
+                # the actual content — don't just tell it to read, DO it for it
+                auto_read_content = ""
+                try:
+                    sr_args = json.loads(tool_call.raw_arguments or "{}")
+                    sr_path = sr_args.get("file_path", sr_args.get("path", ""))
+                    if sr_path and Path(sr_path).exists():
+                        with open(sr_path, "r", encoding="utf-8", errors="replace") as f:
+                            lines = f.readlines()
+                        # Show first 50 lines or the whole file if small
+                        preview_lines = lines[:50]
+                        numbered = [f"{i+1}\t{line.rstrip()}" for i, line in enumerate(preview_lines)]
+                        auto_read_content = (
+                            f"\n\nAUTO-READ of {sr_path} (first {len(preview_lines)} lines):\n"
+                            + "\n".join(numbered)
+                        )
+                        if len(lines) > 50:
+                            auto_read_content += f"\n[... {len(lines) - 50} more lines]"
+                except Exception:
+                    pass
                 error_msg += (
                     "\n\n[RECOVERY: Your search text didn't match the file contents. "
-                    "Use read_file with offset/limit to re-read the exact area you want to change, "
-                    "then retry search_replace with the EXACT text from read_file output."
+                    "The actual file content is shown below — use EXACT text from it for your next edit."
                     f"{sr_file_hint}]"
+                    f"{auto_read_content}"
                 )
             elif tool_call.tool_name == "search_replace" and "multiple" in str(exc).lower():
                 error_msg += (
@@ -1390,10 +1425,12 @@ class AgentLoop:
 
         try:
             start_time = time.perf_counter()
+            # Use temperature override if set (loop detection bumps it)
+            temp = getattr(self, '_temp_override', None) or active_model.temperature
             result = await self.backend.complete(
                 model=active_model,
                 messages=self.messages,
-                temperature=active_model.temperature,
+                temperature=temp,
                 tools=available_tools,
                 tool_choice=tool_choice,
                 extra_headers=self._get_extra_headers(provider),
@@ -1438,10 +1475,12 @@ class AgentLoop:
             start_time = time.perf_counter()
             usage = LLMUsage()
             chunk_agg = LLMChunk(message=LLMMessage(role=Role.assistant))
+            # Use temperature override if set (loop detection bumps it)
+            temp = getattr(self, '_temp_override', None) or active_model.temperature
             async for chunk in self.backend.complete_streaming(
                 model=active_model,
                 messages=self.messages,
-                temperature=active_model.temperature,
+                temperature=temp,
                 tools=available_tools,
                 tool_choice=tool_choice,
                 extra_headers=self._get_extra_headers(provider),
@@ -1544,6 +1583,47 @@ class AgentLoop:
                     approval_type=ToolPermission.ASK,
                     feedback=feedback,
                 )
+
+    def _record_failed_approach(self) -> None:
+        """Record a one-line summary of the most recent failed approach.
+
+        Survives pruning and compaction so the model doesn't retry
+        the same strategy after context cleanup.
+        """
+        if not hasattr(self, '_failed_approaches'):
+            self._failed_approaches = []
+
+        # Extract the last tool call and its result
+        last_tool_name = ""
+        last_tool_args = ""
+        last_result = ""
+        for msg in reversed(self.messages[-6:]):
+            if msg.role == Role.tool and not last_result:
+                result = str(msg.content or "")[:100]
+                if "error" in result.lower() or "not found" in result.lower():
+                    last_result = result[:80]
+            elif msg.role == Role.assistant and msg.tool_calls and not last_tool_name:
+                for tc in msg.tool_calls:
+                    if tc.function:
+                        last_tool_name = tc.function.name or ""
+                        args = tc.function.arguments or ""
+                        # Extract file path if present
+                        try:
+                            parsed = json.loads(args)
+                            last_tool_args = parsed.get("file_path", parsed.get("path", parsed.get("command", "")))[:60]
+                        except (json.JSONDecodeError, TypeError, AttributeError):
+                            last_tool_args = args[:40]
+                        break
+
+        if last_tool_name:
+            summary = f"{last_tool_name}({last_tool_args})"
+            if last_result:
+                summary += f" → {last_result}"
+            # Don't add duplicates
+            if not self._failed_approaches or self._failed_approaches[-1] != summary:
+                self._failed_approaches.append(summary)
+                # Keep only last 10
+                self._failed_approaches = self._failed_approaches[-10:]
 
     def _build_retrospection(self) -> str | None:
         """Build a retrospection summary of recent tool calls.
