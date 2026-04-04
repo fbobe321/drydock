@@ -2053,30 +2053,28 @@ class AgentLoop:
         except Exception:
             pass
 
-        # 2. Skill routing: match prompt to skill and inject content
-        skill_name = None
-        if any(kw in msg_lower for kw in ("review this", "review the", "code review", "audit")):
-            skill_name = "review"
-        elif any(kw in msg_lower for kw in ("investigate", "debug", "why does", "why is", "broken", "diagnose")):
-            skill_name = "investigate"
-        elif any(kw in msg_lower for kw in ("ship it", "commit and push", "create a pr", "open a pr")):
-            skill_name = "ship"
-        elif any(kw in msg_lower for kw in ("simplify", "clean up", "reduce complexity")):
-            skill_name = "simplify"
+        # 2. Skill discovery: inject all skill descriptions so the model
+        # can decide when to use them (replaces hardcoded keyword matching)
+        try:
+            skill_descriptions = []
+            for name, info in self.skill_manager.list_skills().items():
+                desc = info.description or name
+                skill_descriptions.append(f"  /{name} — {desc[:100]}")
+            if skill_descriptions:
+                parts.append(
+                    "AVAILABLE SKILLS (use invoke_skill to activate):\n"
+                    + "\n".join(skill_descriptions[:10])
+                )
+        except Exception:
+            pass
 
-        if skill_name:
-            skill_info = self.skill_manager.get_skill(skill_name)
-            if skill_info and skill_info.skill_path:
-                try:
-                    content = skill_info.skill_path.read_text(encoding="utf-8")
-                    # Strip frontmatter
-                    if content.startswith("---"):
-                        end = content.find("---", 3)
-                        if end > 0:
-                            content = content[end + 3:].strip()
-                    parts.append(f"FOLLOW THIS WORKFLOW ({skill_name} skill):\n{content[:2000]}")
-                except Exception:
-                    pass
+        # 3. Subagent descriptions for delegation
+        parts.append(
+            "SUBAGENTS (use task tool to delegate):\n"
+            "  task(task='...', agent='explore') — Read-only codebase exploration\n"
+            "  task(task='...', agent='diagnostic') — Debug/investigate with bash access\n"
+            "  task(task='...', agent='planner') — Plan multi-file changes before coding"
+        )
 
         # 3. Planning nudge for complex build tasks
         is_build = any(kw in msg_lower for kw in (
