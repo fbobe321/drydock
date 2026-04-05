@@ -1856,6 +1856,42 @@ class AgentLoop:
         except Exception:
             pass
 
+        # Inject discoverable CLI tools (built by DryDock, CLI-Anything, system)
+        try:
+            from drydock.core.config.harness_files import get_harness_files_manager
+            mgr = get_harness_files_manager()
+            user_skills_dirs = mgr.user_skills_dirs
+            tools_found = []
+            for skills_dir in user_skills_dirs:
+                if not skills_dir.is_dir():
+                    continue
+                for skill_dir in sorted(skills_dir.iterdir())[:50]:
+                    skill_md = skill_dir / "SKILL.md"
+                    if not skill_md.is_file():
+                        continue
+                    name = skill_dir.name
+                    # Only show tool-*, system-*, cli-anything-* skills
+                    if not any(name.startswith(p) for p in ("tool-", "system-", "cli-anything-")):
+                        continue
+                    # Read first line of description
+                    try:
+                        for line in skill_md.read_text(encoding="utf-8").split("\n"):
+                            if line.strip().startswith("description:"):
+                                desc = line.split(":", 1)[1].strip().strip('"').strip("'")[:80]
+                                tools_found.append(f"  {name}: {desc}")
+                                break
+                    except Exception:
+                        pass
+            if tools_found:
+                # Show max 15 to avoid bloating context
+                parts.append(
+                    f"AVAILABLE CLI TOOLS ({len(tools_found)} installed, showing first 15):\n"
+                    + "\n".join(tools_found[:15])
+                    + "\nUse via bash: cd /path && python3 -m package_name [args]"
+                )
+        except Exception:
+            pass
+
         if parts:
             self._inject_system_note("\n".join(parts))
 
