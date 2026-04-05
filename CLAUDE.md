@@ -4,12 +4,14 @@
 
 Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
 - **Repo:** https://github.com/fbobe321/drydock
-- **PyPI:** https://pypi.org/project/drydock-cli/ (v2.2.1 for v2, v3.0.0 for v3)
-- **Goal:** Best-in-class SWE-bench Verified pass rate with local LLMs
+- **PyPI:** https://pypi.org/project/drydock-cli/ (v2.5.0)
+- **Goal:** Reliable TUI coding agent with local LLMs. PRD-driven project building + SWE-bench bug fixing.
 - **Hardware:** 2x RTX 4060 Ti 16GB, Gemma 4 26B MoE (A4B) via vLLM Docker at localhost:8000
 - **Server:** remus (Ubuntu 22.04, user: bobef)
-- **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (replaced devstral-24B — 3-4x faster, better results)
-- **Active codebase:** DryDock v3 at `/data3/drydock-v3/` (clean rewrite)
+- **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (only 4B active params, ~70 tok/s)
+- **TUI results:** 88/90 PRD projects pass (98%) through the real TUI
+- **SWE-bench:** 70% file match (v3 baseline), 58% (v3 tuned — tighter prompt hurt)
+- **Priority:** TUI experience first, SWE-bench second
 
 ## Build & Test
 
@@ -36,17 +38,17 @@ curl http://localhost:8000/v1/models
 python3 -c "import ast; ast.parse(open('path/to/file.py').read())"
 ```
 
-### DryDock v2 (legacy)
+### DryDock v2 (TUI — user-facing, v2.5.0)
 
 ```bash
 # Install
-uv sync
+pip install drydock-cli==2.5.0
 
-# Run drydock CLI
-uv run drydock
+# Run TUI (the ONLY way to use drydock — no headless mode)
+drydock
 
-# Run programmatically (headless, for benchmarks)
-python3 -c "import sys; sys.path.insert(0, '.'); from drydock.cli.entrypoint import main; main()" --agent auto-approve -p "your prompt"
+# Headless mode has been REMOVED. All testing goes through the TUI.
+# Use scripts/tui_test.py (pexpect) for automated TUI testing.
 
 # Run tests
 uv run pytest tests/ -x -q --timeout=30
@@ -92,11 +94,15 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 - **Two-tier compaction.** Normal compaction truncates old tool results. Emergency compaction triggers on 400 errors (context overflow) with aggressive truncation.
 - **Provider-agnostic design.** No model-specific hacks in the agent loop. All model quirks handled in `providers.py`.
 
-### v2 Constraints (still apply to v2 codebase)
+### v2 Constraints (TUI codebase)
 - **MessageList is not a plain list.** Never `self.messages = [...]`. Use `self.messages.reset([...])`.
 - **vLLM/Mistral rejects `user` after `tool` messages.** `_sanitize_message_ordering()` runs before every LLM call. All injection must use `_inject_system_note()`.
-- **`os._exit()` in programmatic.py** — necessary because async cleanup hangs. Ensure stdout is flushed before calling.
-- **AGENTS.md is CRITICAL for devstral.** Without per-project instructions, the model loops on ls/bash. Auto-created by `_ensure_agents_md()`.
+- **Non-streaming for Gemma 4.** Streaming tool call argument accumulation produces empty/malformed JSON. `enable_streaming=False` when model is Gemma 4.
+- **Disabled tools for Gemma 4:** ask_user_question, todo, task_create, task_update, task, invoke_skill, tool_search. These cause loops or validation errors.
+- **Simplified prompt for Gemma 4.** Auto-detected via model name → uses `gemma4.md` (20 lines) instead of `cli.md` (125 lines). Complex prompts cause delegation/asking instead of coding.
+- **write_file overwrite=True by default.** Gemma 4 writes files multiple times; old default (False) caused error loops.
+- **Headless mode removed.** All interaction through TUI. Testing via pexpect (`scripts/tui_test.py`).
+- **NEVER test with headless.** The TUI has different code paths (streaming, approval, path expansion). Headless passes mask TUI bugs.
 
 ### Shared Constraints
 - **"Restate the goal" blocks tool calling.** Never ask the model to output text before its first tool call — it pre-empts the tool-calling mechanism.
@@ -252,22 +258,42 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 
 ## Key Learnings
 
-1. AGENTS.md is essential — devstral loops without it (Gemma 4 does not have this problem)
-2. "Restate the goal" blocked tool calling for months — one line
-3. Additive-only changes work best — control flow mods regress
-4. The harness matters as much as the model (Meta-Harness paper)
-5. Environment bootstrapping saves 2-4 exploratory turns
-6. Plan→Edit workflow is Mistral's design, don't fight it
-7. Circuit breaker was net negative — removed entirely
-8. Loop detection should guide, never stop
-9. Test the installed package, not source (different Python envs)
-10. Never wait for full test runs — fix issues from early results
-11. Clean rewrites beat incremental fixes — v3 (~750 lines) outperforms v2 (~5000+ lines)
-12. Model choice matters more than agent complexity — Gemma 4 MoE gives 3-4x speed + better accuracy than devstral
-13. Gemma 4 leaks thinking tokens (`<|channel>thought<channel|>`) — must filter in provider layer
-14. Two-tier compaction (normal + emergency on 400) is more robust than single-tier
-15. Provider-agnostic design enables fast model switching — v3 works with any OpenAI-compatible endpoint
-16. Docker-based model serving (vLLM) is more reliable than bare-metal — easier restarts, GPU management
+1. **Test the TUI, not headless.** Headless passes mask real bugs. TUI has different code paths (streaming, approval, render_path_prompt). ALL testing through TUI via pexpect.
+2. **Use PRDs for testing.** Concrete PRDs with expected files and `--help` give clear pass/fail. 100-project suite proved TUI works (98%).
+3. **Scaffold per model.** Weaker models need more guardrails (non-streaming, fewer tools, simpler prompts). As models improve, remove scaffolding. The code should get simpler over time.
+4. **Streaming breaks Gemma 4 tool calls.** Streaming accumulates JSON chunk-by-chunk → empty args. Non-streaming gets complete response → works perfectly. Root cause of weeks of TUI failures.
+5. **Fewer tools = better for local models.** Gemma 4 wasted 64 turns on task_create/task_update. Disabling non-essential tools eliminated the loop.
+6. **Simple prompts win.** The 125-line cli.md with phases/delegation confused Gemma 4. The 20-line gemma4.md ("ACT IMMEDIATELY") works.
+7. AGENTS.md essential for devstral (loops without it), not needed for Gemma 4
+8. Circuit breaker was net negative — removed entirely
+9. Loop detection should guide, never stop (retrospection > hardcoded nudges)
+10. Clean rewrites beat incremental fixes — v3 (~750 lines) outperforms v2 (~5000+ lines) on SWE-bench
+11. Model choice matters more than agent complexity — Gemma 4 MoE gives 3-4x speed
+12. Docker-based model serving (vLLM) is reliable — easier restarts, GPU management
+13. Auto-read on failed edit — automatically show the model the real file content
+14. Temperature bump on loops — force model to explore different paths
+15. Failed-approach accumulator — prevent re-trying strategies after pruning/compaction
+16. PRD complexity must match model capability — too many files/features causes timeout
+
+## Testing
+
+### TUI Test Harness
+- **Script:** `scripts/tui_test.py` — pexpect-based, drives the REAL TUI binary
+- **Auto-approves** tool permission prompts
+- **Detects:** write loops, API errors, tool call counts, file creation, --help pass/fail
+- **100 PRDs:** at `/data3/drydock_test_projects/` (88/90 pass = 98%)
+
+### PRD Format (what works)
+- Short (under 30 lines)
+- 4-6 files max
+- Clear package name and file list
+- Test command: `python3 -m package_name --help`
+- Stdlib only (no external deps)
+
+### What breaks PRDs
+- Too many files (8+) — model runs out of turns
+- Complex parsers (custom YAML/XML from scratch)
+- Features requiring external APIs or databases
 
 ## When Compacting
 
