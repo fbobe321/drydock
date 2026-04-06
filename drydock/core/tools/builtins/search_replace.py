@@ -188,7 +188,6 @@ class SearchReplace(
         # Try to extract file_path from content if missing
         if not file_path_str and content:
             # Look for file path in the content (common when model puts everything in content)
-            import re
             path_match = re.search(r'(?:file[_\s]?path|path|file)[\s:="\']+([^\s"\']+\.py)', content[:200], re.IGNORECASE)
             if path_match:
                 file_path_str = path_match.group(1)

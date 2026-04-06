@@ -790,81 +790,21 @@ class AgentLoop:
                         continue
                     # After 3 empty responses, let it exit
 
-                # If model gives text without tool calls and hasn't edited anything,
-                # nudge it to make an edit instead of just describing what to do.
-                # Never let the agent exit without at least attempting an edit.
-                if should_break_loop and not has_made_edit and tool_turns >= 1:
-                    text_without_action += 1
-                    # Always continue — don't let the agent exit without editing
-                    should_break_loop = False
-
-                    # Detect model claiming task is done without having edited anything
-                    last_text_lower = (last_message.content or "").lower()
-                    task_complete_phrases = [
-                        "task completed", "task complete", "task is complete",
-                        "task is done", "task has been completed",
-                        "changes have been applied", "fix has been applied",
-                        "the fix is complete", "issue is resolved",
-                    ]
-                    claims_complete = any(p in last_text_lower for p in task_complete_phrases)
-
-                    if claims_complete:
-                        nudge_text = (
-                            "You said the task is complete but NO code was actually changed. "
-                            "Your search_replace call either failed or was never made. "
-                            "Use read_file to read the target file, then use search_replace "
-                            "to make your edit. Do NOT say the task is done until search_replace succeeds."
+                # Text response without edits — this is FINE for questions,
+                # explanations, running code, etc. Only nudge if the model
+                # is clearly asking for permission instead of acting.
+                if should_break_loop and not has_made_edit:
+                    last_text = (last_message.content or "").lower()
+                    is_asking = any(kw in last_text for kw in (
+                        "shall i", "would you like me to",
+                        "ready to begin", "please confirm",
+                    ))
+                    if is_asking and tool_turns == 0:
+                        # Model asked without doing anything — nudge once
+                        should_break_loop = False
+                        self._inject_system_note(
+                            "Act immediately. Do not ask for confirmation."
                         )
-                    elif text_without_action == 1:
-                        last_text = (last_message.content or "").lower()
-                        # Detect model asking for confirmation instead of acting
-                        is_asking = any(kw in last_text for kw in (
-                            "standing by", "waiting for", "please provide",
-                            "what would you like", "how can i help",
-                            "what should i", "do you want me to",
-                            "ready to begin", "i will start",
-                            "shall i", "would you like me to",
-                            "let me know", "please confirm",
-                            "i am ready", "ready to proceed",
-                        ))
-                        if is_asking:
-                            nudge_text = (
-                                "DO NOT ask for confirmation. Act NOW. "
-                                "If there is a PRD.md, implement it with write_file. "
-                                "If there is code, read it with read_file and fix bugs with search_replace. "
-                                "Call a tool on your next response."
-                            )
-                        elif "TARGET:" in last_text.upper() or "FILE:" in last_text.upper():
-                            nudge_text = (
-                                "Good — you identified the target. Now use read_file then search_replace."
-                            )
-                        else:
-                            nudge_text = (
-                                "You responded with text but did not call any tools. "
-                                "Call write_file, read_file, or search_replace NOW."
-                            )
-                    elif text_without_action == 2:
-                        nudge_text = (
-                            "STOP describing the fix. You MUST call search_replace on your NEXT response. "
-                            "No more text-only responses. Act NOW."
-                        )
-                    elif text_without_action <= 5:
-                        nudge_text = (
-                            f"WARNING ({text_without_action} text responses without editing): "
-                            "You MUST call search_replace or read_file immediately. "
-                            "Make your best fix attempt RIGHT NOW even if you are unsure. "
-                            "Pick the most likely file and function, and make a minimal edit."
-                        )
-                    else:
-                        # Keep nudging — never give up
-                        nudge_text = (
-                            "You MUST call a tool. Use grep to find the file, "
-                            "read_file to read it, then search_replace to fix."
-                        )
-                    if nudge_text:
-                        # Use _inject_system_note (appends to last tool/user message)
-                        # User messages cause 'tool after user' ordering violations
-                        self._inject_system_note(nudge_text)
                         logger.info("Model gave text without editing — nudging (attempt %d)", text_without_action)
 
                 # If model has been investigating for too long without making an edit,

@@ -128,17 +128,20 @@ def check_session(messages: list, has_made_edit: bool = False) -> list[SessionIs
             f"{api_errors} API errors occurred during the session"
         ))
 
-    # 7. No edits made despite having a task
-    if not has_made_edit and len(messages) > 5:
-        has_user_task = any(
-            hasattr(msg, 'role') and str(getattr(msg, 'role', '')) == 'user'
-            and len(str(getattr(msg, 'content', '') or '')) > 20
-            for msg in messages
+    # 7. No edits — only flag if the user explicitly asked to build/fix/create something
+    # Questions, exploration, and running code don't need edits
+    if not has_made_edit and len(messages) > 10:
+        user_msgs = [str(getattr(m, 'content', '') or '').lower() for m in messages
+                     if hasattr(m, 'role') and str(getattr(m, 'role', '')) == 'user']
+        build_words = ["build", "create", "fix", "implement", "write", "add", "modify", "update", "edit"]
+        user_asked_for_edit = any(
+            any(w in msg for w in build_words)
+            for msg in user_msgs
         )
-        if has_user_task:
+        if user_asked_for_edit:
             issues.append(SessionIssue(
-                "warning", "no_edits",
-                "Session ended without making any file changes"
+                "info", "no_edits",
+                "No file changes were made — the model may not have completed the task"
             ))
 
     return issues
