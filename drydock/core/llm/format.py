@@ -162,7 +162,11 @@ class APIToolFormatHandler:
                     FailedToolCall(
                         tool_name=parsed_call.tool_name,
                         call_id=parsed_call.call_id,
-                        error=f"Unknown tool '{parsed_call.tool_name}'",
+                        error=(
+                            f"Unknown tool '{parsed_call.tool_name}'. "
+                            f"Available tools: {', '.join(sorted(active_tools.keys())[:10])}. "
+                            f"Use one of these exact names."
+                        ),
                     )
                 )
                 continue

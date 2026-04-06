@@ -901,13 +901,43 @@ class AgentLoop:
                         self._record_failed_approach()
 
                         # RETROSPECTION: Summarize recent actions and let the model
-                        # decide its own next step — no hardcoded nudges
+                        # decide its own next step
                         retro = self._build_retrospection()
                         if retro:
                             # Include failed approaches if any
                             if self._failed_approaches:
                                 approaches = "\n".join(f"  - {a}" for a in self._failed_approaches[-5:])
                                 retro += f"\n\nApproaches already tried (don't repeat these):\n{approaches}"
+
+                            # Detect same-file write loop — compact and restart fresh
+                            stuck_file = self._detect_stuck_file()
+                            if stuck_file:
+                                # Compact: list files already created, drop old messages
+                                existing_files = self._list_created_files()
+
+                                # Keep only the first user message and last 2 messages
+                                if len(self.messages) > 5:
+                                    first_user = None
+                                    for msg in self.messages:
+                                        if msg.role == Role.user:
+                                            first_user = msg
+                                            break
+                                    kept = []
+                                    if first_user:
+                                        kept.append(first_user)
+                                    kept.extend(self.messages[-2:])
+                                    self.messages.reset(kept)
+
+                                # Inject summary of what's done
+                                summary = (
+                                    f"CONTEXT RESET — You were stuck rewriting {stuck_file}.\n"
+                                    f"Files already created: {', '.join(existing_files) if existing_files else 'none'}\n"
+                                    f"Continue creating the REMAINING files. Do not rewrite files that already exist."
+                                )
+                                self._inject_system_note(summary)
+                                # Skip the generic retrospection — the summary is more useful
+                                continue
+
                             self._inject_system_note(retro)
                     else:
                         # Loop broken — reset temperature to normal
@@ -929,6 +959,21 @@ class AgentLoop:
                 yield assistant_event
 
         last_message = self.messages[-1]
+
+        # Detect repetitive text generation (Gemma 4 sometimes loops text within one response)
+        if last_message.content and len(last_message.content) > 200:
+            text = last_message.content
+            # Check if any sentence repeats 3+ times
+            sentences = [s.strip() for s in text.split('.') if len(s.strip()) > 30]
+            if sentences:
+                from collections import Counter
+                sentence_counts = Counter(sentences)
+                most_common, count = sentence_counts.most_common(1)[0]
+                if count >= 3:
+                    # Truncate to first occurrence + note
+                    first_end = text.find(most_common) + len(most_common) + 1
+                    last_message.content = text[:first_end].rstrip()
+                    logger.info("Truncated repetitive text generation (%d repeats of '%s...')", count, most_common[:40])
 
         parsed = self.format_handler.parse_message(last_message)
         resolved = self.format_handler.resolve_tool_calls(parsed, self.tool_manager)
@@ -1620,6 +1665,48 @@ class AgentLoop:
                     feedback=feedback,
                 )
 
+    def _list_created_files(self) -> list[str]:
+        """List files the model has successfully created/written in this session."""
+        files = set()
+        for msg in self.messages:
+            if msg.role == Role.tool and msg.content:
+                content = str(msg.content)
+                # Look for write_file success indicators
+                if "bytes_written" in content or "Created" in content or "Overwritten" in content:
+                    # Extract path from tool result
+                    import re
+                    path_match = re.search(r'"path":\s*"([^"]+)"', content)
+                    if path_match:
+                        files.add(Path(path_match.group(1)).name)
+                    else:
+                        # Try extracting from "Created X" or "Overwritten X"
+                        name_match = re.search(r'(?:Created|Overwritten)\s+(\S+)', content)
+                        if name_match:
+                            files.add(name_match.group(1))
+        return sorted(files)
+
+    def _detect_stuck_file(self) -> str | None:
+        """Detect if the model is writing the same file repeatedly."""
+        write_paths: list[str] = []
+        for msg in reversed(self.messages[-20:]):
+            if msg.role == Role.assistant and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc.function and tc.function.name in ("write_file", "search_replace"):
+                        try:
+                            args = json.loads(tc.function.arguments or "{}")
+                            path = args.get("path", args.get("file_path", ""))
+                            if path:
+                                write_paths.append(path)
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
+        if write_paths:
+            from collections import Counter
+            path_counts = Counter(write_paths)
+            most_common_path, count = path_counts.most_common(1)[0]
+            if count >= 3:
+                return most_common_path
+        return None
+
     def _record_failed_approach(self) -> None:
         """Record a one-line summary of the most recent failed approach.
 
@@ -1822,6 +1909,29 @@ class AgentLoop:
             if len(last_two) == 2 and last_two[0] != last_two[1]:
                 cycle = last_two * 4
                 if tool_names[-8:] == cycle:
+                    return f"WARNING|{last_tool}"
+
+        # Check 5: Same file written 3+ times (model stuck rewriting one file)
+        if last_tool in ("write_file", "search_replace"):
+            write_paths: list[str] = []
+            for msg in reversed(self.messages):
+                if msg.role == Role.assistant and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        if tc.function and tc.function.name in ("write_file", "search_replace"):
+                            try:
+                                args = json.loads(tc.function.arguments or "{}")
+                                path = args.get("path", args.get("file_path", ""))
+                                if path:
+                                    write_paths.append(path)
+                            except (json.JSONDecodeError, AttributeError):
+                                pass
+                if len(write_paths) >= 10:
+                    break
+            if write_paths:
+                from collections import Counter
+                path_counts = Counter(write_paths)
+                most_common_path, most_common_count = path_counts.most_common(1)[0]
+                if most_common_count >= 3:
                     return f"WARNING|{last_tool}"
 
         return None

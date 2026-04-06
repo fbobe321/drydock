@@ -101,6 +101,22 @@ def run_tui_test(prompt: str, cwd: str = ".", timeout: int = 300):
 
                     if "API error" in clean or "400 Bad Request" in clean:
                         api_errors += 1
+
+                    # Detect unknown tool errors
+                    if "Unknown tool" in clean:
+                        tool_errors = getattr(self, '_tool_errors', 0) if hasattr(self, '_tool_errors') else 0
+                        print(f"  ⚠️  UNKNOWN TOOL: {clean.strip()[:80]}")
+
+                    # Detect search_replace errors
+                    if "search_replace" in clean and "error" in clean.lower():
+                        print(f"  ⚠️  SEARCH_REPLACE ERROR")
+
+                    # Detect text repetition loop
+                    if "please let me know" in clean.lower() or "please provide" in clean.lower():
+                        text_loops = getattr(self, '_text_loops', 0) if hasattr(self, '_text_loops') else 0
+                        text_loops += 1
+                        if text_loops > 2:
+                            print(f"  ⚠️  TEXT LOOP: model asking for input ({text_loops}x)")
                         print(f"  ❌ API ERROR #{api_errors}")
 
                     if "consecutive API errors" in clean:

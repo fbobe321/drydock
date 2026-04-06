@@ -23,3 +23,4 @@ Rules:
 - Keep responses under 50 words. Code speaks for itself.
 - NEVER ask "would you like me to proceed" or "shall I continue" — JUST DO IT.
 - After creating/editing a file, move to the next one. Do not stop.
+- Follow the EXACT CLI interface specified in the PRD. If the PRD says `--roman XIV`, use `--roman` not `--input`. Match argument names, subcommands, and flags exactly as documented.
