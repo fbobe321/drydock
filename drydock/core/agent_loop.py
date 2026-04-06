@@ -949,6 +949,20 @@ class AgentLoop:
         finally:
             await self._save_messages()
 
+            # Post-session quality check
+            try:
+                from drydock.core.session_checker import check_session, format_issues
+                issues = check_session(
+                    list(self.messages),
+                    has_made_edit=has_made_edit,
+                )
+                if issues:
+                    report = format_issues(issues)
+                    if report:
+                        yield AssistantEvent(content=report)
+            except Exception:
+                pass  # Non-critical — don't crash on checker errors
+
     async def _perform_llm_turn(self) -> AsyncGenerator[BaseEvent, None]:
         if self.enable_streaming:
             async for event in self._stream_assistant_events():

@@ -53,8 +53,11 @@ class BlockApplyResult(NamedTuple):
 
 
 class SearchReplaceArgs(BaseModel):
-    file_path: str
-    content: str
+    file_path: str = Field(default="", description="Path to the file to edit")
+    content: str = Field(default="", description="SEARCH/REPLACE blocks or JSON with old_string/new_string")
+    # Gemma 4 sometimes sends these directly instead of in content
+    old_string: str | None = Field(default=None, description="Text to find (alternative to content blocks)")
+    new_string: str | None = Field(default=None, description="Replacement text (alternative to content blocks)")
 
 
 class SearchReplaceResult(BaseModel):
@@ -178,8 +181,22 @@ class SearchReplace(
         file_path_str = args.file_path.strip()
         content = args.content.strip()
 
+        # Handle direct old_string/new_string args (Gemma 4 sometimes sends these)
+        if not content and args.old_string is not None and args.new_string is not None:
+            content = f"<<<<<<< SEARCH\n{args.old_string}\n=======\n{args.new_string}\n>>>>>>> REPLACE"
+
+        # Try to extract file_path from content if missing
+        if not file_path_str and content:
+            # Look for file path in the content (common when model puts everything in content)
+            import re
+            path_match = re.search(r'(?:file[_\s]?path|path|file)[\s:="\']+([^\s"\']+\.py)', content[:200], re.IGNORECASE)
+            if path_match:
+                file_path_str = path_match.group(1)
+
         if not file_path_str:
-            raise ToolError("File path cannot be empty")
+            raise ToolError(
+                "File path is required. Use: search_replace(file_path='path/to/file.py', content='...')"
+            )
 
         if len(content) > self.config.max_content_size:
             raise ToolError(
