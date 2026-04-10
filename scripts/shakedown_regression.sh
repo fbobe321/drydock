@@ -79,8 +79,13 @@ for proj in "${projs[@]}"; do
     dir="$PROJECTS_DIR/$proj"
     done_n=$((done_n + 1))
 
-    # Derive package name: strip leading "<num>_" from dir
-    pkg=$(echo "$proj" | sed 's/^[0-9]*_//')
+    # Derive package name from the PRD's "## Package Name" section if it
+    # exists, otherwise fall back to stripping the leading number from the
+    # directory name. Many PRDs use a different package name than the dir
+    # (e.g., dir=08_todo_list but PRD says `todo_manager`).
+    pkg=$(grep -A1 "## Package Name" "$dir/PRD.md" 2>/dev/null \
+        | tail -1 | grep -oP '`\K[a-z0-9_]+(?=`)' | head -1)
+    [ -z "$pkg" ] && pkg=$(echo "$proj" | sed 's/^[0-9]*_//')
 
     # Snapshot PRD if no master exists yet
     if [ -f "$dir/PRD.md" ] && [ ! -f "$dir/PRD.master.md" ]; then
