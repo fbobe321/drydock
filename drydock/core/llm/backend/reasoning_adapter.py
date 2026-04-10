@@ -22,18 +22,26 @@ from drydock.core.types import (
 class ReasoningAdapter(APIAdapter):
     endpoint: ClassVar[str] = "/chat/completions"
 
+    @staticmethod
+    def _sanitize_content(text: str) -> str:
+        """Remove control characters that break JSON parsing on the server."""
+        if not text:
+            return text
+        # Remove null bytes and other control chars (keep \n \r \t)
+        return "".join(c for c in text if c >= " " or c in "\n\r\t")
+
     def _convert_message(self, msg: LLMMessage) -> dict[str, Any]:
         match msg.role:
             case Role.system:
-                return {"role": "system", "content": msg.content or ""}
+                return {"role": "system", "content": self._sanitize_content(msg.content or "")}
             case Role.user:
-                return {"role": "user", "content": msg.content or ""}
+                return {"role": "user", "content": self._sanitize_content(msg.content or "")}
             case Role.assistant:
                 return self._convert_assistant_message(msg)
             case Role.tool:
                 result: dict[str, Any] = {
                     "role": "tool",
-                    "content": msg.content or "",
+                    "content": self._sanitize_content(msg.content or ""),
                     "tool_call_id": msg.tool_call_id,
                 }
                 if msg.name:

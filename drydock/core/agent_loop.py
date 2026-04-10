@@ -489,16 +489,7 @@ class AgentLoop:
             should_break_loop = False
             tool_turns = 0
             api_error_count = 0
-            repeat_warnings = 0
             has_made_edit = False  # Track if model has used search_replace/write_file
-            text_without_action = 0  # Consecutive text responses without tool calls
-            bash_count = 0  # Track consecutive bash calls without an edit
-            search_replace_failures = 0  # Track failed search_replace attempts
-            files_explored: list[str] = []  # Track files read for context state
-            files_modified: list[str] = []  # Track files edited for blast radius
-            context_summary_injected = False
-            self._temp_override: float | None = None  # Temperature bump on loop detection
-            self._failed_approaches: list[str] = []  # Persistent failed approach tracker
             while not should_break_loop:
                 # Loop protection: prevent infinite tool-call loops
                 tool_turns += 1
@@ -576,23 +567,34 @@ class AgentLoop:
                           or "maximum context" in error_str.lower()
                           or "400 bad request" in error_str.lower()
                           or "status: 400" in error_str.lower()):
-                        # Context limit or malformed request — aggressively compact
+                        # Context limit or malformed request — aggressive recovery
                         try:
-                            compacted = 0
+                            # First try: truncate old messages
                             for i, msg in enumerate(self.messages):
                                 if i >= len(self.messages) - 4:
-                                    break  # Keep last 4 messages
+                                    break
                                 if msg.role == Role.tool and hasattr(msg, 'content'):
                                     content = str(msg.content) if msg.content else ""
                                     if len(content) > 200:
-                                        msg.content = content[:100] + "\n[truncated]\n" + content[-50:]
-                                        compacted += 1
+                                        msg.content = content[:100] + "\n[truncated]"
                                 elif msg.role == Role.assistant and hasattr(msg, 'content'):
                                     content = str(msg.content) if msg.content else ""
                                     if len(content) > 500:
                                         msg.content = content[:200] + "\n[truncated]"
-                                        compacted += 1
-                            logger.info("Emergency compaction: truncated %d messages", compacted)
+
+                            # Second try: if messages > 20, keep only last 6
+                            if len(self.messages) > 20:
+                                first_user = None
+                                for msg in self.messages:
+                                    if msg.role == Role.user:
+                                        first_user = msg
+                                        break
+                                kept = []
+                                if first_user:
+                                    kept.append(first_user)
+                                kept.extend(self.messages[-5:])
+                                self.messages.reset(kept)
+                                logger.info("Emergency reset: kept first user + last 5 messages")
                         except Exception:
                             pass
                         error_text = "Context compacted due to API error. Continue with your task."
@@ -601,287 +603,23 @@ class AgentLoop:
                     self._inject_system_note(error_text)
                     continue
 
+                if not self.messages:
+                    continue
                 last_message = self.messages[-1]
 
-                # Track files explored, edits made, and bash/failure patterns
+                # Track edits — no circuit breakers, just track for has_made_edit
                 if not has_made_edit:
                     for msg in reversed(self.messages[-5:]):
                         if msg.role == Role.assistant and msg.tool_calls:
                             for tc in msg.tool_calls:
-                                if not tc.function:
-                                    continue
-                                if tc.function.name in ("search_replace", "write_file"):
-                                    first_edit = not has_made_edit
+                                if tc.function and tc.function.name in ("search_replace", "write_file"):
                                     has_made_edit = True
-                                    bash_count = 0  # Reset on successful edit
-                                    # Reset circuit breaker — the world changed after an edit,
-                                    # so previously-failing commands may now succeed
-                                    self._tool_call_history.clear()
-                                    self._consecutive_circuit_breaker_fires = 0
-                                    # Track blast radius
-                                    try:
-                                        edit_args = json.loads(tc.function.arguments or "{}")
-                                        edit_path = edit_args.get("file_path", edit_args.get("path", ""))
-                                        if edit_path and edit_path not in files_modified:
-                                            files_modified.append(edit_path)
-                                    except (json.JSONDecodeError, AttributeError):
-                                        edit_path = ""
-
-                                    # AUTO-FIX: Fix packaging issues the model gets wrong
-                                    if edit_path and edit_path.endswith(".py"):
-                                        self._auto_fix_package(edit_path)
-
-                                    # Auto-run diagnostics on edited Python files
-                                    if edit_path and edit_path.endswith(".py"):
-                                        try:
-                                            import asyncio
-                                            import subprocess
-                                            diag_result = subprocess.run(
-                                                ["python3", "-c", f"import ast; ast.parse(open('{edit_path}').read()); print('OK')"],
-                                                capture_output=True, text=True, timeout=5,
-                                            )
-                                            if diag_result.returncode != 0:
-                                                self._inject_system_note(
-                                                    f"SYNTAX ERROR in {edit_path}: {diag_result.stderr.strip()[:200]}. "
-                                                    f"Fix the syntax error before continuing."
-                                                )
-                                        except Exception:
-                                            pass
-
-                                    # After first edit: prompt to check related files
-                                    if first_edit and edit_path:
-                                        self._inject_system_note(
-                                            f"Good — you edited {edit_path}. Now check: "
-                                            f"does this bug have a RELATED file that also needs changes? "
-                                            f"Common patterns: if you edited a model, check the serializer/migration. "
-                                            f"If you edited a base class, check subclasses. "
-                                            f"If you edited a util, check callers. "
-                                            f"Use grep to search for imports of the function/class you changed."
-                                        )
-                                if tc.function.name == "read_file":
-                                    try:
-                                        args = json.loads(tc.function.arguments or "{}")
-                                        path = args.get("path", args.get("file_path", ""))
-                                        if path and path not in files_explored:
-                                            files_explored.append(path)
-                                    except (json.JSONDecodeError, AttributeError):
-                                        pass
-                                if tc.function.name in ("bash", "run_command"):
-                                    bash_count += 1
-
-                    # Track search_replace failures (called but error in result)
-                    for msg in reversed(self.messages[-3:]):
-                        if msg.role == Role.tool and msg.content:
-                            content = msg.content or ""
-                            if "search_replace" in content.lower() and "error" in content.lower():
-                                search_replace_failures += 1
-
-                # Blast radius check: warn when touching 5+ files
-                if len(files_modified) >= 5 and len(files_modified) % 5 == 0:
-                    self._inject_system_note(
-                        f"BLAST RADIUS WARNING: You have modified {len(files_modified)} files. "
-                        f"Files: {', '.join(files_modified[-5:])}. "
-                        f"This is a large change. Are you sure all these edits are needed? "
-                        f"Consider stopping to verify your approach."
-                    )
-
-                # Post-edit bash loop: model made edits but now loops on bash
-                # trying to test code that keeps failing
-                if has_made_edit and bash_count >= 3:
-                    # Count consecutive bash calls at end of tool history
-                    consecutive_bash = 0
-                    for tc_name in reversed(self._recent_tool_names()):
-                        if tc_name in ("bash", "run_command"):
-                            consecutive_bash += 1
-                        else:
-                            break
-                    if consecutive_bash >= 3:
-                        self._inject_system_note(
-                            "You have run 3+ bash commands in a row. "
-                            "If your project is WORKING, you are DONE — tell the user the project "
-                            "is complete and what commands they can use. "
-                            "If it is FAILING, STOP running bash and use read_file + search_replace "
-                            "to fix the code. Do NOT keep running the same test."
-                        )
-
-                # Detect bash file creation (touch, echo >, cat <<)
-                for msg in reversed(self.messages[-3:]):
-                    if msg.role == Role.assistant and msg.tool_calls:
-                        for tc in msg.tool_calls:
-                            if tc.function and tc.function.name in ("bash", "run_command"):
-                                cmd = ""
-                                try:
-                                    cmd = json.loads(tc.function.arguments or "{}").get("command", "")
-                                except (json.JSONDecodeError, AttributeError):
-                                    pass
-                                if any(kw in cmd for kw in ("touch ", "echo ", "cat <<", "printf ", "> ")):
-                                    self._inject_system_note(
-                                        f"Do NOT use bash to create files. Use write_file instead. "
-                                        f"bash touch/echo/cat does not create proper code files."
-                                    )
-
-                # Bash abuse detection: model uses bash instead of proper tools
-                if not has_made_edit and bash_count >= 3:
-                    if bash_count == 3:
-                        self._inject_system_note(
-                            "You have run 3 bash commands without creating or editing any files. "
-                            "STOP running bash. Start CREATING files with write_file or "
-                            "EDITING files with search_replace. bash does not create code."
-                        )
-                    elif bash_count == 6:
-                        self._inject_system_note(
-                            "WARNING: 6 bash commands, ZERO file edits. You are stuck in a loop. "
-                            "Your NEXT action MUST be write_file to create a file or "
-                            "search_replace to edit one. Do NOT run any more bash commands."
-                        )
-                    elif bash_count >= 10 and bash_count % 5 == 0:
-                        # Nudge every 5 bash calls, never stop
-                        self._inject_system_note(
-                            "You have run many bash commands. Consider using write_file "
-                            "or search_replace to create/edit files."
-                        )
-
-                # 3-Strike Rule: search_replace keeps failing
-                if search_replace_failures >= 3:
-                    if search_replace_failures == 3:
-                        self._inject_system_note(
-                            f"3-STRIKE RULE: Your search_replace has failed {search_replace_failures} times. "
-                            "STOP trying the same approach. "
-                            "Either: (1) use read_file to get the EXACT text first, "
-                            "(2) try a completely different file, or "
-                            "(3) ask the user for help with /consult."
-                        )
-                    elif search_replace_failures % 3 == 0:
-                        self._inject_system_note(
-                            f"STOP: {search_replace_failures} failed edits. You are stuck. Ask the user for help."
-                        )
-
-                # Context budget warning: after 7 tool turns without an edit,
-                # warn that context is being consumed without progress
-                if tool_turns == 7 and not has_made_edit and not context_summary_injected:
-                    context_summary_injected = True
-                    summary = (
-                        "CONTEXT BUDGET WARNING: You have used 7 tool calls without making an edit. "
-                        "Your context window is filling up — performance degrades as it fills. "
-                    )
-                    if files_explored:
-                        summary += "Files explored: " + ", ".join(files_explored[-5:]) + ". "
-                    summary += (
-                        "You MUST state your TARGET/FUNCTION/CAUSE/FIX now and use search_replace "
-                        "on your next turn. Do NOT continue exploring."
-                    )
-                    self._inject_system_note(summary)
+                                    break
 
                 should_break_loop = last_message.role != Role.tool
 
-                # Handle empty response (no content AND no tools) — retry
-                if (should_break_loop and last_message.role == Role.assistant
-                        and not last_message.content and not last_message.tool_calls):
-                    empty_response_count = getattr(self, '_empty_responses', 0) + 1
-                    self._empty_responses = empty_response_count
-                    if empty_response_count <= 3:
-                        should_break_loop = False
-                        self._inject_system_note(
-                            "Your response was empty. You MUST call a tool. "
-                            "Start by reading the relevant file with read_file, "
-                            "or run the failing command with bash to see the error."
-                        )
-                        logger.warning("Empty model response — nudging (attempt %d)", empty_response_count)
-                        continue
-                    # After 3 empty responses, let it exit
-
-                # Text response without edits — this is FINE for questions,
-                # explanations, running code, etc. Only nudge if the model
-                # is clearly asking for permission instead of acting.
-                if should_break_loop and not has_made_edit:
-                    last_text = (last_message.content or "").lower()
-                    is_asking = any(kw in last_text for kw in (
-                        "shall i", "would you like me to",
-                        "ready to begin", "please confirm",
-                    ))
-                    if is_asking and tool_turns == 0:
-                        # Model asked without doing anything — nudge once
-                        should_break_loop = False
-                        self._inject_system_note(
-                            "Act immediately. Do not ask for confirmation."
-                        )
-                        logger.info("Model gave text without editing — nudging (attempt %d)", text_without_action)
-
-                # If model has been investigating for too long without making an edit,
-                # force it to act (catches grep/read_file loops that don't trigger
-                # the text-without-action check because they DO use tools)
-                if not should_break_loop and not has_made_edit and tool_turns >= 15:
-                    if tool_turns == 15:
-                        nudge_text = (
-                            "You have spent 15 tool calls investigating without making an edit. "
-                            "You MUST use search_replace on your next turn. Pick the most likely target "
-                            "file based on what you've seen and make your fix attempt NOW."
-                        )
-                    elif tool_turns % 5 == 0:
-                        nudge_text = (
-                            f"WARNING: {tool_turns} tool calls without editing. "
-                            "Use search_replace IMMEDIATELY. No more investigation."
-                        )
-                    else:
-                        nudge_text = None
-                    if nudge_text:
-                        self._inject_system_note(nudge_text)
-
-                # Loop guidance — retrospection, NEVER stop
-                if not should_break_loop:
-                    rep = self._check_tool_call_repetition()
-                    if rep == "FORCE_STOP" or (rep and rep.startswith("WARNING")):
-                        # Prune duplicate tool calls to give model fresh context
-                        self._prune_repeated_tool_calls()
-
-                        # Temperature bump: force model to explore different paths
-                        self._temp_override = 0.5
-
-                        # Track failed approach for accumulator
-                        self._record_failed_approach()
-
-                        # RETROSPECTION: Summarize recent actions and let the model
-                        # decide its own next step
-                        retro = self._build_retrospection()
-                        if retro:
-                            # Include failed approaches if any
-                            if self._failed_approaches:
-                                approaches = "\n".join(f"  - {a}" for a in self._failed_approaches[-5:])
-                                retro += f"\n\nApproaches already tried (don't repeat these):\n{approaches}"
-
-                            # Detect same-file write loop — compact and restart fresh
-                            stuck_file = self._detect_stuck_file()
-                            if stuck_file:
-                                # Compact: list files already created, drop old messages
-                                existing_files = self._list_created_files()
-
-                                # Keep only the first user message and last 2 messages
-                                if len(self.messages) > 5:
-                                    first_user = None
-                                    for msg in self.messages:
-                                        if msg.role == Role.user:
-                                            first_user = msg
-                                            break
-                                    kept = []
-                                    if first_user:
-                                        kept.append(first_user)
-                                    kept.extend(self.messages[-2:])
-                                    self.messages.reset(kept)
-
-                                # Inject summary of what's done
-                                summary = (
-                                    f"CONTEXT RESET — You were stuck rewriting {stuck_file}.\n"
-                                    f"Files already created: {', '.join(existing_files) if existing_files else 'none'}\n"
-                                    f"Continue creating the REMAINING files. Do not rewrite files that already exist."
-                                )
-                                self._inject_system_note(summary)
-                                # Skip the generic retrospection — the summary is more useful
-                                continue
-
-                            self._inject_system_note(retro)
-                    else:
-                        # Loop broken — reset temperature to normal
-                        self._temp_override = None
+                # No circuit breakers, no loop detection, no forced nudges.
+                # The model works on its own. The only hard stop is MAX_TOOL_TURNS.
 
                 if user_cancelled:
                     return
@@ -889,19 +627,7 @@ class AgentLoop:
         finally:
             await self._save_messages()
 
-            # Post-session quality check
-            try:
-                from drydock.core.session_checker import check_session, format_issues
-                issues = check_session(
-                    list(self.messages),
-                    has_made_edit=has_made_edit,
-                )
-                if issues:
-                    report = format_issues(issues)
-                    if report:
-                        yield AssistantEvent(content=report)
-            except Exception:
-                pass  # Non-critical — don't crash on checker errors
+            # Session quality check REMOVED — was blocking workflow
 
     async def _perform_llm_turn(self) -> AsyncGenerator[BaseEvent, None]:
         if self.enable_streaming:
@@ -912,6 +638,8 @@ class AgentLoop:
             if assistant_event.content:
                 yield assistant_event
 
+        if not self.messages:
+            return
         last_message = self.messages[-1]
 
         # Detect repetitive text generation (Gemma 4 sometimes loops text within one response)
@@ -1039,7 +767,7 @@ class AgentLoop:
         - Other (bash with commands): block after 3
         """
         args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
-        sig = hashlib.md5(
+        sig = hashlib.sha256(
             f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
 
@@ -1091,7 +819,7 @@ class AgentLoop:
     def _circuit_breaker_record(self, tool_call: ResolvedToolCall, result_text: str) -> None:
         """Record a tool call execution for circuit breaker tracking."""
         args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
-        sig = hashlib.md5(
+        sig = hashlib.sha256(
             f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
         count, _ = self._tool_call_history.get(sig, (0, ""))
@@ -1351,6 +1079,33 @@ class AgentLoop:
                             f"Do NOT run another bash command until you have fixed the code."
                         )
 
+            # RECOVERY: hard-blocked duplicate write_file. When write_file raises
+            # "BLOCKED: ... has been called N times with IDENTICAL content", the
+            # model has a history full of identical no-op writes. Prune those from
+            # message history so the model's next turn sees a cleaner context and
+            # is less likely to re-trigger the same loop.
+            #
+            # Pruning is safe here because the duplicates are by definition no-ops
+            # against the file on disk — deleting the history preserves actual
+            # state. We keep the most recent write attempt (which is the one that
+            # just got blocked) so the model sees the error.
+            if (
+                tool_call.tool_name == "write_file"
+                and "BLOCKED:" in str(exc)
+                and "IDENTICAL content" in str(exc)
+            ):
+                try:
+                    target_path = ""
+                    try:
+                        wf_args = json.loads(tool_call.raw_arguments or "{}")
+                        target_path = wf_args.get("path", "")
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
+                    if target_path:
+                        self._prune_duplicate_writes(target_path)
+                except Exception as prune_exc:
+                    logger.debug("Prune after block failed: %s", prune_exc)
+
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,
@@ -1397,6 +1152,18 @@ class AgentLoop:
             )
         )
 
+        # Advisory loop detection: inject nudge when the model keeps repeating
+        # the same call. Never blocks, never stops — just steers the model toward
+        # a different approach. Catches the 28-identical-bash-calls failure mode.
+        try:
+            repetition = self._check_tool_call_repetition()
+            if repetition:
+                nudge = self._build_repetition_nudge(repetition, tool_call)
+                if nudge:
+                    self._inject_system_note(nudge)
+        except Exception as e:
+            logger.debug("Loop detection check failed: %s", e)
+
         self.telemetry_client.send_tool_call_finished(
             tool_call=tool_call,
             agent_profile_name=self.agent_profile.name,
@@ -1404,6 +1171,169 @@ class AgentLoop:
             decision=decision,
             result=result,
         )
+
+    def _build_repetition_nudge(
+        self, signal: str, tool_call: ResolvedToolCall
+    ) -> str | None:
+        """Build an advisory nudge for the model when a loop is detected.
+
+        Returns None if the tool call was already nudged recently (prevents
+        spamming the model with the same message on every turn).
+        """
+        # Rate-limit: don't nudge more than once every 3 turns for the same tool
+        last_nudge_turn = getattr(self, "_last_nudge_turn", -10)
+        current_turn = len(self.messages)
+        if current_turn - last_nudge_turn < 3:
+            return None
+        self._last_nudge_turn = current_turn
+
+        tool_name = tool_call.tool_name
+        if signal == "FORCE_STOP":
+            return (
+                f"You have called `{tool_name}` with the SAME arguments 8+ times "
+                f"and gotten the same result each time. This is a dead end. "
+                f"You MUST change your approach:\n"
+                f"- For bash: if output is empty, read the source files to find the bug — "
+                f"  don't just re-run the command\n"
+                f"- For write_file/search_replace: if the file already has your content, "
+                f"  move on to the NEXT file\n"
+                f"- If stuck, inspect the actual file contents with read_file before editing"
+            )
+        if signal.startswith("WARNING|"):
+            stuck_tool = signal.split("|", 1)[1] or tool_name
+            if stuck_tool == "bash":
+                return (
+                    f"You have run very similar `bash` commands several times in a row. "
+                    f"If the output is empty or unchanged, the command is not the problem — "
+                    f"the CODE is. Use read_file to inspect the source, then write_file or "
+                    f"search_replace to fix the bug. Do not re-run the same command again."
+                )
+            if stuck_tool in ("write_file", "search_replace"):
+                return (
+                    f"You have written the same file multiple times in a row. "
+                    f"Move to the NEXT file in your plan. If no next file, run the code "
+                    f"with bash to verify it works."
+                )
+            return (
+                f"You have called `{stuck_tool}` several times in a row with similar "
+                f"arguments. Try a different tool or a different approach."
+            )
+        return None
+
+    def _prune_duplicate_writes(self, target_path: str) -> None:
+        """Remove assistant-write_file / tool-result pairs for a looping path.
+
+        Called after the hard-block fires on a write_file call. By that point
+        the message history contains 3+ identical no-op write attempts to
+        `target_path`, which bloats context and keeps nudging the model back
+        toward the same action. Pruning them out gives the next turn a
+        cleaner view.
+
+        We keep:
+          - the system prompt + first user message (they anchor the task)
+          - the MOST RECENT write_file+result pair for this path (the one
+            that just triggered the block — its error message is what the
+            model needs to see)
+          - everything unrelated to target_path
+
+        We drop:
+          - older write_file(path=target_path) assistant messages
+          - their matching tool result messages
+
+        This only prunes write_file calls where the path matches exactly and
+        where the write_file is the ONLY tool call in that assistant message
+        (to avoid removing unrelated calls in a multi-tool turn).
+        """
+        if len(self.messages) < 4:
+            return
+
+        # Find indices of all write_file assistant messages targeting this path
+        target_indices: list[int] = []
+        for i, msg in enumerate(self.messages):
+            if msg.role != Role.assistant:
+                continue
+            tcs = msg.tool_calls or []
+            if len(tcs) != 1:
+                continue
+            fn = tcs[0].function
+            if not fn or fn.name != "write_file":
+                continue
+            try:
+                args = json.loads(fn.arguments or "{}")
+            except (json.JSONDecodeError, AttributeError):
+                continue
+            if args.get("path", "") == target_path:
+                target_indices.append(i)
+
+        if len(target_indices) < 2:
+            return
+
+        # Keep the MOST RECENT one; prune the rest (and their tool result)
+        to_drop: set[int] = set()
+        for idx in target_indices[:-1]:
+            to_drop.add(idx)
+            # The matching tool result is the next tool message
+            for j in range(idx + 1, min(idx + 3, len(self.messages))):
+                if self.messages[j].role == Role.tool:
+                    to_drop.add(j)
+                    break
+
+        if not to_drop:
+            return
+
+        kept = [m for i, m in enumerate(self.messages) if i not in to_drop]
+        logger.info(
+            "Pruning %d message(s) from write loop on %s (history now %d → %d)",
+            len(to_drop), target_path, len(self.messages), len(kept),
+        )
+        self.messages.reset(kept)
+
+    def _truncate_old_tool_results(self) -> None:
+        """Shrink old verbose tool results before they bloat context.
+
+        For local models like Gemma 4 the per-turn cost grows quadratically
+        with context size, so a session with 30+ messages and a few large
+        read_file results becomes unusable. This method:
+
+        - Keeps the system prompt and the FIRST user message verbatim
+          (instructions that should not be lost).
+        - Keeps the last KEEP_RECENT tool results in full.
+        - Truncates any older tool result whose content exceeds the
+          per-result soft cap to a head + footer + size marker.
+
+        Runs every turn but is a no-op when nothing exceeds the caps.
+        Truncation is in-place and idempotent.
+        """
+        KEEP_RECENT = 6              # last N tool messages stay full
+        SOFT_CAP_BYTES = 800         # tool result longer than this gets shrunk
+        HEAD_BYTES = 400             # bytes kept from the head
+        TAIL_BYTES = 100             # bytes kept from the tail
+
+        if len(self.messages) < KEEP_RECENT + 4:
+            return
+
+        # Index of every tool message
+        tool_idxs = [
+            i for i, m in enumerate(self.messages) if m.role == Role.tool
+        ]
+        if len(tool_idxs) <= KEEP_RECENT:
+            return
+
+        # Truncate everything except the last KEEP_RECENT
+        for idx in tool_idxs[:-KEEP_RECENT]:
+            msg = self.messages[idx]
+            content = str(msg.content or "")
+            if len(content) <= SOFT_CAP_BYTES:
+                continue
+            # Idempotent guard — already truncated by us
+            if "[…truncated " in content and "bytes…]" in content:
+                continue
+            head = content[:HEAD_BYTES]
+            tail = content[-TAIL_BYTES:]
+            removed = len(content) - HEAD_BYTES - TAIL_BYTES
+            msg.content = (
+                f"{head}\n[…truncated {removed} bytes…]\n{tail}"
+            )
 
     def _sanitize_message_ordering(self) -> None:
         """Fix any role ordering violations before sending to vLLM/Mistral.
@@ -1414,6 +1344,10 @@ class AgentLoop:
 
         This runs as a safety net before every LLM call.
         """
+        # Proactive context shrinkage runs first so the LLM call sees the
+        # smaller payload.
+        self._truncate_old_tool_results()
+
         if not self.messages:
             return
 
@@ -1434,7 +1368,7 @@ class AgentLoop:
             self.messages.reset(cleaned)
 
         # Fix 2: If last message is assistant, add a user "Continue." prompt
-        if self.messages[-1].role == Role.assistant:
+        if self.messages and self.messages[-1].role == Role.assistant:
             self.messages.append(LLMMessage(role=Role.user, content="Continue."))
 
     async def _chat(self, max_tokens: int | None = None) -> LLMChunk:
@@ -1449,7 +1383,7 @@ class AgentLoop:
         try:
             start_time = time.perf_counter()
             # Use temperature override if set (loop detection bumps it)
-            temp = getattr(self, '_temp_override', None) or active_model.temperature
+            temp = active_model.temperature
             result = await self.backend.complete(
                 model=active_model,
                 messages=self.messages,
@@ -1499,7 +1433,7 @@ class AgentLoop:
             usage = LLMUsage()
             chunk_agg = LLMChunk(message=LLMMessage(role=Role.assistant))
             # Use temperature override if set (loop detection bumps it)
-            temp = getattr(self, '_temp_override', None) or active_model.temperature
+            temp = active_model.temperature
             async for chunk in self.backend.complete_streaming(
                 model=active_model,
                 messages=self.messages,
@@ -1796,7 +1730,7 @@ class AgentLoop:
                             f"{tc.function.name}:{tc.function.arguments}"
                         )
                         tool_names.append(tc.function.name or "")
-                sig = hashlib.md5(
+                sig = hashlib.sha256(
                     "|".join(sorted(call_parts)).encode()
                 ).hexdigest()[:16]
                 sigs.append(sig)
@@ -1993,6 +1927,8 @@ class AgentLoop:
                 "## Rules\n"
                 "- Use absolute imports: `from package.module import X`\n"
                 "- Always create `__init__.py` and `__main__.py`\n"
+                "- Create ALL files listed in the PRD before stopping\n"
+                "- Do NOT stop after creating just __init__.py — continue to the next file\n"
                 "- NEVER ask 'should I proceed' or 'would you like me to' — JUST DO IT\n"
                 "- After creating a file, immediately create the next one\n"
             )
@@ -2229,7 +2165,7 @@ class AgentLoop:
                             except (json.JSONDecodeError, TypeError):
                                 pass
                         call_parts.append(f"{fn_name}:{fn_args}")
-                sig = hashlib.md5("|".join(sorted(call_parts)).encode()).hexdigest()[:16]
+                sig = hashlib.sha256("|".join(sorted(call_parts)).encode()).hexdigest()[:16]
 
                 if sig in seen_sigs:
                     # Duplicate — mark for removal (assistant msg + next tool result)

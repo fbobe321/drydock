@@ -305,6 +305,14 @@ class VibeConfig(BaseSettings):
     include_model_info: bool = True
     include_project_context: bool = True
     include_prompt_detail: bool = True
+    # When True, the system prompt drops the inlined per-tool prompt files
+    # (~6500 tokens for the 24 builtin tools) AND the available skills /
+    # subagents listings. The model still receives the OpenAI tool function
+    # schemas via the `tools` field of the API call. Recommended for local
+    # models like Gemma 4 where every prefill token costs ~7-12 ms and the
+    # bloated default system prompt (~10K tokens) causes 60-120s first-turn
+    # latency. Defaults False for backward compatibility.
+    slim_system_prompt: bool = False
     enable_update_checks: bool = True
     enable_auto_update: bool = True
     enable_notifications: bool = True

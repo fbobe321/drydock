@@ -163,21 +163,12 @@ def run_cli(args: argparse.Namespace) -> None:
             if not hasattr(args, 'initial_prompt') or not args.initial_prompt:
                 args.initial_prompt = args.prompt or stdin_prompt
 
-        # Disable problematic tools for models that can't handle complex schemas
+        # Auto-enable thinking mode for Gemma 4 if not set
         try:
             active = config.get_active_model()
-            if "gemma" in active.name.lower():
-                config.disabled_tools = [
-                    *config.disabled_tools,
-                    "ask_user_question",
-                    "todo",
-                    "task_create",
-                    "task_update",
-                    "task",
-                    "invoke_skill",
-                    "tool_search",
-                ]
-        except (ValueError, AttributeError):
+            if "gemma" in active.name.lower() and active.thinking == "off":
+                active.thinking = "high"
+        except Exception:
             pass
 
         # Disable streaming for Gemma 4 — streaming tool call accumulation

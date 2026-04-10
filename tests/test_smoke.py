@@ -33,7 +33,7 @@ class TestImports:
         from drydock.core.tools.builtins.search_replace import SearchReplace
         from drydock.core.tools.builtins.glob_tool import Glob
         from drydock.core.tools.builtins.notebook_edit import NotebookEdit
-        from drydock.core.tools.builtins.task_manager import TaskCreate
+        from drydock.core.tools.builtins._task_manager import TaskCreate
         from drydock.core.tools.builtins.lsp import Lsp
         from drydock.core.tools.builtins.cron import CronCreate
         from drydock.core.tools.builtins.tool_search import ToolSearch

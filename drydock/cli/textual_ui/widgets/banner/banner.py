@@ -88,11 +88,14 @@ class Banner(Static):
         )
 
     def _format_meta_counts(self) -> str:
-        return (
-            f"{self.state.models_count} model{'s' if self.state.models_count != 1 else ''}"
-            f" · {self.state.mcp_servers_count} MCP server{'s' if self.state.mcp_servers_count != 1 else ''}"
-            f" · {self.state.skills_count} skill{'s' if self.state.skills_count != 1 else ''}"
-        )
+        parts = []
+        if self.state.models_count:
+            parts.append(f"{self.state.models_count} model{'s' if self.state.models_count != 1 else ''}")
+        if self.state.mcp_servers_count:
+            parts.append(f"{self.state.mcp_servers_count} MCP server{'s' if self.state.mcp_servers_count != 1 else ''}")
+        if self.state.skills_count:
+            parts.append(f"{self.state.skills_count} skill{'s' if self.state.skills_count != 1 else ''}")
+        return " · ".join(parts) if parts else ""
 
     def _format_plan(self) -> str:
         return (

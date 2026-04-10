@@ -201,3 +201,4 @@ tests/playground/*
 .
 logs/
 test_bank_results/
+.pause_auto_release

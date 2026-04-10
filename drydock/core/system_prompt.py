@@ -258,20 +258,28 @@ def get_universal_system_prompt(
 
     if config.include_prompt_detail:
         static_sections.append(_get_os_system_prompt())
-        tool_prompts = []
-        for tool_class in tool_manager.available_tools.values():
-            if prompt := tool_class.get_tool_prompt():
-                tool_prompts.append(prompt)
-        if tool_prompts:
-            static_sections.append("\n---\n".join(tool_prompts))
 
-        skills_section = _get_available_skills_section(skill_manager)
-        if skills_section:
-            static_sections.append(skills_section)
+        # slim_system_prompt drops the heaviest static sections — tool
+        # prompt files, skills list, subagents list — that bloat the prompt
+        # to ~10K tokens for local models. The OpenAI tool function schemas
+        # still go to the model via the API `tools` field, so capability
+        # is preserved; only the inlined examples and best-practices docs
+        # are skipped.
+        if not getattr(config, "slim_system_prompt", False):
+            tool_prompts = []
+            for tool_class in tool_manager.available_tools.values():
+                if prompt := tool_class.get_tool_prompt():
+                    tool_prompts.append(prompt)
+            if tool_prompts:
+                static_sections.append("\n---\n".join(tool_prompts))
 
-        subagents_section = _get_available_subagents_section(agent_manager)
-        if subagents_section:
-            static_sections.append(subagents_section)
+            skills_section = _get_available_skills_section(skill_manager)
+            if skills_section:
+                static_sections.append(skills_section)
+
+            subagents_section = _get_available_subagents_section(agent_manager)
+            if subagents_section:
+                static_sections.append(subagents_section)
 
     # === DYNAMIC SECTIONS (change per project/directory) ===
     dynamic_sections = []

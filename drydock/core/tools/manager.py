@@ -49,7 +49,7 @@ def _compute_module_name(path: Path) -> str:
         return canonical
 
     resolved = path.resolve()
-    path_hash = hashlib.md5(str(resolved).encode()).hexdigest()[:8]
+    path_hash = hashlib.sha256(str(resolved).encode()).hexdigest()[:8]
     stem = re.sub(r"[^0-9A-Za-z_]", "_", path.stem) or "mod"
     return f"vibe_tools_discovered_{stem}_{path_hash}"
 

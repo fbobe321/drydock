@@ -4,14 +4,22 @@
 
 Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
 - **Repo:** https://github.com/fbobe321/drydock
-- **PyPI:** https://pypi.org/project/drydock-cli/ (v2.5.0)
-- **Goal:** Reliable TUI coding agent with local LLMs. PRD-driven project building + SWE-bench bug fixing.
+- **PyPI:** https://pypi.org/project/drydock-cli/ (v2.6.23 — v2.6.24 built but unreleased)
+- **Goal:** Reliable TUI coding agent with local LLMs. PRD-driven project building.
 - **Hardware:** 2x RTX 4060 Ti 16GB, Gemma 4 26B MoE (A4B) via vLLM Docker at localhost:8000
 - **Server:** remus (Ubuntu 22.04, user: bobef)
 - **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (only 4B active params, ~70 tok/s)
-- **TUI results:** 88/90 PRD projects pass (98%) through the real TUI
-- **SWE-bench:** 70% file match (v3 baseline), 58% (v3 tuned — tighter prompt hurt)
-- **Priority:** TUI experience first, SWE-bench second
+- **The honest test:** `scripts/user_pain_test.py` user-pain harness — pass means real
+  user-perceptible behaviour, not tool-call counts. See `scripts/run_pain_suite.sh`
+  for the 10-project core set.
+- **OLD harnesses you should NOT trust:** `scripts/tui_test.py` and
+  `core_tests_real.sh` count tool calls and `--help` and miss the things users
+  actually experience (loops the model ignores, hallucinated tool names that
+  hang the session, models that declare done with broken code, 2-minute
+  generation pauses). They produce passing scores while real usage fails.
+- **Priority:** TUI experience first. Fix drydock bugs, don't simplify PRDs.
+- **370 PRDs** at /data3/drydock_test_projects/ — the benchmark suite
+- **Current version:** v2.6.23 on PyPI / v2.6.24 built locally (unreleased)
 
 ## Build & Test
 
@@ -253,47 +261,236 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 - ✅ Docker-based model serving (vLLM + Gemma 4)
 - ✅ Multi-backend SWE-bench harness (v2/devstral + v3/gemma4)
 - ✅ Thinking token filtering (Gemma 4 `<|channel>` leak)
+- ✅ **User-pain harness** (`scripts/user_pain_test.py`) — drives real TUI
+  via pexpect, watches live session log, types `STOP` interrupts,
+  judges on user-perceptible criteria
+- ✅ **Multi-PRD pain suite** (`scripts/run_pain_suite.sh`) — 10 core
+  projects through the user-pain harness
+- ✅ **`_check_main_module_entry`** in write_file.py — catches
+  `__main__.py` files that import `main` but never call it (the codec
+  silent-exit bug)
+- ✅ **`_check_missing_sibling_imports`** in write_file.py — catches
+  `from .cli import CLI` when `cli.py` doesn't exist on disk yet (the
+  minivc unimportable-package bug)
+- ✅ **Escalating dedup message** in write_file.py — 2nd+ identical-content
+  write to a path returns the actual current directory listing plus
+  concrete next-action suggestions, instead of abstract "move to next file"
+- ✅ **Loop-detection wiring** in agent_loop.py — `_check_tool_call_repetition()`
+  was defined but never called; now fires from `_handle_tool_response()`
+  and injects an advisory nudge via `_inject_system_note()`, rate-limited
+  every 3 turns
+- ✅ **`_truncate_old_tool_results`** in agent_loop.py — proactive
+  shrinkage of stale tool results before each LLM call; keeps the last
+  6 in full, truncates older ones > 800 bytes to head + footer + size
+  marker; idempotent
+- ✅ **`_task_manager.py` rename** — TaskCreate/Update/List were
+  duplicates of the `todo` tool that confused Gemma 4 into hanging.
+  Underscore prefix excludes them from tool discovery
+- ✅ **Trust dialog auto-dismissal** in user_pain_test.py
+- ✅ **Pause flags** for both `auto_release.sh` and `watchdog.sh` so
+  manual debugging doesn't get its work overwritten
 
 **Legal note:** All patterns are standard design concepts implemented from scratch. No proprietary code copied.
 
 ## Key Learnings
 
-1. **Test the TUI, not headless.** Headless passes mask real bugs. TUI has different code paths (streaming, approval, render_path_prompt). ALL testing through TUI via pexpect.
-2. **Use PRDs for testing.** Concrete PRDs with expected files and `--help` give clear pass/fail. 100-project suite proved TUI works (98%).
-3. **Scaffold per model.** Weaker models need more guardrails (non-streaming, fewer tools, simpler prompts). As models improve, remove scaffolding. The code should get simpler over time.
-4. **Streaming breaks Gemma 4 tool calls.** Streaming accumulates JSON chunk-by-chunk → empty args. Non-streaming gets complete response → works perfectly. Root cause of weeks of TUI failures.
-5. **Fewer tools = better for local models.** Gemma 4 wasted 64 turns on task_create/task_update. Disabling non-essential tools eliminated the loop.
-6. **Simple prompts win.** The 125-line cli.md with phases/delegation confused Gemma 4. The 20-line gemma4.md ("ACT IMMEDIATELY") works.
-7. AGENTS.md essential for devstral (loops without it), not needed for Gemma 4
-8. Circuit breaker was net negative — removed entirely
-9. Loop detection should guide, never stop (retrospection > hardcoded nudges)
-10. Clean rewrites beat incremental fixes — v3 (~750 lines) outperforms v2 (~5000+ lines) on SWE-bench
-11. Model choice matters more than agent complexity — Gemma 4 MoE gives 3-4x speed
-12. Docker-based model serving (vLLM) is reliable — easier restarts, GPU management
-13. Auto-read on failed edit — automatically show the model the real file content
-14. Temperature bump on loops — force model to explore different paths
-15. Failed-approach accumulator — prevent re-trying strategies after pruning/compaction
-16. PRD complexity must match model capability — too many files/features causes timeout
+### Most-recent (debugging the user's worst session, April 2026)
+
+1. **Test-harness counts are not user pain.** `tui_test.py` and
+   `core_tests_real.sh` reported 80% pass while real users saw drydock
+   loop, hang, and produce broken code. The harnesses were structurally
+   incapable of catching what users experience because they measure
+   tool-call counts and `--help` exit codes, not progress. Build pass
+   criteria around user-perceptible state instead. See `user_pain_test.py`.
+2. **Gemma 4 ignores advisory nudges.** The model received the dedup
+   message ("File already has this exact content. Move to the NEXT file."),
+   the loop-detection system note, the missing-import warning, AND a
+   user-typed `STOP` interrupt — its own thinking tokens ACKNOWLEDGED
+   the loop ("The user is pointing out that I am in a loop... I should
+   move to the next file") — and kept writing the same file 10 times
+   anyway. The advisory-only rule is correct in principle, but Gemma 4
+   cannot reliably respond to it. Hard blocks on pure no-op duplicates
+   may eventually be necessary.
+3. **The auto_release.sh cron silently reverts site-packages every 6 hours.**
+   It runs at 0/6/12/18, builds a wheel from `/data3/drydock`, uploads to
+   PyPI, and `pip install --force-reinstall`s into the user's env. Direct
+   edits to `site-packages/drydock/...` disappear at the next cron tick.
+   Pause via `touch /data3/drydock/.pause_auto_release`.
+4. **`/data3/drydock` is in `sys.path`, but site-packages comes first.**
+   `import drydock; print(drydock.__file__)` lies depending on cwd. From
+   `/data3/drydock` it reports the source tree (cwd is `""` at index 0).
+   From any project cwd it reports site-packages. **Always validate
+   imports from a neutral cwd.**
+5. **PRDs get contaminated across sessions.** The model edits `PRD.md`
+   during a session (adds "✅ Completed" status tables, chat-style
+   filler text). The next test run sees a "completed" PRD and either
+   declares done immediately or hallucinates fix actions. Snapshot
+   `PRD.master.md` before each run; the harness restores it automatically.
+6. **Hallucinated tool names hang the session.** The model called
+   `ralph_repo_index({"directory": "."})` — a tool that doesn't exist.
+   `_build_tool_call_events()` had `if tool_class is None: continue` which
+   silently dropped the call. Drydock waited forever for a tool result
+   that never came. `resolve_tool_calls()` correctly emits a `FailedToolCall`
+   downstream — both code paths exist; verify which one the model is hitting.
+7. **The "Trust this folder?" dialog blocks all input.** Drydock pops a
+   blocking modal the first time it opens an unfamiliar directory. The
+   harness used to type the user prompt blindly into it; the dialog ate
+   the keystrokes and drydock waited forever. The fix: detect the dialog
+   in pexpect output, send Left+Enter to answer Yes. The harness now does
+   this. The CLI should never strand users on a modal dialog.
+8. **Context-bloat eats first-turn latency.** Drydock includes the system
+   prompt + 24 tool definitions + AGENTS.md auto-injection + user message
+   on every turn. With Gemma 4 `thinking="high"` the first response can
+   take 60–130 seconds even on a small project, because the model is
+   generating ~1000 thinking tokens at ~70 tok/s. `auto_compact_threshold`
+   defaults to 200K (higher than Gemma 4's 131K max context) so it never
+   fires. Lower it per-model, and rely on `_truncate_old_tool_results()`
+   to shrink stale `read_file` outputs proactively.
+9. **`task_manager.py` (TaskCreate/Update/List) confused Gemma 4** — the
+   model mixed it up with the existing `todo` tool, called `task_update`
+   on a `todo` ID, hung waiting on the response. Renamed to
+   `_task_manager.py` so the auto-discovery loop in `tools/manager.py`
+   skips it (it skips files starting with `_`). The classes are still
+   importable for tests via the new module name.
+10. **Variance is the rule, not the exception.** Same code, same prompt,
+    same model: codec passed in run 1 of the suite and triggered all 3
+    pain criteria in run 2. Always state both numbers honestly. Don't
+    cherry-pick the run that worked.
+
+### Older but still relevant
+
+11. **Test the TUI, not headless.** Headless passes mask real bugs. TUI
+    has different code paths (streaming, approval, render_path_prompt).
+    ALL testing through TUI via pexpect.
+12. **Use PRDs for testing.** Concrete PRDs with expected files give
+    clear pass/fail. The 370-PRD suite is at /data3/drydock_test_projects/.
+13. **Scaffold per model.** Weaker models need more guardrails
+    (non-streaming, fewer tools, simpler prompts). As models improve,
+    remove scaffolding.
+14. **Streaming breaks Gemma 4 tool calls.** Non-streaming gets the
+    complete response so JSON args are valid. Set `enable_streaming=False`
+    when model is Gemma 4.
+15. **Fewer tools = better for local models.** 24 builtins is already a
+    lot for Gemma 4. The auto-injected list of 39 user-installed CLI
+    tools makes it worse.
+16. **Simple prompts win.** The 125-line `cli.md` with phases/delegation
+    confused Gemma 4. The 20-line `gemma4.md` ("ACT IMMEDIATELY") works.
+17. **AGENTS.md essential for devstral, not needed for Gemma 4.**
+18. **Circuit breaker was net negative — removed entirely.**
+19. **Loop detection should guide, never stop.** Per the user's rule.
+    See learning #2 for the limit of this rule.
+20. **Auto-read on failed edit, temperature bump on loops, failed-approach
+    accumulator** — additive context techniques that help.
 
 ## Testing
 
-### TUI Test Harness
-- **Script:** `scripts/tui_test.py` — pexpect-based, drives the REAL TUI binary
-- **Auto-approves** tool permission prompts
-- **Detects:** write loops, API errors, tool call counts, file creation, --help pass/fail
-- **100 PRDs:** at `/data3/drydock_test_projects/` (88/90 pass = 98%)
+### Use `scripts/user_pain_test.py` — anything else lies
 
-### PRD Format (what works)
-- Short (under 30 lines)
-- 4-6 files max
-- Clear package name and file list
-- Test command: `python3 -m package_name --help`
-- Stdlib only (no external deps)
+The `user_pain_test.py` harness is the only test infrastructure that catches what
+real users experience. Older harnesses (`tui_test.py`, `core_tests_real.sh`,
+`run_real_tests.sh`) measure tool counts and `--help` exit codes; they pass
+while real users see loops and hangs.
 
-### What breaks PRDs
-- Too many files (8+) — model runs out of turns
-- Complex parsers (custom YAML/XML from scratch)
-- Features requiring external APIs or databases
+**How it works:**
+- Drives the real `drydock` TUI via pexpect (no headless mode)
+- Sends a vague user-style prompt ("review the PRD and build the package")
+- Polls the live `~/.vibe/logs/session/session_<id>/messages.jsonl` in parallel
+- Watches for write loops, search_replace cascades, hallucinated-tool hangs
+- Types simulated `STOP` interrupts when loops are detected, then tracks
+  whether the model OBEYS them
+- Distinguishes three end-states:
+  - **Active turn** (any new message in the last 120s) → keep going
+  - **Done** (last assistant has text content with no tool call) → grace 30s, then PASS
+  - **Dead silence** (no new messages of any kind for 120s) → FAIL
+- Resets the cwd between runs (restores `PRD.md` from `PRD.master.md` if present,
+  wipes the package dir and stale data dirs)
+- Auto-handles the "Trust this folder?" dialog drydock pops on new directories
+
+**Pass criteria (ALL must hold):**
+1. NO write loops (≥3 identical-content writes to a path)
+2. NO ignored user `STOP` interrupts
+3. NO search_replace failure cascade (≥3 in a row)
+4. `python3 -m <pkg> --help` actually works
+5. Session under `MAX_SESSION_SECONDS` (default 600)
+
+**Run a single project:**
+
+```bash
+PYTHONUNBUFFERED=1 python3 -u scripts/user_pain_test.py \
+    --cwd /data3/test_drydock \
+    --prompt "review the PRD and get started" \
+    --pkg doc_qa_system
+```
+
+**Run the 10-project core suite:**
+
+```bash
+bash scripts/run_pain_suite.sh
+```
+
+**Real-world results from the harness (after recent fixes):**
+- 4/4 on the small suite (roman_converter, prime_tool, todo_list, codec)
+  with real functional verification: codec round-trips work, todo_list
+  workflow works, prime check works.
+- Variance is real — codec passed in one suite run and FAILED with a
+  3-criteria loop in the next. Same code, same prompt. Document this when
+  reporting.
+
+### Fixture: `tests/fixtures/doc_qa_system_prd.md`
+
+The PRD that originally exposed the user's worst session (10 identical
+`__init__.py` writes, hallucinated `ralph_repo_index` tool, contaminated
+PRD across sessions, 13-min runtime) is checked in. Use it as the canary
+case for any harness work.
+
+### Two cron pause flags you should know about
+
+Both crons silently overwrite work mid-debug. Pause them when iterating:
+
+```bash
+touch /data3/drydock_test_projects/.pause_watchdog       # stops watchdog.sh
+touch /data3/drydock/.pause_auto_release                  # stops auto_release.sh
+```
+
+`auto_release.sh` runs at 0/6/12/18, builds a wheel from `/data3/drydock`,
+uploads to PyPI, and `pip install --force-reinstall`s it into the user's env.
+That overwrites any direct site-packages edits. **If your fix doesn't
+survive the next cron run, it's because you only edited `/data3/drydock` —
+auto_release rebuilds from there but ALSO replaces site-packages.** Commit
+your fix to source AND verify it landed via `git log --oneline -5` before
+expecting persistence.
+
+### Why direct site-packages edits keep disappearing
+
+`/home/bobef/miniforge3/envs/drydock/lib/python3.14/site-packages` comes
+before `/data3/drydock` in `sys.path` from a project cwd, even though the
+`_drydock.pth` file adds `/data3/drydock`. So a sanity check from
+`/data3/drydock` (`import drydock; print(drydock.__file__)`) lies — it
+reports `/data3/drydock/drydock/__init__.py` because cwd-`""` is at index 0.
+From `/data3/drydock_test_projects/X` it reports the site-packages path.
+**Always test imports from a neutral cwd**, OR commit to source AND let
+auto_release rebuild.
+
+### Test Levels (kept for reference, but the user-pain harness covers all of them)
+1. **Build test (--help):** package runs — MEANINGLESS alone
+2. **Functional test:** PRD test cases verified with correct output — THE REAL TEST
+3. **Acceptance test:** specific expected outputs verified
+4. **Quality test:** code quality checks (docstrings, no eval, error handling)
+
+### Critical Testing Rules
+- PRD failures = DryDock bugs. Fix the agent, NOT the PRD.
+- --help passing proves nothing about code quality
+- Safety mechanisms must be ADVISORY not BLOCKING
+- NEVER add circuit breakers that prevent legitimate work
+- The model should be able to answer questions without being forced to edit files
+- **NEVER trust an old harness's pass result.** If `tui_test.py` or
+  `core_tests_real.sh` says PASS, run the same project through
+  `user_pain_test.py` to confirm. The old harnesses count `--help` and
+  silently miss the things users hate.
+- **Always reset PRDs between runs.** The model edits PRD.md (adds
+  "✅ Completed" status tables, chat-style filler) and contaminates
+  subsequent test runs. The harness restores from `PRD.master.md`
+  automatically if present.
 
 ## When Compacting
 

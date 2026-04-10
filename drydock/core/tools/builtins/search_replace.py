@@ -131,6 +131,27 @@ class SearchReplace(
 
         original_content = await self._read_file(file_path)
 
+        # Detect placeholder/omission patterns that would delete code
+        PLACEHOLDER_PATTERNS = [
+            "# rest of code", "# ... rest", "# unchanged",
+            "// rest of code", "// ... rest", "// unchanged",
+            "# TODO: implement", "pass  # placeholder",
+            "...",  # bare ellipsis as entire replacement
+        ]
+        for block in search_replace_blocks:
+            replacement = block.replace.strip()
+            if replacement in PLACEHOLDER_PATTERNS or any(
+                p in replacement.lower() for p in [
+                    "rest of code", "rest of the code", "unchanged",
+                    "remaining code", "code continues", "etc.",
+                ]
+            ):
+                raise ToolError(
+                    f"Your replacement contains a placeholder ('{replacement[:50]}') "
+                    f"that would delete existing code. Provide the COMPLETE replacement "
+                    f"code, not a summary. If the code is unchanged, don't edit it."
+                )
+
         block_result = self._apply_blocks(
             original_content,
             search_replace_blocks,
@@ -165,6 +186,17 @@ class SearchReplace(
                 pass
 
             await self._write_file(file_path, modified_content)
+
+            # Auto-verify syntax for Python files
+            if file_path.suffix == ".py":
+                try:
+                    import ast
+                    ast.parse(modified_content)
+                except SyntaxError as e:
+                    block_result.warnings.append(
+                        f"⚠ SYNTAX ERROR after edit at line {e.lineno}: {e.msg}. "
+                        f"Fix this before continuing."
+                    )
 
         yield SearchReplaceResult(
             file=str(file_path),
@@ -230,14 +262,13 @@ class SearchReplace(
                 ">>>>>>> REPLACE"
             )
 
-        # Detect garbled token output (common with some models/parsers)
+        # Detect garbled token output — only flag obvious corruption
+        # (mixed angle brackets + repeated letters like <<t<ttt<t), not normal repeats
         for block in search_replace_blocks:
-            if re.search(r'(.)\1{4,}', block.search) or re.search(r'<{3,}[a-z]', block.search):
+            if re.search(r'<[a-z]<[a-z]{2,}<[a-z]', block.search):
                 raise ToolError(
-                    "Your search text appears garbled (repeated/corrupted characters). "
-                    "This happens when regex or special characters confuse the tool call parser. "
-                    "WORKAROUND: Use read_file to get the exact line numbers, then use write_file "
-                    "to rewrite the entire function instead of search_replace on complex regex patterns."
+                    "Your search text appears garbled (token corruption). "
+                    "Use write_file to rewrite the function instead of search_replace."
                 )
 
         return file_path, search_replace_blocks

@@ -159,6 +159,10 @@ class OpenAIAdapter(APIAdapter):
             model_name, converted_messages, temperature, tools, max_tokens, tool_choice
         )
 
+        # Enable thinking for models that support it (Gemma 4)
+        if thinking and thinking not in ("off", ""):
+            payload["chat_template_kwargs"] = {"enable_thinking": True}
+
         if enable_streaming:
             payload["stream"] = True
             stream_options = {"include_usage": True}
@@ -167,7 +171,8 @@ class OpenAIAdapter(APIAdapter):
             payload["stream_options"] = stream_options
 
         headers = self.build_headers(api_key)
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        # Use ensure_ascii=True to prevent encoding issues with vLLM's JSON parser
+        body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
 
         return PreparedRequest(self.endpoint, headers, body)
 

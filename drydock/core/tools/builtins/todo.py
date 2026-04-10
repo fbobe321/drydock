@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from enum import StrEnum, auto
 from typing import ClassVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from drydock.core.tools.base import (
     BaseTool,
@@ -32,10 +32,24 @@ class TodoPriority(StrEnum):
 
 
 class TodoItem(BaseModel):
-    id: str
-    content: str
+    id: str = Field(default_factory=lambda: str(__import__('time').time_ns()))
+    content: str = ""
     status: TodoStatus = TodoStatus.PENDING
     priority: TodoPriority = TodoPriority.MEDIUM
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def clean_status(cls, v):
+        if isinstance(v, str):
+            return v.strip("'\"").lower()
+        return v
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def clean_priority(cls, v):
+        if isinstance(v, str):
+            return v.strip("'\"").lower()
+        return v
 
 
 class TodoArgs(BaseModel):

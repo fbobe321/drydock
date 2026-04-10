@@ -394,10 +394,18 @@ class VibeApp(App):  # noqa: PLR0904
         input_widget.value = ""
 
         if self._agent_running:
-            # Queue the message instead of interrupting — process after current task
+            # Queue the message — join rapid-fire inputs (multi-line paste)
             if not hasattr(self, "_pending_messages"):
                 self._pending_messages: list[str] = []
-            self._pending_messages.append(value)
+            import time
+            now = time.time()
+            last_queue_time = getattr(self, "_last_queue_time", 0)
+            if now - last_queue_time < 0.5 and self._pending_messages:
+                # Rapid input (< 500ms apart) = likely paste — join with newline
+                self._pending_messages[-1] += "\n" + value
+            else:
+                self._pending_messages.append(value)
+            self._last_queue_time = now
             preview = value[:60] + "..." if len(value) > 60 else value
             self.notify(f"Queued: \"{preview}\" ({len(self._pending_messages)} pending)")
             return
@@ -801,6 +809,12 @@ class VibeApp(App):  # noqa: PLR0904
                 await self._loading_widget.remove()
             if self.event_handler:
                 self.event_handler.stop_current_tool_call(success=False)
+
+            # Log full traceback for debugging
+            import traceback
+            tb = traceback.format_exc()
+            import logging
+            logging.getLogger(__name__).error("TUI exception: %s\n%s", e, tb)
 
             message = str(e)
             if isinstance(e, RateLimitError):
