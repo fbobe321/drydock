@@ -5,22 +5,22 @@
 set -uo pipefail
 
 RUNS=${1:-3}
-RESULTS="/tmp/pain_variance_results.txt"
+RESULTS="/tmp/shakedown_variance_results.txt"
 > "$RESULTS"
 
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║  VARIANCE SUITE — ${RUNS} runs of the 10-project core    "
+echo "║  SHAKEDOWN VARIANCE — ${RUNS} runs of the 10-project core    "
 echo "╚══════════════════════════════════════════════════════╝"
 
 for i in $(seq 1 "$RUNS"); do
     echo ""
     echo "################## RUN $i / $RUNS ##################"
-    bash /data3/drydock/scripts/run_pain_suite.sh 2>&1
-    # After each run, the suite wrote /tmp/pain_suite_results.txt — grab it
-    if [ -f /tmp/pain_suite_results.txt ]; then
+    bash /data3/drydock/scripts/shakedown_suite.sh 2>&1
+    # After each run, the suite wrote /tmp/shakedown_suite_results.txt — grab it
+    if [ -f /tmp/shakedown_suite_results.txt ]; then
         while IFS='|' read -r proj verdict; do
             printf "RUN%d|%s|%s\n" "$i" "$(echo $proj | xargs)" "$(echo $verdict | xargs)" >> "$RESULTS"
-        done < /tmp/pain_suite_results.txt
+        done < /tmp/shakedown_suite_results.txt
     fi
 done
 

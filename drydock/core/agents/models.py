@@ -43,6 +43,7 @@ class BuiltinAgentName(StrEnum):
     EXPLORE = "explore"
     DIAGNOSTIC = "diagnostic"
     PLANNER = "planner"
+    BUILDER = "builder"
 
 
 @dataclass(frozen=True)
@@ -223,6 +224,34 @@ PLANNER = AgentProfile(
     },
 )
 
+BUILDER = AgentProfile(
+    name=BuiltinAgentName.BUILDER,
+    display_name="Builder",
+    description=(
+        "Subagent that creates an entire Python package from a PRD. Use this "
+        "when the user gives you a PRD with 4+ files to write — delegating "
+        "keeps the main agent's context small and lets the builder iterate "
+        "in its own scratch space. Has read_file, write_file, search_replace, "
+        "glob, and bash. Returns a short summary listing the files created "
+        "and whether `python3 -m <pkg> --help` worked. Up to 40 turns."
+    ),
+    safety=AgentSafety.DESTRUCTIVE,
+    agent_type=AgentType.SUBAGENT,
+    max_turns=40,
+    overrides={
+        "enabled_tools": [
+            "read_file", "write_file", "search_replace",
+            "glob", "grep", "bash",
+        ],
+        "system_prompt_id": "builder",
+        "tools": {
+            "write_file": {"permission": "always"},
+            "search_replace": {"permission": "always"},
+            "bash": {"permission": "always"},
+        },
+    },
+)
+
 BUILTIN_AGENTS: dict[str, AgentProfile] = {
     BuiltinAgentName.DEFAULT: DEFAULT,
     BuiltinAgentName.PLAN: PLAN,
@@ -231,4 +260,5 @@ BUILTIN_AGENTS: dict[str, AgentProfile] = {
     BuiltinAgentName.EXPLORE: EXPLORE,
     BuiltinAgentName.DIAGNOSTIC: DIAGNOSTIC,
     BuiltinAgentName.PLANNER: PLANNER,
+    BuiltinAgentName.BUILDER: BUILDER,
 }

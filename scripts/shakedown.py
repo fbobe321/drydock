@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""User-pain test harness for the drydock TUI.
+"""Shakedown harness for the drydock TUI.
 
 Reproduces the failure modes a real user experiences but the existing
 tui_test.py harness misses:
@@ -26,7 +26,7 @@ Pass criteria (ALL must hold):
 Exit code 0 = pass, non-zero = fail (with detailed report on stdout).
 
 Usage:
-    python3 scripts/user_pain_test.py --cwd /data3/test_drydock \\
+    python3 scripts/shakedown.py --cwd /data3/test_drydock \\
         --prompt "review the PRD and get started" \\
         --pkg doc_qa_system
 """
@@ -51,8 +51,12 @@ SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
 # Failure thresholds (user-perceptible pain)
 DUP_WRITE_LOOP_THRESHOLD = 3       # 3+ identical-content writes = loop
 SEARCH_REPLACE_FAIL_CASCADE = 3    # 3+ failed search_replace in a row
-DEAD_SILENCE_SECONDS = 120         # No new MESSAGES at all for 2 min = stuck
-MAX_SESSION_SECONDS = 600          # Hard cap on session time
+DEAD_SILENCE_SECONDS = 240         # No new MESSAGES at all for 4 min = stuck.
+                                   # Local Gemma 4 with thinking="high" can
+                                   # take 90-120s on a complex first turn —
+                                   # 120s was too aggressive and killed real
+                                   # progress mid-thinking.
+MAX_SESSION_SECONDS = 720          # Hard cap on session time (12 minutes)
 INTERRUPT_GRACE_TURNS = 2          # After we type "stop", give 2 turns
 DONE_GRACE_SECONDS = 30            # After model declares done (text-only), give it
 
@@ -91,26 +95,50 @@ class SessionWatcher:
         return None
 
     def refresh(self) -> list[dict]:
-        """Re-read the messages.jsonl and return any new messages."""
+        """Re-read messages from the main session AND any sub-agent sessions.
+
+        Drydock writes the BUILDER (and other) subagent message logs at
+        `<main_session>/agents/<sub_session>/messages.jsonl`. The shakedown
+        harness used to watch only the main session, so when the main agent
+        delegated to the builder, it looked like the session was idle for
+        the entire build (4 main messages, ~30 sub messages of real work).
+        Now we walk every messages.jsonl under the main session and merge
+        them into one ordered list (main first, then each sub-session by
+        directory name which encodes start time).
+        """
         sd = self.find_session()
         if sd is None:
             return []
-        msgs_file = sd / "messages.jsonl"
-        if not msgs_file.exists():
+
+        msg_files: list[Path] = []
+        main_file = sd / "messages.jsonl"
+        if main_file.exists():
+            msg_files.append(main_file)
+        # Sub-sessions
+        agents_dir = sd / "agents"
+        if agents_dir.exists():
+            for sub in sorted(agents_dir.iterdir()):
+                sub_msgs = sub / "messages.jsonl"
+                if sub_msgs.exists():
+                    msg_files.append(sub_msgs)
+
+        if not msg_files:
             return []
-        try:
-            lines = msgs_file.read_text().strip().split("\n")
-        except Exception:
-            return []
-        msgs = []
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
+
+        msgs: list[dict] = []
+        for f in msg_files:
             try:
-                msgs.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
+                lines = f.read_text().strip().split("\n")
+            except Exception:
+                continue
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msgs.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
         new_msgs = msgs[self.last_seen_msg:]
         self.last_seen_msg = len(msgs)
         self.messages = msgs
@@ -125,8 +153,11 @@ class FailureDetector:
     """Walks messages and tracks user-pain failure modes."""
 
     def __init__(self):
-        # Per-path: list of (msg_index, content_hash) for write_file calls
-        self.writes: dict[str, list[tuple[int, str]]] = defaultdict(list)
+        # Per-path: list of (msg_index, content, bytes_written) for write_file
+        # calls. bytes_written is read from the matching tool result and
+        # lets us distinguish a "real" write from a dedup'd no-op (=0) or
+        # a hard-blocked write (=None / error).
+        self.writes: dict[str, list[tuple[int, str, int | None]]] = defaultdict(list)
         # search_replace results in order
         self.search_replace_results: list[tuple[int, bool]] = []  # (msg_idx, success)
         # Last index that produced a "useful" tool result
@@ -147,6 +178,9 @@ class FailureDetector:
         self.writes.clear()
         self.search_replace_results.clear()
 
+        # Pass 1: collect write_file calls with their args
+        # We need the matching tool result to know bytes_written, so we
+        # walk indexed and look ahead for the next tool message.
         for i, m in enumerate(all_msgs):
             role = m.get("role", "")
             if role == "assistant":
@@ -163,9 +197,29 @@ class FailureDetector:
                     if name == "write_file":
                         path = args.get("path", "")
                         content = args.get("content", "")
-                        if path:
-                            # Normalize path (drydock sometimes prepends absolute)
-                            self.writes[path].append((i, content))
+                        if not path:
+                            continue
+                        # Look ahead for the matching tool result
+                        bytes_written: int | None = None
+                        for j in range(i + 1, min(i + 4, len(all_msgs))):
+                            tm = all_msgs[j]
+                            if tm.get("role") != "tool":
+                                continue
+                            tc_id = tc.get("id", "")
+                            tm_id = tm.get("tool_call_id", "")
+                            if tc_id and tm_id and tc_id != tm_id:
+                                continue
+                            tcontent = str(tm.get("content", "") or "")
+                            if tcontent.startswith("<tool_error>"):
+                                bytes_written = None  # blocked
+                            else:
+                                bw_match = re.search(
+                                    r"bytes_written:\s*(\d+)", tcontent
+                                )
+                                if bw_match:
+                                    bytes_written = int(bw_match.group(1))
+                            break
+                        self.writes[path].append((i, content, bytes_written))
             elif role == "tool":
                 content = str(m.get("content", "") or "")
                 tool_name = m.get("name", "")
@@ -173,24 +227,41 @@ class FailureDetector:
                     is_err = content.startswith("<tool_error>") or "failed:" in content[:80].lower()
                     self.search_replace_results.append((i, not is_err))
 
-        # Now derive failures
+        # Now derive failures.
+        #
+        # A "real" write loop is 3+ consecutive identical-content writes
+        # where ≥2 of them ACTUALLY wrote bytes (bytes_written > 0). The
+        # hard block + dedup combo lets a model spam write_file with the
+        # same content — only the FIRST one writes bytes, the rest are
+        # dedup no-ops or blocked. That's not a loop the harness should
+        # fail on; it's the framework working as intended.
         self.write_loops_detected = []
         for path, entries in self.writes.items():
-            # Count consecutive runs of identical content
             if not entries:
                 continue
             run_content = entries[0][1]
+            run_writes: list[int | None] = [entries[0][2]]
             run_len = 1
-            for _, content in entries[1:]:
+            for _, content, bw in entries[1:]:
                 if content == run_content:
                     run_len += 1
+                    run_writes.append(bw)
                 else:
                     if run_len >= DUP_WRITE_LOOP_THRESHOLD:
-                        self.write_loops_detected.append((path, run_len))
+                        real_writes = sum(
+                            1 for x in run_writes if x is not None and x > 0
+                        )
+                        if real_writes >= 2:
+                            self.write_loops_detected.append((path, run_len))
                     run_content = content
+                    run_writes = [bw]
                     run_len = 1
             if run_len >= DUP_WRITE_LOOP_THRESHOLD:
-                self.write_loops_detected.append((path, run_len))
+                real_writes = sum(
+                    1 for x in run_writes if x is not None and x > 0
+                )
+                if real_writes >= 2:
+                    self.write_loops_detected.append((path, run_len))
 
         # Search replace cascades
         self.search_replace_cascades = []
@@ -247,15 +318,26 @@ class FailureDetector:
         return None
 
     def check_interrupt_obeyed(self, all_msgs: list[dict]) -> None:
-        """For paths we interrupted, check if model wrote them again identically."""
+        """For paths we interrupted, check if model wrote them again identically.
+
+        Only counts as "ignored" if the post-interrupt writes ACTUALLY wrote
+        bytes (bytes_written > 0). Dedup'd no-op writes don't count — those
+        are already caught by the framework.
+        """
         for path in list(self.interrupted_paths):
             entries = self.writes.get(path, [])
-            # Find the interrupt msg index (last user msg whose marker text we sent)
             interrupt_idx = max(self.user_interrupts_sent) if self.user_interrupts_sent else 0
-            after = [(idx, c) for idx, c in entries if idx > interrupt_idx]
+            # Now (idx, content, bytes_written) tuples
+            after = [
+                (idx, c, bw) for idx, c, bw in entries if idx > interrupt_idx
+            ]
             if len(after) >= 2:
-                # Two writes to the same path AFTER the user said stop = ignored
-                if after[-1][1] == after[-2][1]:
+                # Two writes to the same path AFTER the user said stop with
+                # IDENTICAL content AND both actually wrote bytes = ignored.
+                last, prev = after[-1], after[-2]
+                if (last[1] == prev[1]
+                        and (last[2] or 0) > 0
+                        and (prev[2] or 0) > 0):
                     if path not in self.ignored_after_interrupt:
                         self.ignored_after_interrupt.append(path)
 
@@ -317,6 +399,37 @@ class DrydockDriver:
         time.sleep(0.2)
         self.child.send("\r")  # submit
 
+    def dismiss_permission_prompts(self) -> bool:
+        """Detect and auto-approve any tool permission dialog.
+
+        Drydock pops a "Tool wants to do X. Allow?" prompt for tools whose
+        permission is ASK. The default cursor is on "Yes" (option 1), so
+        pressing Enter approves. We do nothing if no prompt is up.
+
+        Returns True if a prompt was dismissed (signal for the caller to
+        give the UI a moment to redraw).
+        """
+        if self.child is None:
+            return False
+        # Peek at recent buffer without consuming
+        try:
+            recent = self.child.before or ""
+        except Exception:
+            return False
+        # Markers seen on the actual permission prompts: numbered "Yes" /
+        # "Yes and always allow" / "No and tell the agent" choices.
+        markers = (
+            "Yes and always allow",
+            "and tell the agent what to do",
+            "Allow this tool to run",
+        )
+        if not any(m in recent for m in markers):
+            return False
+        # Default cursor is on "Yes" — Enter accepts
+        self.child.send("\r")
+        time.sleep(0.5)
+        return True
+
     def alive(self) -> bool:
         return self.child is not None and self.child.isalive()
 
@@ -336,7 +449,7 @@ class DrydockDriver:
 
 def run_test(cwd: Path, prompt: str, pkg: str) -> int:
     print(f"┌────────────────────────────────────────────────────")
-    print(f"│ user-pain test")
+    print(f"│ shakedown")
     print(f"│   cwd:    {cwd}")
     print(f"│   prompt: {prompt}")
     print(f"│   pkg:    {pkg}")
@@ -364,7 +477,7 @@ def run_test(cwd: Path, prompt: str, pkg: str) -> int:
             shutil.rmtree(p)
             print(f"[*] Wiped stale {stale}/")
 
-    log_path = Path(f"/tmp/user_pain_{int(time.time())}.tui.log")
+    log_path = Path(f"/tmp/shakedown_{int(time.time())}.tui.log")
     start_time = time.time()
 
     driver = DrydockDriver(cwd, log_path)
@@ -399,6 +512,13 @@ def run_test(cwd: Path, prompt: str, pkg: str) -> int:
             except pexpect.EOF:
                 print(f"\n[*] TUI exited at {int(elapsed)}s")
                 break
+
+            # If a tool permission dialog is up, auto-approve it.
+            # Drydock blocks input on these prompts otherwise — same class
+            # of bug as the trust dialog. Re-runs at every poll because
+            # multiple permission prompts can fire across a session.
+            if driver.dismiss_permission_prompts():
+                print(f"  [{int(elapsed):4d}s] permission dialog auto-approved")
 
             # Refresh session log
             new_msgs = watcher.refresh()

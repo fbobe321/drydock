@@ -9,9 +9,9 @@
 set -uo pipefail
 
 PYTHON="/home/bobef/miniconda3/bin/python3"
-HARNESS="/data3/drydock/scripts/user_pain_test.py"
+HARNESS="/data3/drydock/scripts/shakedown.py"
 PROJECTS_DIR="/data3/drydock_test_projects"
-RESULTS="/tmp/pain_suite_results.txt"
+RESULTS="/tmp/shakedown_suite_results.txt"
 > "$RESULTS"
 
 # Format: project_dir:package_name:prompt
@@ -33,7 +33,7 @@ fail=0
 total=0
 
 echo "╔════════════════════════════════════════════════════╗"
-echo "║  USER-PAIN SUITE — ${#SUITE[@]} projects              "
+echo "║  SHAKEDOWN SUITE — ${#SUITE[@]} projects              "
 echo "╚════════════════════════════════════════════════════╝"
 
 for entry in "${SUITE[@]}"; do

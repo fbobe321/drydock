@@ -9,8 +9,8 @@ Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
 - **Hardware:** 2x RTX 4060 Ti 16GB, Gemma 4 26B MoE (A4B) via vLLM Docker at localhost:8000
 - **Server:** remus (Ubuntu 22.04, user: bobef)
 - **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (only 4B active params, ~70 tok/s)
-- **The honest test:** `scripts/user_pain_test.py` user-pain harness — pass means real
-  user-perceptible behaviour, not tool-call counts. See `scripts/run_pain_suite.sh`
+- **The honest test:** `scripts/shakedown.py` shakedown harness — pass means real
+  user-perceptible behaviour, not tool-call counts. See `scripts/shakedown_suite.sh`
   for the 10-project core set.
 - **OLD harnesses you should NOT trust:** `scripts/tui_test.py` and
   `core_tests_real.sh` count tool calls and `--help` and miss the things users
@@ -261,11 +261,11 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 - ✅ Docker-based model serving (vLLM + Gemma 4)
 - ✅ Multi-backend SWE-bench harness (v2/devstral + v3/gemma4)
 - ✅ Thinking token filtering (Gemma 4 `<|channel>` leak)
-- ✅ **User-pain harness** (`scripts/user_pain_test.py`) — drives real TUI
+- ✅ **Shakedown harness** (`scripts/shakedown.py`) — drives real TUI
   via pexpect, watches live session log, types `STOP` interrupts,
   judges on user-perceptible criteria
-- ✅ **Multi-PRD pain suite** (`scripts/run_pain_suite.sh`) — 10 core
-  projects through the user-pain harness
+- ✅ **Shakedown suite** (`scripts/shakedown_suite.sh`) — 10 core
+  projects through the shakedown harness
 - ✅ **`_check_main_module_entry`** in write_file.py — catches
   `__main__.py` files that import `main` but never call it (the codec
   silent-exit bug)
@@ -286,7 +286,7 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 - ✅ **`_task_manager.py` rename** — TaskCreate/Update/List were
   duplicates of the `todo` tool that confused Gemma 4 into hanging.
   Underscore prefix excludes them from tool discovery
-- ✅ **Trust dialog auto-dismissal** in user_pain_test.py
+- ✅ **Trust dialog auto-dismissal** in shakedown.py
 - ✅ **Pause flags** for both `auto_release.sh` and `watchdog.sh` so
   manual debugging doesn't get its work overwritten
 
@@ -301,7 +301,7 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
    loop, hang, and produce broken code. The harnesses were structurally
    incapable of catching what users experience because they measure
    tool-call counts and `--help` exit codes, not progress. Build pass
-   criteria around user-perceptible state instead. See `user_pain_test.py`.
+   criteria around user-perceptible state instead. See `shakedown.py`.
 2. **Gemma 4 ignores advisory nudges.** The model received the dedup
    message ("File already has this exact content. Move to the NEXT file."),
    the loop-detection system note, the missing-import warning, AND a
@@ -384,9 +384,9 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 
 ## Testing
 
-### Use `scripts/user_pain_test.py` — anything else lies
+### Use `scripts/shakedown.py` — anything else lies
 
-The `user_pain_test.py` harness is the only test infrastructure that catches what
+The `shakedown.py` harness is the only test infrastructure that catches what
 real users experience. Older harnesses (`tui_test.py`, `core_tests_real.sh`,
 `run_real_tests.sh`) measure tool counts and `--help` exit codes; they pass
 while real users see loops and hangs.
@@ -416,7 +416,7 @@ while real users see loops and hangs.
 **Run a single project:**
 
 ```bash
-PYTHONUNBUFFERED=1 python3 -u scripts/user_pain_test.py \
+PYTHONUNBUFFERED=1 python3 -u scripts/shakedown.py \
     --cwd /data3/test_drydock \
     --prompt "review the PRD and get started" \
     --pkg doc_qa_system
@@ -425,7 +425,7 @@ PYTHONUNBUFFERED=1 python3 -u scripts/user_pain_test.py \
 **Run the 10-project core suite:**
 
 ```bash
-bash scripts/run_pain_suite.sh
+bash scripts/shakedown_suite.sh
 ```
 
 **Real-world results from the harness (after recent fixes):**
@@ -471,7 +471,7 @@ From `/data3/drydock_test_projects/X` it reports the site-packages path.
 **Always test imports from a neutral cwd**, OR commit to source AND let
 auto_release rebuild.
 
-### Test Levels (kept for reference, but the user-pain harness covers all of them)
+### Test Levels (kept for reference, but the shakedown harness covers all of them)
 1. **Build test (--help):** package runs — MEANINGLESS alone
 2. **Functional test:** PRD test cases verified with correct output — THE REAL TEST
 3. **Acceptance test:** specific expected outputs verified
@@ -485,7 +485,7 @@ auto_release rebuild.
 - The model should be able to answer questions without being forced to edit files
 - **NEVER trust an old harness's pass result.** If `tui_test.py` or
   `core_tests_real.sh` says PASS, run the same project through
-  `user_pain_test.py` to confirm. The old harnesses count `--help` and
+  `shakedown.py` to confirm. The old harnesses count `--help` and
   silently miss the things users hate.
 - **Always reset PRDs between runs.** The model edits PRD.md (adds
   "✅ Completed" status tables, chat-style filler) and contaminates

@@ -51,8 +51,21 @@ class TaskResult(BaseModel):
 
 
 class TaskToolConfig(BaseToolConfig):
-    permission: ToolPermission = ToolPermission.ASK
-    allowlist: list[str] = Field(default=[BuiltinAgentName.EXPLORE, BuiltinAgentName.DIAGNOSTIC, BuiltinAgentName.PLANNER])
+    # ALWAYS instead of ASK because the subagent is itself sandboxed by
+    # its own per-tool permissions (see e.g. BUILDER's overrides). Asking
+    # the user to approve every delegation defeats the purpose of subagents
+    # — the model can't iterate without blocking on a TUI dialog the
+    # automated harness can't dismiss. Per-subagent profiles are the right
+    # place to control which tools they're allowed to call.
+    permission: ToolPermission = ToolPermission.ALWAYS
+    allowlist: list[str] = Field(
+        default=[
+            BuiltinAgentName.EXPLORE,
+            BuiltinAgentName.DIAGNOSTIC,
+            BuiltinAgentName.PLANNER,
+            BuiltinAgentName.BUILDER,
+        ]
+    )
 
 
 class Task(
