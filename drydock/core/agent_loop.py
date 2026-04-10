@@ -483,16 +483,22 @@ class AgentLoop:
         # === AUTO-CONTEXT ===
         # Auto-explore project files + inject relevant skill for the task type.
         # The model handles everything with subagents (v2.0.0 fixed delegation).
+        _ar_t0 = time.perf_counter()
         await self._auto_route_task(user_msg)
+        _ar_t1 = time.perf_counter()
+        logger.warning("[TIMING] _auto_route_task: %.2fs", _ar_t1 - _ar_t0)
 
         try:
             should_break_loop = False
             tool_turns = 0
             api_error_count = 0
             has_made_edit = False  # Track if model has used search_replace/write_file
+            logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
                 # Loop protection: prevent infinite tool-call loops
                 tool_turns += 1
+                _wt0 = time.perf_counter()
+                logger.warning("[TIMING] turn %d: starting", tool_turns)
                 if tool_turns > MAX_TOOL_TURNS:
                     yield AssistantEvent(
                         content=f"\n\n[Maximum tool call limit ({MAX_TOOL_TURNS}) reached. Stopping.]\n",
@@ -508,9 +514,12 @@ class AgentLoop:
                         "stop and ask the user for clarification."
                     )
 
+                _mw0 = time.perf_counter()
                 result = await self.middleware_pipeline.run_before_turn(
                     self._get_context()
                 )
+                _mw1 = time.perf_counter()
+                logger.warning("[TIMING] turn %d: middleware=%.2fs action=%s", tool_turns, _mw1 - _mw0, result.action)
                 async for event in self._handle_middleware_result(result):
                     yield event
 
@@ -521,11 +530,13 @@ class AgentLoop:
                 user_cancelled = False
                 try:
                     force_stopped = False
+                    logger.warning("[TIMING] turn %d: calling _perform_llm_turn", tool_turns)
                     async for event in self._perform_llm_turn():
                         if is_user_cancellation_event(event):
                             user_cancelled = True
                         if isinstance(event, AssistantEvent) and event.stopped_by_middleware:
                             force_stopped = True
+                        logger.warning("[TIMING] turn %d: yielding event type=%s", tool_turns, type(event).__name__)
                         yield event
                         await self._save_messages()
                     if force_stopped:
@@ -1372,13 +1383,23 @@ class AgentLoop:
             self.messages.append(LLMMessage(role=Role.user, content="Continue."))
 
     async def _chat(self, max_tokens: int | None = None) -> LLMChunk:
+        _t0 = time.perf_counter()
         self._sanitize_message_ordering()
+        _t1 = time.perf_counter()
 
         active_model = self.config.get_active_model()
         provider = self.config.get_provider_for_model(active_model)
 
         available_tools = self.format_handler.get_available_tools(self.tool_manager)
         tool_choice = self.format_handler.get_tool_choice()
+        _t2 = time.perf_counter()
+
+        n_msgs = len(self.messages)
+        n_tools = len(available_tools) if available_tools else 0
+        logger.info(
+            "[TIMING] _chat start: sanitize=%.2fs prep=%.2fs msgs=%d tools=%d",
+            _t1 - _t0, _t2 - _t1, n_msgs, n_tools,
+        )
 
         try:
             start_time = time.perf_counter()
@@ -1398,6 +1419,12 @@ class AgentLoop:
             )
             end_time = time.perf_counter()
 
+            logger.info(
+                "[TIMING] backend.complete returned in %.2fs (prompt=%s completion=%s)",
+                end_time - start_time,
+                result.usage.prompt_tokens if result.usage else "?",
+                result.usage.completion_tokens if result.usage else "?",
+            )
             if result.usage is None:
                 raise AgentLoopLLMResponseError(
                     "Usage data missing in non-streaming completion response"

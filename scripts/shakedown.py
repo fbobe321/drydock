@@ -51,11 +51,12 @@ SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
 # Failure thresholds (user-perceptible pain)
 DUP_WRITE_LOOP_THRESHOLD = 3       # 3+ identical-content writes = loop
 SEARCH_REPLACE_FAIL_CASCADE = 3    # 3+ failed search_replace in a row
-DEAD_SILENCE_SECONDS = 240         # No new MESSAGES at all for 4 min = stuck.
+DEAD_SILENCE_SECONDS = 360         # No new MESSAGES at all for 6 min = stuck.
                                    # Local Gemma 4 with thinking="high" can
-                                   # take 90-120s on a complex first turn —
-                                   # 120s was too aggressive and killed real
-                                   # progress mid-thinking.
+                                   # take 90-240s on a complex first turn,
+                                   # plus prefill warmup variance. The suite
+                                   # runner also retries once on failure, so
+                                   # this threshold + retry covers most flakes.
 MAX_SESSION_SECONDS = 720          # Hard cap on session time (12 minutes)
 INTERRUPT_GRACE_TURNS = 2          # After we type "stop", give 2 turns
 DONE_GRACE_SECONDS = 30            # After model declares done (text-only), give it
@@ -506,21 +507,32 @@ def run_test(cwd: Path, prompt: str, pkg: str) -> int:
                 print(f"\n[FAIL] Hard timeout at {int(elapsed)}s")
                 break
 
-            # Drive pexpect to keep reading TUI output
-            try:
-                driver.child.expect(pexpect.TIMEOUT, timeout=2)
-            except pexpect.EOF:
+            # CRITICAL: drain the PTY buffer aggressively. The textual TUI
+            # generates ~50KB/s of animated output (spinners, ANSI redraws).
+            # If we don't read fast enough, the kernel PTY buffer fills up
+            # (4-64KB), drydock's stdout write() BLOCKS, and the async event
+            # loop freezes — including the LLM call. This was the root cause
+            # of the "dead silence" pattern that caused 55/59 regression
+            # failures: the session-log polling (scanning 8000+ directories)
+            # would block the reader for >1s, filling the PTY buffer.
+            #
+            # Fix: read with a SHORT timeout (0.1s) to drain output fast,
+            # then only poll the session log every ~2 seconds.
+            for _ in range(20):  # 20 × 0.1s = 2s of aggressive reading
+                try:
+                    driver.child.expect(pexpect.TIMEOUT, timeout=0.1)
+                except pexpect.EOF:
+                    break
+
+            if not driver.alive():
                 print(f"\n[*] TUI exited at {int(elapsed)}s")
                 break
 
-            # If a tool permission dialog is up, auto-approve it.
-            # Drydock blocks input on these prompts otherwise — same class
-            # of bug as the trust dialog. Re-runs at every poll because
-            # multiple permission prompts can fire across a session.
+            # Permission dialog check — fast, just peeks at buffer
             if driver.dismiss_permission_prompts():
                 print(f"  [{int(elapsed):4d}s] permission dialog auto-approved")
 
-            # Refresh session log
+            # Session log refresh — runs after the 2s drain window
             new_msgs = watcher.refresh()
             if new_msgs:
                 detector.feed(watcher.messages)
