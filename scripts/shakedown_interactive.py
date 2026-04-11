@@ -32,16 +32,20 @@ SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
 # wait_condition: "msgs>=N" or "writes>=N" or "done"
 
 SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
-    # ── Tool Agent: build, test, extend, troubleshoot ──
+    # ── Tool Agent: plan, todo, build, test, extend, troubleshoot ──
     "tool_agent": [
         ("Review the PRD and create a plan. List what files you will create "
          "and in what order. Do NOT write any code yet — just plan.",
          "msgs>=4", 120),
-        ("Good. Now start building — write __init__.py, __main__.py, and tools.py first.",
-         "writes>=3", 120),
-        ("Continue — write agent.py and cli.py.",
-         "writes>=5", 120),
-        ("Run python3 -m {pkg} --help to verify the package works. If it fails, fix it.",
+        ("Good plan. Now create a todo list with all the steps needed to "
+         "build this package. Include: create files, test, verify each tool. "
+         "Then start working through the todo list — build the first 3 files.",
+         "writes>=3", 150),
+        ("Keep going through your todo list. Write the remaining files. "
+         "Update each todo item as you complete it.",
+         "writes>=5", 150),
+        ("Run python3 -m {pkg} --help to verify the package works. If it "
+         "fails, fix it. Mark the test todo as done when it passes.",
          "msgs>={prev}+3", 120),
         ("Explain how the agent loop works. Walk me through what happens when "
          "a user types a query.",
@@ -52,18 +56,22 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         ("Test it: run python3 -m {pkg} \"What is the date today?\"",
          "msgs>={prev}+2", 90),
         ("Now test all the original tools still work: "
-         "\"What is 23 * 47?\", \"Count words in PRD.md\", \"Search for def in *.py\"",
+         "\"What is 23 * 47?\", \"Count words in PRD.md\", \"Search for def in *.py\". "
+         "Show me the final todo list status.",
          "done", 180),
     ],
 
-    # ── Stock Screener: build, create data, test filters, add feature ──
+    # ── Stock Screener: todo-driven build + test + feature add ──
     "stock_screener": [
         ("Review the PRD. What modules will you need? Plan the architecture "
          "before writing any code.",
          "msgs>=4", 120),
-        ("Start building. Create the data loading module and the screener logic first.",
-         "writes>=3", 120),
-        ("Create the CLI, formatter, and __main__.py. Make sure the package can run.",
+        ("Create a todo list for the full build: 1) data loader, 2) screener "
+         "logic, 3) CLI, 4) formatter, 5) sample data, 6) test all commands, "
+         "7) export test. Then start working — build the data loader and screener.",
+         "writes>=3", 150),
+        ("Continue through the todo list. Create the CLI, formatter, and "
+         "__main__.py. Make sure the package can run. Update todos as you go.",
          "writes>=6", 150),
         ("Create a sample portfolio.csv with at least 8 stocks for testing.",
          "msgs>={prev}+2", 90),
@@ -74,19 +82,21 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
          "msgs>={prev}+4", 120),
         ("Test the rank command: python3 -m {pkg} rank --data portfolio.csv --top 5",
          "msgs>={prev}+2", 90),
-        ("Export results to JSON and show me the file contents.",
+        ("Export results to JSON and show me the file contents. "
+         "Show me the final todo list — everything should be done.",
          "done", 120),
     ],
 
-    # ── Eval Harness: build, create dataset, run eval, fix issues ──
+    # ── Eval Harness: todo-driven build + dataset + eval + improve ──
     "eval_harness": [
         ("Review the PRD and plan. How will you implement the code evaluator "
          "safely without using eval()? Think through the design.",
          "msgs>=4", 120),
-        ("Build the evaluators module first — exact match, fuzzy match, "
-         "and contains evaluators.",
-         "writes>=2", 120),
-        ("Now build runner.py, report.py, cli.py, and __main__.py.",
+        ("Create a todo list for the full build. Then start — build the "
+         "evaluators module first with exact match, fuzzy match, and contains.",
+         "writes>=2", 150),
+        ("Continue through the todo list. Build runner.py, report.py, cli.py, "
+         "and __main__.py. Update todos as you finish each file.",
          "writes>=6", 150),
         ("Create a sample tasks.json with 10 test cases — mix of math, "
          "text, and logic questions.",
@@ -99,18 +109,22 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
          "msgs>={prev}+4", 120),
         ("Run the eval again and show me the report. Are the results better?",
          "msgs>={prev}+3", 120),
-        ("What's the overall accuracy? Which tasks are failing and why?",
+        ("What's the overall accuracy? Which tasks are failing and why? "
+         "Show me the final todo list status.",
          "done", 120),
     ],
 
-    # ── Doc QA: build, ingest, query, improve retrieval ──
+    # ── Doc QA: todo-driven build + ingest + query + debug ──
     "doc_qa": [
         ("Review the PRD. This is a TF-IDF retrieval system with no external "
          "deps. How will you implement cosine similarity with just stdlib? Plan first.",
          "msgs>=4", 120),
-        ("Build the ingestion module — document loading and chunking.",
-         "writes>=2", 120),
-        ("Build the TF-IDF index module and query processor.",
+        ("Create a todo list for the build: 1) ingestion, 2) chunking, "
+         "3) TF-IDF index, 4) query engine, 5) CLI, 6) test data, 7) test "
+         "ingest, 8) test query. Then start — build the ingestion module.",
+         "writes>=2", 150),
+        ("Continue through the todo list. Build the TF-IDF index module "
+         "and query processor. Update todos as you complete each.",
          "writes>=4", 150),
         ("Build the CLI and __main__.py. Make sure python3 -m {pkg} --help works.",
          "writes>=6", 120),
@@ -121,18 +135,21 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         ("Query: python3 -m {pkg} query \"What is the main topic?\"",
          "msgs>={prev}+2", 90),
         ("The retrieval results look off. Read the index.py file and explain "
-         "the TF-IDF calculation. Is the IDF formula correct?",
+         "the TF-IDF calculation. Is the IDF formula correct? "
+         "Show me the final todo list.",
          "done", 120),
     ],
 
-    # ── Prompt Optimizer: build, create dataset, run optimization ──
+    # ── Prompt Optimizer: todo-driven build + dataset + optimize + improve ──
     "prompt_optimizer": [
         ("Review the PRD. The default executor uses keyword matching — explain "
          "how you'll implement that without an LLM. Plan the architecture.",
          "msgs>=4", 120),
-        ("Build the template generation and mutation module first.",
-         "writes>=2", 120),
-        ("Build the executor, scorer, and optimizer loop.",
+        ("Create a todo list for the full build. Then start — build the "
+         "template generation and mutation module first.",
+         "writes>=2", 150),
+        ("Continue through the todo list. Build the executor, scorer, and "
+         "optimizer loop. Update todos as you go.",
          "writes>=5", 150),
         ("Build the CLI and create a sample sentiment dataset with 15 examples.",
          "writes>=7", 120),
@@ -143,7 +160,8 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         ("The keyword matching is too simple. Add support for negation words "
          "like 'not good' = negative. Use search_replace on executor.py.",
          "msgs>={prev}+4", 120),
-        ("Run the optimization again and compare results to the previous run.",
+        ("Run the optimization again and compare results to the previous run. "
+         "Show me the final todo list — everything should be marked done.",
          "done", 120),
     ],
 }
@@ -320,7 +338,6 @@ def run_interactive(cwd: Path, pkg: str) -> int:
     try:
         for step_idx, (prompt_template, condition, max_wait) in enumerate(script):
             prompt = prompt_template.replace("{pkg}", pkg)
-            prev_msgs = len(watcher.messages)
 
             print(f"\n--- Step {step_idx + 1}/{len(script)} ---")
             print(f"  PROMPT: {prompt[:80]}{'...' if len(prompt) > 80 else ''}")
@@ -328,6 +345,22 @@ def run_interactive(cwd: Path, pkg: str) -> int:
 
             type_message(child, prompt)
             time.sleep(1)
+
+            # On first step, wait for the session to actually appear
+            # before counting messages. The TUI takes a few seconds to
+            # create the session directory.
+            if step_idx == 0:
+                print("  Waiting for session to appear...", end="", flush=True)
+                for _ in range(30):  # up to 30s
+                    drain_pty(child)
+                    if watcher.find_session():
+                        break
+                if watcher.find_session():
+                    print(f" found: {watcher.session_dir.name}")
+                else:
+                    print(" not found (continuing anyway)")
+
+            prev_msgs = len(watcher.messages)
 
             # Wait for condition
             step_start = time.time()

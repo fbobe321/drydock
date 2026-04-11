@@ -194,7 +194,9 @@ class Task(
             )
             return
 
-        # Foreground execution: block and collect results
+        # Foreground execution: block and collect results.
+        # Stream both tool CALLS and tool RESULTS so the user sees
+        # progress in the TUI instead of silence for 10 minutes.
         accumulated_response: list[str] = []
         completed = True
         try:
@@ -203,13 +205,24 @@ class Task(
                     accumulated_response.append(event.content)
                     if event.stopped_by_middleware:
                         completed = False
+                elif isinstance(event, ToolCallEvent):
+                    # Show what the subagent is about to do
+                    if event.tool_class:
+                        adapter = ToolUIDataAdapter(event.tool_class)
+                        display = adapter.get_call_display(event)
+                        message = f"→ {display.summary}"
+                        yield ToolStreamEvent(
+                            tool_name=self.get_name(),
+                            message=message,
+                            tool_call_id=ctx.tool_call_id,
+                        )
                 elif isinstance(event, ToolResultEvent):
                     if event.skipped:
                         completed = False
                     elif event.result and event.tool_class:
                         adapter = ToolUIDataAdapter(event.tool_class)
                         display = adapter.get_result_display(event)
-                        message = f"{event.tool_name}: {display.message}"
+                        message = f"  {event.tool_name}: {display.message}"
                         yield ToolStreamEvent(
                             tool_name=self.get_name(),
                             message=message,

@@ -62,4 +62,7 @@ Rules:
 - Follow the EXACT CLI interface specified in the PRD. Match argument names, subcommands, and flags exactly.
 - Every subcommand in the PRD must have a working handler — not just argparse registration.
 - After creating files, run python3 -m package_name [subcommand] to verify each one works.
+- If you have a todo list, update it after completing each major step
+  (e.g. after building all files, after tests pass). Use todo(action="write")
+  to mark items as done.
 - If a write_file result says "BLOCKED:" you've called it 3+ times with identical content. STOP that path. Write a DIFFERENT file or run bash. Never retry the blocked write.
