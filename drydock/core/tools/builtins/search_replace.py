@@ -286,12 +286,14 @@ class SearchReplace(
         if not search_replace_blocks:
             raise ToolError(
                 "No valid SEARCH/REPLACE blocks found in content.\n"
-                "Expected format:\n"
-                "<<<<<<< SEARCH\n"
-                "[exact content to find]\n"
-                "=======\n"
-                "[new content to replace with]\n"
-                ">>>>>>> REPLACE"
+                "You sent raw code without SEARCH/REPLACE markers.\n"
+                "Either use this format:\n"
+                "  <<<<<<< SEARCH\n"
+                "  [exact text to find]\n"
+                "  =======\n"
+                "  [replacement text]\n"
+                "  >>>>>>> REPLACE\n"
+                "Or use write_file to replace the entire file."
             )
 
         # Detect garbled token output — only flag obvious corruption

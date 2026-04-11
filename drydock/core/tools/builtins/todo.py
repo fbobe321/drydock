@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from enum import StrEnum, auto
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -57,6 +57,40 @@ class TodoArgs(BaseModel):
     todos: list[TodoItem] | None = Field(
         default=None, description="Complete list of todos when writing."
     )
+
+    @field_validator("todos", mode="before")
+    @classmethod
+    def coerce_todos(cls, v: Any) -> Any:
+        """Gemma 4 sends todos in various malformed formats.
+
+        Common patterns:
+          - A single string: "1. Do this 2. Do that"
+          - A list of strings: ["Do this", "Do that"]
+          - A list of dicts missing required fields
+
+        Coerce all of these into list[TodoItem]-compatible dicts.
+        """
+        if v is None:
+            return v
+        if isinstance(v, str):
+            # Split numbered or newline-separated items
+            import re
+            items = re.split(r'\n|(?:\d+\.\s)', v)
+            return [
+                {"content": item.strip(), "status": "pending"}
+                for item in items if item.strip()
+            ]
+        if isinstance(v, list):
+            result = []
+            for item in v:
+                if isinstance(item, str):
+                    result.append({"content": item.strip(), "status": "pending"})
+                elif isinstance(item, dict):
+                    result.append(item)
+                else:
+                    result.append({"content": str(item), "status": "pending"})
+            return result
+        return v
 
 
 class TodoResult(BaseModel):

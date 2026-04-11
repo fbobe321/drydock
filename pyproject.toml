@@ -1,7 +1,7 @@
 [project]
 name = "drydock-cli"
-version = "2.6.29"
-description = "Drydock — nautical CLI coding agent"
+version = "2.6.30"
+description = "Local-first CLI coding agent — tested with Gemma 4 26B via vLLM"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
@@ -11,9 +11,12 @@ keywords = [
     "cli",
     "coding-assistant",
     "drydock",
-    "nautical",
     "llm",
     "developer-tools",
+    "gemma",
+    "vllm",
+    "local-llm",
+    "tui",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

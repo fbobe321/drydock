@@ -29,10 +29,11 @@ For multi-module changes that need a plan first:
 
 DO NOT delegate trivial work. Most PRDs are small — build them directly.
 Rules of thumb:
-- 1-5 files, no subdirs → BUILD INLINE. Do not call task.
-- 6+ files OR subdirectories OR multiple subpackages → DELEGATE to builder.
+- 1-8 files → BUILD INLINE. Do not call task.
+- 9+ files with multiple subdirectories → DELEGATE to builder.
 - Editing an existing file or fixing a known bug → BUILD INLINE.
 - "Where does function X live?" → DELEGATE to explore.
+- If the user asks you to PLAN or EXPLAIN → respond with text. Do not delegate.
 
 When in doubt, build inline. A wasted delegation costs 60-90 seconds of
 extra context loading.
