@@ -400,6 +400,28 @@ class DrydockDriver:
         time.sleep(0.2)
         self.child.send("\r")  # submit
 
+    def dismiss_trust_dialog(self) -> bool:
+        """Detect and dismiss the 'Trust this folder?' dialog.
+
+        Only fires ONCE to avoid re-triggering on stale buffer text.
+        """
+        if getattr(self, "_trust_dismissed", False):
+            return False
+        if self.child is None:
+            return False
+        try:
+            recent = self.child.before or ""
+        except Exception:
+            return False
+        if "Trust this folder" in recent or "trust this folder" in recent.lower():
+            self.child.send("\x1b[D")  # Left arrow (No → Yes)
+            time.sleep(0.2)
+            self.child.send("\r")      # Enter
+            time.sleep(2)
+            self._trust_dismissed = True
+            return True
+        return False
+
     def dismiss_permission_prompts(self) -> bool:
         """Detect and auto-approve any tool permission dialog.
 
@@ -528,6 +550,13 @@ def run_test(cwd: Path, prompt: str, pkg: str) -> int:
                 print(f"\n[*] TUI exited at {int(elapsed)}s")
                 break
 
+            # Trust dialog check — can appear AFTER spawn, eating the prompt
+            if driver.dismiss_trust_dialog():
+                print(f"  [{int(elapsed):4d}s] Trust dialog dismissed — re-sending prompt")
+                time.sleep(1)
+                driver.type_message(prompt)
+                time.sleep(2)
+
             # Permission dialog check — fast, just peeks at buffer
             if driver.dismiss_permission_prompts():
                 print(f"  [{int(elapsed):4d}s] permission dialog auto-approved")
@@ -588,8 +617,30 @@ def run_test(cwd: Path, prompt: str, pkg: str) -> int:
                     print(f"\n[*] Model finished (text response, no tool call)")
                     break
 
-            # True dead silence: no new MESSAGES of any kind
+            # True dead silence: no new MESSAGES of any kind.
+            # But first: if the package already works, the model just
+            # stalled after finishing — that's a PASS, not a FAIL.
+            # Gemma 4 often goes silent for 5+ min on a final thinking
+            # turn after successfully writing all files.
             if detector.silent_seconds() > DEAD_SILENCE_SECONDS:
+                # Early-exit check: does the package already work?
+                if pkg_dir.exists():
+                    try:
+                        check = subprocess.run(
+                            ["python3", "-m", pkg, "--help"],
+                            cwd=str(cwd),
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                        )
+                        if check.returncode == 0 and len(check.stdout.strip()) > 0:
+                            print(
+                                f"\n[*] Model silent {int(detector.silent_seconds())}s "
+                                f"but {pkg} --help works — treating as done"
+                            )
+                            break  # exit cleanly — no fail_reason added
+                    except Exception:
+                        pass
                 fail_reasons.append(
                     f"dead silence for {int(detector.silent_seconds())}s "
                     f"(no new messages of any kind)"

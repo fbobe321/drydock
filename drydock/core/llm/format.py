@@ -76,9 +76,26 @@ class APIToolFormatHandler:
         return "auto"
 
     def process_api_response_message(self, message: Any) -> LLMMessage:
+        # Strip ALL Gemma 4 leaked channel tokens from content.
+        # The model emits various formats:
+        #   <|channel>thought...<channel|>  (thinking tokens)
+        #   <|channel>call:tool_name{...}<tool_call|>  (malformed tool calls)
+        #   <|channel><|channel>list_mcp_resources{...}<tool_call|>  (double channel)
+        # Keeping them wastes context and confuses subsequent turns.
+        content = message.content
+        if content and "<|channel>" in content:
+            import re as _re
+            # Strip any <|channel>...<channel|> or <|channel>...<tool_call|> blocks
+            content = _re.sub(
+                r"<\|channel\>.*?(?:<channel\|>|<tool_call\|>)",
+                "",
+                content,
+                flags=_re.DOTALL,
+            ).strip() or None
+
         clean_message = {
             "role": message.role,
-            "content": message.content,
+            "content": content,
             "reasoning_content": getattr(message, "reasoning_content", None),
             "reasoning_signature": getattr(message, "reasoning_signature", None),
         }

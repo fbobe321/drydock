@@ -653,6 +653,36 @@ class AgentLoop:
             return
         last_message = self.messages[-1]
 
+        # Detect thinking-only stall: model produced no visible content
+        # AND no tool calls.  This happens when Gemma 4 leaks thinking
+        # tokens that get stripped, leaving an empty assistant message.
+        # If the previous message was a tool result (model was mid-work),
+        # inject a nudge to keep it going instead of silently ending.
+        if (
+            not last_message.content
+            and not last_message.tool_calls
+            and len(self.messages) >= 3
+        ):
+            prev_role = self.messages[-2].role if len(self.messages) >= 2 else None
+            if prev_role == Role.tool:
+                # Track consecutive empty turns to avoid infinite nudge loops
+                empty_turns = getattr(self, "_consecutive_empty_turns", 0) + 1
+                self._consecutive_empty_turns = empty_turns
+                if empty_turns <= 2:
+                    logger.info("Thinking-only stall detected (attempt %d) — nudging model to continue", empty_turns)
+                    # Remove the empty assistant message and inject a nudge
+                    self.messages.pop()
+                    self._inject_system_note(
+                        "Continue working. Use a tool (read_file, write_file, "
+                        "search_replace, bash) or say what you want to do next."
+                    )
+                    return  # will re-enter _perform_llm_turn on the next loop iteration
+                else:
+                    logger.info("Thinking-only stall persists after %d nudges — letting session end", empty_turns)
+        else:
+            # Reset counter on any productive turn
+            self._consecutive_empty_turns = 0
+
         # Detect repetitive text generation (Gemma 4 sometimes loops text within one response)
         if last_message.content and len(last_message.content) > 200:
             text = last_message.content
@@ -1219,7 +1249,15 @@ class AgentLoop:
                     f"the CODE is. Use read_file to inspect the source, then write_file or "
                     f"search_replace to fix the bug. Do not re-run the same command again."
                 )
-            if stuck_tool in ("write_file", "search_replace"):
+            if stuck_tool == "search_replace":
+                return (
+                    f"STOP: You are calling search_replace with the same arguments "
+                    f"repeatedly. If the tool said 'ALREADY APPLIED', the edit is DONE. "
+                    f"If it said 'not found', you need to read_file FIRST to see the "
+                    f"actual file contents, then use the EXACT text from the file. "
+                    f"Do NOT retry the same search_replace again."
+                )
+            if stuck_tool == "write_file":
                 return (
                     f"You have written the same file multiple times in a row. "
                     f"Move to the NEXT file in your plan. If no next file, run the code "
@@ -1382,6 +1420,56 @@ class AgentLoop:
         if self.messages and self.messages[-1].role == Role.assistant:
             self.messages.append(LLMMessage(role=Role.user, content="Continue."))
 
+    def _choose_thinking_level(self, active_model: Any) -> str:
+        """Adapt thinking level based on conversation state.
+
+        Thinking is expensive for Gemma 4 (~70 tok/s).  Using "high" on
+        every turn causes 30-120s hangs between file writes.  Instead:
+
+        HIGH — first response, user messages, planning/complex decisions
+        LOW  — after tool errors (debug, but keep it brief)
+        OFF  — after successful tool results, system notes (just act)
+        """
+        base = active_model.thinking
+        if base in ("off", ""):
+            return base  # thinking disabled entirely — respect that
+
+        # Only adapt for local models where thinking is slow
+        if "gemma" not in active_model.name.lower():
+            return base
+
+        # Early conversation (first few turns): full thinking for planning
+        # The model needs to understand the task and make a plan.
+        if len(self.messages) <= 4:
+            return base
+
+        # Look at the last message to decide
+        last = self.messages[-1] if self.messages else None
+        if last is None:
+            return base
+
+        if last.role == Role.user:
+            content = str(last.content or "")
+            # System note / loop nudge → act immediately
+            if "[SYSTEM" in content:
+                return "off"
+            # Real user message → full thinking (they're asking something new)
+            return base
+
+        if last.role == Role.tool:
+            content = str(last.content or "")
+            # Tool error → think about the fix (but not too long)
+            if "<tool_error>" in content or "error" in content.lower()[:100]:
+                return "low"
+            # read_file result → might need to reason about the code
+            if "content:" in content[:50] and len(content) > 500:
+                return "low"
+            # Successful write/bash → just keep going
+            return "off"
+
+        # Default: configured level
+        return base
+
     async def _chat(self, max_tokens: int | None = None) -> LLMChunk:
         _t0 = time.perf_counter()
         self._sanitize_message_ordering()
@@ -1400,6 +1488,16 @@ class AgentLoop:
             "[TIMING] _chat start: sanitize=%.2fs prep=%.2fs msgs=%d tools=%d",
             _t1 - _t0, _t2 - _t1, n_msgs, n_tools,
         )
+
+        # Adaptive thinking: reduce thinking on routine turns
+        original_thinking = active_model.thinking
+        active_model.thinking = self._choose_thinking_level(active_model)
+        if active_model.thinking != original_thinking:
+            logger.info(
+                "[THINKING] %s → %s (last msg role=%s)",
+                original_thinking, active_model.thinking,
+                self.messages[-1].role if self.messages else "?",
+            )
 
         try:
             start_time = time.perf_counter()
@@ -1444,6 +1542,9 @@ class AgentLoop:
             raise RuntimeError(
                 f"API error from {provider.name} (model: {active_model.name}): {e}"
             ) from e
+        finally:
+            # Restore thinking level so the config stays clean
+            active_model.thinking = original_thinking
 
     async def _chat_streaming(
         self, max_tokens: int | None = None
@@ -1742,6 +1843,28 @@ class AgentLoop:
 
     def _check_tool_call_repetition(self) -> str | None:
         """Check if recent tool calls are repeating. Returns 'FORCE_STOP', 'WARNING', or None."""
+
+        # Early check: search_replace with the same file + old_string twice
+        # in a row.  This is the #1 user-pain loop — the model retries an
+        # edit that already succeeded or that keeps failing with the same
+        # "not found" error.  Nudge after just 2 identical attempts.
+        recent_sr: list[str] = []
+        for msg in reversed(self.messages[-20:]):
+            if msg.role == Role.assistant and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc.function and tc.function.name == "search_replace":
+                        try:
+                            args = json.loads(tc.function.arguments or "{}")
+                            # Build a key from file_path + old_string (content block)
+                            key = f"{args.get('file_path', '')}:{args.get('content', '')}"
+                            recent_sr.append(key)
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
+                if len(recent_sr) >= 4:
+                    break
+        if len(recent_sr) >= 2 and recent_sr[0] == recent_sr[1]:
+            return "WARNING|search_replace"
+
         sigs: list[str] = []
         tool_names: list[str] = []
         lookback = 0

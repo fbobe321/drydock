@@ -224,6 +224,38 @@ class SearchReplace(
             if path_match:
                 file_path_str = path_match.group(1)
 
+        # Last resort: if file_path is still missing but we have SEARCH text,
+        # scan project files for a match.  Gemma 4 frequently drops file_path.
+        # Limit scan to avoid hanging on large repos.
+        if not file_path_str and content:
+            blocks = self._parse_search_replace_blocks(content)
+            if blocks:
+                search_text = blocks[0].search.strip()
+                if search_text and len(search_text) >= 10:
+                    project_root = Path.cwd()
+                    candidates: list[Path] = []
+                    files_checked = 0
+                    for ext in ("*.py",):  # Only scan Python files
+                        for f in project_root.rglob(ext):
+                            if files_checked > 200:
+                                break
+                            if "__pycache__" in str(f) or ".git" in str(f):
+                                continue
+                            files_checked += 1
+                            try:
+                                text = f.read_text(encoding="utf-8", errors="replace")
+                                if len(text) > 100_000:
+                                    continue
+                                if search_text in text:
+                                    candidates.append(f)
+                            except Exception:
+                                continue
+                    if len(candidates) == 1:
+                        file_path_str = str(candidates[0])
+                    elif candidates:
+                        candidates.sort(key=lambda p: len(str(p)))
+                        file_path_str = str(candidates[0])
+
         if not file_path_str:
             raise ToolError(
                 "File path is required. Use: search_replace(file_path='path/to/file.py', content='...')"
@@ -333,6 +365,35 @@ class SearchReplace(
 
         for i, (search, replace) in enumerate(blocks, 1):
             if search not in current_content:
+                # Check if this change was ALREADY APPLIED — the replacement
+                # text is in the file but the search text is not.  This is the
+                # #1 cause of edit loops: the model successfully edits a file
+                # then retries the same edit because it doesn't realise it
+                # already worked.
+                if (replace and replace.strip()
+                        and len(replace.strip()) >= 10
+                        and replace.strip() in current_content):
+                    warnings.append(
+                        f"Block {i}: ALREADY APPLIED — the replacement text already "
+                        f"exists in {filepath.name}. The search text is gone because "
+                        f"a previous edit already made this change. "
+                        f"Move on to the next task."
+                    )
+                    # Count as "applied" so we don't error — the file is correct
+                    applied += 1
+                    continue
+                # Also detect deletion that already happened (search text removed,
+                # replace is empty — the line is simply gone).  Only trigger
+                # for meaningful search strings to avoid false positives.
+                if (not replace or not replace.strip()) and len(search.strip()) >= 10:
+                    warnings.append(
+                        f"Block {i}: ALREADY APPLIED — the text you want to remove "
+                        f"is already absent from {filepath.name}. "
+                        f"Move on to the next task."
+                    )
+                    applied += 1
+                    continue
+
                 # Try auto-applying high-confidence fuzzy match (>= 0.95 similarity)
                 auto_apply_threshold = max(fuzzy_threshold, 0.95)
                 best_match = SearchReplace._find_best_fuzzy_match(
