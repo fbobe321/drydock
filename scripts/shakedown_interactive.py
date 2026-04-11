@@ -40,7 +40,7 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         # ── Phase 1: Planning ──
         ("Review the PRD and create a plan. List what files you will "
          "create and in what order. Do NOT write any code yet.",
-         "msgs>=4", 120),
+         "msgs>=3", 120),
         ("What design patterns will you use for the tool registry? "
          "How will the agent decide which tool to call?",
          "msgs>={prev}+2", 90),
@@ -115,7 +115,7 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         # ── Planning ──
         ("Review the PRD. What modules will you need? Think about the "
          "data flow: CSV → filter → rank → format → output.",
-         "msgs>=4", 120),
+         "msgs>=3", 120),
         ("How will you handle missing or malformed data in the CSV? "
          "What about stocks with no book value (division by zero)?",
          "msgs>={prev}+2", 90),
@@ -190,7 +190,7 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         # ── Planning ──
         ("Review the PRD and plan. How will you implement the code "
          "evaluator safely without using eval()? Think through it.",
-         "msgs>=4", 120),
+         "msgs>=3", 120),
         ("What's your strategy for the fuzzy evaluator? How will you "
          "handle partial matches vs completely wrong answers?",
          "msgs>={prev}+2", 90),
@@ -269,7 +269,7 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         ("Review the PRD. This is a TF-IDF retrieval system with no "
          "external deps. How will you implement cosine similarity "
          "with just stdlib? Plan the math.",
-         "msgs>=4", 120),
+         "msgs>=3", 120),
         ("Walk me through the chunking strategy. How will you handle "
          "overlap between chunks? What about very short documents?",
          "msgs>={prev}+2", 90),
@@ -350,7 +350,7 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
         ("Review the PRD. The default executor uses keyword matching. "
          "Explain how you'll score sentiment with just string matching "
          "and no LLM. Plan the architecture.",
-         "msgs>=4", 120),
+         "msgs>=3", 120),
         ("How will the prompt mutation work? What variations will you "
          "try? Give me 3 example mutations of a base prompt.",
          "msgs>={prev}+2", 90),
@@ -428,7 +428,7 @@ SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
 # Default fallback script for unknown packages
 DEFAULT_SCRIPT: list[tuple[str, str, int]] = [
     ("Review the PRD and create a plan. List what files you need.",
-     "msgs>=4", 120),
+     "msgs>=3", 120),
     ("Create a todo list and start building. Execute all items.",
      "writes>=3", 150),
     ("Continue — write the remaining files.",
@@ -448,6 +448,107 @@ DEFAULT_SCRIPT: list[tuple[str, str, int]] = [
     ("Write a README.md.",
      "done", 120),
 ]
+
+
+# ── Autonomous bonus round: single mega-prompt, model must self-manage ──
+# These test whether the model can execute a long checklist without
+# stopping to ask the user "shall I continue?" after each item.
+AUTONOMOUS_SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
+    "tool_agent": [
+        ("I need you to do ALL of the following without stopping or asking "
+         "me anything. Execute every item, then show me the results:\n\n"
+         "1. Read the PRD and build the entire tool_agent package\n"
+         "2. Create a todo list tracking your progress\n"
+         "3. Write all 5 files: __init__.py, __main__.py, tools.py, agent.py, cli.py\n"
+         "4. Run python3 -m tool_agent --help\n"
+         "5. Fix any errors\n"
+         "6. Test the calculator: python3 -m tool_agent \"What is 99*77?\"\n"
+         "7. Test the file reader: python3 -m tool_agent \"Read PRD.md\"\n"
+         "8. Add a 'date_tool' using search_replace on tools.py\n"
+         "9. Test it: python3 -m tool_agent \"What is today's date?\"\n"
+         "10. Add a --verbose flag to cli.py using search_replace\n"
+         "11. Test verbose: python3 -m tool_agent --verbose \"What is 5+3?\"\n"
+         "12. Write a README.md\n"
+         "13. Update the todo list — mark everything done\n"
+         "14. Show me the final directory listing and todo status\n\n"
+         "DO NOT STOP between items. Do all 14.",
+         "writes>=7", 600),
+    ],
+    "stock_screener": [
+        ("Execute this entire checklist without stopping:\n\n"
+         "1. Read the PRD\n"
+         "2. Create a todo list\n"
+         "3. Build all 6 files: __init__.py, __main__.py, cli.py, data.py, screener.py, formatter.py\n"
+         "4. Create portfolio.csv with 10 stocks\n"
+         "5. Run python3 -m stock_screener --help\n"
+         "6. Fix any errors\n"
+         "7. Test: python3 -m stock_screener screen --data portfolio.csv --pb-max 1.5\n"
+         "8. Test: python3 -m stock_screener rank --data portfolio.csv --top 5\n"
+         "9. Add a 'summary' subcommand using search_replace\n"
+         "10. Test: python3 -m stock_screener summary --data portfolio.csv\n"
+         "11. Export to JSON: python3 -m stock_screener export --data portfolio.csv --format json --output results.json\n"
+         "12. Write a README.md\n"
+         "13. Mark all todos done and show final status\n\n"
+         "Do ALL items without asking me anything.",
+         "writes>=7", 600),
+    ],
+    "eval_harness": [
+        ("Execute this entire checklist without stopping:\n\n"
+         "1. Read the PRD\n"
+         "2. Create a todo list\n"
+         "3. Build evaluators.py with exact, fuzzy, and contains evaluators\n"
+         "4. Build runner.py, report.py, cli.py, __main__.py\n"
+         "5. Create tasks.json with 15 test cases\n"
+         "6. Run python3 -m eval_harness --help\n"
+         "7. Fix any errors\n"
+         "8. Run: python3 -m eval_harness run --dataset tasks.json --evaluator exact\n"
+         "9. Run: python3 -m eval_harness run --dataset tasks.json --evaluator fuzzy --threshold 0.8\n"
+         "10. Add a 'normalize' option to exact evaluator using search_replace\n"
+         "11. Run exact evaluator again — are more tasks passing?\n"
+         "12. Write a README.md\n"
+         "13. Mark all todos done and show final status\n\n"
+         "Do ALL items without asking me anything.",
+         "writes>=7", 600),
+    ],
+    "doc_qa": [
+        ("Execute this entire checklist without stopping:\n\n"
+         "1. Read the PRD\n"
+         "2. Create a todo list\n"
+         "3. Build ingest.py with document loading and chunking\n"
+         "4. Build index.py with TF-IDF (pure stdlib, no numpy)\n"
+         "5. Build query.py, cli.py, __main__.py\n"
+         "6. Create test_docs/ with 3 text files about different topics\n"
+         "7. Run python3 -m doc_qa --help\n"
+         "8. Fix any errors\n"
+         "9. Run: python3 -m doc_qa ingest test_docs/\n"
+         "10. Run: python3 -m doc_qa query \"What is Python?\"\n"
+         "11. Add --chunk-size flag to ingest using search_replace on cli.py\n"
+         "12. Re-ingest with --chunk-size 100 and query again\n"
+         "13. Write a README.md\n"
+         "14. Mark all todos done and show final status\n\n"
+         "Do ALL items without asking me anything.",
+         "writes>=7", 600),
+    ],
+    "prompt_optimizer": [
+        ("Execute this entire checklist without stopping:\n\n"
+         "1. Read the PRD\n"
+         "2. Create a todo list\n"
+         "3. Build templates.py with prompt generation and mutation\n"
+         "4. Build executor.py with keyword-matching sentiment classifier\n"
+         "5. Build scorer.py, optimizer.py, cli.py, __main__.py\n"
+         "6. Create data.json with 20 sentiment examples\n"
+         "7. Run python3 -m prompt_optimizer --help\n"
+         "8. Fix any errors\n"
+         "9. Run: python3 -m prompt_optimizer run --task sentiment --dataset data.json --iterations 3\n"
+         "10. Show the best prompt: python3 -m prompt_optimizer best --task sentiment\n"
+         "11. Add negation handling ('not good' = negative) using search_replace on executor.py\n"
+         "12. Run optimization again with 5 iterations\n"
+         "13. Write a README.md\n"
+         "14. Mark all todos done and show final status\n\n"
+         "Do ALL items without asking me anything.",
+         "writes>=7", 600),
+    ],
+}
 
 
 class SessionWatcher:
@@ -601,8 +702,13 @@ def run_interactive(cwd: Path, pkg: str) -> int:
     results: list[dict] = []
 
     # Pick the conversation script for this package
-    script = SCRIPTS.get(pkg, DEFAULT_SCRIPT)
-    print(f"  Using script: {'custom' if pkg in SCRIPTS else 'default'} ({len(script)} steps)")
+    mode = os.environ.get("SHAKEDOWN_MODE", "interactive")
+    if mode == "autonomous" and pkg in AUTONOMOUS_SCRIPTS:
+        script = AUTONOMOUS_SCRIPTS[pkg]
+        print(f"  Mode: AUTONOMOUS (1 mega-prompt, model must self-manage)")
+    else:
+        script = SCRIPTS.get(pkg, DEFAULT_SCRIPT)
+        print(f"  Mode: interactive ({len(script)} steps)")
 
     try:
         for step_idx, (prompt_template, condition, max_wait) in enumerate(script):
