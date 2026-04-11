@@ -4,22 +4,25 @@
 
 Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
 - **Repo:** https://github.com/fbobe321/drydock
-- **PyPI:** https://pypi.org/project/drydock-cli/ (v2.6.23 — v2.6.24 built but unreleased)
+- **PyPI:** https://pypi.org/project/drydock-cli/ (v2.6.32)
 - **Goal:** Reliable TUI coding agent with local LLMs. PRD-driven project building.
 - **Hardware:** 2x RTX 4060 Ti 16GB, Gemma 4 26B MoE (A4B) via vLLM Docker at localhost:8000
 - **Server:** remus (Ubuntu 22.04, user: bobef)
 - **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (only 4B active params, ~70 tok/s)
-- **The honest test:** `scripts/shakedown.py` shakedown harness — pass means real
-  user-perceptible behaviour, not tool-call counts. See `scripts/shakedown_suite.sh`
-  for the 10-project core set.
+- **The honest test:** `scripts/shakedown_interactive.py` — drives the real TUI
+  via pexpect with a multi-step user conversation (24 steps per PRD: plan,
+  build, test, add features, debug, review code, edge cases, README).
+  Single-prompt shakedown.py also available for quick regression.
+- **5 medium-difficulty test PRDs** at /data3/drydock_test_projects/401-405
+  (tool_agent, prompt_optimizer, doc_qa, stock_screener, eval_harness)
 - **OLD harnesses you should NOT trust:** `scripts/tui_test.py` and
   `core_tests_real.sh` count tool calls and `--help` and miss the things users
-  actually experience (loops the model ignores, hallucinated tool names that
-  hang the session, models that declare done with broken code, 2-minute
-  generation pauses). They produce passing scores while real usage fails.
+  actually experience. Harness pass rates LIE — the only real test is using
+  the TUI interactively with multiple rounds of feature requests, edits, and
+  testing.
 - **Priority:** TUI experience first. Fix drydock bugs, don't simplify PRDs.
 - **370 PRDs** at /data3/drydock_test_projects/ — the benchmark suite
-- **Current version:** v2.6.23 on PyPI / v2.6.24 built locally (unreleased)
+- **Current version:** v2.6.32 on PyPI
 
 ## Build & Test
 
@@ -289,6 +292,40 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 - ✅ **Trust dialog auto-dismissal** in shakedown.py
 - ✅ **Pause flags** for both `auto_release.sh` and `watchdog.sh` so
   manual debugging doesn't get its work overwritten
+- ✅ **Adaptive thinking** — thinking=OFF for routine file writes,
+  thinking=HIGH for planning (first 4 msgs) and user messages,
+  thinking=LOW for error recovery. Eliminates 30-120s hangs between
+  file writes. Mirrors Claude Code's extended thinking approach.
+- ✅ **search_replace "already applied" detection** — when search text
+  is gone but replacement text already exists, return success+warning
+  instead of "not found" error. Stops the #1 edit loop pattern.
+- ✅ **search_replace file_path inference** — when model drops file_path
+  (Gemma 4 does this frequently), scan project files for the search text
+  and auto-fill the path.
+- ✅ **search_replace raw-code fallback** — when model sends raw code
+  without SEARCH/REPLACE markers, fall back to full file overwrite
+  instead of error-looping.
+- ✅ **Thinking token stripping** — strip ALL `<|channel>` variants
+  (thought, call, tool_call, double-channel) from message history
+  before storing. Saves context, prevents confusion.
+- ✅ **Thinking-stall nudge** — detect empty responses (pure thinking,
+  no content/tools) after tool results. Pop empty message, inject
+  "Continue working" nudge. Max 2 retries.
+- ✅ **Todo tool arg coercion** — Gemma 4 sends todos as strings
+  ("1. Do X\n2. Do Y") or flat lists (["X","Y"]). Validator coerces
+  to proper TodoItem dicts.
+- ✅ **Hallucinated tool suppression** — silently ignore
+  exit_plan_mode, enter_plan_mode (Gemma 4 invents these).
+- ✅ **Subagent progress streaming** — stream ToolCallEvents from
+  builder subagent to TUI so user sees "→ Writing file.py" instead
+  of "Sailing... 10m" silence.
+- ✅ **Interactive shakedown** (`scripts/shakedown_interactive.py`) —
+  24-step user scripts per PRD: plan, todo, build, test, code review,
+  add features via search_replace, bug hunt, ideas, README.
+- ✅ **Delegation threshold raised** 6→9 files. Prompt rule: if user
+  asks to PLAN or EXPLAIN, respond with text — don't delegate.
+- ✅ **Auto-continue instruction** — gemma4.md: "execute ALL todo
+  items without pausing, only stop when EVERY item is done."
 
 **Legal note:** All patterns are standard design concepts implemented from scratch. No proprietary code copied.
 
@@ -382,11 +419,62 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 20. **Auto-read on failed edit, temperature bump on loops, failed-approach
     accumulator** — additive context techniques that help.
 
+### April 2026: interactive shakedown learnings
+
+21. **Harness pass rates lie — interactive testing finds real bugs.**
+    Single-prompt "build the package" tests showed 93% pass rate.
+    Interactive 24-step conversations (plan, build, test, add features,
+    debug, review) found: thinking hangs, todo tool broken, search_replace
+    format errors, model stopping to ask permission, no subagent visibility,
+    exit_plan_mode hallucination. NONE of these showed up in the harness.
+22. **Thinking hangs are the #1 user pain.** With thinking=HIGH on every
+    turn, the model generates 30-120s of thinking tokens between file writes.
+    Users see the TUI frozen. Fix: adaptive thinking — OFF for routine
+    writes, HIGH only for planning and user messages.
+23. **search_replace fails 3 ways.** (a) Model drops file_path entirely.
+    (b) Model sends raw code without SEARCH/REPLACE markers. (c) Model
+    retries an edit that already succeeded. Each needs a different fix.
+24. **Gemma 4 hallucinates tools.** Commonly: exit_plan_mode,
+    enter_plan_mode, list_mcp_resources. Silently drop them instead of
+    showing errors.
+25. **Subagent work is invisible.** Builder subagent runs 10+ minutes
+    writing files and testing. User sees "Sailing..." with no progress.
+    Fix: stream ToolCallEvents from subagent to main TUI.
+26. **Model stops at each todo item.** Despite "NEVER ask shall I
+    continue", Gemma 4 completes one phase then stops and reports.
+    Needs stronger instruction: "execute ALL items without pausing."
+27. **site-packages overrides source tree.** Even with `-e` install,
+    old `.pyc` files or stale pip installs in site-packages can mask
+    source changes. Always `pip install -e /data3/drydock` after changes.
+28. **The Trust dialog blocks automation.** It appears on first launch
+    in any new directory, eats the user's prompt, and the harness can't
+    see it. Pre-trust all test directories in trusted_folders.toml.
+
 ## Testing
 
-### Use `scripts/shakedown.py` — anything else lies
+### Use `scripts/shakedown_interactive.py` — multi-round conversations
 
-The `shakedown.py` harness is the only test infrastructure that catches what
+The interactive shakedown is the REAL test. It sends 24 prompts that
+simulate a user: plan → build → test → add features → debug → review.
+Single-prompt tests (`shakedown.py`) are useful for regression but miss
+the issues users actually experience.
+
+```bash
+# Interactive test (24-step conversation)
+python3 scripts/shakedown_interactive.py \\
+    --cwd /data3/drydock_test_projects/403_tool_agent \\
+    --pkg tool_agent
+
+# Quick regression (single prompt)
+python3 scripts/shakedown.py \\
+    --cwd /data3/drydock_test_projects/403_tool_agent \\
+    --prompt "review the PRD and build the package" \\
+    --pkg tool_agent
+```
+
+### Old harness note
+
+The `shakedown.py` single-prompt harness catches what
 real users experience. Older harnesses (`tui_test.py`, `core_tests_real.sh`,
 `run_real_tests.sh`) measure tool counts and `--help` exit codes; they pass
 while real users see loops and hangs.
