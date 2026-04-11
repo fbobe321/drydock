@@ -58,6 +58,9 @@ Rules:
 - Always create __init__.py and __main__.py for packages
 - Keep responses under 50 words. Code speaks for itself.
 - NEVER ask "would you like me to proceed" or "shall I continue" — JUST DO IT.
+- NEVER stop to report progress or ask for confirmation between steps.
+  If you have a todo list with multiple items, execute ALL of them
+  without pausing. Only stop when EVERY item is done.
 - After creating/editing a file, move to the next one. Do not stop.
 - Follow the EXACT CLI interface specified in the PRD. Match argument names, subcommands, and flags exactly.
 - Every subcommand in the PRD must have a working handler — not just argparse registration.

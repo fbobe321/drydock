@@ -172,9 +172,17 @@ class APIToolFormatHandler:
 
         active_tools = tool_manager.available_tools
 
+        # Tools the model hallucinates that should be silently ignored
+        # rather than generating a visible error that confuses the user.
+        _IGNORE_TOOLS = {"exit_plan_mode", "enter_plan_mode", "plan_mode"}
+
         for parsed_call in parsed.tool_calls:
             tool_class = active_tools.get(parsed_call.tool_name)
             if not tool_class:
+                # Silently drop known hallucinated tools instead of
+                # showing an error in the TUI
+                if parsed_call.tool_name in _IGNORE_TOOLS:
+                    continue
                 failed_calls.append(
                     FailedToolCall(
                         tool_name=parsed_call.tool_name,

@@ -121,7 +121,36 @@ class SearchReplace(
     async def run(
         self, args: SearchReplaceArgs, ctx: InvokeContext | None = None
     ) -> AsyncGenerator[ToolStreamEvent | SearchReplaceResult, None]:
-        file_path, search_replace_blocks = self._prepare_and_validate_args(args)
+        try:
+            file_path, search_replace_blocks = self._prepare_and_validate_args(args)
+        except ToolError as e:
+            err_msg = str(e)
+            if err_msg.startswith("NO_BLOCKS:"):
+                # Gemma 4 sent raw code without SEARCH/REPLACE markers.
+                # Fall back to full file overwrite instead of error-looping.
+                raw_content = err_msg[len("NO_BLOCKS:"):]
+                file_path_str = args.file_path.strip()
+                if file_path_str and len(raw_content) > 20:
+                    target = Path(file_path_str).expanduser()
+                    if not target.is_absolute():
+                        target = Path.cwd() / target
+                    target = target.resolve()
+                    if target.exists():
+                        import logging as _log
+                        _log.getLogger(__name__).info(
+                            "search_replace: no blocks — overwriting %s", target,
+                        )
+                        await self._write_file(target, raw_content)
+                        yield SearchReplaceResult(
+                            file=str(target),
+                            blocks_applied=1,
+                            lines_changed=0,
+                            warnings=["Wrote entire file (no SEARCH/REPLACE blocks). "
+                                      "Use write_file next time."],
+                            content=raw_content[:100] + "...",
+                        )
+                        return
+            raise
 
         # Injection guard: scan replacement content for suspicious patterns
         from drydock.core.tools.injection_guard import check_content_for_injection
@@ -285,15 +314,7 @@ class SearchReplace(
         search_replace_blocks = self._parse_search_replace_blocks(content)
         if not search_replace_blocks:
             raise ToolError(
-                "No valid SEARCH/REPLACE blocks found in content.\n"
-                "You sent raw code without SEARCH/REPLACE markers.\n"
-                "Either use this format:\n"
-                "  <<<<<<< SEARCH\n"
-                "  [exact text to find]\n"
-                "  =======\n"
-                "  [replacement text]\n"
-                "  >>>>>>> REPLACE\n"
-                "Or use write_file to replace the entire file."
+                "NO_BLOCKS:" + content  # sentinel for run() to handle fallback
             )
 
         # Detect garbled token output — only flag obvious corruption
