@@ -400,9 +400,15 @@ def ralph(cwd: Path, pkg: str, max_iterations: int = 5,
             )
             ucount = watcher.count_user_messages()
             type_prompt(child, fix_prompt)
-            if not wait_for_prompt_landing(child, watcher, ucount, timeout=60):
-                print(f"  ERROR: iter {it} fix prompt did not land")
-                break
+            if not wait_for_prompt_landing(child, watcher, ucount, timeout=120):
+                # Retry with longer pause first
+                print(f"  [fix prompt didn't land in 120s — waiting 30s + retrying]")
+                time.sleep(30)
+                drain_pty(child, 5.0)
+                type_prompt(child, fix_prompt)
+                if not wait_for_prompt_landing(child, watcher, ucount, timeout=120):
+                    print(f"  ERROR: iter {it} fix prompt did not land after retry")
+                    break
             print(f"  fix prompt landed, waiting for response...")
             status = wait_for_completion(child, watcher, max_wait=900, idle_threshold=180)
             elapsed = int(time.time() - start_time)
