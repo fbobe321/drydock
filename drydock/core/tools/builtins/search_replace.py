@@ -127,7 +127,10 @@ class SearchReplace(
             err_msg = str(e)
             if err_msg.startswith("NO_BLOCKS:"):
                 # Gemma 4 sent raw code without SEARCH/REPLACE markers.
-                # Fall back to full file overwrite instead of error-looping.
+                # CAREFULLY fall back to full file overwrite — but refuse if
+                # the raw content is much shorter than the existing file
+                # (would be catastrophic data loss). See CLAUDE.md learning
+                # #39: drydock nuked a 5171-char cli.py with a 16-line fragment.
                 raw_content = err_msg[len("NO_BLOCKS:"):]
                 file_path_str = args.file_path.strip()
                 if file_path_str and len(raw_content) > 20:
@@ -137,6 +140,31 @@ class SearchReplace(
                     target = target.resolve()
                     if target.exists():
                         import logging as _log
+                        existing_size = target.stat().st_size
+                        # SAFETY CHECK: refuse to shrink a file by >50% via the
+                        # raw-code fallback. The model almost certainly intended
+                        # a partial patch, not a full replace, if the new content
+                        # is dramatically shorter.
+                        if existing_size > 500 and len(raw_content) < existing_size * 0.5:
+                            _log.getLogger(__name__).warning(
+                                "search_replace: REFUSING destructive overwrite of %s "
+                                "(existing=%d chars, new=%d chars, would shrink by %d%%)",
+                                target, existing_size, len(raw_content),
+                                100 - int(len(raw_content) * 100 / existing_size),
+                            )
+                            raise ToolError(
+                                f"REFUSED: the raw content you sent ({len(raw_content)} "
+                                f"chars) is much shorter than the existing {target.name} "
+                                f"({existing_size} chars). This would destroy most of "
+                                f"the file. If you intended a small patch, use proper "
+                                f"SEARCH/REPLACE blocks:\n"
+                                f"<<<<<<< SEARCH\n"
+                                f"[exact existing text to replace]\n"
+                                f"=======\n"
+                                f"[new text]\n"
+                                f">>>>>>> REPLACE\n"
+                                f"If you intended a full rewrite, use write_file instead."
+                            )
                         _log.getLogger(__name__).info(
                             "search_replace: no blocks — overwriting %s", target,
                         )
