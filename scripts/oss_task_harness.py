@@ -55,10 +55,13 @@ def sh(cmd: str, cwd: str | None = None, timeout: int = 300) -> tuple[int, str, 
 
 def setup_repo(workdir: Path, repo_url: str, commit: str) -> bool:
     """Clone repo fresh or reset existing to specified commit."""
+    # Always run from a stable cwd (the parent dir) to avoid getcwd failures
+    os.chdir("/tmp")
     workdir.parent.mkdir(parents=True, exist_ok=True)
     if (workdir / ".git").exists():
         # Reset existing
-        rc, _, err = sh("git reset --hard HEAD && git clean -fd", cwd=str(workdir))
+        rc, _, err = sh("git reset --hard HEAD && git clean -fd -e TASK.md -e AGENTS.md",
+                       cwd=str(workdir))
         if rc != 0:
             print(f"  reset failed: {err[:200]}")
         rc, _, _ = sh(f"git checkout {commit}", cwd=str(workdir))
@@ -67,8 +70,8 @@ def setup_repo(workdir: Path, repo_url: str, commit: str) -> bool:
             shutil.rmtree(workdir)
         else:
             return True
-    # Fresh clone
-    rc, out, err = sh(f"git clone {repo_url} {workdir}", timeout=600)
+    # Fresh clone — run from /tmp to avoid parent-cwd issues
+    rc, out, err = sh(f"git clone {repo_url} {workdir}", cwd="/tmp", timeout=600)
     if rc != 0:
         print(f"  clone failed: {err[:200]}")
         return False
