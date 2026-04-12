@@ -186,7 +186,7 @@ EXPLORE = AgentProfile(
     ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
-    max_turns=15,
+    max_turns=60,
     overrides={"enabled_tools": ["grep", "read_file", "glob"], "system_prompt_id": "explore"},
 )
 
@@ -200,7 +200,7 @@ DIAGNOSTIC = AgentProfile(
     ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
-    max_turns=15,
+    max_turns=80,
     overrides={
         "enabled_tools": ["grep", "read_file", "bash", "glob"],
         "system_prompt_id": "diagnostic",
@@ -217,7 +217,7 @@ PLANNER = AgentProfile(
     ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
-    max_turns=10,
+    max_turns=40,
     overrides={
         "enabled_tools": ["grep", "read_file", "glob"],
         "system_prompt_id": "planner",
@@ -233,11 +233,11 @@ BUILDER = AgentProfile(
         "keeps the main agent's context small and lets the builder iterate "
         "in its own scratch space. Has read_file, write_file, search_replace, "
         "glob, and bash. Returns a short summary listing the files created "
-        "and whether `python3 -m <pkg> --help` worked. Up to 40 turns."
+        "and whether `python3 -m <pkg> --help` worked. Up to 200 turns."
     ),
     safety=AgentSafety.DESTRUCTIVE,
     agent_type=AgentType.SUBAGENT,
-    max_turns=40,
+    max_turns=200,
     overrides={
         "enabled_tools": [
             "read_file", "write_file", "search_replace",
