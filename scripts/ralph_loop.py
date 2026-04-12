@@ -46,22 +46,45 @@ class SessionWatcher:
         self.messages: list[dict] = []
 
     def find_session(self) -> Path | None:
+        """Find the drydock session directory for our cwd.
+
+        Problem: drydock only writes meta.json at session EXIT (not start).
+        So we can't match on working_directory during the session.
+
+        Strategy: Pick the newest session dir created after our start_time.
+        If messages.jsonl exists in it (= drydock is actively writing), use it.
+        """
         if self.session_dir is not None:
             return self.session_dir
         if not SESSION_ROOT.exists():
             return None
-        for entry in sorted(SESSION_ROOT.iterdir(), reverse=True):
+
+        # Find the newest dir that was created (birth time) at-or-after since
+        candidates = []
+        for entry in SESSION_ROOT.iterdir():
             try:
-                if not entry.is_dir() or entry.stat().st_mtime < self.since - 5:
+                if not entry.is_dir():
                     continue
-                meta = json.loads((entry / "meta.json").read_text())
-                wd = meta.get("environment", {}).get("working_directory", "")
-                if str(self.cwd) == wd:
-                    self.session_dir = entry
-                    return entry
+                # Use directory creation time (birth) via stat
+                st = entry.stat()
+                # Directory's ctime usually = creation. Use mtime as fallback.
+                dir_ctime = st.st_ctime
+                if dir_ctime < self.since - 2:
+                    continue
+                candidates.append((dir_ctime, entry))
             except Exception:
                 continue
-        return None
+
+        if not candidates:
+            return None
+
+        # Pick the newest. Take it even without messages.jsonl — drydock
+        # may not flush messages until exit. Since only one drydock process
+        # should be running, the newest dir created after our start is ours.
+        candidates.sort(reverse=True)
+        newest_ctime, newest_entry = candidates[0]
+        self.session_dir = newest_entry
+        return newest_entry
 
     def refresh(self) -> int:
         sd = self.find_session()
@@ -329,27 +352,23 @@ def ralph(cwd: Path, pkg: str, max_iterations: int = 5,
         # Type the prompt — drydock creates a session when it receives input
         type_prompt(child, initial_prompt)
 
-        # Now wait for the session to appear — 3 min is generous. Drydock can
-        # be slow to spin up when the cwd has many files or GPU is busy.
+        # Now wait for the session to appear — 5 min. Drydock can take 3-4
+        # minutes to create the session dir when GPU is busy from a prior run.
         print(f"  Waiting for session to appear...", end="", flush=True)
         session_found = False
-        for i in range(180):  # up to 180s (3 min)
+        for i in range(300):  # up to 300s (5 min)
             drain_pty(child, 1.0)
             if watcher.find_session():
                 session_found = True
                 break
-            if i == 60:
-                print(f" (still waiting at 60s, retyping prompt)", end="", flush=True)
-                time.sleep(2)
-                type_prompt(child, initial_prompt)
-            elif i == 120:
-                print(f" (still waiting at 120s, retyping again)", end="", flush=True)
+            if i > 0 and i % 60 == 0:
+                print(f" (still waiting at {i}s, retyping)", end="", flush=True)
                 time.sleep(2)
                 type_prompt(child, initial_prompt)
         if session_found:
             print(f" found: {watcher.session_dir.name}")
         else:
-            print(f" NOT FOUND after 180s")
+            print(f" NOT FOUND after 300s")
             return 1
 
         # Wait for user message to actually appear in session log
