@@ -4,12 +4,12 @@
 [![License](https://img.shields.io/github/license/fbobe321/drydock)](https://github.com/fbobe321/drydock/blob/main/LICENSE)
 
 ```
-     ____              ____             _    
-    |  _ \ _ __ _   _ |  _ \  ___   ___| | __
-    | | | | '__| | | || | | |/ _ \ / __| |/ /
-    | |_| | |  | |_| || |_| | (_) | (__|   < 
-    |____/|_|   \__, ||____/ \___/ \___|_|\_\
-                |___/
+     ____             ____             _    
+    |  _ \ _ __ _   _|  _ \  ___   ___| | __
+    | | | | '__| | | | | | |/ _ \ / __| |/ /
+    | |_| | |  | |_| | |_| | (_) | (__|   < 
+    |____/|_|   \__, |____/ \___/ \___|_|\_\
+                |___/                       
 ```
 
 **Local-first CLI coding agent. Chart your course. Execute with precision.**
