@@ -263,7 +263,8 @@ def drive_drydock(workdir: Path, task_text: str, max_seconds: int = 2400) -> str
 
 def run_task(workdir: Path, repo_url: str, commit: str,
              task_file: Path, test_cmd: str,
-             baseline_test_cmd: str | None = None) -> dict:
+             baseline_test_cmd: str | None = None,
+             validate_cmd: str | None = None) -> dict:
     """Run a complete OSS task cycle. Returns report dict."""
     report = {
         "workdir": str(workdir),
@@ -330,8 +331,23 @@ def run_task(workdir: Path, repo_url: str, commit: str,
     report["diff_summary"] = diff_out.strip()
     print(f"   diff: {diff_out.strip()}")
 
+    # ── 7. Feature validation (prevents non-functional scaffolding) ──
+    if validate_cmd:
+        print(f"5. Feature validation: {validate_cmd}")
+        vrc, vout, verr = sh(validate_cmd, cwd=str(workdir), timeout=60)
+        report["validation_rc"] = vrc
+        report["validation_output"] = (vout + verr)[-1000:]
+        report["validation_pass"] = (vrc == 0)
+        print(f"   validation: {'PASS' if vrc == 0 else 'FAIL'} (rc={vrc})")
+        if vrc != 0:
+            print(f"   output: {(vout + verr)[-500:]}")
+    else:
+        report["validation_pass"] = None  # not tested
+
+    overall_pass = (after_pass and not report['regression']
+                    and (report.get('validation_pass') is not False))
     print(f"\n{'─'*60}")
-    print(f"  RESULT: {'PASS' if (after_pass and not report['regression']) else 'FAIL'}")
+    print(f"  RESULT: {'PASS' if overall_pass else 'FAIL'}")
     print(f"{'─'*60}\n")
 
     return report
@@ -346,6 +362,10 @@ def main() -> int:
     parser.add_argument("--test-cmd", required=True)
     parser.add_argument("--baseline-test-cmd", default=None,
                        help="Defaults to --test-cmd")
+    parser.add_argument("--validate-cmd", default=None,
+                       help="Optional validation command run after task. If "
+                            "non-zero exit, marks overall as FAIL. Use for "
+                            "runtime feature checks (prevents scaffolding bugs).")
     args = parser.parse_args()
 
     report = run_task(
@@ -355,6 +375,7 @@ def main() -> int:
         Path(args.task).resolve(),
         args.test_cmd,
         args.baseline_test_cmd,
+        args.validate_cmd,
     )
 
     out_path = Path(f"/tmp/oss_task_{Path(args.task).stem}_{int(time.time())}.json")
