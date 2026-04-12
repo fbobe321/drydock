@@ -1,0 +1,10 @@
+{
+  "_comment": "Maps PRD keywords to worked-example files. The stuck detector matches keywords against the PRD text + failing test output and surfaces the best-scoring example.",
+  "examples": [
+    {
+      "file": "sql_parser.py",
+      "keywords": ["sql", "select from", "insert into", "where", "update set", "delete from", "tokenizer", "recursive descent", "query parser"],
+      "summary": "SQL tokenizer + recursive-descent parser. Handles SELECT/INSERT/UPDATE/DELETE + WHERE. Shows the critical alias-vs-keyword detection pattern."
+    }
+  ]
+}
