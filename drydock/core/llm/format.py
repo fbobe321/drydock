@@ -174,7 +174,13 @@ class APIToolFormatHandler:
 
         # Tools the model hallucinates that should be silently ignored
         # rather than generating a visible error that confuses the user.
-        _IGNORE_TOOLS = {"exit_plan_mode", "enter_plan_mode", "plan_mode"}
+        _IGNORE_TOOLS = {
+            "exit_plan_mode", "enter_plan_mode", "plan_mode",
+            # Gemma 4 confabulated tools — observed in user sessions and
+            # mini_db fresh build (called ralph_repo_index 5 times).
+            "ralph_repo_index", "repo_index", "index_repo",
+            "list_mcp_resources", "list_resources", "search_resources",
+        }
 
         for parsed_call in parsed.tool_calls:
             tool_class = active_tools.get(parsed_call.tool_name)

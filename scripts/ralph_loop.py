@@ -290,8 +290,19 @@ def ralph(cwd: Path, pkg: str, max_iterations: int = 5,
 
     # Baseline: current state of tests
     p, f, _ = run_functional_tests(cwd)
+    # ALSO check whether the package directory even exists on disk. Tests can
+    # "pass" via false positives when the package is missing entirely (grep
+    # for absence-patterns matches when the command output is empty because
+    # of a ModuleNotFoundError). Only treat the build as "existing" if the
+    # package dir has at least an __init__.py.
+    pkg_init = cwd / pkg / "__init__.py"
+    package_exists = pkg_init.exists()
     print(f"  Baseline ({'no build' if fresh_build else 'existing build'}): "
-          f"{p}/{p+f} tests pass")
+          f"{p}/{p+f} tests pass, package_exists={package_exists}")
+    if not package_exists:
+        # Treat as if there's no build — force full rebuild
+        print(f"  [{pkg}/__init__.py missing → treating as fresh build]")
+        p = 0
     baseline_pass = p
     baseline_fail = f
 

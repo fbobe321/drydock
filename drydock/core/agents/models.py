@@ -202,7 +202,8 @@ DIAGNOSTIC = AgentProfile(
     agent_type=AgentType.SUBAGENT,
     max_turns=80,
     overrides={
-        "enabled_tools": ["grep", "read_file", "bash", "glob"],
+        "enabled_tools": ["grep", "read_file", "bash", "glob",
+                          "web_search", "web_fetch"],
         "system_prompt_id": "diagnostic",
     },
 )
@@ -242,12 +243,17 @@ BUILDER = AgentProfile(
         "enabled_tools": [
             "read_file", "write_file", "search_replace",
             "glob", "grep", "bash",
+            # web tools — when stuck on a difficult problem, the model can
+            # google for examples, error-message solutions, or API docs.
+            "web_search", "web_fetch",
         ],
         "system_prompt_id": "builder",
         "tools": {
             "write_file": {"permission": "always"},
             "search_replace": {"permission": "always"},
             "bash": {"permission": "always"},
+            "web_search": {"permission": "always"},
+            "web_fetch": {"permission": "always"},
         },
     },
 )
