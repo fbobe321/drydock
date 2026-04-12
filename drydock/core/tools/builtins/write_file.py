@@ -84,6 +84,53 @@ def _check_main_module_entry(tree) -> str | None:
     return f"imports {sorted(entry_names)} but never calls any of them"
 
 
+def _check_bare_raise_outside_except(tree) -> list[str]:
+    """Detect `raise` without an argument outside of an except block.
+
+    Bare `raise` is only valid inside an except handler (re-raises the
+    active exception). Outside an except, it fails at runtime with
+    'No active exception to reraise'. This is a common Gemma 4 mistake:
+    writing `if not found: raise` when `raise SomeError(...)` was intended.
+
+    Returns a list of line-number hints for each problem found.
+    """
+    import ast
+
+    problems: list[str] = []
+
+    class _Visitor(ast.NodeVisitor):
+        def __init__(self):
+            self.in_except = 0
+            self.in_func = 0
+
+        def visit_ExceptHandler(self, node):
+            self.in_except += 1
+            self.generic_visit(node)
+            self.in_except -= 1
+
+        def visit_FunctionDef(self, node):
+            self.in_func += 1
+            # bare raise inside a function but outside except is still bad
+            # (the function can be called from anywhere, not just except).
+            self.generic_visit(node)
+            self.in_func -= 1
+
+        def visit_AsyncFunctionDef(self, node):
+            self.visit_FunctionDef(node)
+
+        def visit_Raise(self, node):
+            if node.exc is None and self.in_except == 0:
+                problems.append(
+                    f"line {node.lineno}: bare `raise` outside any except block "
+                    f"(will fail with 'No active exception to reraise' at runtime)"
+                )
+            # Don't recurse — raise has no sub-Raise nodes
+            self.generic_visit(node)
+
+    _Visitor().visit(tree)
+    return problems
+
+
 def _check_missing_sibling_imports(tree, file_path: Path) -> set[str]:
     """Detect imports of sibling modules that don't exist on disk yet.
 
@@ -310,6 +357,24 @@ class WriteFile(
                             f"Without it, `python3 -m {file_path.parent.name}` will "
                             f"exit silently with no output."
                         )
+                # Catch bare `raise` outside except. Found in ACE v2 build —
+                # drydock wrote `if not found: raise` in cli.py, which fails
+                # at runtime with "No active exception to reraise".
+                bare_raises = _check_bare_raise_outside_except(tree)
+                if bare_raises:
+                    raise_warning = (
+                        f"\n\n⚠ {file_path.name} has bare `raise` outside of "
+                        f"any except block:\n"
+                        + "\n".join(f"  {p}" for p in bare_raises[:3])
+                        + "\n  A bare `raise` only works inside an `except` handler. "
+                        + "Use `raise SpecificError(...)` with an explicit exception, "
+                        + "or return/print an error instead."
+                    )
+                    if syntax_warning:
+                        syntax_warning += raise_warning
+                    else:
+                        syntax_warning = raise_warning
+
                 # Catch missing-import bug: file imports `from .x import Y` or
                 # `from pkg.x import Y` but x.py doesn't exist on disk yet.
                 # Real bug found in minivc build — __init__.py imported `cli`
