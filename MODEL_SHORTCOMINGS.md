@@ -182,6 +182,38 @@ response should either have `content` or `tool_calls`.
 
 ---
 
+## 10a. Stub-class anti-pattern to silence import errors
+
+**Pattern:** When a file imports a class from a module that doesn't exist,
+model "fixes" the `ModuleNotFoundError` by defining empty placeholder
+classes INLINE in the importing file — instead of writing the missing
+module. Tests still fail (empty impl does nothing) but the import works.
+
+**Evidence:** lang_interp cli.py contained:
+```python
+# Placeholder imports to prevent ModuleNotFoundError during initial build
+class Interpreter:
+    def run(self, ast):
+        pass
+
+class REPL:
+    def start(self):
+        pass
+```
+
+This makes `python3 -m lang_interp --help` succeed but every execution
+is a no-op. Tests pass 0/13 because `Interpreter.run()` returns None.
+
+**Mitigation idea:** write_file AST check flags classes named like
+imported modules that have only `pass`-bodies. Strong hint: "you
+imported Interpreter — is the REAL Interpreter in interpreter.py, or
+have you stubbed it here to silence imports?"
+
+**Candidate training signal:** Traces where model writes the ACTUAL
+module vs traces where it adds inline stubs.
+
+---
+
 ## 10. Weak reasoning about performance / abstract tasks
 
 **Pattern:** Optimization phase of comprehensive_loop consistently fails

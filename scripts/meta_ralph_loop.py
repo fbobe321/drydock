@@ -201,12 +201,48 @@ def best_of_n(cwd: Path, pkg: str, base_prompt: str, n: int,
     return current_best_pass, current_best_fail, current_best_out, snap
 
 
+def extract_root_errors(failure_output: str) -> list[str]:
+    """Pull the most informative error lines out of a functional test dump.
+
+    Prioritizes:
+      1. `No module named 'pkg.X'` — drydock forgot to write X
+      2. `AttributeError: ... has no attribute 'Y'` — Y doesn't exist
+      3. `ImportError: cannot import name 'Z'` — import mismatch
+      4. Any `XxxError:` line
+      5. Full FAIL lines if nothing specific found
+    """
+    root_errors = []
+    lines = (failure_output or "").split("\n")
+
+    # Pattern-match the high-value errors
+    for line in lines:
+        for pat in ("No module named",
+                    "AttributeError:",
+                    "ImportError:",
+                    "ModuleNotFoundError:",
+                    "SyntaxError:",
+                    "TypeError:",
+                    "NameError:"):
+            if pat in line:
+                # Strip path prefix noise
+                cleaned = line.strip()
+                if cleaned and cleaned not in root_errors:
+                    root_errors.append(cleaned[:200])
+                break
+
+    if not root_errors:
+        # Fallback to FAIL lines
+        root_errors = [ln.strip() for ln in lines
+                       if ln.startswith("FAIL:")][:5]
+
+    return root_errors[:8]
+
+
 def make_stuck_prompt(pkg: str, cwd: Path, failure_output: str) -> str:
     """Build the stage-3 'stuck' prompt with web_search + worked-example hints."""
-    # Extract FAIL lines
-    fail_lines = [ln for ln in (failure_output or "").split("\n")
-                  if ln.startswith("FAIL:")][:5]
-    fail_text = "\n".join(fail_lines)
+    # Extract meaningful errors (not just 'Traceback...' noise)
+    root_errors = extract_root_errors(failure_output)
+    fail_text = "\n".join(f"  {e}" for e in root_errors[:5])
 
     # Look up a worked example
     example_path = None
@@ -289,14 +325,38 @@ def meta_ralph(cwd: Path, pkg: str, max_stages: int = 3,
     # ── STAGE 2: best-of-N sampling ──
     if max_stages >= 2:
         print(f"\n─── STAGE 2: best-of-{samples_per_stage} sampling ───")
-        fail_lines = "\n".join(ln for ln in out.split("\n")
-                                if ln.startswith("FAIL:"))[:1500]
-        fix_prompt = (
-            f"Tests are failing:\n{fail_lines}\n\n"
-            f"Make TARGETED search_replace patches. Do not rewrite working files. "
-            f"Do not break currently-passing tests. Run bash functional_tests.sh "
-            f"when you think you're done."
-        )
+        root_errors = extract_root_errors(out)
+        error_text = "\n".join(f"  {e}" for e in root_errors)
+        print(f"  extracted errors:")
+        for e in root_errors[:3]:
+            print(f"    {e[:100]}")
+
+        # Detect missing-module pattern and redirect
+        missing_modules = set()
+        for e in root_errors:
+            m = re.search(r"No module named '([^']+)'", e)
+            if m:
+                missing_modules.add(m.group(1))
+
+        if missing_modules:
+            # Specifically tell the model to write the missing files
+            fix_prompt = (
+                f"Your package is importing modules that don't exist yet:\n"
+                f"{error_text}\n\n"
+                f"WRITE the missing modules. Specifically:\n"
+                + "\n".join(f"  - create {m.replace('.', '/')}.py"
+                            for m in missing_modules) +
+                f"\n\nDo NOT keep editing files that already exist. "
+                f"The missing files are what's blocking all tests. "
+                f"Read PRD.md to see what each module should contain."
+            )
+        else:
+            fix_prompt = (
+                f"Root-cause errors from functional_tests.sh:\n{error_text}\n\n"
+                f"Make TARGETED search_replace patches for each. Do not rewrite "
+                f"working files. Do not break currently-passing tests. Run "
+                f"`bash functional_tests.sh` when you think you're done."
+            )
         p, f, out, best_snap = best_of_n(
             cwd, pkg, fix_prompt, samples_per_stage,
             best_pass, best_fail, best_out, best_snap,
