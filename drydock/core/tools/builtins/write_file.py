@@ -131,6 +131,153 @@ def _check_bare_raise_outside_except(tree) -> list[str]:
     return problems
 
 
+def _check_stub_classes(tree, file_path: Path) -> list[str]:
+    """Detect inline stub classes that should be real implementations.
+
+    Catches the lang_interp anti-pattern: model "fixes" ModuleNotFoundError
+    by defining empty placeholder classes inline in cli.py/__main__.py:
+
+        class Interpreter:
+            def run(self, ast):
+                pass
+
+        class REPL:
+            def start(self):
+                pass
+
+    The stub silences the import error, `python3 -m pkg --help` works,
+    but every real execution is a no-op. See MODEL_SHORTCOMINGS.md #10a.
+
+    Returns a list of human-readable problem descriptions.
+    """
+    import ast as ast_mod
+    import re
+
+    pkg_dir = file_path.parent
+    problems: list[str] = []
+
+    def _is_stub_body(body) -> bool:
+        """True if a function body is purely a stub (pass/…/return/raise NIE)."""
+        # Skip leading docstring
+        if (body and isinstance(body[0], ast_mod.Expr)
+                and isinstance(body[0].value, ast_mod.Constant)
+                and isinstance(body[0].value.value, str)):
+            body = body[1:]
+        if len(body) != 1:
+            return False
+        s = body[0]
+        if isinstance(s, ast_mod.Pass):
+            return True
+        if (isinstance(s, ast_mod.Expr)
+                and isinstance(s.value, ast_mod.Constant)
+                and s.value.value is ...):
+            return True
+        if isinstance(s, ast_mod.Return):
+            # return None / return / return <literal>
+            if s.value is None:
+                return True
+            if isinstance(s.value, ast_mod.Constant):
+                return True
+        if isinstance(s, ast_mod.Raise):
+            exc = s.exc
+            if isinstance(exc, ast_mod.Name) and exc.id == "NotImplementedError":
+                return True
+            if (isinstance(exc, ast_mod.Call)
+                    and isinstance(exc.func, ast_mod.Name)
+                    and exc.func.id == "NotImplementedError"):
+                return True
+        return False
+
+    for node in tree.body:
+        if not isinstance(node, ast_mod.ClassDef):
+            continue
+
+        # Skip explicit abstract base classes / protocols / dataclasses
+        is_abstract = any(
+            (isinstance(b, ast_mod.Name) and b.id in {"ABC", "Protocol"}) or
+            (isinstance(b, ast_mod.Attribute) and b.attr in {"ABC", "Protocol"})
+            for b in node.bases
+        )
+        if is_abstract:
+            continue
+        for deco in node.decorator_list:
+            if isinstance(deco, ast_mod.Name) and deco.id in {
+                "dataclass", "runtime_checkable", "final"
+            }:
+                is_abstract = True
+                break
+            if isinstance(deco, ast_mod.Attribute) and deco.attr in {
+                "dataclass", "runtime_checkable"
+            }:
+                is_abstract = True
+                break
+        if is_abstract:
+            continue
+
+        methods = [
+            m for m in node.body
+            if isinstance(m, (ast_mod.FunctionDef, ast_mod.AsyncFunctionDef))
+        ]
+        if not methods:
+            continue
+        # Look only at NON-dunder methods. A class is a stub when all of its
+        # public methods are trivial, even if __init__ does real setup (storing
+        # args on self). The lang_interp pattern frequently has a real __init__
+        # plus stub `run`/`evaluate`/`start` methods.
+        non_dunder = [m for m in methods if not (
+            m.name.startswith("__") and m.name.endswith("__")
+        )]
+        if not non_dunder:
+            continue
+        if not all(_is_stub_body(m.body) for m in non_dunder):
+            continue
+
+        # All methods are stubs. Where should this class REALLY live?
+        class_name_lower = node.name.lower()
+        # CamelCase → snake_case, but keep acronyms together (REPL → repl,
+        # HTTPServer → http_server, XMLParser → xml_parser).
+        snake = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", node.name)
+        snake = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", snake).lower()
+        candidates = {class_name_lower, snake}
+
+        # If this file IS the natural home for the class, skip — it might be
+        # a genuine work-in-progress stub in its own module.
+        if file_path.stem in candidates:
+            continue
+
+        # Is there a companion file where the real implementation could live?
+        real_module = None
+        for c in candidates:
+            if (pkg_dir / f"{c}.py").exists():
+                real_module = f"{c}.py"
+                break
+            if (pkg_dir / c / "__init__.py").exists():
+                real_module = f"{c}/__init__.py"
+                break
+
+        if real_module:
+            problems.append(
+                f"class `{node.name}` (line {node.lineno}) has only stub methods "
+                f"but {real_module} already exists in {pkg_dir.name}/. "
+                f"Use `from .{real_module.split('/')[0].split('.')[0]} import {node.name}` "
+                f"instead of redefining an empty stub."
+            )
+        elif file_path.stem in {
+            "cli", "__main__", "app", "main", "server", "__init__"
+        }:
+            # Thin-wrapper files shouldn't contain real class implementations.
+            problems.append(
+                f"class `{node.name}` (line {node.lineno}) is defined INLINE in "
+                f"{file_path.name} with only stub methods — every method body is "
+                f"`pass`/`...`/`return`/`raise NotImplementedError`. "
+                f"This silences ModuleNotFoundError but makes the class non-functional. "
+                f"Write the REAL implementation in {sorted(candidates)[0]}.py and "
+                f"import it here."
+            )
+
+    return problems
+
+
 def _check_missing_sibling_imports(tree, file_path: Path) -> set[str]:
     """Detect imports of sibling modules that don't exist on disk yet.
 
@@ -338,12 +485,40 @@ class WriteFile(
                 import ast
                 tree = ast.parse(args.content)
             except SyntaxError as e:
+                # Track consecutive syntax-error writes per file. Gemma 4
+                # thrashes — each retry has DIFFERENT (still broken) content,
+                # so identical-content dedup never fires. After 3 in a row on
+                # the same path, escalate to ToolError forcing a tactic change.
+                thrash = self.state.__dict__.setdefault("_syntax_thrash", {})
+                key = str(file_path)
+                thrash[key] = thrash.get(key, 0) + 1
+                thrash_n = thrash[key]
                 syntax_warning = (
                     f"\n\n⚠ SYNTAX ERROR in {file_path.name} line {e.lineno}: {e.msg}"
                     f"\n  {e.text.rstrip() if e.text else ''}"
                     f"\n  Fix this before moving to the next file."
                 )
+                if thrash_n >= 3:
+                    raise ToolError(
+                        f"BLOCKED: write_file({file_path.name}) has produced "
+                        f"{thrash_n} consecutive syntax errors on this file. "
+                        f"Current error: line {e.lineno}: {e.msg}. "
+                        f"Rewriting the whole file with broken syntax again is "
+                        f"refused. Switch tactic: "
+                        f"(1) read_file({file_path.name}) to see current state, "
+                        f"(2) use search_replace for targeted fixes, or "
+                        f"(3) write a DIFFERENT file from your plan and come "
+                        f"back to this one. This exact write is rejected."
+                    )
+                elif thrash_n == 2:
+                    syntax_warning += (
+                        f"\n  [2nd syntax error on this file. ONE MORE will be "
+                        f"blocked — switch to search_replace or read the file first.]"
+                    )
             else:
+                # Reset thrash counter on a successful parse.
+                thrash = self.state.__dict__.get("_syntax_thrash", {})
+                thrash.pop(str(file_path), None)
                 # Catch silent-exit __main__.py: imports a `main` function but
                 # never actually calls it. Real bug found in the codec build —
                 # `python3 -m pkg` ran, exited 0, and produced no output.
@@ -374,6 +549,26 @@ class WriteFile(
                         syntax_warning += raise_warning
                     else:
                         syntax_warning = raise_warning
+
+                # Catch stub-class anti-pattern (MODEL_SHORTCOMINGS #10a).
+                # Model writes `class Interpreter: def run(self): pass` inline
+                # in cli.py to silence ModuleNotFoundError instead of writing
+                # interpreter.py. --help works but every execution is a no-op.
+                stub_problems = _check_stub_classes(tree, file_path)
+                if stub_problems:
+                    stub_warning = (
+                        f"\n\n⚠ {file_path.name} contains STUB classes "
+                        f"(placeholder implementations that silence imports "
+                        f"but do nothing):\n"
+                        + "\n".join(f"  • {p}" for p in stub_problems[:3])
+                        + "\n  Stub classes make the package look functional "
+                        + "(`python3 -m pkg --help` works) but every real "
+                        + "execution is a no-op. Write the REAL implementation."
+                    )
+                    if syntax_warning:
+                        syntax_warning += stub_warning
+                    else:
+                        syntax_warning = stub_warning
 
                 # Catch missing-import bug: file imports `from .x import Y` or
                 # `from pkg.x import Y` but x.py doesn't exist on disk yet.

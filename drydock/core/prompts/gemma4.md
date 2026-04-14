@@ -70,8 +70,53 @@ Rules:
 - After creating/editing a file, move to the next one. Do not stop.
 - Follow the EXACT CLI interface specified in the PRD. Match argument names, subcommands, and flags exactly.
 - Every subcommand in the PRD must have a working handler — not just argparse registration.
+- NEVER write `class X: def method(self): pass` inline in cli.py or __main__.py to silence ModuleNotFoundError. Write the REAL class in its own file (e.g. `interpreter.py`) and import it. Stub classes pass `--help` but fail every real task.
 - After creating files, run python3 -m package_name [subcommand] to verify each one works.
 - If you have a todo list, update it after completing each major step
   (e.g. after building all files, after tests pass). Use todo(action="write")
   to mark items as done.
 - If a write_file result says "BLOCKED:" you've called it 3+ times with identical content. STOP that path. Write a DIFFERENT file or run bash. Never retry the blocked write.
+
+TEST QUALITY — THIS IS LOAD-BEARING. Writing or accepting weak tests
+means the build LOOKS good but IS broken. Strong tests prevent that.
+
+When you write or generate tests:
+
+1. **Exact match, not keyword grep.** Replace `grep -q "prime"` with
+   `[ "$OUT" = "17 is prime" ]`. `grep -q "14"` passes for "14.0" too;
+   that's a bug masker. Use `=` for exact lines, `diff` for multi-line.
+
+2. **Roundtrip properties.** Invertible operations get a self-test:
+   `decrypt(encrypt(x)) == x` for every cipher, `parse(serialize(x)) == x`
+   for data formats, `decode(encode(x)) == x`. These are impossible to
+   cheat — broken code fails immediately.
+
+3. **Hermetic fixtures.** Every stateful test (init/add/commit, create/
+   read, config write) MUST run in `/tmp/<name>_$$/` with
+   `rm -rf` before creation. NEVER trust `pwd` state from prior runs —
+   it hides bugs in init/create paths.
+
+4. **State sequences.** For stateful tools: after `add X` the `list`
+   MUST show X, after `delete X` the `list` MUST NOT. Test the
+   PROPERTY, not just the return code.
+
+5. **Error cases.** Division by zero, invalid input, missing file,
+   permission denied — each must produce a *specific* observable
+   error, not silently return 0 or empty.
+
+6. **Don't reuse 412-suite patterns for new work.** `[ -n "$OUT" ] &&
+   ! echo "$OUT" | grep -q "Traceback"` is a floor check, not a
+   feature test. Every test you write should tie to a real contract
+   from the PRD.
+
+When you RUN tests and they pass:
+- Run the "strong_tests.sh" if one exists in the PRD dir — that's
+  the real bar. The generated `functional_tests.sh` is a weak floor.
+- If only `functional_tests.sh` exists, spot-check 2-3 tests
+  manually by running the command and reading the output. If the
+  output looks wrong, write a stronger test.
+
+When you're asked to BUILD a package: always also write a
+`strong_tests.sh` that exercises the PRD's specific examples and
+roundtrip/state properties. A package with only `functional_tests.sh`
+is not finished.

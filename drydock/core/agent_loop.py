@@ -1193,15 +1193,22 @@ class AgentLoop:
             )
         )
 
-        # Advisory loop detection: inject nudge when the model keeps repeating
-        # the same call. Never blocks, never stops — just steers the model toward
-        # a different approach. Catches the 28-identical-bash-calls failure mode.
+        # Loop detection now drives TOKEN-LEVEL sampling bumps, not
+        # advisory system notes (2026-04-13: confirmed 75/75 NOTICE
+        # tool-result messages were ignored by Gemma 4, and nudge
+        # system notes fired 4/4 with 8 identical calls continuing).
+        # The tool-level ToolError escalation in read_file/bash (5x)
+        # and search_replace (2x fail) is the hard stop for each
+        # specific call; here we also bump sampling to make the NEXT
+        # generated tool call likely to differ.
         try:
             repetition = self._check_tool_call_repetition()
             if repetition:
-                nudge = self._build_repetition_nudge(repetition, tool_call)
-                if nudge:
-                    self._inject_system_note(nudge)
+                self._loop_detected = True
+                self._loop_signal = repetition
+            else:
+                self._loop_detected = False
+                self._loop_signal = None
         except Exception as e:
             logger.debug("Loop detection check failed: %s", e)
 
@@ -1213,61 +1220,11 @@ class AgentLoop:
             result=result,
         )
 
-    def _build_repetition_nudge(
-        self, signal: str, tool_call: ResolvedToolCall
-    ) -> str | None:
-        """Build an advisory nudge for the model when a loop is detected.
-
-        Returns None if the tool call was already nudged recently (prevents
-        spamming the model with the same message on every turn).
-        """
-        # Rate-limit: don't nudge more than once every 3 turns for the same tool
-        last_nudge_turn = getattr(self, "_last_nudge_turn", -10)
-        current_turn = len(self.messages)
-        if current_turn - last_nudge_turn < 3:
-            return None
-        self._last_nudge_turn = current_turn
-
-        tool_name = tool_call.tool_name
-        if signal == "FORCE_STOP":
-            return (
-                f"You have called `{tool_name}` with the SAME arguments 8+ times "
-                f"and gotten the same result each time. This is a dead end. "
-                f"You MUST change your approach:\n"
-                f"- For bash: if output is empty, read the source files to find the bug — "
-                f"  don't just re-run the command\n"
-                f"- For write_file/search_replace: if the file already has your content, "
-                f"  move on to the NEXT file\n"
-                f"- If stuck, inspect the actual file contents with read_file before editing"
-            )
-        if signal.startswith("WARNING|"):
-            stuck_tool = signal.split("|", 1)[1] or tool_name
-            if stuck_tool == "bash":
-                return (
-                    f"You have run very similar `bash` commands several times in a row. "
-                    f"If the output is empty or unchanged, the command is not the problem — "
-                    f"the CODE is. Use read_file to inspect the source, then write_file or "
-                    f"search_replace to fix the bug. Do not re-run the same command again."
-                )
-            if stuck_tool == "search_replace":
-                return (
-                    f"STOP: You are calling search_replace with the same arguments "
-                    f"repeatedly. If the tool said 'ALREADY APPLIED', the edit is DONE. "
-                    f"If it said 'not found', you need to read_file FIRST to see the "
-                    f"actual file contents, then use the EXACT text from the file. "
-                    f"Do NOT retry the same search_replace again."
-                )
-            if stuck_tool == "write_file":
-                return (
-                    f"You have written the same file multiple times in a row. "
-                    f"Move to the NEXT file in your plan. If no next file, run the code "
-                    f"with bash to verify it works."
-                )
-            return (
-                f"You have called `{stuck_tool}` several times in a row with similar "
-                f"arguments. Try a different tool or a different approach."
-            )
-        return None
+    # _build_repetition_nudge REMOVED (2026-04-13): advisory nudges had
+    # 0% effect on Gemma 4 — fired 4 times while model made 8 identical
+    # calls. Replaced by token-level sampling bumps (see agent_loop's
+    # _loop_detected path) plus tool-level ToolError escalation in
+    # read_file/bash/search_replace.
 
     def _prune_duplicate_writes(self, target_path: str) -> None:
         """Remove assistant-write_file / tool-result pairs for a looping path.
@@ -1501,9 +1458,32 @@ class AgentLoop:
 
         try:
             start_time = time.perf_counter()
-            # Use temperature override if set (loop detection bumps it)
             temp = active_model.temperature
-            result = await self.backend.complete(
+            extra_sampling: dict | None = None
+
+            # Token-level loop-breaker: when repetition is detected, bump
+            # temperature and add frequency_penalty + a fresh seed so the
+            # model's next completion is mechanically likely to diverge.
+            # Mistral/OpenAI-compat backends pass these straight through
+            # to vLLM's SamplingParams.
+            if getattr(self, "_loop_detected", False):
+                signal = getattr(self, "_loop_signal", "") or ""
+                # Heavier bump if we've already hit the FORCE_STOP signal
+                # (=8 repeats) vs a WARNING (=3-5 repeats).
+                heavy = signal == "FORCE_STOP"
+                temp = min(1.0, temp + (0.5 if heavy else 0.3))
+                extra_sampling = {
+                    "frequency_penalty": 0.7 if heavy else 0.4,
+                    "presence_penalty": 0.3,
+                    "seed": int(time.time() * 1000) & 0x7FFFFFFF,
+                }
+                logger.info(
+                    "[LOOP-BREAK] %s → temp %.2f, freq_pen %.2f, seed %d",
+                    signal, temp, extra_sampling["frequency_penalty"],
+                    extra_sampling["seed"],
+                )
+
+            complete_kwargs = dict(
                 model=active_model,
                 messages=self.messages,
                 temperature=temp,
@@ -1515,6 +1495,14 @@ class AgentLoop:
                 if self.entrypoint_metadata
                 else None,
             )
+            if extra_sampling:
+                complete_kwargs["extra_sampling"] = extra_sampling
+            try:
+                result = await self.backend.complete(**complete_kwargs)
+            except TypeError:
+                # Older backend that doesn't accept extra_sampling
+                complete_kwargs.pop("extra_sampling", None)
+                result = await self.backend.complete(**complete_kwargs)
             end_time = time.perf_counter()
 
             logger.info(

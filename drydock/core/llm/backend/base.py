@@ -32,6 +32,7 @@ class APIAdapter(Protocol):
         provider: ProviderConfig,
         api_key: str | None = None,
         thinking: str = "off",
+        extra_sampling: dict[str, Any] | None = None,
     ) -> PreparedRequest: ...
 
     def parse_response(

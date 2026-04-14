@@ -347,6 +347,27 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 - ✅ **Stale dir cleanup in harness** — `run_interactive()` now removes
   any directory in cwd that starts with the package name prefix but
   isn't the expected package dir (catches model naming mistakes).
+- ✅ **Stub-class anti-pattern detection** (`_check_stub_classes` in
+  write_file.py) — catches the lang_interp pattern where the model
+  defines `class Interpreter: def run(self): pass` inline in cli.py
+  to silence ModuleNotFoundError instead of writing interpreter.py.
+  AST-based; ignores ABC/Protocol/dataclass; suggests the right
+  companion module. See MODEL_SHORTCOMINGS.md #10a.
+- ✅ **412-suite functional test baseline** (`BASELINE_412.md`) —
+  auto-generated `functional_tests.sh` for all 99 PRDs in
+  `/data3/drydock_test_projects/`. NO `--help`-only tests. Baseline:
+  85.0% pass rate (267/314), 65 clean PRDs, 32 with real bugs.
+- ✅ **Conservative literal-output detection** in
+  `scripts/auto_generate_tests.py` — treats PRD arrow-text as PROSE
+  description by default; only keeps as literal expected output when
+  has strong structural signal (digits, quotes, braces, paths, all-caps,
+  codename tokens). Auto-creates /tmp fixtures and plain filename
+  fixtures (sample.txt, data.csv, etc.) referenced in commands.
+- ✅ **Worked example: tree-walking interpreter** — `worked_examples/
+  tree_walking_interpreter.py` canonical lexer/parser/interpreter
+  with operator-precedence-via-method-nesting and environment-with-
+  outer-pointer for lexical scope. Surfaced in meta_ralph stuck mode
+  for language-interpreter style PRDs.
 
 **Legal note:** All patterns are standard design concepts implemented from scratch. No proprietary code copied.
 
@@ -527,6 +548,15 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
     killed the user's active TUI session twice by doing
     `ps aux | grep drydock | kill`. Only kill by tracked PIDs from
     my own background tasks. User's TUI is also a drydock process.
+39. **`pgrep -P pid` can return unrelated children.** (2026-04-13) I ran
+    `kill $PORT_PID $(pgrep -P $PORT_PID | head -1)` to stop a port
+    task and accidentally killed `llm_balancer.py` (which listens on
+    :8001 and proxies to vLLM on :8000). Every in-flight drydock
+    session got 6 API errors and gave up before cron's 5-min keepalive
+    restarted the balancer. When stopping a background task, kill ONLY
+    the specific PID you spawned; let the shell's process group
+    handling or SIGTERM propagation take care of children.
+    Verify target by PID match (`ps -p $PID -o comm`) before killing.
 
 ## Testing
 

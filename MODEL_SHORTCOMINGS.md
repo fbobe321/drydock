@@ -40,12 +40,30 @@ inspection) but the feature is non-functional at runtime.
   `_format_table()`. Feature non-functional; tests pass because the test
   just checked the signature.
 - Session: `session_20260412_105528_30d43609`.
+- minivc (10_version_control): `__main__.py` does
+  `init.run()`, `status.run()`, `add.run(args.path)` etc. after
+  importing them with `from minivc import init, status, add`. But
+  `init`/`status`/`add` are FUNCTIONS, not classes — they have no
+  `.run()` attribute. Every subcommand fails with
+  `AttributeError: 'function' object has no attribute 'run'`. --help
+  works because argparse doesn't dispatch. Baseline run 2026-04-13:
+  0/5 functional tests pass.
 
 **Root cause hypothesis:** Model doesn't trace execution path end-to-end.
 Treats each file as independent.
 
 **Candidate training signal:** Traces where model correctly chases a
 parameter through the full call graph vs traces where it stops at surface.
+
+**meta_ralph result (2026-04-13):** minivc FIXED in 58 seconds at
+stage 1 (single_build). The model correctly identified
+`'function' object has no attribute 'run'`, rewrote the dispatch to
+call callables directly (`add_cmd(args.path)` instead of `add.run(args.path)`),
+and all 5 tests passed. The `cli_subcommand_dispatch.py` worked
+example in `worked_examples/` was the key hint — scoring matched on
+"argparse", "subcommand", "init", "run()", "AttributeError" keywords.
+**This shortcoming is substantially mitigated by worked examples +
+meta_ralph when the failure signature is recognizable.**
 
 ---
 
@@ -209,8 +227,83 @@ imported modules that have only `pass`-bodies. Strong hint: "you
 imported Interpreter — is the REAL Interpreter in interpreter.py, or
 have you stubbed it here to silence imports?"
 
+**Harness mitigation IN PLACE (v2.6.79):** `_check_stub_classes()` in
+`write_file.py` walks the AST of any written .py file and flags classes
+where ALL methods have trivial bodies (`pass`, `...`, `return`, or
+`raise NotImplementedError`). Skips ABC/Protocol/dataclass. If a
+companion module with the same name exists on disk, suggests
+`from .interpreter import Interpreter` instead. If no companion exists
+and the file is a thin-wrapper name (cli.py, __main__.py, app.py,
+main.py, server.py, __init__.py), tells the model to write the real
+implementation in `<classname_snake>.py` and import it.
+
 **Candidate training signal:** Traces where model writes the ACTUAL
 module vs traces where it adds inline stubs.
+
+---
+
+## 10b. Interactive fallback even when CLI args supplied
+
+**Pattern:** A CLI accepts an optional value (e.g. `--password`) AND
+falls back to `getpass()` / `input()` when the flag is absent. The
+model writes the fallback path first and forgets to check the flag
+first — so even when the user passes `--password pass123` the tool
+calls `getpass()`, which fails with `EOFError` in any non-interactive
+context (tests, CI, piped input).
+
+**Evidence:**
+- password_vault (53): `python3 -m password_vault add --site test
+  --user bob --password pass123` → `EOFError` from `fallback_getpass`.
+  The CLI ignored the `--password` arg and prompted interactively.
+- Similar pattern likely in any tool with a `--password` / `--key` /
+  `--seed` style flag where the PRD shows both an interactive and a
+  non-interactive usage.
+
+**Harness mitigation idea:** write_file AST check — flag any `getpass`
+or `input()` call inside a function that also consumes an argparse
+namespace, unless there's a clear conditional (`if args.password: ...
+else: getpass()`). Weak signal; may false-positive on legitimate
+interactive-only commands. Better as a prompt rule.
+
+**Candidate training signal:** Traces where CLI tools correctly prefer
+flag values over interactive prompts, only dropping to `getpass()` when
+the flag is unset.
+
+---
+
+## 10c. Multi-module architectural rewrites exceed 3-stage iteration
+
+**Pattern:** When a PRD requires ≥4 interdependent modules (e.g.
+lang_interp needs lexer → parser → type_checker → interpreter → repl),
+a single drydock session can't hold the whole design in context. The
+model fixes one module at a time but regressions in another module
+cause net 0 improvement; rollback restores the broken baseline.
+
+**Evidence:**
+- lang_interp (408): 0/13 → 0/13 after 3-stage meta_ralph
+  (single_build, best_of_2, stuck_mode with tree_walking_interpreter
+  worked example). Total 23.6 min. Model identified the lexer issue
+  correctly but couldn't complete the fix chain. Final code is still
+  the stub-class version (reverted after every failed sample).
+
+**Root cause hypothesis:** The model's working memory can track ~3-4
+files cleanly. Beyond that, fixing module A introduces inconsistency
+with module B that the model doesn't track. The snapshot+rollback
+mechanism correctly refuses regressions but also prevents partial
+progress from accumulating.
+
+**Candidate approaches:**
+- Multi-session iteration: keep progress across sessions by committing
+  each improvement separately.
+- Test-level checkpointing: accept partial improvement (e.g. go from
+  0/13 to 3/13) instead of all-or-nothing.
+- Worked example: a FULL interpreter, not just the lexer/parser pattern.
+  (tree_walking_interpreter.py is 400 lines but the model still stalled.)
+
+**Candidate training signal:** Long traces where the model correctly
+threads a multi-module fix (changing a token type in lexer.py then
+updating the parser's KEYWORDS list, then the interpreter's visit_X,
+then the REPL's prompt).
 
 ---
 

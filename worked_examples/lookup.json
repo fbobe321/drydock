@@ -5,6 +5,16 @@
       "file": "sql_parser.py",
       "keywords": ["sql", "select from", "insert into", "where", "update set", "delete from", "tokenizer", "recursive descent", "query parser"],
       "summary": "SQL tokenizer + recursive-descent parser. Handles SELECT/INSERT/UPDATE/DELETE + WHERE. Shows the critical alias-vs-keyword detection pattern."
+    },
+    {
+      "file": "cli_subcommand_dispatch.py",
+      "keywords": ["argparse", "subcommand", "subparsers", "dispatch", "command", "cli", "init", "AttributeError: 'function' object has no attribute", "run()", "main", "minivc", "vcs", "version control"],
+      "summary": "Canonical argparse subcommand dispatch. One-shape rule: subcommands are callables, mapped by name via a COMMANDS dict. Prevents the minivc anti-pattern (init.run() on a function)."
+    },
+    {
+      "file": "tree_walking_interpreter.py",
+      "keywords": ["interpreter", "lexer", "parser", "ast", "evaluate", "repl", "language", "tokenize", "expression", "precedence", "environment", "closure", "scope", "let", "fn ", "visit_"],
+      "summary": "Tree-walking interpreter for a toy language. Lexer → Parser → Interpreter in SEPARATE files. Operator precedence via method-call nesting (parse_expr → parse_add → parse_mul → parse_atom). Environment with outer-pointer for lexical scope. visit_<NodeType> dispatch. CRITICAL: do NOT stub Interpreter in cli.py — write it in interpreter.py."
     }
   ]
 }

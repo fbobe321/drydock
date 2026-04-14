@@ -92,6 +92,7 @@ class OpenAIAdapter(APIAdapter):
         tools: list[AvailableTool] | None,
         max_tokens: int | None,
         tool_choice: StrToolChoice | AvailableTool | None,
+        extra_sampling: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload = {
             "model": model_name,
@@ -109,6 +110,14 @@ class OpenAIAdapter(APIAdapter):
             )
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+
+        # Loop-breaker sampling overrides (frequency_penalty, seed, etc).
+        # These override temperature if provided (our anti-loop code bumps
+        # temperature directly here too). vLLM ignores unknown keys.
+        if extra_sampling:
+            for k, v in extra_sampling.items():
+                if v is not None:
+                    payload[k] = v
 
         return payload
 
@@ -145,6 +154,7 @@ class OpenAIAdapter(APIAdapter):
         provider: ProviderConfig,
         api_key: str | None = None,
         thinking: str = "off",
+        extra_sampling: dict[str, Any] | None = None,
     ) -> PreparedRequest:
         merged_messages = merge_consecutive_user_messages(messages)
         field_name = provider.reasoning_field_name
@@ -156,7 +166,8 @@ class OpenAIAdapter(APIAdapter):
         ]
 
         payload = self.build_payload(
-            model_name, converted_messages, temperature, tools, max_tokens, tool_choice
+            model_name, converted_messages, temperature, tools, max_tokens, tool_choice,
+            extra_sampling=extra_sampling,
         )
 
         # Enable thinking for models that support it (Gemma 4)
@@ -278,6 +289,7 @@ class GenericBackend:
         tool_choice: StrToolChoice | AvailableTool | None = None,
         extra_headers: dict[str, str] | None = None,
         metadata: dict[str, str] | None = None,
+        extra_sampling: dict[str, Any] | None = None,
     ) -> LLMChunk:
         api_key = (
             os.getenv(self._provider.api_key_env_var)
@@ -299,6 +311,7 @@ class GenericBackend:
             provider=self._provider,
             api_key=api_key,
             thinking=model.thinking,
+            extra_sampling=extra_sampling,
         )
 
         headers = req.headers

@@ -224,7 +224,40 @@ class SearchReplace(
                 error_message += "\n\nWarnings encountered:\n" + "\n".join(
                     block_result.warnings
                 )
+
+            # Mechanical loop-breaker: if search_replace has failed with
+            # "Search text not found" on the SAME file 2+ times in a row,
+            # embed the current file head in the error so the model sees
+            # actual file state and can't keep retrying phantom edits.
+            # (One session had 8 consecutive identical search_replace
+            # failures with 0 behavior change. Nudges didn't help.)
+            state = self.state.__dict__.setdefault("_sr_fail_history", {})
+            fail_key = str(file_path)
+            entry = state.get(fail_key, {"count": 0})
+            entry["count"] += 1
+            state[fail_key] = entry
+            if entry["count"] >= 2:
+                try:
+                    head = original_content[:2000]
+                    line_count = original_content.count("\n")
+                    error_message += (
+                        f"\n\n[LOOP-BREAKER: this is the #{entry['count']} "
+                        f"consecutive search_replace failure on "
+                        f"{file_path.name}. Stop retrying the same search. "
+                        f"Actual file content (first 2000 chars of "
+                        f"{line_count} lines):\n"
+                        f"-----FILE START-----\n{head}\n-----FILE END-----\n"
+                        f"Use THIS exact text as your search target, OR "
+                        f"abandon this edit and try write_file.]"
+                    )
+                except Exception:
+                    pass
+
             raise ToolError(error_message)
+        else:
+            # Success → reset the fail counter for this file
+            state = self.state.__dict__.setdefault("_sr_fail_history", {})
+            state.pop(str(file_path), None)
 
         modified_content = block_result.content
 
