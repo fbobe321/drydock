@@ -76,22 +76,52 @@ class APIToolFormatHandler:
         return "auto"
 
     def process_api_response_message(self, message: Any) -> LLMMessage:
-        # Strip ALL Gemma 4 leaked channel tokens from content.
+        # Strip ALL Gemma 4 leaked channel/tool-call tokens from content.
         # The model emits various formats:
         #   <|channel>thought...<channel|>  (thinking tokens)
         #   <|channel>call:tool_name{...}<tool_call|>  (malformed tool calls)
         #   <|channel><|channel>list_mcp_resources{...}<tool_call|>  (double channel)
-        # Keeping them wastes context and confuses subsequent turns.
+        #   <|tool_call>call:write_file{content:<|"|>import ...  (bare tool_call,
+        #       observed in color_converter session 20260414_121725 after a
+        #       syntax-thrash BLOCK — model panicked, emitted this as its FINAL
+        #       assistant turn with no real tool call; shakedown interpreted the
+        #       text-only response as completion and ended the session.)
+        # Keeping them wastes context, confuses subsequent turns, and can
+        # fake-signal "done" to harnesses that watch for text-only messages.
         content = message.content
-        if content and "<|channel>" in content:
+        if content and ("<|channel>" in content or "<|tool_call>" in content):
             import re as _re
-            # Strip any <|channel>...<channel|> or <|channel>...<tool_call|> blocks
+            # Strip <|channel>...<channel|> or <|channel>...<tool_call|> blocks
             content = _re.sub(
                 r"<\|channel\>.*?(?:<channel\|>|<tool_call\|>)",
                 "",
                 content,
                 flags=_re.DOTALL,
-            ).strip() or None
+            )
+            # Strip bare <|tool_call>call:...<tool_call|> blocks (no channel
+            # prefix). Unterminated variants (stream cut off mid-emission)
+            # are stripped by the catch-all below.
+            content = _re.sub(
+                r"<\|tool_call\>.*?<tool_call\|>",
+                "",
+                content,
+                flags=_re.DOTALL,
+            )
+            # Final catch-all: any dangling <|...|> or <...|> tokens that
+            # didn't form a complete pair (stream truncation).
+            content = _re.sub(r"<\|[^>]{0,200}\|>", "", content)
+            content = _re.sub(r"<\|[^>]{0,200}>", "", content)
+            content = _re.sub(r"<[^>]{0,200}\|>", "", content)
+            # If remaining content is just tool-call-leak residue (starts
+            # with `call:toolname{` after stripping), nuke it. Otherwise
+            # harness watchers treat the garbage text as a completion
+            # signal. agent_loop's empty-content nudge will ask the model
+            # to continue with a real tool call.
+            stripped = content.strip()
+            if _re.match(r"^(call:\w+\{|\w+\{content:)", stripped):
+                content = None
+            else:
+                content = stripped or None
 
         clean_message = {
             "role": message.role,

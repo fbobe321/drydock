@@ -180,6 +180,27 @@ class ToolManager:
             name: cls for name, cls in self._available.items() if cls.is_available()
         }
 
+        # Auto-disable tools that misfire for Gemma 4. The model mixes up
+        # `task` (subagent delegation) with `todo` (task list), recurses
+        # with thinking-token-leaked output that gets fed back to itself.
+        # Observed: minivc session 20260414_120752 — model called `task`
+        # with builder agent; subagent response was raw <|tool_call>
+        # thinking tokens rendered as text, triggered session hang.
+        # Scaffolding per CLAUDE.md constraint; remove when model improves.
+        _GEMMA4_AUTO_DISABLE = {
+            "task", "task_create", "task_update", "task_list",
+            "ask_user_question", "invoke_skill", "tool_search",
+        }
+        try:
+            active = self._config.get_active_model()
+            if "gemma" in active.name.lower():
+                runtime_available = {
+                    name: cls for name, cls in runtime_available.items()
+                    if name not in _GEMMA4_AUTO_DISABLE
+                }
+        except (ValueError, AttributeError):
+            pass
+
         if self._config.enabled_tools:
             return {
                 name: cls
