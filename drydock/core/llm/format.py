@@ -164,25 +164,52 @@ class APIToolFormatHandler:
             try:
                 args = json.loads(raw_json)
             except json.JSONDecodeError:
-                # Don't silently use {} — log the malformed args and skip
+                # Gemma 4 frequently leaks thinking-token markers INSIDE
+                # JSON string values. Tokens like "<|\Fix" make `\F` an
+                # invalid JSON escape, which crashes the decoder and loses
+                # the whole tool call. Sanitize and retry before giving up.
                 import logging
+                import re as _re
                 logging.getLogger(__name__).warning(
                     "Malformed tool call JSON for %s: %s",
                     function_call.name,
                     (function_call.arguments or "")[:200],
                 )
-                # Try to salvage partial JSON by closing brackets
                 raw = (function_call.arguments or "").strip()
+                args = {}
                 if raw:
-                    # Count open/close braces and try to fix
-                    opens = raw.count('{') - raw.count('}')
-                    raw_fixed = raw + '}' * max(0, opens)
+                    sanitized = raw
+                    # Strip complete <|channel>...<channel|>/<tool_call|> blocks
+                    sanitized = _re.sub(
+                        r"<\|channel\>.*?(?:<channel\|>|<tool_call\|>)",
+                        "", sanitized, flags=_re.DOTALL,
+                    )
+                    sanitized = _re.sub(
+                        r"<\|tool_call\>.*?<tool_call\|>",
+                        "", sanitized, flags=_re.DOTALL,
+                    )
+                    # Strip unpaired/truncated <|...|> and <|...> tokens.
+                    sanitized = _re.sub(r"<\|[^>]{0,200}\|>", "", sanitized)
+                    sanitized = _re.sub(r"<\|[^>]{0,200}>", "", sanitized)
+                    sanitized = _re.sub(r"<[^>]{0,200}\|>", "", sanitized)
+                    # Escape any remaining invalid backslash escapes (JSON
+                    # only allows \" \\ \/ \b \f \n \r \t \u). Catches e.g.
+                    # `<|\Fix` residue where `\F` would abort the decoder.
+                    sanitized = _re.sub(
+                        r'\\(?!["\\/bfnrtu])', r'\\\\', sanitized,
+                    )
                     try:
-                        args = json.loads(raw_fixed)
+                        args = json.loads(sanitized)
                     except json.JSONDecodeError:
-                        args = {"_parse_error": f"Malformed JSON: {raw[:100]}..."}
-                else:
-                    args = {}
+                        # Last-ditch: try closing any unbalanced braces.
+                        opens = sanitized.count("{") - sanitized.count("}")
+                        if opens > 0:
+                            try:
+                                args = json.loads(sanitized + "}" * opens)
+                            except json.JSONDecodeError:
+                                args = {"_parse_error": f"Malformed JSON after sanitize: {sanitized[:100]}..."}
+                        else:
+                            args = {"_parse_error": f"Malformed JSON: {raw[:100]}..."}
 
             tool_calls.append(
                 ParsedToolCall(

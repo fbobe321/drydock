@@ -388,30 +388,17 @@ class Bash(
 
             returncode = proc.returncode or 0
 
-            # Mechanical loop-breaker.
-            # Tier 1 (3rd identical call): collapse body to short notice.
-            # Tier 2 (5th identical call): raise ToolError. Notice-in-
-            # tool-result was being ignored 75/75 times by Gemma 4
-            # (session 20260414_003629 had 99 bash calls, 75 were NOTICE
-            # re-runs). ToolError goes through the error-handling path
-            # and the model visibly reacts to those.
+            # Mechanical loop-breaker (ADVISORY ONLY — never raise
+            # ToolError; see feedback_no_tool_errors_for_loop_detection.md).
+            # 3rd+ identical call: collapse body to short notice so the
+            # model sees "this ran already with same output" without
+            # getting refused into a block-loop.
             state = self.state.__dict__.setdefault("_bash_history", {})
             combined = stdout + "\n---STDERR---\n" + stderr
             out_hash = hash((combined, returncode))
             entry = state.get(args.command)
             if entry and entry["hash"] == out_hash:
                 entry["count"] += 1
-                if entry["count"] >= 5:
-                    raise ToolError(
-                        f"REFUSED: `{args.command[:80]}` has run "
-                        f"{entry['count']} times with IDENTICAL output "
-                        f"(rc={returncode}). Re-running will NOT change "
-                        f"anything. You MUST do something DIFFERENT: "
-                        f"edit source files, write tests, read a DIFFERENT "
-                        f"file, or move on. This exact command is blocked "
-                        f"until you take a different action. Last stdout "
-                        f"(first 300): {stdout[:300]!r}"
-                    )
                 if entry["count"] >= 3:
                     notice = (
                         f"[NOTICE: this is the #{entry['count']} identical "

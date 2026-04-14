@@ -84,7 +84,16 @@ class EventHandler:
                     )
                 await self._handle_assistant_message(event)
             case ToolCallEvent():
-                await self.finalize_streaming()
+                # Finalize assistant content stream (user-visible text) but
+                # KEEP the reasoning widget open across tool calls. Closing
+                # it spawns a fresh "Thought" widget for every reasoning
+                # chunk between calls — a turn with N tool calls shows N
+                # "Thought" widgets stacked down the screen.
+                if self.current_streaming_message is not None:
+                    await self.current_streaming_message.stop_stream()
+                    if self.current_streaming_message.is_stripped_content_empty():
+                        await self.current_streaming_message.remove()
+                    self.current_streaming_message = None
                 return await self._handle_tool_call(event, loading_widget)
             case ToolResultEvent():
                 await self.finalize_streaming()

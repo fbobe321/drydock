@@ -392,44 +392,19 @@ class WriteFile(
     ) -> AsyncGenerator[ToolStreamEvent | WriteFileResult, None]:
         file_path, file_existed, content_bytes = self._prepare_and_validate_path(args)
 
-        # Path-write thrash gate (catches write_file ↔ search_replace ping-pong).
-        # Counts CUMULATIVE writes to a path regardless of content. Identical-
-        # content dedup misses this case because an intervening search_replace
-        # mutates the file between writes, so each write_file sees "different"
-        # content even though the model is rewriting the same broken version.
-        # Real bug: minivc session wrote commands/__init__.py 11 times — every
-        # write was clobbering the prior search_replace fix. Threshold 5 is
-        # generous; legitimate work writes a file 1–2x.
+        # Path-write thrash counter (just counts; advisory only). Per
+        # feedback_no_tool_errors_for_loop_detection.md: loop detection
+        # in tools must be advisory, never raise ToolError — hard blocks
+        # cause their own loops on long tasks.
         path_writes = self.state.__dict__.setdefault("_path_writes", {})
         path_key = str(file_path)
         path_writes[path_key] = path_writes.get(path_key, 0) + 1
         path_n = path_writes[path_key]
-        if path_n >= 5:
-            raise ToolError(
-                f"BLOCKED: write_file({file_path.name}) has been called "
-                f"{path_n} times this session on the same path. This is "
-                f"a thrash loop — likely write_file overwriting prior "
-                f"search_replace fixes, or repeated full rewrites instead "
-                f"of targeted edits. Refused. Switch tactic: "
-                f"(1) read_file({file_path.name}) to see CURRENT disk state, "
-                f"(2) use search_replace for surgical fixes, "
-                f"(3) move to a DIFFERENT file in your plan and come back later. "
-                f"Do NOT call write_file on this path again until you have "
-                f"made progress elsewhere."
-            )
 
         # Skip if file already has identical content (prevents write loops).
-        #
-        # Three-tier escalation — first call is a friendly advisory, second
-        # adds concrete state, third is a HARD BLOCK via ToolError. Every
-        # advisory signal in drydock (dedup content, system note nudge,
-        # missing-import warning, user-typed STOP interrupt) is ignored by
-        # Gemma 4 on write loops — confirmed by 3 of 5 failures in the
-        # April 2026 user-pain suite run. The hard block is narrow: it only
-        # fires on pure no-op writes (file exists AND content matches disk)
-        # after 3 identical attempts. Legitimate retries (different content,
-        # different path, or after the model successfully wrote a DIFFERENT
-        # file) are never blocked.
+        # ADVISORY ONLY — must never raise ToolError. See
+        # feedback_no_tool_errors_for_loop_detection.md: hard blocks cause
+        # their own loops on long tasks.
         if file_existed:
             try:
                 existing = file_path.read_text(encoding="utf-8")
@@ -439,28 +414,6 @@ class WriteFile(
                     state[key] = state.get(key, 0) + 1
                     repeat_n = state[key]
 
-                    # Tier 3: hard block. 3rd identical no-op write → ToolError.
-                    if repeat_n >= 3:
-                        try:
-                            siblings = sorted(
-                                p.name for p in file_path.parent.iterdir()
-                                if p.is_file() and not p.name.startswith("__pycache__")
-                            )
-                            sibling_str = ", ".join(siblings) if siblings else "(none)"
-                        except Exception:
-                            sibling_str = "(unknown)"
-                        raise ToolError(
-                            f"BLOCKED: write_file({file_path.name}) has been called "
-                            f"{repeat_n} times with IDENTICAL content that already "
-                            f"matches the file on disk. This is a no-op loop. "
-                            f"Files in {file_path.parent.name}/: {sibling_str}. "
-                            f"Do something DIFFERENT — write a different file from "
-                            f"your plan, or run bash with `python3 -m "
-                            f"{file_path.parent.name} --help` to verify the package. "
-                            f"This exact write_file call is refused."
-                        )
-
-                    # Tier 2: escalated advisory with directory listing.
                     msg = "File already has this exact content (no-op). "
                     if repeat_n >= 2:
                         try:
@@ -472,16 +425,13 @@ class WriteFile(
                             msg += (
                                 f"You've written this exact file {repeat_n} times. "
                                 f"Files currently in {file_path.parent.name}/: "
-                                f"{sibling_str}. STOP writing this file. "
-                                f"Either write a DIFFERENT file from your plan, "
-                                f"or run `bash` with `python3 -m {file_path.parent.name} --help` "
-                                f"to verify the package works. "
-                                f"ONE MORE identical write to this path will be blocked."
+                                f"{sibling_str}. Move on — write a DIFFERENT file "
+                                f"from your plan, or run `bash` with `python3 -m "
+                                f"{file_path.parent.name} --help` to verify."
                             )
                         except Exception:
                             msg += "Move to the NEXT file in your plan."
                     else:
-                        # Tier 1: first duplicate — friendly advisory.
                         msg += "Move to the NEXT file in your plan."
 
                     yield WriteFileResult(
@@ -491,8 +441,6 @@ class WriteFile(
                         content=msg,
                     )
                     return
-            except ToolError:
-                raise
             except Exception:
                 pass
 
@@ -511,10 +459,9 @@ class WriteFile(
                 import ast
                 tree = ast.parse(args.content)
             except SyntaxError as e:
-                # Track consecutive syntax-error writes per file. Gemma 4
-                # thrashes — each retry has DIFFERENT (still broken) content,
-                # so identical-content dedup never fires. After 3 in a row on
-                # the same path, escalate to ToolError forcing a tactic change.
+                # Track consecutive syntax-error writes per file. ADVISORY
+                # ONLY — must not raise ToolError. See
+                # feedback_no_tool_errors_for_loop_detection.md.
                 thrash = self.state.__dict__.setdefault("_syntax_thrash", {})
                 key = str(file_path)
                 thrash[key] = thrash.get(key, 0) + 1
@@ -525,21 +472,17 @@ class WriteFile(
                     f"\n  Fix this before moving to the next file."
                 )
                 if thrash_n >= 3:
-                    raise ToolError(
-                        f"BLOCKED: write_file({file_path.name}) has produced "
-                        f"{thrash_n} consecutive syntax errors on this file. "
-                        f"Current error: line {e.lineno}: {e.msg}. "
-                        f"Rewriting the whole file with broken syntax again is "
-                        f"refused. Switch tactic: "
-                        f"(1) read_file({file_path.name}) to see current state, "
-                        f"(2) use search_replace for targeted fixes, or "
-                        f"(3) write a DIFFERENT file from your plan and come "
-                        f"back to this one. This exact write is rejected."
+                    syntax_warning += (
+                        f"\n  [{thrash_n}th consecutive syntax error on this "
+                        f"file. Switch tactic: read_file() to see current "
+                        f"state, then use search_replace for surgical fixes, "
+                        f"or write a DIFFERENT file and come back later.]"
                     )
                 elif thrash_n == 2:
                     syntax_warning += (
-                        f"\n  [2nd syntax error on this file. ONE MORE will be "
-                        f"blocked — switch to search_replace or read the file first.]"
+                        f"\n  [2nd syntax error on this file — consider "
+                        f"read_file + search_replace instead of another full "
+                        f"rewrite.]"
                     )
             else:
                 # Reset thrash counter on a successful parse.
