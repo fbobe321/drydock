@@ -187,7 +187,6 @@ def main() -> None:
     args = parse_arguments()
 
     if getattr(args, "doctor", False):
-        from drydock.core.config.harness_files import init_harness_files_manager
         from drydock.core.config.doctor import run_doctor
         init_harness_files_manager("user", "project")
         sys.exit(run_doctor(apply=bool(getattr(args, "fix", False))))
