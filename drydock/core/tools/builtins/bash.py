@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from typing import Any
 from functools import lru_cache
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ import signal
 import sys
 from typing import ClassVar, Literal, final
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from tree_sitter import Language, Node, Parser
 import tree_sitter_bash as tsbash
 
@@ -161,8 +162,25 @@ async def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
 
 
 def _get_default_allowlist() -> list[str]:
+    # Auto-accepted because they are read-only / non-destructive.
+    # Each entry is a prefix — commands starting with any of these are
+    # ALWAYS allowed. Parser splits at pipes/chains so `ls | rm` is
+    # checked as two separate commands.
     common = [
-        "echo", "find", "git diff", "git log", "git status", "tree", "whoami",
+        "echo", "find", "tree", "whoami",
+        # Git read-only subcommands
+        "git diff", "git log", "git status", "git show",
+        "git branch", "git ls-files", "git grep", "git remote",
+        "git rev-parse", "git blame", "git config --get",
+        "git tag", "git stash list",
+        # Search tools (read-only by design)
+        "grep", "rg", "fd", "fdfind", "ag",
+        # Text/file inspection
+        "diff", "cmp", "sort", "uniq", "awk", "cut", "tr",
+        "basename", "dirname", "realpath", "readlink",
+        # System info (read-only)
+        "date", "id", "hostname", "pwd", "env", "printenv",
+        "du", "df", "ps", "free", "uptime",
         # Python project management — safe read/install operations
         "pip install", "pip list", "pip show", "pip freeze", "pip check",
         "pip install -e", "pip install -r",
@@ -221,6 +239,26 @@ def _get_default_denylist_standalone() -> list[str]:
         return common + ["bash", "sh", "nohup", "vi", "vim", "emacs", "nano", "su"]
 
 
+def _merge_with_defaults(user_value: Any, defaults_fn: Callable[[], list[str]]) -> list[str]:
+    """Union user list with package defaults so `pip install -U` propagates
+    new defaults without clobbering user additions (Config Option A). If the
+    user list ends with an entry '__override__', their list is used verbatim
+    (escape hatch for anyone who needs to intentionally remove a default).
+    """
+    if user_value is None:
+        return defaults_fn()
+    if not isinstance(user_value, list):
+        return user_value  # pydantic will re-type-check and fail cleanly
+    if "__override__" in user_value:
+        return [v for v in user_value if v != "__override__"]
+    defaults = defaults_fn()
+    merged = list(defaults)
+    for item in user_value:
+        if item not in merged:
+            merged.append(item)
+    return merged
+
+
 class BashToolConfig(BaseToolConfig):
     permission: ToolPermission = ToolPermission.ASK
     max_output_bytes: int = Field(
@@ -231,16 +269,39 @@ class BashToolConfig(BaseToolConfig):
     )
     allowlist: list[str] = Field(
         default_factory=_get_default_allowlist,
-        description="Command prefixes that are automatically allowed",
+        description=(
+            "Command prefixes that are automatically allowed. User entries "
+            "are UNIONED with package defaults (new defaults auto-propagate "
+            "on pip install -U). Include '__override__' in the list to use "
+            "your list verbatim and skip defaults."
+        ),
     )
     denylist: list[str] = Field(
         default_factory=_get_default_denylist,
-        description="Command prefixes that are automatically denied",
+        description=(
+            "Command prefixes that are automatically denied. User entries "
+            "unioned with package defaults; see allowlist for override."
+        ),
     )
     denylist_standalone: list[str] = Field(
         default_factory=_get_default_denylist_standalone,
         description="Commands that are denied only when run without arguments",
     )
+
+    @field_validator("allowlist", mode="before")
+    @classmethod
+    def _merge_allowlist(cls, v: Any) -> list[str]:
+        return _merge_with_defaults(v, _get_default_allowlist)
+
+    @field_validator("denylist", mode="before")
+    @classmethod
+    def _merge_denylist(cls, v: Any) -> list[str]:
+        return _merge_with_defaults(v, _get_default_denylist)
+
+    @field_validator("denylist_standalone", mode="before")
+    @classmethod
+    def _merge_denylist_standalone(cls, v: Any) -> list[str]:
+        return _merge_with_defaults(v, _get_default_denylist_standalone)
 
 
 class BashArgs(BaseModel):

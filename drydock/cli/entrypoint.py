@@ -83,6 +83,17 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--setup", action="store_true", help="Setup API key and exit")
     parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Check ~/.drydock/config.toml for drift vs. package defaults and exit",
+    )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="With --doctor: rewrite ~/.drydock/config.toml to union missing "
+        "defaults (writes .bak backup first). No effect without --doctor.",
+    )
+    parser.add_argument(
         "--workdir",
         type=Path,
         metavar="DIR",
@@ -174,6 +185,12 @@ def check_and_resolve_trusted_folder() -> None:
 
 def main() -> None:
     args = parse_arguments()
+
+    if getattr(args, "doctor", False):
+        from drydock.core.config.harness_files import init_harness_files_manager
+        from drydock.core.config.doctor import run_doctor
+        init_harness_files_manager("user", "project")
+        sys.exit(run_doctor(apply=bool(getattr(args, "fix", False))))
 
     if args.workdir:
         workdir = args.workdir.expanduser().resolve()

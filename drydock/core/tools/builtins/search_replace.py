@@ -180,6 +180,53 @@ class SearchReplace(
                         return
             raise
 
+        # Read-before-Edit enforcement (Claude Code tool contract).
+        # Editing a file without having seen it is the #1 cause of the
+        # "SEARCH text not found" failure cascade. Require the model to
+        # have read this path (or just written it) this session.
+        # Structured rejection (not ToolError) — model sees guidance in
+        # the result content and pivots to read_file.
+        read_state = ctx.read_file_state if ctx else None
+        path_key = str(file_path)
+        if read_state is not None and file_path.exists():
+            prior = read_state.get(path_key)
+            if prior is None:
+                yield SearchReplaceResult(
+                    file=path_key,
+                    blocks_applied=0,
+                    lines_changed=0,
+                    warnings=[],
+                    content=(
+                        "<system-reminder>\n"
+                        f"{file_path.name} has not been read this session. "
+                        "Use read_file first so you can see the current "
+                        "contents — then search_replace with the actual "
+                        "text from the file. This edit was NOT applied.\n"
+                        "</system-reminder>"
+                    ),
+                )
+                return
+            try:
+                current_mtime = file_path.stat().st_mtime_ns
+            except OSError:
+                current_mtime = 0
+            if prior.get("timestamp") and current_mtime and current_mtime > prior["timestamp"]:
+                yield SearchReplaceResult(
+                    file=path_key,
+                    blocks_applied=0,
+                    lines_changed=0,
+                    warnings=[],
+                    content=(
+                        "<system-reminder>\n"
+                        f"{file_path.name} was modified on disk since your "
+                        "last read. Re-read before editing to avoid "
+                        "clobbering changes you haven't seen. This edit "
+                        "was NOT applied.\n"
+                        "</system-reminder>"
+                    ),
+                )
+                return
+
         # Injection guard: scan replacement content for suspicious patterns
         from drydock.core.tools.injection_guard import check_content_for_injection
         if warning := check_content_for_injection(args.content, args.file_path):
@@ -276,6 +323,20 @@ class SearchReplace(
                 pass
 
             await self._write_file(file_path, modified_content)
+
+            # Update read_file_state so chained edits don't trip Read-
+            # before-Edit. We just wrote — we know disk state.
+            if read_state is not None:
+                try:
+                    new_mtime = file_path.stat().st_mtime_ns
+                except OSError:
+                    new_mtime = 0
+                read_state[path_key] = {
+                    "content": modified_content,
+                    "timestamp": new_mtime,
+                    "offset": 0,
+                    "limit": None,
+                }
 
             # Auto-verify syntax for Python files
             if file_path.suffix == ".py":

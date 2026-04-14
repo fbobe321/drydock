@@ -92,63 +92,56 @@ class ReadFile(
             )
             return
 
+        # mtime-based read dedup (Claude Code tool-contract pattern).
+        # If the model reads a file it has already read this session and
+        # nothing has changed on disk since, return a compact stub
+        # pointing to the earlier tool_result. Saves context + kills the
+        # "re-read 50x for no reason" pattern. Also preserves Read-before-
+        # Write because the stub still counts as having read the file.
+        read_state = ctx.read_file_state if ctx else None
+        path_key = str(file_path)
+        try:
+            current_mtime = file_path.stat().st_mtime_ns
+        except OSError:
+            current_mtime = 0
+        prior = read_state.get(path_key) if read_state is not None else None
+        if (
+            prior is not None
+            and prior.get("timestamp") == current_mtime
+            and prior.get("offset") == args.offset
+            and prior.get("limit") == args.limit
+        ):
+            yield ReadFileResult(
+                path=path_key,
+                content=(
+                    "<system-reminder>\n"
+                    f"File unchanged since your earlier read this session "
+                    f"({file_path.name}, mtime unchanged, same offset/limit). "
+                    "Use the content from the earlier Read tool_result — "
+                    "do NOT re-read. If you need to take action, call "
+                    "search_replace or write_file on what you already have.\n"
+                    "</system-reminder>"
+                ),
+                lines_read=0,
+                was_truncated=True,
+            )
+            return
+
         read_result = await self._read_file(args, file_path)
         content = "".join(read_result.lines)
 
-        # Mechanical loop-breaker: if the model reads the SAME path with
-        # the SAME (offset, limit) 3+ times in a row and the content
-        # hasn't changed, replace the body with a compact notice so the
-        # loop is visible. The model keeps burning context on identical
-        # reads (confirmed: one session had 52 identical read_file calls
-        # on lang_interp/lexer.py). This makes the re-read USELESS so it
-        # stops being attractive.
-        state = self.state.__dict__.setdefault("_read_history", {})
-        key = (str(file_path), args.offset, args.limit)
-        entry = state.get(key)
-        now_hash = hash(content)
-        if entry and entry["hash"] == now_hash:
-            entry["count"] += 1
-            # Tier 2 (5th identical read): ToolError — notice alone is
-            # being ignored by Gemma 4. An error forces the model through
-            # the error-handling path, which it reacts to.
-            if entry["count"] >= 5:
-                from drydock.core.tools.base import ToolError as _TE
-                raise _TE(
-                    f"REFUSED: you have already read {file_path.name} "
-                    f"{entry['count']} times with no file changes in "
-                    f"between. The content is in your context already. "
-                    f"STOP re-reading and DO something: edit the file, "
-                    f"read a DIFFERENT file, or run the code. This read "
-                    f"is refused until a different action happens."
-                )
-            if entry["count"] >= 3:
-                notice = (
-                    f"[NOTICE: this is read_file call #{entry['count']} "
-                    f"for {file_path.name} with no file changes since the "
-                    f"previous reads. The content below is IDENTICAL to "
-                    f"what you already have. STOP re-reading — use the "
-                    f"content from your context. Either edit the file "
-                    f"with search_replace/write_file, or call a different "
-                    f"tool.]\n"
-                )
-                # Return only the first 10 lines + the notice, so the
-                # model isn't spending context on identical body.
-                short = content.split("\n", 10)
-                shortened = "\n".join(short[:10])
-                if len(short) > 10:
-                    shortened += f"\n... [body elided on repeat read #{entry['count']}]"
-                yield ReadFileResult(
-                    path=str(file_path),
-                    content=notice + shortened,
-                    lines_read=len(read_result.lines),
-                    was_truncated=True,
-                )
-                return
-        else:
-            state[key] = {"hash": now_hash, "count": 1}
+        # Record read state so Write/Edit can enforce Read-before-Write
+        # and so future re-reads can dedup against this one.
+        if read_state is not None:
+            read_state[path_key] = {
+                "content": content,
+                "timestamp": current_mtime,
+                "offset": args.offset,
+                "limit": args.limit,
+            }
 
         yield ReadFileResult(
-            path=str(file_path),
+            path=path_key,
             content=content,
             lines_read=len(read_result.lines),
             was_truncated=read_result.was_truncated,

@@ -195,6 +195,12 @@ class AgentLoop:
         self._empty_responses: int = 0
         self._successful_test_runs: int = 0
 
+        # Shared read-file state — used by write_file / search_replace to
+        # enforce Read-before-Write (per Claude Code's tool contract) and
+        # by read_file to dedup unchanged-mtime re-reads. Keyed by resolved
+        # absolute path; value is {"content", "timestamp", "offset", "limit"}.
+        self._read_file_state: dict[str, dict] = {}
+
         system_prompt = get_universal_system_prompt(
             self.tool_manager, self.config, self.skill_manager, self.agent_manager
         )
@@ -970,6 +976,7 @@ class AgentLoop:
                     sampling_callback=self._sampling_handler,
                     plan_file_path=self._plan_session.plan_file_path,
                     switch_agent_callback=self.switch_agent,
+                    read_file_state=self._read_file_state,
                 ),
                 **tool_call.args_dict,
             ):

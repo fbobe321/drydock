@@ -51,6 +51,11 @@ class InvokeContext:
     entrypoint_metadata: EntrypointMetadata | None = field(default=None)
     plan_file_path: Path | None = field(default=None)
     switch_agent_callback: SwitchAgentCallback | None = field(default=None)
+    # Shared across all tool invocations within a session. The same dict
+    # reference lives on AgentLoop; write_file / read_file / search_replace
+    # mutate it to track what the model has observed (Read-before-Write
+    # + read dedup, per Claude Code's tool contract model).
+    read_file_state: dict[str, dict] | None = field(default=None)
 
 
 class ToolError(Exception):

@@ -392,12 +392,63 @@ class WriteFile(
     ) -> AsyncGenerator[ToolStreamEvent | WriteFileResult, None]:
         file_path, file_existed, content_bytes = self._prepare_and_validate_path(args)
 
+        # Read-before-Write enforcement (Claude Code tool contract).
+        # Overwriting a file the model hasn't read this session is the
+        # root cause of the oscillation loop: model writes broken V1,
+        # gets syntax warning, writes broken V2, gets different warning,
+        # writes V1 again, etc. Forcing it to read first means it CAN
+        # see the current state and do targeted search_replace instead.
+        # Returned as a structured no-op result (not ToolError) so the
+        # model doesn't panic — per Claude Code pattern and per
+        # feedback_no_tool_errors_for_loop_detection.md.
+        read_state = ctx.read_file_state if ctx else None
+        path_key = str(file_path)
+        if file_existed and read_state is not None:
+            prior = read_state.get(path_key)
+            current_mtime = 0
+            try:
+                current_mtime = file_path.stat().st_mtime_ns
+            except OSError:
+                pass
+            if prior is None:
+                yield WriteFileResult(
+                    path=path_key,
+                    bytes_written=0,
+                    file_existed=True,
+                    content=(
+                        "<system-reminder>\n"
+                        f"{file_path.name} exists but you have not read it "
+                        "this session. Read it first (read_file) so you can "
+                        "see the current contents, then either:\n"
+                        "  • edit with search_replace for targeted changes, "
+                        "or\n"
+                        "  • call write_file again to do a full rewrite.\n"
+                        "This write was NOT applied to disk.\n"
+                        "</system-reminder>"
+                    ),
+                )
+                return
+            if prior.get("timestamp") and current_mtime and current_mtime > prior["timestamp"]:
+                yield WriteFileResult(
+                    path=path_key,
+                    bytes_written=0,
+                    file_existed=True,
+                    content=(
+                        "<system-reminder>\n"
+                        f"{file_path.name} was modified on disk since your "
+                        "last read (mtime advanced). Re-read before writing "
+                        "to avoid clobbering changes you haven't seen. "
+                        "This write was NOT applied to disk.\n"
+                        "</system-reminder>"
+                    ),
+                )
+                return
+
         # Path-write thrash counter (just counts; advisory only). Per
         # feedback_no_tool_errors_for_loop_detection.md: loop detection
         # in tools must be advisory, never raise ToolError — hard blocks
         # cause their own loops on long tasks.
         path_writes = self.state.__dict__.setdefault("_path_writes", {})
-        path_key = str(file_path)
         path_writes[path_key] = path_writes.get(path_key, 0) + 1
         path_n = path_writes[path_key]
 
@@ -414,7 +465,7 @@ class WriteFile(
                     state[key] = state.get(key, 0) + 1
                     repeat_n = state[key]
 
-                    msg = "File already has this exact content (no-op). "
+                    body = "File already has this exact content (no-op). "
                     if repeat_n >= 2:
                         try:
                             siblings = sorted(
@@ -422,7 +473,7 @@ class WriteFile(
                                 if p.is_file() and not p.name.startswith("__pycache__")
                             )
                             sibling_str = ", ".join(siblings) if siblings else "(none)"
-                            msg += (
+                            body += (
                                 f"You've written this exact file {repeat_n} times. "
                                 f"Files currently in {file_path.parent.name}/: "
                                 f"{sibling_str}. Move on — write a DIFFERENT file "
@@ -430,9 +481,10 @@ class WriteFile(
                                 f"{file_path.parent.name} --help` to verify."
                             )
                         except Exception:
-                            msg += "Move to the NEXT file in your plan."
+                            body += "Move to the NEXT file in your plan."
                     else:
-                        msg += "Move to the NEXT file in your plan."
+                        body += "Move to the NEXT file in your plan."
+                    msg = f"<system-reminder>\n{body}\n</system-reminder>"
 
                     yield WriteFileResult(
                         path=str(file_path),
@@ -453,6 +505,18 @@ class WriteFile(
         await self._write_file(args, file_path)
 
         # Auto-verify syntax for Python files
+        # Also note heavy path-write counts so the model sees it's been
+        # oscillating on the same file. Advisory-only — see
+        # feedback_no_tool_errors_for_loop_detection.md.
+        path_warning = ""
+        if path_n >= 4:
+            path_warning = (
+                f"\n\nℹ You've written {file_path.name} {path_n} times "
+                f"this session. If the file is oscillating between versions, "
+                f"run your tests (`python3 -m {file_path.parent.name} --help` "
+                f"or a bash command) to see the ACTUAL failure, then fix "
+                f"one thing at a time with search_replace."
+            )
         syntax_warning = ""
         if file_path.suffix == ".py":
             try:
@@ -466,9 +530,29 @@ class WriteFile(
                 key = str(file_path)
                 thrash[key] = thrash.get(key, 0) + 1
                 thrash_n = thrash[key]
+
+                # Build surrounding-line context — the single error line
+                # isn't enough for the model to pivot, it keeps rewriting
+                # the whole file with the same structural mistake. Show
+                # ±3 lines from the CONTENT JUST WRITTEN so the model can
+                # see what it actually sent and do targeted SR on it.
+                context_block = ""
+                try:
+                    src_lines = args.content.splitlines()
+                    err_line = (e.lineno or 1) - 1
+                    start = max(0, err_line - 3)
+                    end = min(len(src_lines), err_line + 4)
+                    numbered = [
+                        f"  {'>' if i == err_line else ' '} {i+1:>4}: {src_lines[i]}"
+                        for i in range(start, end)
+                    ]
+                    context_block = "\n" + "\n".join(numbered)
+                except Exception:
+                    pass
+
                 syntax_warning = (
                     f"\n\n⚠ SYNTAX ERROR in {file_path.name} line {e.lineno}: {e.msg}"
-                    f"\n  {e.text.rstrip() if e.text else ''}"
+                    f"{context_block}"
                     f"\n  Fix this before moving to the next file."
                 )
                 if thrash_n >= 3:
@@ -481,8 +565,8 @@ class WriteFile(
                 elif thrash_n == 2:
                     syntax_warning += (
                         f"\n  [2nd syntax error on this file — consider "
-                        f"read_file + search_replace instead of another full "
-                        f"rewrite.]"
+                        f"read_file + search_replace on the lines shown "
+                        f"above instead of another full rewrite.]"
                     )
             else:
                 # Reset thrash counter on a successful parse.
@@ -559,14 +643,37 @@ class WriteFile(
                             f"will raise ModuleNotFoundError."
                         )
 
+        # Update read_file_state so subsequent write_file / search_replace
+        # calls on this path pass the Read-before-Write check without
+        # requiring an explicit re-read. We just wrote it, so we know
+        # what's on disk.
+        if read_state is not None:
+            try:
+                new_mtime = file_path.stat().st_mtime_ns
+            except OSError:
+                new_mtime = 0
+            read_state[path_key] = {
+                "content": args.content,
+                "timestamp": new_mtime,
+                "offset": 0,
+                "limit": None,
+            }
+
         result = WriteFileResult(
             path=str(file_path),
             bytes_written=content_bytes,
             file_existed=file_existed,
             content=args.content,
         )
-        if syntax_warning:
-            result.content = syntax_warning  # Override content with the warning
+        if syntax_warning or path_warning:
+            # Override content with diagnostics wrapped in a system-reminder
+            # so the model treats these with more weight than ordinary
+            # result text. Per Claude Code's read-tool empty-file warning
+            # pattern (<system-reminder> framing for high-signal advisories).
+            combined = (syntax_warning or "") + (path_warning or "")
+            result.content = (
+                f"<system-reminder>{combined}\n</system-reminder>"
+            )
         yield result
 
     _BINARY_EXTENSIONS = frozenset({
