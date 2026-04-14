@@ -659,17 +659,23 @@ class WriteFile(
                 "limit": None,
             }
 
+        # Terse success message (Claude Code pattern). Do NOT echo
+        # args.content back — the model already has the content in its
+        # assistant-message history. Echoing wastes context AND gives the
+        # model an easy path to re-read what it just wrote instead of
+        # moving on (one of the oscillation triggers). If there's a
+        # warning/advisory, surface that INSTEAD of the content echo.
+        action = "updated" if file_existed else "created"
+        success_msg = (
+            f"File {file_path.name} {action} successfully ({content_bytes} bytes)."
+        )
         result = WriteFileResult(
             path=str(file_path),
             bytes_written=content_bytes,
             file_existed=file_existed,
-            content=args.content,
+            content=success_msg,
         )
         if syntax_warning or path_warning:
-            # Override content with diagnostics wrapped in a system-reminder
-            # so the model treats these with more weight than ordinary
-            # result text. Per Claude Code's read-tool empty-file warning
-            # pattern (<system-reminder> framing for high-signal advisories).
             combined = (syntax_warning or "") + (path_warning or "")
             result.content = (
                 f"<system-reminder>{combined}\n</system-reminder>"

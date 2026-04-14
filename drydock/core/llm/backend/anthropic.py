@@ -65,10 +65,13 @@ class AnthropicMapper:
         return {"role": "assistant", "content": content if content else ""}
 
     def _convert_tool_call(self, tc: ToolCall) -> dict[str, Any]:
-        try:
-            tool_input = json.loads(tc.function.arguments or "{}")
-        except json.JSONDecodeError:
-            tool_input = {}
+        from drydock.core.llm.format import safe_parse_tool_args
+        tool_input = safe_parse_tool_args(
+            tc.function.arguments, tool_name=tc.function.name or "?"
+        )
+        # Strip the synthetic _parse_error key so Anthropic doesn't see it
+        # as a real tool input field.
+        tool_input.pop("_parse_error", None)
         return {
             "type": "tool_use",
             "id": self._sanitize_tool_call_id(tc.id),

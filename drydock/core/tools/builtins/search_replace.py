@@ -349,12 +349,20 @@ class SearchReplace(
                         f"Fix this before continuing."
                     )
 
+        # Terse success content (Claude Code pattern) — don't echo the
+        # SEARCH/REPLACE payload back. Model already has it in history;
+        # echoing wastes context and tempts re-reading. Warnings still go
+        # through so the model sees actionable issues.
         yield SearchReplaceResult(
             file=str(file_path),
             blocks_applied=block_result.applied,
             lines_changed=lines_changed,
             warnings=block_result.warnings,
-            content=args.content,
+            content=(
+                f"{file_path.name} edited successfully "
+                f"({block_result.applied} block(s), "
+                f"{lines_changed:+d} line(s))."
+            ),
         )
 
     @final
