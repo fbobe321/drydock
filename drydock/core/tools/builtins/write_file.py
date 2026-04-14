@@ -392,6 +392,32 @@ class WriteFile(
     ) -> AsyncGenerator[ToolStreamEvent | WriteFileResult, None]:
         file_path, file_existed, content_bytes = self._prepare_and_validate_path(args)
 
+        # Path-write thrash gate (catches write_file ↔ search_replace ping-pong).
+        # Counts CUMULATIVE writes to a path regardless of content. Identical-
+        # content dedup misses this case because an intervening search_replace
+        # mutates the file between writes, so each write_file sees "different"
+        # content even though the model is rewriting the same broken version.
+        # Real bug: minivc session wrote commands/__init__.py 11 times — every
+        # write was clobbering the prior search_replace fix. Threshold 5 is
+        # generous; legitimate work writes a file 1–2x.
+        path_writes = self.state.__dict__.setdefault("_path_writes", {})
+        path_key = str(file_path)
+        path_writes[path_key] = path_writes.get(path_key, 0) + 1
+        path_n = path_writes[path_key]
+        if path_n >= 5:
+            raise ToolError(
+                f"BLOCKED: write_file({file_path.name}) has been called "
+                f"{path_n} times this session on the same path. This is "
+                f"a thrash loop — likely write_file overwriting prior "
+                f"search_replace fixes, or repeated full rewrites instead "
+                f"of targeted edits. Refused. Switch tactic: "
+                f"(1) read_file({file_path.name}) to see CURRENT disk state, "
+                f"(2) use search_replace for surgical fixes, "
+                f"(3) move to a DIFFERENT file in your plan and come back later. "
+                f"Do NOT call write_file on this path again until you have "
+                f"made progress elsewhere."
+            )
+
         # Skip if file already has identical content (prevents write loops).
         #
         # Three-tier escalation — first call is a friendly advisory, second
