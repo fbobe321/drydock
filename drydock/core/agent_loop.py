@@ -890,13 +890,39 @@ class AgentLoop:
         return ""
 
     def _circuit_breaker_check(self, tool_call: ResolvedToolCall) -> str | None:
-        """Disabled. Loop detection handles repetition.
+        """Block exact-duplicate tool calls after a high threshold.
 
-        The circuit breaker consistently caused more harm than good —
-        blocking valid retries after the model fixed code.
-        _check_tool_call_repetition() catches actual infinite loops.
+        Re-enabled v2.6.102 after stress session 20260415_171815 hit
+        91× identical search_replace with the same content
+        (same SEARCH/REPLACE block, same file). The per-tool mute
+        only lasts 1 turn so the model resumed immediately. The
+        token-level sampling bumps don't help when the model picks
+        the SAME serialized args every time.
+
+        Conservative thresholds — only fires on truly pathological
+        repeat counts that would never be a "valid retry":
+          search_replace, write_file, bash: after 8 identical calls
+          read_file, grep, glob, ls: after 12 identical calls
         """
-        return None
+        args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
+        sig = hashlib.sha256(
+            f"{tool_call.tool_name}:{args_str}".encode()
+        ).hexdigest()
+        count, last_result = self._tool_call_history.get(sig, (0, ""))
+        tool_name = tool_call.tool_name
+        is_readonly = tool_name in ("grep", "read_file", "glob", "ls")
+        threshold = 12 if is_readonly else 8
+        if count < threshold:
+            return None
+        return (
+            f"NOTE: this exact call to `{tool_name}` has been made "
+            f"{count} times this session with identical arguments. "
+            f"Last result: {last_result[:200]}\n\n"
+            f"The result will not change on a {count + 1}th attempt. "
+            f"Move on — call a DIFFERENT tool, use DIFFERENT arguments, "
+            f"or end your turn with a text summary so the user can "
+            f"take the next step."
+        )
 
     def _circuit_breaker_check_FULL(self, tool_call: ResolvedToolCall) -> str | None:
         """Block exact-duplicate tool calls. Returns cached result or None.
