@@ -47,7 +47,7 @@ def safe_parse_tool_args(raw_json: str | None, tool_name: str = "?") -> dict[str
     if not raw:
         return {}
     try:
-        return json.loads(raw)
+        return _clean_string_values(json.loads(raw))
     except json.JSONDecodeError:
         pass
 
@@ -68,17 +68,66 @@ def safe_parse_tool_args(raw_json: str | None, tool_name: str = "?") -> dict[str
     sanitized = _re.sub(r"<[^>]{0,200}\|>", "", sanitized)
     sanitized = _re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", sanitized)
 
+    parsed: dict | None = None
     try:
-        return json.loads(sanitized)
+        parsed = json.loads(sanitized)
     except json.JSONDecodeError:
-        pass
-    opens = sanitized.count("{") - sanitized.count("}")
-    if opens > 0:
-        try:
-            return json.loads(sanitized + "}" * opens)
-        except json.JSONDecodeError:
-            pass
-    return {"_parse_error": f"Malformed JSON: {raw[:100]}..."}
+        opens = sanitized.count("{") - sanitized.count("}")
+        if opens > 0:
+            try:
+                parsed = json.loads(sanitized + "}" * opens)
+            except json.JSONDecodeError:
+                pass
+    if parsed is None:
+        return {"_parse_error": f"Malformed JSON: {raw[:100]}..."}
+    return _clean_string_values(parsed)
+
+
+def _clean_string_values(obj: Any, field_name: str = "") -> Any:
+    r"""Walk a JSON-decoded structure and clean leaked-token residue from
+    string values. After json.loads, a tool-arg path like
+    `"tool\\_agent/parser.\\py<|\"|>"` becomes the literal Python string
+    `tool\_agent/parser.\py<|"|>` — preserves the corruption. Tool
+    validation then rejects it and the model retries the same broken
+    path forever.
+
+    Observed 2026-04-15 stress session 20260415_041558: 40+ write_file
+    calls to `"tool\_agent/parser.\py"<|"|>` in an attractor loop with
+    8 distinct signatures (dodging both exact-repeat and 3-variant
+    oscillation detectors).
+
+    Cleaning depth depends on the field name (outer JSON key):
+
+    * path-like keys (`path`, `file_path`, `file`, `command`, `cwd`,
+      `url`) — aggressive: strip `<|...|>` tokens AND drop orphan
+      backslashes before letters (paths should never contain those).
+    * content-like keys (`content`, `new_string`, `old_string`,
+      `text`, `body`, `description`) — conservative: only strip
+      `<|...|>` tokens; preserve `\d` / `\w` / `\n` / `\t` etc. which
+      are legitimate in source code, regex patterns, etc.
+    * everything else — conservative.
+    """
+    import re as _re
+    PATH_LIKE = {"path", "file_path", "file", "command", "cwd", "url"}
+    if isinstance(obj, dict):
+        return {k: _clean_string_values(v, field_name=k) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean_string_values(v, field_name=field_name) for v in obj]
+    if isinstance(obj, str):
+        s = obj
+        # Always strip leaked channel/tool_call tokens — never legit content.
+        s = _re.sub(r"<\|channel\>.*?(?:<channel\|>|<tool_call\|>)", "", s, flags=_re.DOTALL)
+        s = _re.sub(r"<\|tool_call\>.*?<tool_call\|>", "", s, flags=_re.DOTALL)
+        s = _re.sub(r"<\|[^>]{0,200}\|>", "", s)
+        s = _re.sub(r"<\|[^>]{0,200}>", "", s)
+        s = _re.sub(r"<[^>]{0,200}\|>", "", s)
+        if field_name in PATH_LIKE:
+            # Drop orphan backslashes before letters only on path-like
+            # fields. Real paths never have `\d` or `\p`. Model emits
+            # these as over-escaped JSON; this normalizes them.
+            s = _re.sub(r"\\(?=[A-Za-z_])", "", s)
+        return s
+    return obj
 
 
 class ParsedToolCall(BaseModel):
