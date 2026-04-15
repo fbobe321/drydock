@@ -662,31 +662,56 @@ class AgentLoop:
         # Detect thinking-only stall: model produced no visible content
         # AND no tool calls.  This happens when Gemma 4 leaks thinking
         # tokens that get stripped, leaving an empty assistant message.
-        # If the previous message was a tool result (model was mid-work),
-        # inject a nudge to keep it going instead of silently ending.
+        # Also covers the degenerate-mode exit where the model stops
+        # emitting anything at all after a long session (observed in
+        # stress session 20260415_075603 after 8 identical bash calls
+        # exhausted something in the model's state — subsequent user
+        # prompts got empty text replies).
         if (
             not last_message.content
             and not last_message.tool_calls
             and len(self.messages) >= 3
         ):
             prev_role = self.messages[-2].role if len(self.messages) >= 2 else None
-            if prev_role == Role.tool:
-                # Track consecutive empty turns to avoid infinite nudge loops
+            # Fire the nudge for both tool→empty (mid-work stall) AND
+            # user→empty (user-facing stall) paths. Limit nudges so we
+            # don't infinite-loop; escalate the message on repeat.
+            if prev_role in (Role.tool, Role.user):
                 empty_turns = getattr(self, "_consecutive_empty_turns", 0) + 1
                 self._consecutive_empty_turns = empty_turns
-                if empty_turns <= 2:
-                    logger.info("Thinking-only stall detected (attempt %d) — nudging model to continue", empty_turns)
-                    # Remove the empty assistant message and inject a nudge
-                    self.messages.pop()
-                    self._inject_system_note(
-                        "Continue working. Use a tool (read_file, write_file, "
-                        "search_replace, bash) or say what you want to do next."
+                if empty_turns <= 3:
+                    logger.info(
+                        "Empty-response stall (prev=%s, attempt %d) — nudging",
+                        prev_role, empty_turns,
                     )
-                    return  # will re-enter _perform_llm_turn on the next loop iteration
+                    self.messages.pop()
+                    if empty_turns == 1:
+                        note = (
+                            "Continue working. Use a tool (read_file, "
+                            "write_file, search_replace, bash) or state "
+                            "your plan in text."
+                        )
+                    elif empty_turns == 2:
+                        note = (
+                            "You sent an empty response. Call a tool now "
+                            "(write_file, search_replace, bash, read_file) "
+                            "OR explicitly say you are done with this task."
+                        )
+                    else:
+                        note = (
+                            "You have sent 3 empty responses in a row. "
+                            "Respond with either (a) a tool call to make "
+                            "progress, or (b) a single sentence explaining "
+                            "why you cannot proceed. Pick one."
+                        )
+                    self._inject_system_note(note)
+                    return
                 else:
-                    logger.info("Thinking-only stall persists after %d nudges — letting session end", empty_turns)
+                    logger.info(
+                        "Empty stall persists after %d nudges — letting session end",
+                        empty_turns,
+                    )
         else:
-            # Reset counter on any productive turn
             self._consecutive_empty_turns = 0
 
         # Detect repetitive text generation (Gemma 4 sometimes loops text within one response)
@@ -1941,7 +1966,9 @@ class AgentLoop:
         # the stress run), so 9-of-12 is a much tighter cluster than
         # legitimate progress.
         if len(sigs) >= 12:
-            # Collect recent (tool_name, path) pairs for hot-combo detection
+            # Collect recent (tool_name, path_or_command) pairs for
+            # hot-combo detection. Include `command` as a path-like key
+            # so bash loops (same command run 8+ times) are caught too.
             path_tool_pairs: list[tuple[str, str]] = []
             paths_only: list[str] = []
             for msg in list(reversed(self.messages))[:40]:
@@ -1953,10 +1980,13 @@ class AgentLoop:
                             a = json.loads(tc.function.arguments or "{}")
                         except (json.JSONDecodeError, AttributeError):
                             continue
-                        p = a.get("file_path") or a.get("path") or ""
+                        # Path-like identity key: file path OR command.
+                        # For bash, the "path" is the command string.
+                        p = (a.get("file_path") or a.get("path")
+                             or a.get("command") or "")
                         if p:
-                            paths_only.append(p)
-                            path_tool_pairs.append((tc.function.name or "", p))
+                            paths_only.append(str(p)[:200])
+                            path_tool_pairs.append((tc.function.name or "", str(p)[:200]))
                         if len(paths_only) >= 12:
                             break
                     if len(paths_only) >= 12:
