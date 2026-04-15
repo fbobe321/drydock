@@ -1519,8 +1519,15 @@ class AgentLoop:
                 logger.info(
                     "[LOOP-BREAK] FORCE_STOP (no hot-combo) → tool_choice=none"
                 )
-            # Consume the flag — one-turn action.
+            # Consume ALL loop flags — one-turn action. Must reset
+            # _loop_detected too, otherwise the flag persists across
+            # turns (because _check_tool_call_repetition only updates
+            # it on tool-result handling, which skips when the model
+            # emits empty responses — so tool_choice=none would stay
+            # sticky forever, leading to infinite empty-reply stalls).
             self._hot_tool_path = None
+            self._loop_detected = False
+            self._loop_signal = None
         _t2 = time.perf_counter()
 
         n_msgs = len(self.messages)
