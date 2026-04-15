@@ -660,23 +660,27 @@ class AgentLoop:
         last_message = self.messages[-1]
 
         # Detect thinking-only stall: model produced no visible content
-        # AND no tool calls.  This happens when Gemma 4 leaks thinking
-        # tokens that get stripped, leaving an empty assistant message.
-        # Also covers the degenerate-mode exit where the model stops
-        # emitting anything at all after a long session (observed in
-        # stress session 20260415_075603 after 8 identical bash calls
-        # exhausted something in the model's state — subsequent user
-        # prompts got empty text replies).
+        # AND no tool calls.
         if (
             not last_message.content
             and not last_message.tool_calls
             and len(self.messages) >= 3
         ):
             prev_role = self.messages[-2].role if len(self.messages) >= 2 else None
-            # Fire the nudge for both tool→empty (mid-work stall) AND
-            # user→empty (user-facing stall) paths. Limit nudges so we
-            # don't infinite-loop; escalate the message on repeat.
             if prev_role in (Role.tool, Role.user):
+                # Count CONSECUTIVE stalls within the current user-turn
+                # context. Reset when a new USER message arrives — each
+                # user prompt is a fresh opportunity, not carrying over
+                # a dead-counter from the prior stall.
+                last_user_idx = -1
+                for idx in range(len(self.messages) - 1, -1, -1):
+                    if self.messages[idx].role == Role.user:
+                        last_user_idx = idx
+                        break
+                last_reset = getattr(self, "_empty_nudge_last_user_idx", -1)
+                if last_user_idx != last_reset:
+                    self._consecutive_empty_turns = 0
+                    self._empty_nudge_last_user_idx = last_user_idx
                 empty_turns = getattr(self, "_consecutive_empty_turns", 0) + 1
                 self._consecutive_empty_turns = empty_turns
                 if empty_turns <= 3:
@@ -699,16 +703,17 @@ class AgentLoop:
                         )
                     else:
                         note = (
-                            "You have sent 3 empty responses in a row. "
-                            "Respond with either (a) a tool call to make "
-                            "progress, or (b) a single sentence explaining "
-                            "why you cannot proceed. Pick one."
+                            "You have sent 3 empty responses in a row for "
+                            "this user request. Respond with either (a) a "
+                            "tool call to make progress, or (b) one "
+                            "sentence explaining why you cannot proceed."
                         )
                     self._inject_system_note(note)
                     return
                 else:
                     logger.info(
-                        "Empty stall persists after %d nudges — letting session end",
+                        "Empty stall persists at %d for this user msg; "
+                        "leaving it and letting next user message reset",
                         empty_turns,
                     )
         else:

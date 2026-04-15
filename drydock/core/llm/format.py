@@ -239,16 +239,15 @@ class APIToolFormatHandler:
             elif _re.match(r"^(call:\w+\{|\w+\{content:)", stripped):
                 content = None
             elif (not message.tool_calls
-                  and _re.match(r"^thought[\s/\n]", stripped, flags=_re.IGNORECASE)):
-                # Gemma 4 thinking-channel leak: content begins with
-                # literal "thought" followed by whitespace/slash/newline.
-                # The model is narrating its reasoning WITHOUT making a
-                # tool call. Observed v2.6.95 stress session
-                # 20260415_093914 prompts 47-60: every assistant turn
-                # was "thought / The user wants to add X. / Current
-                # state of Y: ..." with no action. Nuke so the empty-
-                # response nudge in agent_loop fires and asks for a
-                # real tool call instead.
+                  and (_re.match(r"^thought\s*/", stripped)
+                       or _re.match(r"^thought\s*\n", stripped))):
+                # Narrow Gemma-4 thinking-channel leak: content begins
+                # with bare "thought" followed by `/` or newline (the
+                # exact token separator shape Gemma emits when it
+                # streams thinking as content). Observed v2.6.95 stress
+                # session 20260415_093914 prompts 47-60. This DOESN'T
+                # match legitimate "Thought: ..." prose or "Thoughts on
+                # this..." — only the bare-word leak with `/` or `\n`.
                 content = None
             else:
                 content = stripped or None
