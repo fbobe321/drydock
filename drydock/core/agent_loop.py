@@ -1139,6 +1139,11 @@ class AgentLoop:
             cancel = str(
                 get_user_cancellation_message(CancellationReason.TOOL_INTERRUPTED)
             )
+            # Record cancelled calls in the circuit-breaker history too.
+            # Without this the model can spin forever on cancelled calls
+            # (observed in stress sessions: 15+ identical read_file all
+            # returning <user_cancellation> with no count incrementing).
+            self._circuit_breaker_record(tool_call, f"CANCELLED: {cancel[:200]}")
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,
