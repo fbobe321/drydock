@@ -1,0 +1,1679 @@
+# Bootstrap: build tool_agent from PRD first
+Review the PRD.md in this directory. Build the initial tool_agent package with the 6 built-in tools, pipe syntax parser, plugin loader, conversation memory, and CLI entrypoint. After all files are written, run `python3 -m tool_agent --list-tools` to verify it works.
+
+# Built-in tools — extended (200)
+sha1 hash
+sha512 hash
+blake2b hash
+crc32
+rot13 cipher
+caesar cipher
+atbash cipher
+morse encode
+morse decode
+hex_to_int
+int_to_hex
+bin_to_int
+int_to_bin
+float_to_int
+round_to
+ceil
+floor
+abs
+negate
+sum_list
+avg_list
+min_list
+max_list
+median
+std_dev
+variance
+percentile
+mode
+factorial
+fibonacci
+is_prime
+primes_up_to
+gcd
+lcm
+modular_inverse
+sin
+cos
+tan
+asin
+acos
+atan
+log10
+log2
+ln
+exp
+pow_func
+sqrt
+cbrt
+deg_to_rad
+rad_to_deg
+miles_to_km
+km_to_miles
+celsius_to_f
+f_to_celsius
+feet_to_m
+m_to_feet
+kg_to_lb
+lb_to_kg
+format_bytes
+format_duration
+format_number_with_commas
+parse_int
+parse_float
+parse_bool
+is_valid_email
+is_valid_url
+is_valid_ipv4
+is_valid_ipv6
+is_valid_uuid
+is_valid_isbn
+extract_emails_from_text
+extract_urls_from_text
+extract_phone_numbers
+extract_dates
+strip_html_tags
+strip_ansi_codes
+normalize_whitespace
+snake_to_camel
+camel_to_snake
+kebab_to_snake
+snake_to_kebab
+pluralize
+singularize
+ordinalize
+left_pad
+right_pad
+center_pad
+wrap_text_at_width
+indent_text
+dedent_text
+remove_duplicates_in_list
+flatten_list
+chunk_list
+zip_lists
+unzip_lists
+set_intersection
+set_union
+set_difference
+dict_get_nested
+dict_set_nested
+dict_merge
+dict_invert
+list_to_dict
+dict_to_list
+csv_filter
+csv_select_columns
+csv_sort_by
+json_pretty
+json_minify
+json_validate
+yaml_validate
+toml_parse
+toml_dump
+ini_parse
+ini_dump
+xml_to_dict
+dict_to_xml
+html_escape
+html_unescape
+shell_quote
+shell_unquote
+now_iso
+now_unix
+today_date
+today_weekday
+parse_iso_date
+format_date
+date_diff_days
+add_days
+subtract_days
+next_weekday
+previous_weekday
+is_weekend
+is_business_day
+timezone_now
+convert_timezone
+duration_humanize
+ago_format
+url_parse
+url_join
+url_query_params
+ip_to_int
+int_to_ip
+cidr_contains
+cidr_hosts
+is_private_ip
+reverse_dns
+html_get_title
+html_get_meta_description
+markdown_to_text
+markdown_to_html
+html_to_markdown
+ansi_color_text
+ansi_strip
+terminal_width
+rgb_to_hex
+hex_to_rgb
+rgb_to_hsl
+hsl_to_rgb
+color_lighten
+color_darken
+color_invert
+image_size
+image_format
+audio_duration
+video_duration
+file_size
+file_mtime
+file_owner
+list_directory
+tree_directory
+file_count
+find_files_by_extension
+find_files_modified_since
+find_largest_files
+find_oldest_files
+compare_two_files
+diff_two_strings
+patch_apply
+patch_create
+git_current_branch
+git_last_commit_message
+git_diff_stat
+git_blame
+git_log_oneline
+git_remote_url
+github_repo_info
+gitlab_repo_info
+package_json_info
+pyproject_toml_info
+cargo_toml_info
+license_detect
+readme_detect
+ci_detect
+lines_of_code
+tabs_vs_spaces
+indent_consistency_check
+trailing_whitespace_count
+todo_count
+fixme_count
+hack_count
+import_graph
+function_count
+class_count
+test_file_count
+test_function_count
+complexity_metric
+halstead_metrics
+tabular_pretty_print
+csv_to_markdown
+weather_for_city
+stock_price
+bitcoin_price
+ethereum_price
+ip_geolocation
+phone_to_country
+email_validation_smtp
+domain_whois
+wikipedia_summary
+dictionary_lookup
+thesaurus_synonyms
+translate_text
+summarize_text
+tokenize_text
+stem_words
+lemmatize_words
+language_detect
+sentiment_analyze
+keyword_extract
+tag_extract
+entity_extract
+qr_encode
+qr_decode
+barcode_encode
+barcode_decode
+captcha_solve
+spell_check
+image_resize
+image_rotate
+image_crop
+image_grayscale
+image_thumbnail
+image_to_ascii
+audio_speed
+audio_volume
+audio_trim
+video_thumbnail
+video_extract_audio
+pdf_text_extract
+pdf_metadata
+pdf_merge
+pdf_split
+epub_text_extract
+docx_text_extract
+
+# Format converters (200)
+convert json to yaml
+convert json to toml
+convert json to csv
+convert json to tsv
+convert json to xml
+convert json to ini
+convert json to env
+convert yaml to json
+convert yaml to toml
+convert yaml to csv
+convert yaml to tsv
+convert yaml to xml
+convert yaml to ini
+convert yaml to env
+convert toml to json
+convert toml to yaml
+convert toml to csv
+convert toml to tsv
+convert toml to xml
+convert toml to ini
+convert toml to env
+convert csv to json
+convert csv to yaml
+convert csv to toml
+convert csv to tsv
+convert csv to xml
+convert csv to ini
+convert csv to env
+convert tsv to json
+convert tsv to yaml
+convert tsv to toml
+convert tsv to csv
+convert tsv to xml
+convert tsv to ini
+convert tsv to env
+convert xml to json
+convert xml to yaml
+convert xml to toml
+convert xml to csv
+convert xml to tsv
+convert xml to ini
+convert xml to env
+convert ini to json
+convert ini to yaml
+convert ini to toml
+convert ini to csv
+convert ini to tsv
+convert ini to xml
+convert ini to env
+convert env to json
+convert env to yaml
+convert env to toml
+convert env to csv
+convert env to tsv
+convert env to xml
+convert env to ini
+
+# CLI flags (200)
+Add a --color CLI flag that controls behavior
+Add a --no-color CLI flag that controls behavior
+Add a --json CLI flag that controls behavior
+Add a --yaml CLI flag that controls behavior
+Add a --csv CLI flag that controls behavior
+Add a --table CLI flag that controls behavior
+Add a --raw CLI flag that controls behavior
+Add a --markdown CLI flag that controls behavior
+Add a --verbose CLI flag that controls behavior
+Add a --quiet CLI flag that controls behavior
+Add a --debug CLI flag that controls behavior
+Add a --trace CLI flag that controls behavior
+Add a --log-level CLI flag that controls behavior
+Add a --log-file CLI flag that controls behavior
+Add a --config CLI flag that controls behavior
+Add a --profile CLI flag that controls behavior
+Add a --env CLI flag that controls behavior
+Add a --dry-run CLI flag that controls behavior
+Add a --force CLI flag that controls behavior
+Add a --interactive CLI flag that controls behavior
+Add a --non-interactive CLI flag that controls behavior
+Add a --yes CLI flag that controls behavior
+Add a --no CLI flag that controls behavior
+Add a --timeout CLI flag that controls behavior
+Add a --max-retries CLI flag that controls behavior
+Add a --no-retry CLI flag that controls behavior
+Add a --cache CLI flag that controls behavior
+Add a --no-cache CLI flag that controls behavior
+Add a --cache-dir CLI flag that controls behavior
+Add a --clear-cache CLI flag that controls behavior
+Add a --concurrency CLI flag that controls behavior
+Add a --parallel CLI flag that controls behavior
+Add a --sequential CLI flag that controls behavior
+Add a --batch-size CLI flag that controls behavior
+Add a --input CLI flag that controls behavior
+Add a --output CLI flag that controls behavior
+Add a --input-file CLI flag that controls behavior
+Add a --output-file CLI flag that controls behavior
+Add a --stdin CLI flag that controls behavior
+Add a --stdout CLI flag that controls behavior
+Add a --format CLI flag that controls behavior
+Add a --encoding CLI flag that controls behavior
+Add a --delimiter CLI flag that controls behavior
+Add a --separator CLI flag that controls behavior
+Add a --quote-char CLI flag that controls behavior
+Add a --include CLI flag that controls behavior
+Add a --exclude CLI flag that controls behavior
+Add a --filter CLI flag that controls behavior
+Add a --sort CLI flag that controls behavior
+Add a --reverse CLI flag that controls behavior
+Add a --unique CLI flag that controls behavior
+Add a --head CLI flag that controls behavior
+Add a --tail CLI flag that controls behavior
+Add a --skip CLI flag that controls behavior
+Add a --limit CLI flag that controls behavior
+Add a --page CLI flag that controls behavior
+Add a --page-size CLI flag that controls behavior
+Add a --user CLI flag that controls behavior
+Add a --group CLI flag that controls behavior
+Add a --permissions CLI flag that controls behavior
+Add a --owner CLI flag that controls behavior
+Add a --umask CLI flag that controls behavior
+
+# Plugin system (200)
+Plugin feature: hot-reload
+Plugin feature: dependency injection
+Plugin feature: event bus
+Plugin feature: lifecycle hooks
+Plugin feature: configuration schema
+Plugin feature: secret management
+Plugin feature: telemetry
+Plugin feature: profiling
+Plugin feature: metrics export
+Plugin feature: health check
+Plugin feature: version negotiation
+Plugin feature: capability flags
+Plugin feature: permission scopes
+Plugin feature: sandboxing
+Plugin feature: resource limits
+Plugin feature: rate limiting
+Plugin feature: circuit breaker
+Plugin feature: fallback
+Plugin feature: retry policy
+Plugin feature: timeout policy
+Plugin feature: idempotency
+Plugin feature: deduplication
+Plugin feature: batching
+Plugin feature: debouncing
+Plugin feature: throttling
+Plugin feature: caching with TTL
+Plugin feature: cache invalidation
+Plugin feature: write-through
+Plugin feature: write-behind
+Plugin feature: request signing
+Plugin feature: token rotation
+Plugin feature: OAuth flow
+Plugin feature: SAML flow
+Plugin feature: OIDC flow
+Plugin feature: API key rotation
+Plugin feature: secret scanning
+Plugin feature: PII redaction
+Plugin feature: log sampling
+Plugin feature: trace propagation
+Plugin feature: span attributes
+Plugin feature: baggage propagation
+Plugin feature: error tagging
+Plugin feature: alert routing
+Plugin feature: notification channels
+Plugin feature: escalation policies
+Plugin feature: on-call rotation
+Plugin feature: incident management
+Plugin feature: runbook execution
+Plugin feature: chaos injection
+Plugin feature: fault simulation
+Plugin feature: load shedding
+Plugin feature: graceful degradation
+Plugin feature: blue-green deploy
+Plugin feature: canary deploy
+Plugin feature: feature flags per user
+Plugin feature: feature flags per cohort
+Plugin feature: A/B testing harness
+Plugin feature: experiment tracking
+Plugin feature: statistical significance
+Plugin feature: sample size calc
+Plugin feature: hypothesis testing
+Plugin feature: bayesian estimator
+Plugin feature: monte carlo
+Plugin feature: simulation
+Plugin feature: scheduled tasks
+Plugin feature: cron expressions
+Plugin feature: recurring jobs
+Plugin feature: one-shot jobs
+Plugin feature: job priorities
+Plugin feature: job queues
+Plugin feature: job dependencies
+Plugin feature: job retries
+Plugin feature: DAG execution
+Plugin feature: workflow definition
+Plugin feature: parallel branches
+Plugin feature: conditional steps
+Plugin feature: input validation
+Plugin feature: output validation
+Plugin feature: schema migration
+Plugin feature: data versioning
+Plugin feature: data lineage
+Plugin feature: audit trail
+Plugin feature: compliance reporting
+Plugin feature: GDPR export
+Plugin feature: GDPR delete
+Plugin feature: user consent tracking
+Plugin feature: anonymization
+Plugin feature: pseudonymization
+Plugin feature: k-anonymity
+
+# Storage (200)
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+Add storage backend: sqlite
+Add storage backend: postgres
+Add storage backend: mysql
+Add storage backend: mongodb
+Add storage backend: redis
+Add storage backend: memcached
+Add storage backend: elasticsearch
+Add storage backend: opensearch
+Add storage backend: clickhouse
+Add storage backend: duckdb
+Add storage backend: rocksdb
+Add storage backend: leveldb
+Add storage backend: lmdb
+Add storage backend: badger
+Add storage backend: bolt
+Add storage backend: s3
+Add storage backend: gcs
+Add storage backend: azure-blob
+Add storage backend: minio
+Add storage backend: ceph
+Add storage backend: nfs
+Add storage backend: samba
+Add storage backend: ftp
+Add storage backend: sftp
+Add storage backend: webdav
+
+# API surfaces (200)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+API: REST GET endpoint
+API: REST POST endpoint
+API: REST PUT endpoint
+API: REST DELETE endpoint
+API: REST PATCH endpoint
+API: GraphQL query
+API: GraphQL mutation
+API: GraphQL subscription
+API: gRPC unary
+API: gRPC server-streaming
+API: gRPC client-streaming
+API: gRPC bidi-streaming
+API: WebSocket server
+API: WebSocket client
+API: SSE server
+API: SSE client
+API: JSON-RPC server
+API: JSON-RPC client
+API: OpenAPI generation
+API: Swagger UI
+API: API versioning
+API: API deprecation policy
+API: rate limiter (token bucket)
+API: rate limiter (leaky bucket)
+API: rate limiter (sliding window)
+
+# Testing (200)
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+Test: unit test for tool X
+Test: integration test for pipe Y
+Test: fuzz test for parser Z
+Test: property test for converter A
+Test: regression test for bug B
+Test: smoke test for CLI C
+Test: performance benchmark for D
+Test: memory benchmark for E
+Test: concurrency test for F
+Test: race condition test for G
+Test: idempotency test for H
+Test: rollback test for I
+Test: snapshot test for J
+Test: golden test for K
+
+# Documentation (200)
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+Doc: README section about X
+Doc: CONTRIBUTING update for Y
+Doc: tutorial for Z
+Doc: API reference for A
+Doc: FAQ entry for B
+Doc: troubleshooting guide for C
+Doc: migration guide for D
+Doc: changelog entry for E
+Doc: release notes for F
+Doc: architecture diagram for G
+
+# Performance (200)
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+Perf: cache result of pure function
+Perf: lazy-load module
+Perf: memoize expensive call
+Perf: batch DB writes
+Perf: stream large file
+Perf: compress old logs
+Perf: deduplicate repeated requests
+Perf: coalesce parallel reads
+Perf: warm cache on startup
+Perf: evict LRU entries
+
+# Integration (200)
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image
+Integrate: Slack webhook
+Integrate: Discord webhook
+Integrate: Telegram bot
+Integrate: GitHub Actions
+Integrate: GitLab CI
+Integrate: CircleCI
+Integrate: Jenkins
+Integrate: Prometheus metrics
+Integrate: Grafana dashboard
+Integrate: Datadog APM
+Integrate: New Relic APM
+Integrate: Sentry error tracking
+Integrate: Honeycomb tracing
+Integrate: PagerDuty incidents
+Integrate: Opsgenie
+Integrate: VictorOps
+Integrate: AWS Lambda
+Integrate: GCP Cloud Functions
+Integrate: Azure Functions
+Integrate: Cloudflare Workers
+Integrate: Fastly Compute
+Integrate: Vercel Edge
+Integrate: Docker image
+Integrate: OCI image
+Integrate: Singularity image

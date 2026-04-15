@@ -1,7 +1,7 @@
 # DryDock — Local CLI Coding Agent
 
 **Repository:** https://github.com/fbobe321/drydock
-**PyPI:** https://pypi.org/project/drydock-cli/ (v2.6.85)
+**PyPI:** https://pypi.org/project/drydock-cli/ (v2.6.107)
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
 
 ## Vision
@@ -14,14 +14,50 @@ harness that drives the real TUI like a real user, not a tool-call counter.
 
 - **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (MoE, 4B active params per
   token, ~70 tok/s) via vLLM Docker on 2x RTX 4060 Ti 16GB
-- **Version:** 2.6.85 on PyPI. Major refactor wave (v2.6.79 → v2.6.85)
-  moved the loop-prevention model from hard `ToolError` blocks to
-  advisory-result + structural prevention (read-before-write, read dedup,
-  terse results, token sanitization, system-reminder framing). Most of
-  this is borrowed wholesale from a reading of the Claude Code source
-  tree — ideas, not code.
+- **Version:** 2.6.107 on PyPI. The v2.6.79–v2.6.107 wave shipped 28+
+  loop-prevention iterations: Read-before-Write contract, read dedup,
+  terse results, token sanitization, system-reminder framing, JSON
+  sanitizer, field-aware path cleaner, fake-tool-call text detection,
+  thinking-channel leak strippers, oscillation/path-dominance/error-
+  storm/cancellation detectors, exact-call circuit breaker, sticky-
+  flag fixes, MessageList.pop, inline stall retry, line-break
+  paragraph fix, per-prompt 15-min budget + 35-call ceiling, Gemma 4
+  80K compact threshold, and finally the **session-reset-every-10-
+  prompts pattern** (v2.6.107) borrowed from
+  [Adversarial Code Review](https://asdlc.io/patterns/adversarial-code-review/).
 - **Users can:** build projects from PRDs, fix bugs, review code, refactor
   — through the TUI only (headless mode is gone)
+
+## Stress Test Progress (200-prompt benchmark)
+
+The 201-prompt stress test (`scripts/stress_shakedown.py` →
+`scripts/stress_prompts_tool_agent.txt`) drives the real drydock TUI
+through 1 build + 200 feature additions on `tool_agent`, treating
+context bloat, attractor loops, model degeneration, and rendering as
+a unified end-to-end test.
+
+**Best run so far:** v2.6.102 reached 96/201 prompts before tool calls
+started returning `<user_cancellation>` infinite loop.
+
+**Current run:** v2.6.107 with session-reset-every-10 pattern. Cron
+job sends hourly status to Telegram (`scripts/stress_telegram_status.py`).
+If a run completes 201 prompts, the goal extends to 2000 prompts.
+
+The pattern of failure modes hit (and shipped fixes for):
+- Tight identical-call loops (v2.6.79–v2.6.95)
+- Multi-variant oscillation on same path (v2.6.87–v2.6.90)
+- Path corruption with leaked tokens (v2.6.88)
+- Fake-tool-call text without real tool_calls (v2.6.91)
+- Empty-response stalls (v2.6.99)
+- MessageList.pop crash silently swallowed (v2.6.98)
+- Sticky `_loop_detected` baking `frequency_penalty` into all output
+  → suppressed SPACE token → "no spaces" (v2.6.100, v2.6.105)
+- Cancellation infinite loops (v2.6.106)
+- Context bloat past 80K → vLLM hangs (v2.6.103)
+- TUI line-break rendering (v2.6.101, v2.6.104)
+- Per-prompt no-end-condition (v2.6.101 — 15-min + 35-call budget)
+- All of the above prevented up-front by **session-reset every 10
+  prompts** (v2.6.107) — bounded context, no rot
 
 ## How drydock is tested now
 
@@ -237,7 +273,139 @@ order:
 Auto-created if none exist. AGENTS.md is essential for devstral
 (it loops without one) but Gemma 4 works without it.
 
-## Recent fixes (April 13–14, 2026)
+## Recent fixes (April 13–15, 2026)
+
+### v2.6.107 (April 15) — session-reset every 10 prompts in stress harness
+Adversarial-code-review pattern from asdlc.io: prevent context rot
+by SESSION SEPARATION, not reactive compaction. Stress harness now
+sends `/clear` every 10 user prompts and a one-line state preamble.
+Each batch starts with bounded context, sidestepping all the
+context-bloat symptoms we'd been patching individually.
+
+### v2.6.106 (April 15) — record cancelled tool calls in circuit breaker
+`asyncio.CancelledError` handler ran `_handle_tool_response` but not
+`_circuit_breaker_record`, so cancelled calls didn't increment the
+counter. Stress hit 15+ identical read_file all returning
+`<user_cancellation>`, breaker never fired. Now all cancellations
+count toward the 12-call threshold.
+
+### v2.6.105 (April 15) — clear `_loop_detected` after sampling — fixes "no spaces in TUI"
+The `frequency_penalty=0.4` (WARNING) / `0.7` (FORCE_STOP) loop-break
+sampling was sticking on across turns. v2.6.100 only cleared the flag
+in the FORCE_STOP `tool_choice="none"` path; the sampling-only path
+left the flag set. `_check_tool_call_repetition` only updates the
+flag on tool-result handling, so text-only turns never reset it.
+Result: `frequency_penalty` baked into every subsequent generation
+suppressed the SPACE token (most-repeated). Model emitted
+"Iwillnowadd" instead of "I will now add". User-visible "no spaces
+in TUI text" was caused here. Fix: clear `_loop_detected` and
+`_loop_signal` in BOTH consumption paths.
+
+### v2.6.104 (April 15) — line-break paragraph fix
+Replaced trailing-spaces hard-break (`  \n`) — which Textual rendered
+as visible double-spaces — with paragraph break (`\n\n`). Skips list
+items and code fences.
+
+### v2.6.103 (April 15) — Gemma 4 compact threshold cap at 80K
+Default `auto_compact_threshold` was 200K; Gemma 4 max context is
+131K. Auto-compact never fired. Per-model cap at 80K for any model
+whose name contains "gemma" leaves headroom for response.
+
+### v2.6.102 (April 15) — exact-call circuit breaker re-enabled
+Stress hit 91× identical search_replace with same content. Re-enabled
+`_circuit_breaker_check` (was hardcoded `return None`) with high
+thresholds: 8 for write/edit/bash, 12 for read-only. Returns NOTE
+result; 5 consecutive breaker fires → forced session stop.
+
+### v2.6.101 (April 15) — 15-min per-prompt budget + line-break preserve
+Per-user-prompt wall-clock budget (15 min) and tool-call ceiling (35).
+After either limit, drydock yields a clean assistant message and ends
+the turn. Returns control to the user. Also added `_preserve_line_breaks`
+(replaced in v2.6.104).
+
+### v2.6.100 (April 15) — clear `_loop_detected` after FORCE_STOP
+First fix for the sticky-flag bug (incomplete — also needed v2.6.105).
+
+### v2.6.99 (April 15) — inline stall-retry for empty responses
+When the model emits empty (no content + no tool calls), retry the
+LLM call inline up to 3 times within the same user turn, popping
+the empty assistant and injecting an escalating nudge each retry.
+
+### v2.6.98 (April 15) — MessageList.pop method
+v2.6.96/97 empty-nudge was crashing silently every fire because
+MessageList is a custom Sequence and has no `pop()` method. Added
+`pop(index=-1)` mirroring list.pop.
+
+### v2.6.97 (April 15) — narrowed thought-nuker + per-user-msg counter reset
+v2.6.96 was over-aggressive (matched any "thought" prefix). Narrowed
+to `^thought\s*/` or `^thought\s*\n` only. Counter resets when a new
+user message arrives.
+
+### v2.6.96 (April 15) — nuke `^thought` thinking-channel leaks
+Gemma 4 emits "thought / The user wants to add X" narrative without
+calling tools. Detect and nuke to None so empty-nudge fires.
+
+### v2.6.95 (April 15) — same-tool-repeat + error-storm detectors
+Check 1a: same tool name 8+ consecutive (regardless of args) →
+FORCE_STOP. Check 1c: ≥8 of last 10 same tool AND ≥6 errors →
+FORCE_STOP. Both feed per-tool mute.
+
+### v2.6.94 (April 15) — task tool re-enabled + write metric for bash heredoc
+Task subagent re-enabled now that v2.6.91's sanitization handles its
+output. Stress harness counts `cat <<EOF > file` as a write so the
+metric stops false-zeroing when model pivots to bash file creation.
+
+### v2.6.93 (April 15) — entrypoint.py duplicate import hotfix
+v2.6.83 had a local import inside `--doctor` branch that shadowed
+the module-level binding → `UnboundLocalError` on every non-doctor
+invocation. Broke drydock entirely. Fixed.
+
+### v2.6.92 (April 15) — bash command in path-dominance + empty-nudge widening
+Path-dominance check now includes `command` field for bash. Empty-
+nudge widened to fire on user→empty too (was only tool→empty).
+
+### v2.6.91 (April 14) — fake-tool-call text detection
+Gemma 4 sometimes degenerates into emitting `<|tool_call>call:...{`
+as plain text instead of real tool_calls. Detect this shape and nuke
+content to None so empty-nudge fires.
+
+### v2.6.90 (April 14) — per-tool mute on path-dominance
+Replaced blunt `tool_choice="none"` with surgical per-tool removal:
+when 9/12 calls touch same path, remove that specific tool from
+`available_tools` for one turn. Model must diversify.
+
+### v2.6.89 (April 14) — relaxed oscillation detection
+≥9 of last 12 calls touch same path → FORCE_STOP, regardless of
+signature variance.
+
+### v2.6.88 (April 14) — field-aware path cleaner
+Strip leak tokens AND orphan backslashes before letters from path-
+like fields (`path`, `file_path`, `command`, `cwd`, `url`).
+Preserve content fields untouched (regex strings need `\d` etc.).
+
+### v2.6.87 (April 14) — multi-variant oscillation detector
+Last 12 calls have ≤3 distinct sigs AND ≥9 touch single path →
+FORCE_STOP.
+
+### v2.6.86 (April 14) — `tool_choice="none"` loop-break + harness pacing
+First version of FORCE_STOP→tool_choice="none" pattern (later
+replaced by per-tool mute in v2.6.90).
+
+### v2.6.85 (April 14) — centralized JSON sanitizer + terse tool results
+`safe_parse_tool_args` helper; write_file/search_replace return
+terse `"X updated successfully (N bytes)"` instead of echoing content.
+
+### v2.6.84 (April 14) — entrypoint UnboundLocalError hotfix
+(See v2.6.93 for the same bug class — different version.)
+
+### v2.6.83 (April 14) — Claude Code tool contract patterns
+Read-before-Write/Edit, read dedup stub, system-reminder framing,
+read-only bash auto-accept, config Option A + C.
+
+### v2.6.79–v2.6.82 (April 13–14) — initial loop-breaker iterations
+Syntax-thrash, cumulative path-write, Gemma 4 auto-disable, leak-
+token stripping. Some patterns later reverted to advisory-only when
+hard blocks caused worse loops.
 
 ### v2.6.79 (April 13) — syntax-thrash loop-breaker
 Added ToolError on 3rd consecutive syntax-error write to same file.
@@ -342,48 +510,64 @@ Second claude-code pass produced two more wins:
 
 ## Roadmap
 
-### Near-term (loop-prevention backlog)
-Ideas catalogued after the 2nd Claude Code source review. All shipped
-ideas are in "Safety" above; the list below is what's next, ordered
-by bang-for-buck:
+### Currently in flight (April 15, 2026)
+- **200-prompt stress test** running against v2.6.107 (PID
+  1614232 as of writing). Hourly Telegram status via cron. If the
+  current run completes 201 prompts cleanly, goal extends to 2000.
+- **Telegram notifications**: `scripts/stress_telegram_status.py`
+  fires every hour via crontab; reports prompt progress, session
+  health, dup-ratio, max-consecutive, error count.
 
+### Likely to retire after v2.6.107 proves out
+With session-reset every 10 prompts, several earlier safety nets
+become defense-in-depth instead of load-bearing. Candidates to
+simplify or remove if a few clean stress runs land:
+- Some of the cascade of FORCE_STOP detectors (Check 1a/1b/1c) —
+  most won't trigger at all in 10-prompt batches
+- The 35-call per-prompt ceiling — model usually finishes faster
+  than that within a batch
+- The 80K compact threshold — context shouldn't approach it any more
+
+### Near-term backlog (still relevant)
 1. **Stop-sequences for leak tokens** — add `<|channel>`,
    `<|tool_call>`, `<|"|>` as vLLM stop-sequences so generation halts
    before a leaked marker lands in the stream. Kills a class of
    JSON-decode + rendering issues at the tokenizer.
-2. **Ping-pong detection** — `write(X) → search_replace(X) → write(X)`
-   within K turns injects "Pick ONE approach: full rewrite or surgical
-   edit." Addresses the exact minivc case that v2.6.80 tried to fix
-   with a hard block.
-3. **Read-after-write stub** — if `read_file(X)` comes within K turns
-   of `write_file(X)` with mtime unchanged, return stub instead of
-   the file body.
-4. **Per-turn status `<system-reminder>`** — "tool calls: 47/200 |
-   writes-per-file: cli.py=6 | recent SR fail: cli.py". Injected
-   every N turns to give the model raw awareness.
-5. **Auto-prepend `read_file` when path is hot** — if `write_file(X)`
-   is called and `path_writes[X] >= 3` without an intervening read,
-   auto-run `read_file` first and include the result.
+2. **Per-turn status `<system-reminder>`** — "tool calls: 8/35 |
+   writes-per-file: cli.py=6". Injected every N turns to give the
+   model raw awareness within a batch.
+3. **ruff inline on writes** — run `ruff check` on every Python write
+   and feed errors back as `<system-reminder>` warnings (cheaper than
+   full LSP).
+4. **Grammar-constrained tool args** via vLLM's lm-format-enforcer —
+   JSON schema per tool; tokenizer can't emit invalid JSON. Kills the
+   `\Fix`-class of bugs entirely at the generation level.
+5. **LSP integration** (pyright/ruff) — real diagnostics after every
+   write. Large lift but highest feedback quality.
 6. **Time-based microcompact** — replace old `tool_result` content
    with a stub like `[Old tool result content cleared]` after N
    minutes/turns. Claude Code pattern; drydock has per-call truncation
-   but not time-based aging.
-7. **ruff inline on writes** — run `ruff check` on every Python write
-   and feed errors back as `<system-reminder>` warnings (cheaper than
-   full LSP).
-8. **Grammar-constrained tool args** via vLLM's lm-format-enforcer —
-   JSON schema per tool; tokenizer can't emit invalid JSON. Kills the
-   `\Fix`-class of bugs entirely at the generation level.
-9. **LSP integration** (pyright/ruff) — real diagnostics after every
-   write. Large lift but highest feedback quality.
-10. **Per-model `auto_compact_threshold`** — current default of
-    200K never fires for Gemma 4 (131K max context).
+   but not time-based aging. With session-reset, may not even matter.
+
+### Adversarial-review pattern (next big architectural move)
+Source: [asdlc.io / Adversarial Code Review](https://asdlc.io/patterns/adversarial-code-review/).
+The next architectural improvement after session-reset:
+
+- **Builder/Critic split**: after a builder agent finishes a feature,
+  spawn a CRITIC agent in a fresh session whose ONLY job is to verify
+  the diff against a spec file. Critic returns PASS or numbered
+  violations. Builder iterates on violations. Echoes the
+  separation-of-concerns we got from session-reset — applies it at
+  the verification level too.
+- **Spec file as binding contract**: blueprint + constraints +
+  anti-patterns. Currently AGENTS.md plays this role; could promote
+  to a structured PRD-with-acceptance-criteria format.
 
 ### Medium-term
 - **Second deployment target** so PyPI failures don't lose history
 - **Replace `tui_test.py` and `core_tests_real.sh` entirely** —
-  `shakedown.py` + `shakedown_interactive.py` are the only honest
-  tests
+  `shakedown.py` + `shakedown_interactive.py` + `stress_shakedown.py`
+  are the only honest tests
 - **Token cost dashboard** so first-turn prefill regressions catch
   before they hit users
 - **Consultant escalation** — partly wired in `agent_loop.py`; finish
@@ -393,11 +577,14 @@ by bang-for-buck:
 ### Long-term
 - Support larger models as hardware improves
 - Plugin marketplace for custom tools/skills
-- Web dashboard for monitoring long runs
+- Web dashboard for monitoring long runs (replace the cron+Telegram
+  status with a real timeline)
 - Multi-model routing (different models for different tasks)
 - Fine-tune Gemma 4 on bail-out traces (sessions where drydock
   recovered from a loop). Pairs naturally with the user's "Deep Noir"
   research direction.
+- 13-day autonomous run goal (per industry reports of
+  spec-driven + adversarial-review agents reaching that horizon)
 
 ## Architecture Notes
 
