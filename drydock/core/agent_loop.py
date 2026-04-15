@@ -1913,6 +1913,46 @@ class AgentLoop:
             and all(s == sigs[-1] for s in sigs[-REPEAT_FORCE_STOP_THRESHOLD:])
         ):
             return "FORCE_STOP"
+
+        # Check 1b: Small-variant oscillation. Recent calls bounce among
+        # 2-3 distinct signatures on the same path — e.g. write_file(X)
+        # ↔ search_replace(X) ping-pong, or alternating between V1 and
+        # V2 of the same file. Max exact-consecutive hits 2-3 so Check 1
+        # misses, but user perceives a stuck loop. Observed 2026-04-15
+        # stress session 20260415_025053 at prompt 24 (json_set_tool.py).
+        if len(sigs) >= 12:
+            recent_12 = sigs[-12:]
+            unique = set(recent_12)
+            # Tiny variant set (≤3) + high overlap = oscillation
+            if len(unique) <= 3:
+                # Also require that the model is stuck on a SINGLE path
+                # for the bulk of these calls, so we don't false-fire on
+                # legitimate "grep then read then edit then grep again"
+                # flows that use different paths.
+                paths: list[str] = []
+                for msg in list(reversed(self.messages))[:40]:
+                    if msg.role == Role.assistant and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            if not tc.function:
+                                continue
+                            try:
+                                a = json.loads(tc.function.arguments or "{}")
+                            except (json.JSONDecodeError, AttributeError):
+                                continue
+                            p = a.get("file_path") or a.get("path") or ""
+                            if p:
+                                paths.append(p)
+                            if len(paths) >= 12:
+                                break
+                        if len(paths) >= 12:
+                            break
+                last_12_paths = paths[:12]
+                if last_12_paths:
+                    # If one path accounts for >=75% of recent calls → oscillation
+                    most = max(set(last_12_paths), key=last_12_paths.count)
+                    if last_12_paths.count(most) >= 9:
+                        return "FORCE_STOP"
+
         if (
             len(sigs) >= REPEAT_WARNING_THRESHOLD
             and all(s == sigs[-1] for s in sigs[-REPEAT_WARNING_THRESHOLD:])
