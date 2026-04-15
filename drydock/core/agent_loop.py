@@ -1652,6 +1652,16 @@ class AgentLoop:
                     signal, temp, extra_sampling["frequency_penalty"],
                     extra_sampling["seed"],
                 )
+                # ALWAYS clear the loop flags after consuming them — for
+                # both FORCE_STOP and WARNING signals. _check_tool_call_
+                # repetition only updates these when handling a tool
+                # result; if the model emits text-only (no tool call) the
+                # check never runs and the flag stays set forever, baking
+                # frequency_penalty=0.4 into every subsequent generation.
+                # That suppresses repeated tokens INCLUDING SPACE — the
+                # user-reported "no spaces in TUI text" was caused here.
+                self._loop_detected = False
+                self._loop_signal = None
 
             complete_kwargs = dict(
                 model=active_model,
