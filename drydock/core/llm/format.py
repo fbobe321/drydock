@@ -201,36 +201,42 @@ class APIToolFormatHandler:
         # Keeping them wastes context, confuses subsequent turns, and can
         # fake-signal "done" to harnesses that watch for text-only messages.
         content = message.content
-        if content and ("<|channel>" in content or "<|tool_call>" in content):
+        if content:
             import re as _re
-            # Strip <|channel>...<channel|> or <|channel>...<tool_call|> blocks
-            content = _re.sub(
-                r"<\|channel\>.*?(?:<channel\|>|<tool_call\|>)",
-                "",
-                content,
-                flags=_re.DOTALL,
-            )
-            # Strip bare <|tool_call>call:...<tool_call|> blocks (no channel
-            # prefix). Unterminated variants (stream cut off mid-emission)
-            # are stripped by the catch-all below.
-            content = _re.sub(
-                r"<\|tool_call\>.*?<tool_call\|>",
-                "",
-                content,
-                flags=_re.DOTALL,
-            )
-            # Final catch-all: any dangling <|...|> or <...|> tokens that
-            # didn't form a complete pair (stream truncation).
-            content = _re.sub(r"<\|[^>]{0,200}\|>", "", content)
-            content = _re.sub(r"<\|[^>]{0,200}>", "", content)
-            content = _re.sub(r"<[^>]{0,200}\|>", "", content)
-            # If remaining content is just tool-call-leak residue (starts
-            # with `call:toolname{` after stripping), nuke it. Otherwise
-            # harness watchers treat the garbage text as a completion
-            # signal. agent_loop's empty-content nudge will ask the model
-            # to continue with a real tool call.
+            # Case 1: marked leaks with <|...|> delimiters.
+            if "<|channel>" in content or "<|tool_call>" in content:
+                content = _re.sub(
+                    r"<\|channel\>.*?(?:<channel\|>|<tool_call\|>)",
+                    "", content, flags=_re.DOTALL,
+                )
+                content = _re.sub(
+                    r"<\|tool_call\>.*?<tool_call\|>",
+                    "", content, flags=_re.DOTALL,
+                )
+                content = _re.sub(r"<\|[^>]{0,200}\|>", "", content)
+                content = _re.sub(r"<\|[^>]{0,200}>", "", content)
+                content = _re.sub(r"<[^>]{0,200}\|>", "", content)
+
+            # Case 2: unmarked degenerate fake-tool-call text. Gemma 4
+            # sometimes stops emitting real tool_calls and instead writes
+            # the tool-call template as plain text, like:
+            #   "thought call:write_file{content:class Foo: ..."
+            #   "(thought) call:write_file{...}"
+            # Drydock parses no tool_calls → nothing runs → user-facing
+            # hang. Observed 2026-04-15 stress session 20260415_072556
+            # prompts 16-30: every assistant turn was pure fake-tool text.
+            # Strip leading "thought"/"(thought)" filler and match the
+            # `call:name{...}` shape so the agent loop sees empty content
+            # and can fire its recovery nudge.
             stripped = content.strip()
-            if _re.match(r"^(call:\w+\{|\w+\{content:)", stripped):
+            # Peel "thought" or "(thought)" prefix (case-insensitive, optional
+            # whitespace)
+            peeled = _re.sub(
+                r"^\s*\(?thought\)?\s*", "", stripped, flags=_re.IGNORECASE,
+            )
+            if _re.match(r"^call:\w+\s*\{", peeled) or _re.match(r"^\w+\s*\{\s*content\s*:", peeled):
+                content = None
+            elif _re.match(r"^(call:\w+\{|\w+\{content:)", stripped):
                 content = None
             else:
                 content = stripped or None
