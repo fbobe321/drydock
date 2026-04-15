@@ -1,0 +1,55 @@
+# Bootstrap: build tool_agent from PRD first
+Review the PRD.md in this directory. Build the initial tool_agent package with the 6 built-in tools, pipe syntax parser, plugin loader, conversation memory, and CLI entrypoint. After all files are written, run `python3 -m tool_agent --list-tools` to verify it works.
+
+# New built-in tools (40)
+Add a hash tool that computes SHA-256 of a string. Usage: hash <text>. Update --list-tools.
+Add an md5 tool that computes MD5 of a string. Usage: md5 <text>.
+Add a base64 tool with encode and decode modes. Usage: base64 encode <text> | base64 decode <text>.
+Add a url_encode tool. Usage: url_encode <text>.
+Add a url_decode tool. Usage: url_decode <text>.
+Add a timestamp tool that returns current Unix timestamp.
+Add a random tool that picks a random integer between two bounds. Usage: random <min> <max>.
+Add a uuid tool that generates a random UUID v4.
+Add a reverse_words tool (not reverse chars) that reverses word order.
+Add a title_case tool that title-cases input.
+Add a upper tool for uppercase.
+Add a lower tool for lowercase.
+Add a length tool that returns character count.
+Add a line_count tool that counts newlines in a file.
+Add a char_count tool that counts characters excluding whitespace.
+Add a env_get tool that returns an environment variable value. Usage: env_get <name>.
+Add a env_list tool that prints all env vars.
+Add a path_join tool that joins path components.
+Add a path_basename tool that returns the basename of a path.
+Add a path_dirname tool that returns the dirname of a path.
+Add a json_get tool that extracts a field by dotted path. Usage: json_get <json> <path>.
+Add a json_set tool that sets a field by dotted path. Usage: json_set <json> <path> <value>.
+Add a json_keys tool that lists top-level keys.
+Add a yaml_to_json tool that converts YAML to JSON.
+Add a json_to_yaml tool that converts JSON to YAML.
+Add a xml_parse tool that converts XML to JSON dict.
+Add a count_lines tool for number of lines in string input.
+Add a head tool that returns first N lines. Usage: head <n> <text>.
+Add a tail tool that returns last N lines. Usage: tail <n> <text>.
+Add a sort_lines tool. Usage: sort_lines <text>.
+Add a uniq tool that removes consecutive duplicate lines.
+Add a replace tool with three args: old, new, text. Usage: replace <old> <new> <text>.
+Add a regex_match tool. Usage: regex_match <pattern> <text>, returns first match.
+Add a regex_replace tool. Usage: regex_replace <pattern> <replacement> <text>.
+Add a regex_findall tool. Usage: regex_findall <pattern> <text>.
+Add a echo_tool that simply echoes input.
+Add a sleep tool that pauses for N seconds (useful for testing).
+Add a noop tool that does nothing.
+Add a ping_check tool that checks if a host resolves (no actual ping, use socket).
+Add a disk_usage tool that returns free/used/total bytes of cwd.
+
+# Plugin / extension features (20)
+Support hot-reload of plugins without restarting the CLI.
+Add a --plugin-path CLI flag that accepts a directory of plugins.
+Allow plugins to declare dependencies on other tools, resolved at load time.
+Plugin manifest format: a plugin may include a manifest.json with metadata (name, version, author).
+Ignore plugins whose manifest.json declares enabled: false.
+Auto-generate --list-plugins that lists every loaded plugin with version.
+Allow plugins to register multiple tools via a register_tools() function.
+Support per-plugin configuration files at plugins/<name>.conf.
+Add plugin load timing logged in --verbose mode.

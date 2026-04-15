@@ -1445,26 +1445,42 @@ class AgentLoop:
         available_tools = self.format_handler.get_available_tools(self.tool_manager)
         tool_choice = self.format_handler.get_tool_choice()
 
-        # Loop-break via tool_choice="none" — when repetition is severe
-        # (FORCE_STOP signal), force the model to emit TEXT next turn.
-        # Cannot call a tool on this turn. Forces reflection/replan via
-        # natural language, then tool_choice returns to "auto" on the
-        # following turn. This breaks attractor loops where the model
-        # keeps firing identical tool calls despite advisories (144x
-        # write_file, 13x read_file observed in stress session
-        # 20260415_021415_ac6bd91f).
-        # Ratelimit: only force tool_choice=none once per N turns so we
-        # don't ping-pong between "none" and "auto" forever.
+        # Loop-break when FORCE_STOP detected. Two-tier:
+        #   1. If _hot_tool_path is set (specific tool+path dominates the
+        #      recent window), REMOVE that tool from available_tools for
+        #      this turn. Model must diversify — can still use other tools.
+        #      This is surgical: the model can read, bash, SR, etc., just
+        #      can't call the over-used tool on the over-used path.
+        #   2. Otherwise (generic FORCE_STOP), fall back to tool_choice=none
+        #      so model emits text. Last resort.
+        # The hot-path flag is consumed (cleared) here so it's a one-turn
+        # mute. If the model goes back to looping next turn, we'll re-detect
+        # and re-mute.
         if getattr(self, "_loop_detected", False) and getattr(self, "_loop_signal", "") == "FORCE_STOP":
-            last_forced = getattr(self, "_last_tool_choice_none_turn", -999)
-            current_turn = len(self.messages)
-            if current_turn - last_forced >= 4:
+            hot = getattr(self, "_hot_tool_path", None)
+            if hot and hot[0] and available_tools:
+                hot_tool_name, hot_path = hot
+                before = len(available_tools)
+                available_tools = [
+                    t for t in available_tools
+                    if getattr(t.function, "name", None) != hot_tool_name
+                ]
+                after = len(available_tools)
+                if before != after:
+                    logger.info(
+                        "[LOOP-BREAK] FORCE_STOP hot=(%s, %s) — "
+                        "removed '%s' from available_tools for 1 turn "
+                        "(%d → %d tools). Model must diversify.",
+                        hot_tool_name, hot_path[:50], hot_tool_name, before, after,
+                    )
+            else:
+                # No specific tool+path hot-combo — fall back to text-only.
                 tool_choice = "none"
-                self._last_tool_choice_none_turn = current_turn
                 logger.info(
-                    "[LOOP-BREAK] FORCE_STOP signal → tool_choice=none "
-                    "for this turn (forces text response, breaks attractor)"
+                    "[LOOP-BREAK] FORCE_STOP (no hot-combo) → tool_choice=none"
                 )
+            # Consume the flag — one-turn action.
+            self._hot_tool_path = None
         _t2 = time.perf_counter()
 
         n_msgs = len(self.messages)
@@ -1917,19 +1933,17 @@ class AgentLoop:
         # Check 1b: Path-dominance oscillation. The model is stuck on a
         # single file — writing, rewriting, SR-patching, reading — even
         # though each call's signature differs enough to dodge Check 1.
-        # If ≥9 of the last 12 tool calls touch the SAME path, trip
-        # FORCE_STOP regardless of signature variance.
+        # If ≥9 of the last 12 tool calls touch the SAME path, record
+        # the (tool, path) hot-combo for the NEXT turn to act on.
         #
         # Tolerance: normal feature-addition work spreads writes across
         # many prompts (+3 writes per prompt over 100+ tool calls in
         # the stress run), so 9-of-12 is a much tighter cluster than
-        # legitimate progress. Observed attractors dodged Check 1:
-        #   session 20260415_025053: write↔SR ping-pong on json_set_tool.py
-        #   session 20260415_041558: 8 sig variants on parser.py with
-        #     leaked path tokens (now cleaned at parse time)
-        #   session 20260415_055037: 6-7 sig variants on tools.py
+        # legitimate progress.
         if len(sigs) >= 12:
-            paths: list[str] = []
+            # Collect recent (tool_name, path) pairs for hot-combo detection
+            path_tool_pairs: list[tuple[str, str]] = []
+            paths_only: list[str] = []
             for msg in list(reversed(self.messages))[:40]:
                 if msg.role == Role.assistant and msg.tool_calls:
                     for tc in msg.tool_calls:
@@ -1941,16 +1955,28 @@ class AgentLoop:
                             continue
                         p = a.get("file_path") or a.get("path") or ""
                         if p:
-                            paths.append(p)
-                        if len(paths) >= 12:
+                            paths_only.append(p)
+                            path_tool_pairs.append((tc.function.name or "", p))
+                        if len(paths_only) >= 12:
                             break
-                    if len(paths) >= 12:
+                    if len(paths_only) >= 12:
                         break
-            last_12_paths = paths[:12]
+            last_12_paths = paths_only[:12]
+            last_12_pairs = path_tool_pairs[:12]
             if len(last_12_paths) >= 12:
-                most = max(set(last_12_paths), key=last_12_paths.count)
-                if last_12_paths.count(most) >= 9:
+                most_path = max(set(last_12_paths), key=last_12_paths.count)
+                if last_12_paths.count(most_path) >= 9:
+                    # Record the dominating (tool, path) pair with the
+                    # highest count so the agent can mute that specific
+                    # tool on that path next turn.
+                    from collections import Counter
+                    pair_counts = Counter(last_12_pairs)
+                    top_pair, top_count = pair_counts.most_common(1)[0]
+                    self._hot_tool_path = top_pair if top_count >= 5 else (None, most_path)
                     return "FORCE_STOP"
+        # Reset hot-path when no path-dominance detected
+        if not getattr(self, "_hot_tool_path", None) or True:
+            pass  # hot path set only when triggered; consumed in _chat
 
         if (
             len(sigs) >= REPEAT_WARNING_THRESHOLD
