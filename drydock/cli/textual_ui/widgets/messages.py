@@ -110,10 +110,47 @@ class StreamingMessageBase(Static):
         return self._content.strip() == ""
 
 
+def _preserve_line_breaks(text: str) -> str:
+    """Convert single \\n to markdown hard-break (two trailing spaces +
+    newline) so the rendered output keeps line breaks the model wrote.
+
+    Markdown spec treats single newlines as whitespace; only \\n\\n is a
+    paragraph break. Gemma 4 emits assistant text with structured
+    single-newline lists/steps that disappear when rendered. This
+    transform preserves them without affecting code fences (already
+    inside ```...``` blocks) or paragraph breaks.
+    """
+    if not text:
+        return text
+    # Walk lines, doubling single \n inside non-fenced regions.
+    out: list[str] = []
+    in_fence = False
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        out.append(line)
+        if in_fence:
+            continue
+        if i == len(lines) - 1:
+            continue
+        # If next line is empty (paragraph break) or current line is
+        # empty already, no transform needed.
+        nxt = lines[i + 1]
+        if line == "" or nxt == "":
+            continue
+        # Add two trailing spaces to make the single \n a hard break.
+        out[-1] = line + "  "
+    return "\n".join(out)
+
+
 class AssistantMessage(StreamingMessageBase):
     def __init__(self, content: str) -> None:
-        super().__init__(content)
+        super().__init__(_preserve_line_breaks(content))
         self.add_class("assistant-message")
+
+    async def append_content(self, content: str) -> None:
+        await super().append_content(_preserve_line_breaks(content))
 
     def compose(self) -> ComposeResult:
         if self._content:

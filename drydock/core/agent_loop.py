@@ -499,6 +499,12 @@ class AgentLoop:
             tool_turns = 0
             api_error_count = 0
             has_made_edit = False  # Track if model has used search_replace/write_file
+            # Per-user-prompt wall-clock budget. Gemma 4 routinely
+            # spends 60+ minutes on a single prompt without closing it
+            # — looks like work is happening, but the user is staring
+            # at a non-responsive TUI. Cap at 15 minutes per prompt.
+            PER_PROMPT_BUDGET_SEC = 15 * 60
+            _prompt_start = time.perf_counter()
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
                 # Loop protection: prevent infinite tool-call loops
@@ -512,8 +518,55 @@ class AgentLoop:
                     )
                     return
 
-                # Progressive budget warnings (visible to user via tool results)
-                if tool_turns in (50, 100, 150):
+                # Progressive budget warnings — much tighter than before.
+                # Gemma 4 routinely burns 30+ tool calls on a single
+                # feature add (write→test→debug→edit→test cycles), which
+                # looks healthy turn-by-turn but is a meandering loop in
+                # user terms (12 prompts in 2+ hours observed). Push the
+                # model to wrap up earlier.
+                _elapsed = time.perf_counter() - _prompt_start
+                if _elapsed > PER_PROMPT_BUDGET_SEC:
+                    yield AssistantEvent(
+                        content=(
+                            f"\n\n[Drydock: {int(_elapsed/60)} minutes "
+                            f"elapsed on this single prompt — over the "
+                            f"{PER_PROMPT_BUDGET_SEC // 60}-min budget. "
+                            "Stopping. Work done so far is on disk; "
+                            "your next prompt can review or continue.]\n"
+                        ),
+                        stopped_by_middleware=True,
+                    )
+                    return
+                if tool_turns == 15:
+                    self._inject_system_note(
+                        f"You have used {tool_turns} tool calls on this "
+                        "single user request. Start wrapping up — make "
+                        "your next 3-5 calls count, then stop with a "
+                        "summary so the user can review."
+                    )
+                elif tool_turns == 25:
+                    self._inject_system_note(
+                        f"You have used {tool_turns} tool calls on this "
+                        "single request. STOP NOW. Emit a final text "
+                        "response summarizing what you did (or what is "
+                        "blocked) so the user can take the next step."
+                    )
+                elif tool_turns >= 35:
+                    # Hard end-of-turn: synthesize a user-facing message
+                    # and stop. The model has spent way too long on one
+                    # request without closing it.
+                    yield AssistantEvent(
+                        content=(
+                            f"\n\n[Drydock: stopped after {tool_turns} tool "
+                            "calls on a single request — too long without "
+                            "closing the turn. Returning control to the "
+                            "user. The work done so far is on disk; your "
+                            "next prompt can review or continue.]\n"
+                        ),
+                        stopped_by_middleware=True,
+                    )
+                    return
+                if tool_turns in (75, 125, 175):
                     self._inject_system_note(
                         f"You have used {tool_turns}/{MAX_TOOL_TURNS} tool calls. "
                         "Wrap up your current task. If you are stuck in a loop, "
