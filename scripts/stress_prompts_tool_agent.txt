@@ -1,0 +1,222 @@
+# Bootstrap: build tool_agent from PRD first
+Review the PRD.md in this directory. Build the initial tool_agent package with the 6 built-in tools, pipe syntax parser, plugin loader, conversation memory, and CLI entrypoint. After all files are written, run `python3 -m tool_agent --list-tools` to verify it works.
+
+# New built-in tools (40)
+Add a hash tool that computes SHA-256 of a string. Usage: hash <text>. Update --list-tools.
+Add an md5 tool that computes MD5 of a string. Usage: md5 <text>.
+Add a base64 tool with encode and decode modes. Usage: base64 encode <text> | base64 decode <text>.
+Add a url_encode tool. Usage: url_encode <text>.
+Add a url_decode tool. Usage: url_decode <text>.
+Add a timestamp tool that returns current Unix timestamp.
+Add a random tool that picks a random integer between two bounds. Usage: random <min> <max>.
+Add a uuid tool that generates a random UUID v4.
+Add a reverse_words tool (not reverse chars) that reverses word order.
+Add a title_case tool that title-cases input.
+Add a upper tool for uppercase.
+Add a lower tool for lowercase.
+Add a length tool that returns character count.
+Add a line_count tool that counts newlines in a file.
+Add a char_count tool that counts characters excluding whitespace.
+Add a env_get tool that returns an environment variable value. Usage: env_get <name>.
+Add a env_list tool that prints all env vars.
+Add a path_join tool that joins path components.
+Add a path_basename tool that returns the basename of a path.
+Add a path_dirname tool that returns the dirname of a path.
+Add a json_get tool that extracts a field by dotted path. Usage: json_get <json> <path>.
+Add a json_set tool that sets a field by dotted path. Usage: json_set <json> <path> <value>.
+Add a json_keys tool that lists top-level keys.
+Add a yaml_to_json tool that converts YAML to JSON.
+Add a json_to_yaml tool that converts JSON to YAML.
+Add a xml_parse tool that converts XML to JSON dict.
+Add a count_lines tool for number of lines in string input.
+Add a head tool that returns first N lines. Usage: head <n> <text>.
+Add a tail tool that returns last N lines. Usage: tail <n> <text>.
+Add a sort_lines tool. Usage: sort_lines <text>.
+Add a uniq tool that removes consecutive duplicate lines.
+Add a replace tool with three args: old, new, text. Usage: replace <old> <new> <text>.
+Add a regex_match tool. Usage: regex_match <pattern> <text>, returns first match.
+Add a regex_replace tool. Usage: regex_replace <pattern> <replacement> <text>.
+Add a regex_findall tool. Usage: regex_findall <pattern> <text>.
+Add a echo_tool that simply echoes input.
+Add a sleep tool that pauses for N seconds (useful for testing).
+Add a noop tool that does nothing.
+Add a ping_check tool that checks if a host resolves (no actual ping, use socket).
+Add a disk_usage tool that returns free/used/total bytes of cwd.
+
+# Plugin / extension features (20)
+Support hot-reload of plugins without restarting the CLI.
+Add a --plugin-path CLI flag that accepts a directory of plugins.
+Allow plugins to declare dependencies on other tools, resolved at load time.
+Plugin manifest format: a plugin may include a manifest.json with metadata (name, version, author).
+Ignore plugins whose manifest.json declares enabled: false.
+Auto-generate --list-plugins that lists every loaded plugin with version.
+Allow plugins to register multiple tools via a register_tools() function.
+Support per-plugin configuration files at plugins/<name>.conf.
+Add plugin load timing logged in --verbose mode.
+Allow plugins to register event hooks for before/after tool invocation.
+Support disabling a plugin at runtime by name. Usage: python3 -m tool_agent --disable-plugin reverse_tool.
+Support enabling a plugin at runtime by name.
+Add plugin version compatibility check against a min_tool_agent_version key.
+Allow plugins to ship with their own help text and examples.
+Add a --list-plugins --verbose mode that prints full manifest.
+Add plugin load-order control via priority integer in manifest.
+Skip plugins that raise exceptions during load and log a warning.
+Support plugins written as single files or as packages (directories with __init__.py).
+Add a plugin_dir list in CLI config for multiple plugin search paths.
+Introduce a plugin sandbox mode that restricts file/network access.
+
+# CLI features (30)
+Add a --session flag to persist conversation history between invocations.
+Add history support — tool_agent history shows previous queries.
+Support command aliases: user can define "greet" = "calculator 1+1" in config.
+Add a --config flag pointing to an alternative config file.
+Support profiles — tool_agent --profile dev loads dev-specific config.
+Add --dry-run mode that prints what tools WOULD be invoked without running them.
+Add --trace mode that shows each tool call and its intermediate result.
+Add colored output using ANSI escape codes.
+Add a --no-color flag to disable colors (also respect NO_COLOR env).
+Add a --json flag that prints the final response as JSON.
+Add a --yaml flag that prints the final response as YAML.
+Add a --quiet flag that suppresses non-error output.
+Add a --log-file flag that writes tool-agent logs to a path.
+Add a --log-level flag (debug/info/warn/error).
+Add a --timeout flag that limits total runtime per query.
+Add a --max-steps flag that limits the number of tool invocations.
+Add stdin support — tool_agent reads query from stdin when no positional arg.
+Add a --interactive mode that prompts for queries in a loop until EOF.
+Add readline support in interactive mode (up-arrow for history).
+Add tab completion for tool names in interactive mode.
+Add a --help-tool <name> flag that prints detailed help for one tool.
+Add a --examples flag that prints example queries for every tool.
+Add a --version flag that prints the tool_agent version.
+Add a bash completion script generator: tool_agent --print-completions.
+Add a zsh completion script generator.
+Add a --list-memory flag that dumps all in-memory context.
+Add a --clear-memory flag that wipes persistent session memory.
+Add a --replay flag that re-runs a recorded session from a log file.
+Add a --record flag that writes every query + response to a replay log.
+Add a --step-through flag that pauses before each tool invocation awaiting Enter.
+
+# Memory / session (20)
+Persist memory to ~/.tool_agent/sessions/<id>.json so sessions survive restart.
+Add memory expiration — entries older than N hours are dropped.
+Add tags to memory entries so user can search by tag.
+Add a search_memory tool that searches by substring.
+Add a forget tool that removes a memory entry.
+Add a memory_summary tool that prints the last N interactions.
+Support multiple named sessions — switch with --session <name>.
+Add memory export in JSON format.
+Add memory import from a JSON file.
+Add memory size limit — trim oldest entries when exceeded.
+Add memory diff between two sessions.
+Add SQLite backend for memory storage.
+Add memory compression for entries older than N turns.
+Add an encrypt memory feature using a passphrase.
+Allow memory to be read-only for a given session.
+Add a lock/unlock command on a session.
+Add session metadata (created_at, last_used, query_count).
+Add memory introspection: how many tokens, how many interactions.
+Add memory garbage collection command to remove orphan entries.
+Add a rename_session command.
+
+# Error handling (15)
+Catch and gracefully report ImportError when a plugin module fails to import.
+Wrap every tool invocation in a try/except that reports stack traces only in --verbose.
+Add a retry mechanism for transient tool failures with exponential backoff.
+Validate tool input types before invocation — reject mismatched arg counts with a clear error.
+Add a fallback tool that runs when the requested tool is not found.
+Surface rich error messages when json_tool is called on malformed JSON.
+Handle KeyboardInterrupt (Ctrl+C) cleanly during long-running tools.
+Handle BrokenPipeError when stdout is piped to a tool that exits early.
+Catch FileNotFoundError in file_reader and suggest similar paths.
+Add a "did you mean?" suggestion when an unknown tool name is used.
+Add structured error codes (e.g., TOOL_NOT_FOUND, INVALID_ARGS) in --json output.
+Log uncaught exceptions to ~/.tool_agent/errors.log.
+Add an --abort-on-error flag to stop on first tool error.
+Add a --continue-on-error flag (default behavior) that explicitly keeps running.
+Rate-limit error messages to prevent log flooding.
+
+# Testing (15)
+Write unit tests for every built-in tool in tests/test_tools.py.
+Write unit tests for the CLI argument parser in tests/test_cli.py.
+Write integration tests for pipe syntax in tests/test_pipe.py.
+Write a test for the plugin loader in tests/test_plugins.py.
+Add a pytest conftest.py that sets up a temp directory for test isolation.
+Add a tox.ini that runs the test suite against Python 3.11 and 3.12.
+Add a GitHub Actions workflow for running tests on push.
+Add coverage reporting via pytest-cov.
+Add a benchmarking test that measures calculator throughput.
+Write an integration test that runs the full --list-tools flow.
+Write a test that the memory_summary tool returns at most N entries.
+Write a fuzz test for json_tool using random JSON inputs.
+Write a property test that calculator round-trips through parse/format.
+Write a regression test for the empty-query crash bug.
+Add test fixtures for common plugin shapes (single-file, package, bad-plugin).
+
+# Documentation (15)
+Write a README.md with usage examples, including pipe syntax.
+Write a CONTRIBUTING.md with setup instructions.
+Write a PLUGINS.md with a guide to writing a plugin.
+Write a CHANGELOG.md with all features listed by version.
+Generate a docs/ folder with one markdown file per tool.
+Add inline docstrings to every public function.
+Generate Sphinx-style docs from docstrings.
+Add a man page at docs/tool_agent.1.
+Write an ARCHITECTURE.md describing the agent loop and pipe parser.
+Add a BUGS.md with known issues.
+Add a FAQ.md with common questions.
+Add inline comments explaining the tree-walking pipe parser.
+Add type hints to every function signature.
+Run mypy and fix any type errors.
+Write a blog post draft in docs/blog/launch.md.
+
+# Output / formatting (20)
+Add syntax highlighting to JSON output when printing to terminal.
+Add markdown rendering for docstrings in --help-tool output.
+Add a table formatter for --list-tools output (aligned columns).
+Add pagination for long --list-tools output.
+Add emoji indicators for tool categories in --list-tools.
+Add a progress bar when running multi-step pipe queries.
+Add a spinner while a tool is running.
+Add a compact mode for --json output (no indentation).
+Add a pretty mode for --json (2-space indent).
+Add color themes: dark, light, monokai, selected via --theme.
+Add a --plain flag that strips all formatting.
+Add line numbers to file_reader output.
+Add a --show-tokens flag that prints token counts for inputs/outputs.
+Add output streaming — print tool results as they stream.
+Add a timestamp prefix to every logged line.
+Add a tool-call trace renderer that uses tree characters.
+Add a diff renderer when two json_tool outputs are compared.
+Add a hexdump output mode for binary data.
+Add a --width flag that wraps output to N columns.
+Add a markdown table rendering mode for tabular data.
+
+# Performance / caching (10)
+Cache file_reader results for files that haven't changed.
+Cache calculator results for pure arithmetic expressions.
+Lazy-import plugin modules only when their tool is invoked.
+Add a cache_dir configurable via env CLI_CACHE_DIR.
+Add cache statistics: hits, misses, size.
+Add a --no-cache flag.
+Add a --clear-cache command.
+Parallelize independent pipe stages when safe.
+Add benchmark output showing time spent per tool in a pipe.
+Profile memory usage during a long session and print the peak.
+
+# Integration (15)
+Support reading query from JSON: --json-input file.
+Support returning results to a webhook URL via --webhook.
+Support emitting Prometheus metrics on a sidecar HTTP port.
+Add support for OpenTelemetry trace export.
+Add stdout structured logging in JSON lines format.
+Support loading plugins from a pip package (entry points).
+Support loading plugins from a GitHub URL (download + verify hash).
+Support HTTP remote tools: a tool can be defined as a remote HTTP endpoint.
+Add OAuth support for remote tools that require auth.
+Support a `tool_agent daemon` subcommand that runs an HTTP server exposing tools.
+Add a FastAPI server mode serving /v1/tools and /v1/query endpoints.
+Support gRPC as an alternative transport.
+Add Docker image build config (Dockerfile).
+Add a docker-compose.yml for the daemon + a prometheus sidecar.
+Write a Kubernetes manifest for deploying the daemon.

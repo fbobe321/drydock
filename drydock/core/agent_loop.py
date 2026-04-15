@@ -1444,6 +1444,27 @@ class AgentLoop:
 
         available_tools = self.format_handler.get_available_tools(self.tool_manager)
         tool_choice = self.format_handler.get_tool_choice()
+
+        # Loop-break via tool_choice="none" — when repetition is severe
+        # (FORCE_STOP signal), force the model to emit TEXT next turn.
+        # Cannot call a tool on this turn. Forces reflection/replan via
+        # natural language, then tool_choice returns to "auto" on the
+        # following turn. This breaks attractor loops where the model
+        # keeps firing identical tool calls despite advisories (144x
+        # write_file, 13x read_file observed in stress session
+        # 20260415_021415_ac6bd91f).
+        # Ratelimit: only force tool_choice=none once per N turns so we
+        # don't ping-pong between "none" and "auto" forever.
+        if getattr(self, "_loop_detected", False) and getattr(self, "_loop_signal", "") == "FORCE_STOP":
+            last_forced = getattr(self, "_last_tool_choice_none_turn", -999)
+            current_turn = len(self.messages)
+            if current_turn - last_forced >= 4:
+                tool_choice = "none"
+                self._last_tool_choice_none_turn = current_turn
+                logger.info(
+                    "[LOOP-BREAK] FORCE_STOP signal → tool_choice=none "
+                    "for this turn (forces text response, breaks attractor)"
+                )
         _t2 = time.perf_counter()
 
         n_msgs = len(self.messages)
