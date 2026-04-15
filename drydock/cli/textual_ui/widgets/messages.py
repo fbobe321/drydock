@@ -111,18 +111,23 @@ class StreamingMessageBase(Static):
 
 
 def _preserve_line_breaks(text: str) -> str:
-    """Convert single \\n to markdown hard-break (two trailing spaces +
-    newline) so the rendered output keeps line breaks the model wrote.
+    """Promote single \\n to markdown paragraph-break (\\n\\n) so the
+    rendered output keeps line breaks the model wrote.
 
-    Markdown spec treats single newlines as whitespace; only \\n\\n is a
-    paragraph break. Gemma 4 emits assistant text with structured
-    single-newline lists/steps that disappear when rendered. This
-    transform preserves them without affecting code fences (already
-    inside ```...``` blocks) or paragraph breaks.
+    Markdown spec treats single \\n as whitespace; only \\n\\n is a
+    paragraph break. Gemma 4 emits assistant text with single-newline
+    lists/steps that disappear when rendered. The previous attempt
+    used trailing-spaces hard-break (`  \\n`) but Textual's Markdown
+    widget rendered those as visible double-spaces, making prose look
+    run-on. Doubling the newline preserves visual breaks AND renders
+    cleanly.
+
+    Skips: code fences (preserved verbatim), markdown lists (already
+    render with proper spacing), and any line ending in a trailing
+    backslash (markdown escape).
     """
     if not text:
         return text
-    # Walk lines, doubling single \n inside non-fenced regions.
     out: list[str] = []
     in_fence = False
     lines = text.split("\n")
@@ -134,13 +139,21 @@ def _preserve_line_breaks(text: str) -> str:
             continue
         if i == len(lines) - 1:
             continue
-        # If next line is empty (paragraph break) or current line is
-        # empty already, no transform needed.
         nxt = lines[i + 1]
+        # Skip if already a paragraph break, or current/next is empty.
         if line == "" or nxt == "":
             continue
-        # Add two trailing spaces to make the single \n a hard break.
-        out[-1] = line + "  "
+        # Don't insert blank between adjacent list items — markdown
+        # already renders those on separate lines.
+        stripped = line.lstrip()
+        nxt_stripped = nxt.lstrip()
+        if (stripped.startswith(("- ", "* ", "+ "))
+                and nxt_stripped.startswith(("- ", "* ", "+ "))):
+            continue
+        if stripped[:2].rstrip(".").isdigit() and nxt_stripped[:2].rstrip(".").isdigit():
+            continue  # numbered list
+        # Insert blank line for paragraph break.
+        out.append("")
     return "\n".join(out)
 
 
