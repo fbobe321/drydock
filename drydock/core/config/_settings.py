@@ -495,14 +495,23 @@ class VibeConfig(BaseSettings):
 
     @model_validator(mode="after")
     def _apply_global_auto_compact_threshold(self) -> VibeConfig:
-        self.models = [
-            model
-            if "auto_compact_threshold" in model.model_fields_set
-            else model.model_copy(
-                update={"auto_compact_threshold": self.auto_compact_threshold}
+        # Per-model compact threshold: Gemma 4 maxes at 131K context.
+        # The default 200K never fires, so context bloats until the
+        # model returns empty/garbage and stress-tests stall. Cap at
+        # 80K for Gemma — leaves headroom for the response.
+        # Other models keep the global threshold.
+        new_models = []
+        for model in self.models:
+            if "auto_compact_threshold" in model.model_fields_set:
+                new_models.append(model)
+                continue
+            threshold = self.auto_compact_threshold
+            if "gemma" in model.name.lower() and threshold > 80_000:
+                threshold = 80_000
+            new_models.append(
+                model.model_copy(update={"auto_compact_threshold": threshold})
             )
-            for model in self.models
-        ]
+        self.models = new_models
         return self
 
     @model_validator(mode="after")
