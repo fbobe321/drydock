@@ -176,11 +176,36 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     timed_out = 0
 
     cur_section: str | None = None
+    SESSION_RESET_EVERY = 10  # /clear every N prompts to bound context
     for i, (section, prompt) in enumerate(prompts_only, start=1):
         if section != cur_section:
             cur_section = section
             if section:
                 print(f"\n┈┈┈ {section} ┈┈┈")
+
+        # Adversarial-code-review pattern from asdlc.io: every N user
+        # prompts, reset the session so context stays bounded. Each
+        # batch starts fresh; the model gets a one-line state preamble
+        # from the harness instead of dragging 50+ prior turns of
+        # history into context.
+        if i > 1 and (i - 1) % SESSION_RESET_EVERY == 0:
+            print(f"\n┈┈┈ session reset (after {i - 1} prompts) ┈┈┈")
+            # Type /clear and a state-summary preamble
+            from shakedown_interactive import type_message
+            type_message(child, "/clear")
+            time.sleep(2)
+            preamble = (
+                f"You're continuing work on the {pkg} package. "
+                f"You've already added the first {i - 1} features from "
+                "the PRD; check what's there with `python3 -m "
+                f"{pkg} --list-tools` and `ls plugins/` if needed. "
+                "Don't redo work that's already done; ADD the next "
+                "features as the user requests them."
+            )
+            send_prompt_and_confirm(child, preamble, watcher,
+                                    max_retries=3, wait_per_retry=120.0)
+            _idle_wait(child, watcher, watcher.refresh(),
+                       max_seconds=120.0, quiet_seconds=8.0)
 
         # Wait for TUI to be truly idle before typing next prompt.
         # If we type while drydock is still working on the prior turn,
