@@ -180,15 +180,21 @@ class ToolManager:
             name: cls for name, cls in self._available.items() if cls.is_available()
         }
 
-        # Auto-disable tools that misfire for Gemma 4. The model mixes up
-        # `task` (subagent delegation) with `todo` (task list), recurses
-        # with thinking-token-leaked output that gets fed back to itself.
-        # Observed: minivc session 20260414_120752 — model called `task`
-        # with builder agent; subagent response was raw <|tool_call>
-        # thinking tokens rendered as text, triggered session hang.
-        # Scaffolding per CLAUDE.md constraint; remove when model improves.
+        # Auto-disable tools that misfire for Gemma 4.
+        # `task` is RE-ENABLED as of v2.6.93 — the original disable was
+        # because subagent responses leaked raw <|tool_call> thinking
+        # tokens and hung the parent session. v2.6.88+ field-aware
+        # sanitization + v2.6.91 fake-tool-call-text nuker now handle
+        # that class of bugs. Re-enabling lets drydock parallelize
+        # work between the main agent and a builder subagent → both
+        # vLLM backends get used simultaneously (prior sequential loop
+        # left ~50% throughput on the table).
+        # Kept disabled: `ask_user_question` (Gemma 4 asks in a loop),
+        # `invoke_skill` (not proven), `tool_search` (confuses the
+        # small-model tool list), `task_create/update/list` (duplicates
+        # the `todo` tool and Gemma 4 mixes them up).
         _GEMMA4_AUTO_DISABLE = {
-            "task", "task_create", "task_update", "task_list",
+            "task_create", "task_update", "task_list",
             "ask_user_question", "invoke_skill", "tool_search",
         }
         try:

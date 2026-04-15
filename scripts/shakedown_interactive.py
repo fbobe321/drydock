@@ -1372,9 +1372,23 @@ class SessionWatcher:
         for m in self.messages:
             if m.get("role") == "assistant":
                 for tc in m.get("tool_calls") or []:
-                    name = tc.get("function", {}).get("name", "")
+                    fn = tc.get("function", {})
+                    name = fn.get("name", "")
                     if name in ("write_file", "search_replace"):
                         n += 1
+                    elif name == "bash":
+                        # Gemma 4 sometimes pivots to `cat <<EOF > file` or
+                        # `echo ... > file` for file creation instead of
+                        # write_file. Count these as writes too so the
+                        # stress harness doesn't report false "0 writes".
+                        try:
+                            import json as _j
+                            cmd = _j.loads(fn.get("arguments", "") or "{}").get("command", "")
+                        except Exception:
+                            cmd = ""
+                        if (">" in cmd and ("cat <<" in cmd or "echo " in cmd
+                                            or "printf " in cmd or "tee " in cmd)):
+                            n += 1
         return n
 
     def has_errors(self) -> list[str]:
