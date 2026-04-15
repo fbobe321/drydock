@@ -1955,6 +1955,40 @@ class AgentLoop:
         ):
             return "FORCE_STOP"
 
+        # Check 1a: Same TOOL NAME repeated ≥8 consecutively, regardless
+        # of args. Catches the "write_file with missing/corrupted args 36
+        # times in a row" pathology where each sig differs (path is
+        # missing or garbled differently each call) but the model is
+        # clearly stuck hammering the same tool.
+        # Record a hot-combo on the stuck tool with an empty-path marker
+        # so the per-tool mute in _chat will remove it for 1 turn.
+        if len(tool_names) >= 8:
+            last8 = tool_names[-8:]
+            if all(n == last8[-1] for n in last8):
+                self._hot_tool_path = (last8[-1], "<stuck>")
+                return "FORCE_STOP"
+
+        # Check 1c: High recent-error fraction. If ≥6 of last 10 tool
+        # calls returned errors AND they're the same tool, that's a
+        # stuck-in-error-retry loop. FORCE_STOP + mute the tool.
+        if len(tool_names) >= 10:
+            recent_names = tool_names[-10:]
+            last_name = recent_names[-1]
+            same_name_count = sum(1 for n in recent_names if n == last_name)
+            if same_name_count >= 8:
+                # Count tool_error results in last ~20 messages
+                recent_errors = 0
+                for msg in list(reversed(self.messages))[:30]:
+                    if msg.role == Role.tool:
+                        c = str(msg.content or "")
+                        if "<tool_error>" in c or "Invalid arguments" in c:
+                            recent_errors += 1
+                    if recent_errors >= 6:
+                        break
+                if recent_errors >= 6:
+                    self._hot_tool_path = (last_name, "<error-storm>")
+                    return "FORCE_STOP"
+
         # Check 1b: Path-dominance oscillation. The model is stuck on a
         # single file — writing, rewriting, SR-patching, reading — even
         # though each call's signature differs enough to dodge Check 1.
