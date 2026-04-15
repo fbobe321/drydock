@@ -450,6 +450,11 @@ class MessageList(Sequence[LLMMessage]):
         """Replace contents silently (never notifies)."""
         self._data = list(new)
 
+    def pop(self, index: int = -1) -> LLMMessage:
+        """Remove and return the message at `index` (default: last).
+        Silent — does not notify observers."""
+        return self._data.pop(index)
+
     @contextmanager
     def silent(self) -> Iterator[None]:
         """Context manager that suppresses notifications."""
