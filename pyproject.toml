@@ -1,6 +1,6 @@
 [project]
 name = "drydock-cli"
-version = "2.6.98"
+version = "2.6.99"
 description = "Local-first CLI coding agent — tested with Gemma 4 26B via vLLM"
 readme = "README.md"
 requires-python = ">=3.12"

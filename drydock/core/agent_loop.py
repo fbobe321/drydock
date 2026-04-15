@@ -647,77 +647,87 @@ class AgentLoop:
             # Session quality check REMOVED — was blocking workflow
 
     async def _perform_llm_turn(self) -> AsyncGenerator[BaseEvent, None]:
-        if self.enable_streaming:
-            async for event in self._stream_assistant_events():
-                yield event
-        else:
-            assistant_event = await self._get_assistant_event()
-            if assistant_event.content:
-                yield assistant_event
+        def _dbg(msg: str) -> None:
+            try:
+                with open("/tmp/drydock_stall_debug.log", "a") as _f:
+                    _f.write(msg + "\n")
+            except Exception:
+                pass
 
-        if not self.messages:
-            return
-        last_message = self.messages[-1]
+        # One LLM call, with up to MAX_STALL_RETRIES inline retries on
+        # empty responses (no content AND no tool_calls). After each
+        # empty, pop it, inject a nudge, and re-call within the same
+        # turn so the model gets a real chance to recover BEFORE
+        # control returns to the outer loop (which would otherwise exit
+        # on the empty + end the user turn).
+        MAX_STALL_RETRIES = 3
+        for _stall_attempt in range(MAX_STALL_RETRIES + 1):
+            if self.enable_streaming:
+                async for event in self._stream_assistant_events():
+                    yield event
+            else:
+                assistant_event = await self._get_assistant_event()
+                if assistant_event.content:
+                    yield assistant_event
 
-        # Detect thinking-only stall: model produced no visible content
-        # AND no tool calls.
-        if (
-            not last_message.content
-            and not last_message.tool_calls
-            and len(self.messages) >= 3
-        ):
+            if not self.messages:
+                _dbg("[STALL-DEBUG] no messages")
+                return
+            last_message = self.messages[-1]
+            _dbg(
+                f"[STALL-DEBUG] attempt={_stall_attempt} role={last_message.role} "
+                f"content_len={len(last_message.content or '')} "
+                f"has_tool_calls={bool(last_message.tool_calls)} "
+                f"msgs={len(self.messages)}"
+            )
+
+            # If productive (has content OR tool calls), exit retry loop.
+            if last_message.content or last_message.tool_calls:
+                break
+
+            # Empty response — try to recover inline.
+            if _stall_attempt >= MAX_STALL_RETRIES:
+                _dbg(f"[STALL-DEBUG] max retries ({MAX_STALL_RETRIES}) exhausted; leaving empty")
+                break
             prev_role = self.messages[-2].role if len(self.messages) >= 2 else None
-            if prev_role in (Role.tool, Role.user):
-                # Count CONSECUTIVE stalls within the current user-turn
-                # context. Reset when a new USER message arrives — each
-                # user prompt is a fresh opportunity, not carrying over
-                # a dead-counter from the prior stall.
-                last_user_idx = -1
-                for idx in range(len(self.messages) - 1, -1, -1):
-                    if self.messages[idx].role == Role.user:
-                        last_user_idx = idx
-                        break
-                last_reset = getattr(self, "_empty_nudge_last_user_idx", -1)
-                if last_user_idx != last_reset:
-                    self._consecutive_empty_turns = 0
-                    self._empty_nudge_last_user_idx = last_user_idx
-                empty_turns = getattr(self, "_consecutive_empty_turns", 0) + 1
-                self._consecutive_empty_turns = empty_turns
-                if empty_turns <= 3:
-                    logger.info(
-                        "Empty-response stall (prev=%s, attempt %d) — nudging",
-                        prev_role, empty_turns,
-                    )
-                    self.messages.pop()
-                    if empty_turns == 1:
-                        note = (
-                            "Continue working. Use a tool (read_file, "
-                            "write_file, search_replace, bash) or state "
-                            "your plan in text."
-                        )
-                    elif empty_turns == 2:
-                        note = (
-                            "You sent an empty response. Call a tool now "
-                            "(write_file, search_replace, bash, read_file) "
-                            "OR explicitly say you are done with this task."
-                        )
-                    else:
-                        note = (
-                            "You have sent 3 empty responses in a row for "
-                            "this user request. Respond with either (a) a "
-                            "tool call to make progress, or (b) one "
-                            "sentence explaining why you cannot proceed."
-                        )
-                    self._inject_system_note(note)
-                    return
-                else:
-                    logger.info(
-                        "Empty stall persists at %d for this user msg; "
-                        "leaving it and letting next user message reset",
-                        empty_turns,
-                    )
-        else:
-            self._consecutive_empty_turns = 0
+            if prev_role not in (Role.tool, Role.user):
+                _dbg(f"[STALL-DEBUG] prev_role={prev_role} not recoverable")
+                break
+
+            _dbg(f"[STALL-DEBUG] inline retry #{_stall_attempt + 1} (prev={prev_role})")
+            # Pop the empty assistant; inject an escalating nudge.
+            self.messages.pop()
+            if _stall_attempt == 0:
+                note = (
+                    "Continue working. Use a tool (read_file, "
+                    "write_file, search_replace, bash) or state "
+                    "your plan in text."
+                )
+            elif _stall_attempt == 1:
+                note = (
+                    "You sent an empty response. Call a tool now "
+                    "(write_file, search_replace, bash, read_file) "
+                    "OR explicitly say you are done with this task."
+                )
+            else:
+                note = (
+                    "You have sent 3 empty responses in a row for "
+                    "this user request. Respond with either (a) a "
+                    "tool call to make progress, or (b) one "
+                    "sentence explaining why you cannot proceed."
+                )
+            self._inject_system_note(note)
+            logger.info(
+                "Empty-response stall (inline retry %d/%d, prev=%s)",
+                _stall_attempt + 1, MAX_STALL_RETRIES, prev_role,
+            )
+            # Loop back to re-call the LLM.
+            continue
+
+        # (Old stall check removed — now handled inline above in the
+        # retry loop, which re-calls the LLM after each empty rather
+        # than returning control to the outer loop that would exit on
+        # empty assistant + user-role precursor.)
 
         # Detect repetitive text generation (Gemma 4 sometimes loops text within one response)
         if last_message.content and len(last_message.content) > 200:
