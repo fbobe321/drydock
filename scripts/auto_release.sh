@@ -125,7 +125,33 @@ done
 # Tag
 git tag "v$NEW_VERSION" 2>/dev/null || true
 
-# Notify
-$PYTHON "$DRYDOCK/scripts/notify_release.py" "$NEW_VERSION" "Auto-release: $COMMITS_SINCE commits since $LAST_TAG" 2>/dev/null
+# Notify — include the actual change summaries since last release, not
+# just a "N commits" placeholder. Pull each meaningful commit subject
+# (skip Bump/Auto-release/Daily sync chatter) and the highest step from
+# the most recent stress run.
+COMMIT_SUMMARIES=$(git log "$LAST_TAG"..HEAD --pretty=format:'%s' 2>/dev/null \
+    | grep -vE '^(Bump version|v[0-9]+\.[0-9]+\.[0-9]+:|Daily sync|Auto-release)' \
+    | head -5)
+if [ -z "$COMMIT_SUMMARIES" ]; then
+    COMMIT_SUMMARIES="Auto-release: $COMMITS_SINCE commits since $LAST_TAG"
+fi
+NOTIFY_BODY="$COMMIT_SUMMARIES"
+
+# Append previous stress run progress (matches publish_to_pypi.sh).
+LAST_STRESS_LOG=$(ls -1t /tmp/stress_2000_*.log 2>/dev/null | head -1)
+if [ -n "$LAST_STRESS_LOG" ]; then
+    STRESS_MAX=$(grep -oE '^\[ *[0-9]+/[0-9]+\]' "$LAST_STRESS_LOG" 2>/dev/null \
+        | tr -d '[] ' | awk -F/ '{print $1}' | sort -n | tail -1)
+    STRESS_TOTAL=$(grep -oE '^\[ *[0-9]+/[0-9]+\]' "$LAST_STRESS_LOG" 2>/dev/null \
+        | tr -d '[] ' | awk -F/ '{print $2}' | head -1)
+    if [ -n "$STRESS_MAX" ] && [ -n "$STRESS_TOTAL" ]; then
+        STRESS_LOG_NAME=$(basename "$LAST_STRESS_LOG")
+        NOTIFY_BODY="${NOTIFY_BODY}
+
+Previous stress run (${STRESS_LOG_NAME}) reached ${STRESS_MAX}/${STRESS_TOTAL} steps before stopping."
+    fi
+fi
+
+$PYTHON "$DRYDOCK/scripts/notify_release.py" "$NEW_VERSION" "$NOTIFY_BODY" 2>/dev/null
 
 echo "[$(date)] Released v$NEW_VERSION successfully"

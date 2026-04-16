@@ -176,11 +176,7 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     timed_out = 0
 
     cur_section: str | None = None
-    SESSION_RESET_EVERY = 5  # /clear every N prompts to bound context.
-    # Lowered from 15 on 2026-04-16: empirically Gemma 4 goes silent
-    # after ~2-4 productive in-session prompts (regardless of v122's
-    # filler fix), so /clear-ing 3x more often keeps the productivity
-    # window fresh and triples effective throughput.
+    SESSION_RESET_EVERY = 15  # /clear every N prompts to bound context
     for i, (section, prompt) in enumerate(prompts_only, start=1):
         if section != cur_section:
             cur_section = section
