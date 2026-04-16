@@ -196,6 +196,13 @@ class ToolManager:
         _GEMMA4_AUTO_DISABLE = {
             "task_create", "task_update", "task_list",
             "ask_user_question", "invoke_skill", "tool_search",
+            # todo disabled for Gemma 4: the model calls todo(read) in
+            # a loop returning "0 todos" and never writes any. The 200-
+            # line prompt confuses the 4B-active-param model. Instead,
+            # Gemma 4 plans via its thinking channel and executes
+            # inline — the auto-continue loop (tool_turns > 0 → don't
+            # break) keeps it going without needing an explicit list.
+            "todo",
         }
         try:
             active = self._config.get_active_model()

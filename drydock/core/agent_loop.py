@@ -833,7 +833,18 @@ class AgentLoop:
                                     has_made_edit = True
                                     break
 
-                should_break_loop = last_message.role != Role.tool
+                # Only break when the model emits TEXT and hasn't made
+                # any tool calls this turn. If tool_turns > 0 the model
+                # is mid-work — a text message is an intermediate summary
+                # ("Wrote __init__.py, now I'll write cli.py") that used
+                # to force the user to type "continue" after every step.
+                # Keeping the loop alive lets the model chain through
+                # its entire plan in one user turn. The per-prompt budget
+                # (50 tool calls / 15 min) still provides a hard stop.
+                should_break_loop = (
+                    last_message.role != Role.tool
+                    and tool_turns == 0
+                )
 
                 # No circuit breakers, no loop detection, no forced nudges.
                 # The model works on its own. The only hard stop is MAX_TOOL_TURNS.
