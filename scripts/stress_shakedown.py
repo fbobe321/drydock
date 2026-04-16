@@ -195,8 +195,18 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
             from shakedown_interactive import type_message
             type_message(child, "/clear")
             time.sleep(3)  # let TUI drain the /clear command
-            # Don't wait for "ready"; /clear is instant. The next
-            # iteration's _wait_until_tui_ready handles pacing.
+            # Invalidate session cache: /clear creates a new session
+            # dir; without resetting these, the watcher polls the
+            # OLD session forever and reports "prompt not accepted"
+            # for everything in the new batch.
+            watcher.session_dir = None
+            watcher.since = time.time()
+            watcher.messages = []
+            # Wait for the new session dir to appear before continuing.
+            for _ in range(30):
+                if watcher.find_session() is not None:
+                    break
+                time.sleep(1)
 
         # Wait for TUI to be truly idle before typing next prompt.
         # If we type while drydock is still working on the prior turn,
