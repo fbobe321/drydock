@@ -91,9 +91,14 @@ def _restore_checkpoint_to_step(session_dir: Path, state_data: dict,
     """Use git directly to restore cwd files to the state right after
     step N completed.
 
-    Step N corresponds to checkpoint index N-1 (one checkpoint per
-    completed user turn, 0-indexed). Returns the chosen checkpoint dict
-    so the caller can print details.
+    Step N nominally maps to checkpoint index N-1 (one checkpoint per
+    completed user turn). In practice harness retries and resumes can
+    cause drift, so we clamp: if step exceeds what the checkpoint store
+    holds, we fall back to the LATEST checkpoint and let the caller
+    skip the requested number of prompts. This is the right semantic
+    for "I was at step N, resume there" — the work-tree is restored to
+    the most recent state we have, and the harness picks up from N+1.
+    Returns the chosen checkpoint dict.
     """
     checkpoints = state_data.get("checkpoints", [])
     if not checkpoints:
@@ -101,12 +106,19 @@ def _restore_checkpoint_to_step(session_dir: Path, state_data: dict,
             f"checkpoint store {session_dir} has no checkpoints"
         )
     cp_index = step - 1
-    if cp_index < 0 or cp_index >= len(checkpoints):
-        raise SystemExit(
-            f"step {step} out of range — checkpoints cover steps "
-            f"1..{len(checkpoints)} for this session"
+    if cp_index < 0:
+        raise SystemExit(f"step {step} must be >= 1")
+    if cp_index >= len(checkpoints):
+        # Drift case — clamp to latest checkpoint and warn.
+        cp_index = len(checkpoints) - 1
+        cp = checkpoints[cp_index]
+        print(
+            f"  NOTE: step {step} > {len(checkpoints)} checkpoints "
+            f"available; clamping to latest (cp #{cp_index} "
+            f"\"{cp['label'][:50]}\")."
         )
-    cp = checkpoints[cp_index]
+    else:
+        cp = checkpoints[cp_index]
 
     git_dir = session_dir / "repo.git"
     if not (git_dir / "HEAD").is_file():
