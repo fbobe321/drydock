@@ -226,6 +226,11 @@ class AgentLoop:
         self.session_logger = SessionLogger(config.session_logging, self.session_id)
         self._teleport_service: TeleportService | None = None
 
+        # Checkpoint store — lazily initialised on first user turn so we
+        # can capture cwd at that point. None when disabled (e.g. tests).
+        self._checkpoint_store: Any | None = None
+        self._checkpoints_disabled: bool = False
+
         thread = Thread(
             target=migrate_sessions_entrypoint,
             args=(config.session_logging,),
@@ -327,6 +332,128 @@ class AgentLoop:
 
         async for event in self._conversation_loop(msg):
             yield event
+
+        # Record a checkpoint at the END of the user turn — both
+        # conversation pointer and code state are stable now. Best-effort:
+        # checkpoint failures are non-fatal so they can never break the
+        # main agent loop.
+        try:
+            self._record_checkpoint(label=msg[:200])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[checkpoint] record skipped: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Checkpoints — see drydock/core/checkpoint.py
+    # ------------------------------------------------------------------
+
+    # Agent-level state that should travel with each checkpoint so a
+    # rewind also rolls back circuit-breaker counts, loop flags, etc.
+    # Same set as the /clear and /compact resets — kept in sync there.
+    _CHECKPOINT_STATE_FIELDS = (
+        "_tool_call_history",
+        "_consecutive_circuit_breaker_fires",
+        "_empty_responses",
+        "_successful_test_runs",
+        "_loop_detected",
+        "_loop_signal",
+        "_hot_tool_path",
+        "_consecutive_empty_turns",
+        "_empty_nudge_last_user_idx",
+        "_total_error_rounds",
+        "_read_file_state",
+    )
+
+    def _capture_agent_state(self) -> dict:
+        """Snapshot the counters/flags that should rewind with us.
+
+        JSON-safe: tuples become lists, dicts pass through. Missing
+        attributes default to None so older sessions don't crash on
+        restore.
+        """
+        snap: dict = {}
+        for name in self._CHECKPOINT_STATE_FIELDS:
+            value = getattr(self, name, None)
+            # Tuples need to round-trip through JSON; convert to list
+            # and remember the type so restore can revert.
+            if isinstance(value, tuple):
+                snap[name] = {"_kind": "tuple", "items": list(value)}
+            else:
+                snap[name] = value
+        return snap
+
+    def _apply_agent_state(self, snap: dict) -> None:
+        """Restore the counters/flags from a snapshot."""
+        for name in self._CHECKPOINT_STATE_FIELDS:
+            if name not in snap:
+                continue
+            value = snap[name]
+            if isinstance(value, dict) and value.get("_kind") == "tuple":
+                value = tuple(value.get("items", []))
+            setattr(self, name, value)
+
+    def _get_checkpoint_store(self):
+        """Lazy-init the per-session CheckpointStore. Returns None on failure."""
+        if self._checkpoint_store is not None:
+            return self._checkpoint_store
+        if self._checkpoints_disabled:
+            return None
+        try:
+            from drydock.core.checkpoint import CheckpointStore
+            self._checkpoint_store = CheckpointStore(
+                work_tree=Path.cwd(), session_id=self.session_id,
+            )
+            return self._checkpoint_store
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[checkpoint] disabled: %s", exc)
+            self._checkpoints_disabled = True
+            return None
+
+    def _record_checkpoint(self, label: str = "") -> None:
+        store = self._get_checkpoint_store()
+        if store is None:
+            return
+        store.record(
+            msg_index=len(self.messages),
+            label=label,
+            agent_state=self._capture_agent_state(),
+        )
+
+    def restore_checkpoint(self, index: int, mode: str = "both") -> Any:
+        """Restore to the checkpoint at `index` (0-based, oldest first).
+
+        mode: "code" | "conversation" | "both".
+
+        Returns the Checkpoint that was restored. Caller (TUI / CLI) is
+        responsible for surfacing UI feedback.
+        """
+        store = self._get_checkpoint_store()
+        if store is None:
+            raise RuntimeError("checkpoints not available in this session")
+
+        # Resolve negative indices the way Python lists do, so callers
+        # can pass -1 for "the most recent one before HEAD".
+        if index < 0:
+            index = len(store.checkpoints) + index
+
+        cp = store.restore(index, mode=mode)
+
+        if mode in ("conversation", "both"):
+            # Truncate the live message list back to where we were.
+            keep = list(self.messages[: cp.msg_index])
+            self.messages.reset(keep)
+            # Roll back agent counters/flags to their state at that
+            # point so circuit-breaker fires, loop flags, etc. don't
+            # leak forward and re-poison the rewound session.
+            self._apply_agent_state(cp.agent_state)
+
+        return cp
+
+    def list_checkpoints(self, limit: int | None = None) -> list:
+        """Return checkpoints (most-recent first) for the picker UI."""
+        store = self._get_checkpoint_store()
+        if store is None:
+            return []
+        return store.list_checkpoints(limit=limit)
 
     @property
     def teleport_service(self) -> TeleportService:

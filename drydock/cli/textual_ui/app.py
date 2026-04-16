@@ -989,32 +989,141 @@ class VibeApp(App):  # noqa: PLR0904
         await self._mount_and_scroll(UserCommandMessage(help_text))
 
     async def _rewind_command(self, args: str = "") -> None:
-        """Undo the last assistant turn and its tool calls."""
+        """Rewind to a previous checkpoint, or undo the last assistant turn.
+
+        Usage:
+            /rewind            list checkpoints, with diff stats
+            /rewind <n>        restore checkpoint n (BOTH code + conversation)
+            /rewind <n> code   restore code only
+            /rewind <n> conv   restore conversation only
+            /rewind last       legacy: undo just the last assistant turn
+        """
         if self._agent_running:
             await self._mount_and_scroll(
-                ErrorMessage("Cannot rewind while agent is running.", collapsed=self._tools_collapsed)
+                ErrorMessage(
+                    "Cannot rewind while agent is running.",
+                    collapsed=self._tools_collapsed,
+                )
             )
             return
 
-        # Find and remove the last assistant turn (assistant + tool messages)
+        parts = args.strip().split()
+
+        # No-arg: list checkpoints
+        if not parts:
+            await self._show_checkpoint_list()
+            return
+
+        first = parts[0].lower()
+
+        # Legacy "undo last assistant turn" — preserved as `/rewind last`
+        if first == "last":
+            await self._rewind_last_turn()
+            return
+
+        # Numeric index → restore checkpoint
+        try:
+            idx = int(first)
+        except ValueError:
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    "Usage: `/rewind` (list), `/rewind <n>` (restore), "
+                    "`/rewind <n> code|conv` (partial), `/rewind last` "
+                    "(undo last turn).",
+                    collapsed=self._tools_collapsed,
+                )
+            )
+            return
+
+        mode_arg = parts[1].lower() if len(parts) > 1 else "both"
+        mode_map = {"both": "both", "code": "code", "conv": "conversation",
+                    "conversation": "conversation", "msg": "conversation"}
+        if mode_arg not in mode_map:
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    f"Unknown mode {mode_arg!r}. "
+                    "Use code, conv, or both (default).",
+                    collapsed=self._tools_collapsed,
+                )
+            )
+            return
+        mode = mode_map[mode_arg]
+
+        try:
+            cp = self.agent_loop.restore_checkpoint(idx, mode=mode)
+        except Exception as exc:  # noqa: BLE001
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    f"Rewind failed: {exc}", collapsed=self._tools_collapsed,
+                )
+            )
+            return
+
+        await self._mount_and_scroll(
+            UserCommandMessage(
+                f"Rewound to checkpoint {cp.index} "
+                f"({cp.short_commit()}, mode={mode}). "
+                f"Conversation now at {cp.msg_index} messages."
+            )
+        )
+
+    async def _rewind_last_turn(self) -> None:
+        """Legacy: drop just the last assistant turn (no checkpoint involved)."""
         removed = 0
         while len(self.agent_loop.messages) > 1:
             last = self.agent_loop.messages[-1]
             if last.role == Role.system:
                 break
             if last.role == Role.user and removed > 0:
-                break  # Stop before the user message that triggered the turn
-            self.agent_loop.messages.reset(list(self.agent_loop.messages[:-1]))
+                break
+            self.agent_loop.messages.reset(
+                list(self.agent_loop.messages[:-1])
+            )
             removed += 1
-
         if removed > 0:
             await self._mount_and_scroll(
-                UserCommandMessage(f"Rewound {removed} messages. You can now re-prompt.")
+                UserCommandMessage(
+                    f"Rewound {removed} messages. You can now re-prompt."
+                )
             )
         else:
             await self._mount_and_scroll(
                 UserCommandMessage("Nothing to rewind.")
             )
+
+    async def _show_checkpoint_list(self) -> None:
+        """List recent checkpoints with diff stats. The interactive picker
+        UI is phase 2; this text view is enough for `/rewind <n>` use."""
+        checkpoints = self.agent_loop.list_checkpoints(limit=30)
+        if not checkpoints:
+            await self._mount_and_scroll(
+                UserCommandMessage(
+                    "No checkpoints yet. One is recorded after each user "
+                    "turn finishes."
+                )
+            )
+            return
+
+        store = self.agent_loop._get_checkpoint_store()
+        lines = [
+            "## Checkpoints (most recent first)",
+            "",
+            "| # | Commit | Msgs | Label |",
+            "|---|--------|------|-------|",
+        ]
+        for cp in checkpoints:
+            label = cp.label.replace("|", "/")[:60]
+            lines.append(
+                f"| {cp.index} | `{cp.short_commit()}` | {cp.msg_index} | "
+                f"{label} |"
+            )
+        lines.extend([
+            "",
+            "Restore with `/rewind <n>` (both code + conversation), "
+            "`/rewind <n> code` (code only), or `/rewind <n> conv` "
+            "(conversation only).",
+        ])
+        await self._mount_and_scroll(UserCommandMessage("\n".join(lines)))
 
     async def _show_status(self) -> None:
         stats = self.agent_loop.stats

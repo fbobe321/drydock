@@ -78,8 +78,9 @@ class CommandRegistry:
                 handler="_consult_command",
             ),
             "rewind": Command(
-                aliases=frozenset(["/rewind"]),
-                description="Undo the last assistant turn and its tool calls",
+                aliases=frozenset(["/rewind", "/checkpoint"]),
+                description="Restore code and/or conversation to a previous "
+                            "checkpoint. Run `/rewind` to list checkpoints.",
                 handler="_rewind_command",
             ),
             "resume": Command(

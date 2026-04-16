@@ -36,6 +36,31 @@ through 1 build + 200 feature additions on `tool_agent`, treating
 context bloat, attractor loops, model degeneration, and rendering as
 a unified end-to-end test.
 
+### Purpose
+
+**The point of the stress test is to improve the TUI experience for
+the actual end user.** The user does NOT use the harness — the harness
+is a test driver, not a product. Every fix should land in drydock
+itself (or in the model-handling layer) so a real user typing into the
+TUI sees the improvement.
+
+Rules of engagement:
+
+- **Drydock fixes are the goal.** When the harness exposes a regression
+  (loops, hangs, silent prompts, slow responses), the fix goes in
+  `drydock/` and ships in a new release. The harness numbers are a
+  proxy for user experience; never optimise harness numbers in a way
+  that doesn't help the user.
+- **Harness changes are ONLY to keep the harness functional with the
+  TUI.** If pexpect can't drive the new TUI, fix pexpect glue. If the
+  trust dialog blocks input, auto-dismiss it. If the session log path
+  changes, update the watcher. **Do not tweak harness parameters
+  (`SESSION_RESET_EVERY`, idle timeouts, retry counts) to inflate step
+  throughput.** That's gaming the metric, not improving drydock.
+- The hour-by-hour step count is signal, not the goal. The goal is
+  drydock that doesn't loop, doesn't hang, doesn't go silent, and
+  produces working code on long sessions for a real user.
+
 **Best run so far:** v2.6.102 reached 96/201 prompts before tool calls
 started returning `<user_cancellation>` infinite loop.
 
