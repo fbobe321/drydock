@@ -2679,8 +2679,16 @@ class AgentLoop:
 
         last_msg = self.messages[-1]
         if last_msg.role is Role.tool:
-            empty_assistant_msg = LLMMessage(role=Role.assistant, content="Continuing...")
-            self.messages.append(empty_assistant_msg)
+            # Bridge tool→user gap. "Continuing..." was ambiguous — Gemma 4
+            # read it as a self-statement ("I said Continuing, so I'm done")
+            # and went silent for the next user prompt. In the 2026-04-16
+            # stress run this single filler poisoned 14/15 prompts per cycle.
+            # An explicit hand-off phrases it as a clear turn boundary.
+            filler = LLMMessage(
+                role=Role.assistant,
+                content="Previous turn ended; awaiting your next instruction.",
+            )
+            self.messages.append(filler)
 
     def _reset_session(self) -> None:
         self.session_id = str(uuid4())
