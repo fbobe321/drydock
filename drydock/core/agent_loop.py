@@ -551,10 +551,13 @@ class AgentLoop:
                         "response summarizing what you did (or what is "
                         "blocked) so the user can take the next step."
                     )
-                elif tool_turns >= 35:
+                elif tool_turns >= 50:
                     # Hard end-of-turn: synthesize a user-facing message
-                    # and stop. The model has spent way too long on one
-                    # request without closing it.
+                    # and stop. Was 35 but that truncated initial builds
+                    # (tool_agent stress: agent.py never got written,
+                    # breaking the whole subsequent run). 50 is generous
+                    # enough for a full build while still preventing
+                    # infinite loops.
                     yield AssistantEvent(
                         content=(
                             f"\n\n[Drydock: stopped after {tool_turns} tool "
