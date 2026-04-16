@@ -2723,6 +2723,24 @@ class AgentLoop:
         self.tool_manager.reset_all()
         self._reset_session()
 
+        # ALSO reset all agent-level sampling/loop/circuit-breaker state.
+        # Learning from the 2026-04-15 stress marathon: sticky loop flags
+        # (freq_penalty=0.4 baked into subsequent generations) were the
+        # cause of the user-visible "no spaces in TUI text" bug. If a
+        # user hits /clear after a bad turn and this state DOESN'T
+        # reset, the fresh session inherits the poisoning.
+        self._tool_call_history = {}
+        self._consecutive_circuit_breaker_fires = 0
+        self._empty_responses = 0
+        self._successful_test_runs = 0
+        self._loop_detected = False
+        self._loop_signal = None
+        self._hot_tool_path = None
+        self._consecutive_empty_turns = 0
+        self._empty_nudge_last_user_idx = -1
+        self._total_error_rounds = 0
+        self._read_file_state = {}
+
     async def compact(self) -> str:
         try:
             self._clean_message_history()

@@ -109,11 +109,15 @@ class ContextWarningMiddleware:
     Debounced: only warns every 5 tool calls to avoid spamming.
     """
 
+    # Tiers use absolute token ranges (more actionable than percentages —
+    # context window size is fixed per model). Defaults tuned for Gemma 4
+    # (131K max, where degradation starts near 80K per 2026-04-15 stress
+    # data). Other models just see percentages of their own max.
     _TIERS = [
-        (0.50, "soft", "You've used {pct:.0f}% of context ({used:,}/{max:,} tokens). Start wrapping up your current task."),
-        (0.65, "moderate", "Context at {pct:.0f}%. Stop exploring — finish your current edit and verify it works."),
-        (0.75, "critical", "Context at {pct:.0f}% — CRITICAL. Make your final edit NOW. No more grep/read_file. Use /compact if you need to continue."),
-        (0.85, "emergency", "Context nearly full ({pct:.0f}%). You MUST stop after this turn. Apply your fix with search_replace immediately or the session will degrade."),
+        (0.50, "soft", "{used:,} tokens used ({pct:.0f}% of {max:,}). Start wrapping up your current task."),
+        (0.65, "moderate", "{used:,} tokens used ({pct:.0f}% of {max:,}). Stop exploring — finish your current edit and verify it works."),
+        (0.75, "critical", "{used:,} tokens used ({pct:.0f}% of {max:,}) — CRITICAL. Finish this edit NOW. No more grep/read_file. Use /compact if you need to continue."),
+        (0.85, "emergency", "{used:,} tokens used ({pct:.0f}% of {max:,}) — context nearly full. You MUST stop after this turn or the model will start emitting empty responses and run-on text (freq_penalty poisoning). Apply your fix with search_replace immediately or use /compact."),
     ]
 
     def __init__(
