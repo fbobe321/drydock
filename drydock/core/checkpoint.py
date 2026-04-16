@@ -120,10 +120,15 @@ class CheckpointStore:
                agent_state: dict | None = None) -> Checkpoint:
         """Snapshot the current work-tree under a fresh checkpoint.
 
-        Idempotent for the no-change case: if the work-tree hasn't
-        changed since the last checkpoint AND agent_state matches the
-        previous checkpoint's, returns the previous one instead of
-        creating a duplicate commit.
+        Always returns a NEW Checkpoint with a fresh index, even when
+        the work-tree hasn't changed — callers that count checkpoints
+        per user turn (notably the stress harness) need a 1:1 mapping.
+        Git itself dedupes the underlying tree at the storage layer
+        (content-addressed), so a no-change checkpoint costs ~one commit
+        object (~150 bytes) and reuses the existing tree. When tree
+        AND agent_state both match the previous checkpoint, the new
+        Checkpoint reuses the previous commit hash (no commit-tree call)
+        to avoid the cost.
 
         agent_state is an opaque JSON-safe dict the caller stashes so
         a future restore() can round-trip it back. Used by AgentLoop
@@ -140,9 +145,10 @@ class CheckpointStore:
 
         snapshot_state = dict(agent_state or {})
 
-        # Skip duplicate-tree commits: if the new tree matches the last
-        # checkpoint's tree AND agent_state hasn't changed either,
-        # reuse the previous checkpoint.
+        # Reuse the previous commit hash if both the work-tree AND the
+        # agent_state are unchanged. This keeps git history compact
+        # while still giving the caller a fresh-index Checkpoint object.
+        commit_sha: str | None = None
         if self.checkpoints:
             last = self.checkpoints[-1]
             try:
@@ -150,24 +156,25 @@ class CheckpointStore:
                     "rev-parse", f"{last.commit}^{{tree}}"
                 ).strip()
                 if last_tree == tree_sha and last.agent_state == snapshot_state:
-                    return last
+                    commit_sha = last.commit
             except CheckpointError:
                 pass
 
-        # Commit
-        msg = f"checkpoint {len(self.checkpoints)}"
-        if label:
-            msg += f": {label[:80]}"
-        try:
-            args = ["commit-tree", tree_sha, "-m", msg]
-            if self.checkpoints:
-                args += ["-p", self.checkpoints[-1].commit]
-            commit_sha = self._git(*args).strip()
-            self._git("update-ref", "refs/heads/main", commit_sha)
-        except CheckpointError as exc:
-            raise CheckpointError(
-                f"checkpoint commit-tree failed: {exc}"
-            ) from exc
+        # Commit (skipped when we're reusing the previous commit).
+        if commit_sha is None:
+            msg = f"checkpoint {len(self.checkpoints)}"
+            if label:
+                msg += f": {label[:80]}"
+            try:
+                args = ["commit-tree", tree_sha, "-m", msg]
+                if self.checkpoints:
+                    args += ["-p", self.checkpoints[-1].commit]
+                commit_sha = self._git(*args).strip()
+                self._git("update-ref", "refs/heads/main", commit_sha)
+            except CheckpointError as exc:
+                raise CheckpointError(
+                    f"checkpoint commit-tree failed: {exc}"
+                ) from exc
 
         cp = Checkpoint(
             index=len(self.checkpoints),

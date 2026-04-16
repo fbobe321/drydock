@@ -94,13 +94,21 @@ def test_record_skips_excluded_dirs(store):
     assert not any(n.startswith(".venv/") for n in names)
 
 
-def test_record_dedupes_unchanged_tree(store):
+def test_record_unchanged_tree_reuses_commit(store):
+    """Each record() returns a fresh Checkpoint with a new index, but
+    when nothing changed (tree + agent_state) we reuse the previous
+    commit hash so git history stays compact."""
     (store.work_tree / "a.py").write_text("ok\n")
     cp1 = store.record(msg_index=1, label="first")
     cp2 = store.record(msg_index=2, label="no change")
-    # Same tree → same Checkpoint object (no new commit)
-    assert cp1 is cp2
-    assert len(store.checkpoints) == 1
+    # Different Checkpoint objects with different indexes
+    assert cp1.index == 0
+    assert cp2.index == 1
+    assert len(store.checkpoints) == 2
+    # But they share the underlying commit (no work-tree delta)
+    assert cp1.commit == cp2.commit
+    # And the new one carries its own msg_index so caller can map back
+    assert cp2.msg_index == 2
 
 
 def test_record_chains_parents(store):
