@@ -21,8 +21,10 @@ of a single build and see where the TUI starts to loop or drift.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -52,6 +54,78 @@ def _parse_prompts(path: Path) -> list[tuple[str | None, str]]:
             continue
         items.append((current_section, line))
     return items
+
+
+def _find_latest_checkpoint_session(cwd: Path) -> tuple[Path, dict] | None:
+    """Find the most recently-modified drydock checkpoint store whose
+    work_tree matches cwd. Returns (session_dir, state_data) or None."""
+    base = Path.home() / ".drydock" / "checkpoints"
+    if not base.is_dir():
+        return None
+    target = cwd.resolve()
+    candidates: list[tuple[float, Path, dict]] = []
+    for sess_dir in base.iterdir():
+        if not sess_dir.is_dir():
+            continue
+        state = sess_dir / "state.json"
+        if not state.is_file():
+            continue
+        try:
+            data = json.loads(state.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        wt = data.get("work_tree", "")
+        try:
+            if Path(wt).resolve() == target:
+                candidates.append((state.stat().st_mtime, sess_dir, data))
+        except OSError:
+            continue
+    if not candidates:
+        return None
+    candidates.sort(reverse=True)
+    return candidates[0][1], candidates[0][2]
+
+
+def _restore_checkpoint_to_step(session_dir: Path, state_data: dict,
+                                cwd: Path, step: int) -> dict:
+    """Use git directly to restore cwd files to the state right after
+    step N completed.
+
+    Step N corresponds to checkpoint index N-1 (one checkpoint per
+    completed user turn, 0-indexed). Returns the chosen checkpoint dict
+    so the caller can print details.
+    """
+    checkpoints = state_data.get("checkpoints", [])
+    if not checkpoints:
+        raise SystemExit(
+            f"checkpoint store {session_dir} has no checkpoints"
+        )
+    cp_index = step - 1
+    if cp_index < 0 or cp_index >= len(checkpoints):
+        raise SystemExit(
+            f"step {step} out of range — checkpoints cover steps "
+            f"1..{len(checkpoints)} for this session"
+        )
+    cp = checkpoints[cp_index]
+
+    git_dir = session_dir / "repo.git"
+    if not (git_dir / "HEAD").is_file():
+        raise SystemExit(
+            f"checkpoint repo at {git_dir} is missing or invalid"
+        )
+    env = {
+        **os.environ,
+        "GIT_DIR": str(git_dir),
+        "GIT_WORK_TREE": str(cwd),
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+    # read-tree --reset -u rewrites the index AND the work-tree to match
+    # the snapshot tree. Untracked files are left alone.
+    subprocess.run(
+        ["git", "read-tree", "--reset", "-u", cp["commit"]],
+        env=env, check=True, capture_output=True, timeout=60,
+    )
+    return cp
 
 
 def _idle_wait(child: pexpect.spawn, watcher: SessionWatcher,
@@ -107,11 +181,13 @@ def _wait_until_tui_ready(child: pexpect.spawn, watcher: SessionWatcher,
 
 
 def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
-        report_every: int) -> int:
+        report_every: int, resume_from_step: int = 0) -> int:
     print(f"\n{'=' * 60}")
     print(f"  STRESS SHAKEDOWN: {pkg}")
     print(f"  cwd:     {cwd}")
     print(f"  prompts: {prompts_file}")
+    if resume_from_step:
+        print(f"  resume:  from step {resume_from_step + 1}")
     print(f"{'=' * 60}\n")
 
     items = _parse_prompts(prompts_file)
@@ -119,19 +195,38 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     total = len(prompts_only)
     print(f"Loaded {total} prompts.\n")
 
-    # Reset PRD but DON'T wipe the package — if it exists and is
-    # functional, the stress test should ADD to it, not rebuild.
-    # Wiping caused incomplete builds that broke all subsequent
-    # feature additions (missing __main__.py etc.).
-    master = cwd / "PRD.master.md"
-    target = cwd / "PRD.md"
-    if master.exists():
-        shutil.copy2(master, target)
-    pkg_dir = cwd / pkg
-    for entry in cwd.iterdir():
-        if entry.is_dir() and entry.name != pkg and entry.name.startswith(pkg.split("_")[0]):
-            if entry.name not in ("test_docs", "test_data", "plugins", ".git"):
-                shutil.rmtree(entry, ignore_errors=True)
+    skip_count = 0  # for --resume-from-step display
+
+    if resume_from_step:
+        # Find the most recent drydock checkpoint store for this cwd.
+        found = _find_latest_checkpoint_session(cwd)
+        if found is None:
+            print(f"ERROR: no checkpoint store found for cwd={cwd}.")
+            print("       (drydock must have run in this dir before with v2.6.125+)")
+            return 2
+        sess_dir, state_data = found
+        print(f"  checkpoint store: {sess_dir.name}")
+        cp = _restore_checkpoint_to_step(sess_dir, state_data, cwd,
+                                         resume_from_step)
+        print(f"  restored to checkpoint {cp['index']} ({cp['commit'][:8]})")
+        print(f"  label: {cp['label'][:80]!r}")
+        print(f"  → resuming at step {resume_from_step + 1}\n")
+        skip_count = resume_from_step
+        prompts_only = prompts_only[resume_from_step:]
+    else:
+        # Reset PRD but DON'T wipe the package — if it exists and is
+        # functional, the stress test should ADD to it, not rebuild.
+        # Wiping caused incomplete builds that broke all subsequent
+        # feature additions (missing __main__.py etc.).
+        master = cwd / "PRD.master.md"
+        target = cwd / "PRD.md"
+        if master.exists():
+            shutil.copy2(master, target)
+        pkg_dir = cwd / pkg
+        for entry in cwd.iterdir():
+            if entry.is_dir() and entry.name != pkg and entry.name.startswith(pkg.split("_")[0]):
+                if entry.name not in ("test_docs", "test_data", "plugins", ".git"):
+                    shutil.rmtree(entry, ignore_errors=True)
 
     log_path = Path(f"/tmp/stress_shakedown_{int(time.time())}.tui.log")
     print(f"  TUI log: {log_path}\n")
@@ -177,7 +272,10 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
 
     cur_section: str | None = None
     SESSION_RESET_EVERY = 15  # /clear every N prompts to bound context
-    for i, (section, prompt) in enumerate(prompts_only, start=1):
+    # When resuming, step counter starts at the resumed step + 1 so the
+    # printed log lines stay aligned with the original run.
+    for raw_i, (section, prompt) in enumerate(prompts_only, start=1):
+        i = raw_i + skip_count
         if section != cur_section:
             cur_section = section
             if section:
@@ -288,6 +386,14 @@ def main() -> int:
                     help="Max seconds to wait per prompt (default 180)")
     ap.add_argument("--report-every", type=int, default=20,
                     help="Print a progress snapshot every N prompts")
+    ap.add_argument(
+        "--resume-from-step", type=int, default=0, metavar="N",
+        help=("Restore the project files from the most recent drydock "
+              "checkpoint matching --cwd to the state right after step "
+              "N completed, then continue typing from step N+1. The "
+              "next drydock TUI starts with a fresh conversation; only "
+              "the work-tree is restored. Requires drydock >=2.6.125 "
+              "to have run in --cwd at least once."))
     args = ap.parse_args()
 
     if not args.cwd.is_dir():
@@ -296,9 +402,13 @@ def main() -> int:
     if not args.prompts.is_file():
         print(f"ERROR: --prompts not a file: {args.prompts}")
         return 2
+    if args.resume_from_step < 0:
+        print(f"ERROR: --resume-from-step must be >= 0")
+        return 2
 
     return run(args.cwd, args.pkg, args.prompts,
-               args.max_per_prompt, args.report_every)
+               args.max_per_prompt, args.report_every,
+               resume_from_step=args.resume_from_step)
 
 
 if __name__ == "__main__":

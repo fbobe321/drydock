@@ -62,6 +62,10 @@ from drydock.cli.textual_ui.widgets.path_display import PathDisplay
 from drydock.cli.textual_ui.widgets.proxy_setup_app import ProxySetupApp
 from drydock.cli.textual_ui.widgets.question_app import QuestionApp
 from drydock.cli.textual_ui.widgets.session_picker import SessionPickerApp
+from drydock.cli.textual_ui.widgets.checkpoint_picker import (
+    CheckpointPickerApp,
+    RestoreModePickerApp,
+)
 from drydock.cli.textual_ui.widgets.teleport_message import TeleportMessage
 from drydock.cli.textual_ui.widgets.tools import ToolResultMessage
 from drydock.cli.textual_ui.windowing import (
@@ -1092,8 +1096,7 @@ class VibeApp(App):  # noqa: PLR0904
             )
 
     async def _show_checkpoint_list(self) -> None:
-        """List recent checkpoints with diff stats. The interactive picker
-        UI is phase 2; this text view is enough for `/rewind <n>` use."""
+        """Open the interactive checkpoint picker."""
         checkpoints = self.agent_loop.list_checkpoints(limit=30)
         if not checkpoints:
             await self._mount_and_scroll(
@@ -1104,26 +1107,102 @@ class VibeApp(App):  # noqa: PLR0904
             )
             return
 
+        # Compute diff stats for the picker — caps at the visible 30 so
+        # this stays sub-second.
         store = self.agent_loop._get_checkpoint_store()
-        lines = [
-            "## Checkpoints (most recent first)",
-            "",
-            "| # | Commit | Msgs | Label |",
-            "|---|--------|------|-------|",
-        ]
-        for cp in checkpoints:
-            label = cp.label.replace("|", "/")[:60]
-            lines.append(
-                f"| {cp.index} | `{cp.short_commit()}` | {cp.msg_index} | "
-                f"{label} |"
+        diff_summaries: dict[int, str] = {}
+        if store is not None:
+            for cp in checkpoints:
+                try:
+                    stats = store.diff_stats(cp.index)
+                    if stats:
+                        bits = []
+                        if stats.files_changed:
+                            bits.append(f"{stats.files_changed}f")
+                        if stats.insertions:
+                            bits.append(f"+{stats.insertions}")
+                        if stats.deletions:
+                            bits.append(f"-{stats.deletions}")
+                        diff_summaries[cp.index] = " ".join(bits)
+                    else:
+                        diff_summaries[cp.index] = "(no change)"
+                except Exception:  # noqa: BLE001
+                    diff_summaries[cp.index] = ""
+
+        picker = CheckpointPickerApp(
+            checkpoints=checkpoints,
+            diff_summaries=diff_summaries,
+        )
+        await self._switch_from_input(picker)
+
+    async def on_checkpoint_picker_app_checkpoint_picked(
+        self, event: CheckpointPickerApp.CheckpointPicked
+    ) -> None:
+        """User picked a checkpoint — show the mode picker next."""
+        # Look up the checkpoint to display label/short_commit
+        cp = None
+        for c in self.agent_loop.list_checkpoints():
+            if c.index == event.checkpoint_index:
+                cp = c
+                break
+
+        # Tear down the first picker before mounting the second.
+        try:
+            existing = self.query_one(CheckpointPickerApp)
+            await existing.remove()
+        except Exception:  # noqa: BLE001
+            pass
+
+        if cp is None:
+            await self._switch_to_input_app()
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    f"Checkpoint #{event.checkpoint_index} disappeared.",
+                    collapsed=self._tools_collapsed,
+                )
             )
-        lines.extend([
-            "",
-            "Restore with `/rewind <n>` (both code + conversation), "
-            "`/rewind <n> code` (code only), or `/rewind <n> conv` "
-            "(conversation only).",
-        ])
-        await self._mount_and_scroll(UserCommandMessage("\n".join(lines)))
+            return
+
+        mode_picker = RestoreModePickerApp(
+            checkpoint_index=cp.index,
+            label=cp.label,
+            short_commit=cp.short_commit(),
+        )
+        await self._switch_from_input(mode_picker)
+
+    async def on_checkpoint_picker_app_cancelled(
+        self, event: CheckpointPickerApp.Cancelled
+    ) -> None:
+        await self._switch_to_input_app()
+
+    async def on_restore_mode_picker_app_mode_picked(
+        self, event: RestoreModePickerApp.ModePicked
+    ) -> None:
+        await self._switch_to_input_app()
+        try:
+            cp = self.agent_loop.restore_checkpoint(
+                event.checkpoint_index, mode=event.mode,
+            )
+        except Exception as exc:  # noqa: BLE001
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    f"Rewind failed: {exc}",
+                    collapsed=self._tools_collapsed,
+                )
+            )
+            return
+        await self._mount_and_scroll(
+            UserCommandMessage(
+                f"Rewound to checkpoint #{cp.index} "
+                f"({cp.short_commit()}, mode={event.mode}). "
+                f"Conversation now at {cp.msg_index} messages."
+            )
+        )
+
+    async def on_restore_mode_picker_app_cancelled(
+        self, event: RestoreModePickerApp.Cancelled
+    ) -> None:
+        await self._switch_to_input_app()
 
     async def _show_status(self) -> None:
         stats = self.agent_loop.stats
