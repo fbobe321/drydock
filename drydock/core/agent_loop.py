@@ -302,6 +302,12 @@ class AgentLoop:
     async def act(self, msg: str) -> AsyncGenerator[BaseEvent]:
         self._clean_message_history()
 
+        # New user turn — reset the circuit-breaker fire counter so a bad
+        # previous turn can never poison this one. The counter is supposed
+        # to track consecutive repetitions; a fresh user message is
+        # unambiguously the start of a new intent.
+        self._consecutive_circuit_breaker_fires = 0
+
         # Auto-create AGENTS.md if no project instructions exist.
         # devstral needs per-project AGENTS.md to anchor its behavior —
         # without it the model loops on ls/bash instead of using subagents.
@@ -997,31 +1003,13 @@ class AgentLoop:
     async def _process_one_tool_call(
         self, tool_call: ResolvedToolCall
     ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent]:
-        # Circuit breaker: block exact duplicate calls after 2 attempts
+        # Circuit breaker: block exact duplicate calls after 2 attempts.
+        # CLAUDE.md rule: advisory only, NEVER blocking. Loop detection
+        # nudges the model but must never stop the session — only
+        # MAX_TOOL_TURNS (200) is a hard stop. See the 2026-04-16 stress
+        # run where FORCED STOP poisoned every subsequent prompt.
         if blocked := self._circuit_breaker_check(tool_call):
             self._consecutive_circuit_breaker_fires += 1
-
-            if self._consecutive_circuit_breaker_fires >= 5:
-                # Model is ignoring the circuit breaker — force stop
-                force_msg = (
-                    f"FORCED STOP: You ignored the circuit breaker {self._consecutive_circuit_breaker_fires} times. "
-                    f"The session is being terminated because you keep running the same command. "
-                    f"You MUST try a completely different approach."
-                )
-                yield ToolResultEvent(
-                    tool_name=tool_call.tool_name,
-                    tool_class=tool_call.tool_class,
-                    error=force_msg,
-                    tool_call_id=tool_call.call_id,
-                )
-                self._handle_tool_response(tool_call, force_msg, "failure")
-                # Inject stop signal into messages
-                yield AssistantEvent(
-                    content=f"\n\n[{force_msg}]\n",
-                    stopped_by_middleware=True,
-                )
-                return
-
             yield ToolResultEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,
@@ -1300,10 +1288,6 @@ class AgentLoop:
         async for event in self._emit_failed_tool_events(resolved.failed_calls):
             yield event
         for tool_call in resolved.tool_calls:
-            # Stop processing more tool calls if circuit breaker force-stopped
-            if self._consecutive_circuit_breaker_fires >= 5:
-                break
-
             yield ToolCallEvent(
                 tool_name=tool_call.tool_name,
                 tool_class=tool_call.tool_class,
