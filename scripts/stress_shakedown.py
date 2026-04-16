@@ -176,7 +176,7 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     timed_out = 0
 
     cur_section: str | None = None
-    SESSION_RESET_EVERY = 10  # /clear every N prompts to bound context
+    SESSION_RESET_EVERY = 25  # /clear every N prompts to bound context
     for i, (section, prompt) in enumerate(prompts_only, start=1):
         if section != cur_section:
             cur_section = section
