@@ -81,9 +81,22 @@ class PriceLimitMiddleware:
 class AutoCompactMiddleware:
     def __init__(self, threshold: int) -> None:
         self.threshold = threshold
+        # Proactive trigger at 90% of threshold — fires one turn EARLIER
+        # than the strict cutoff so the next response doesn't bloat past
+        # the hard limit. With Gemma 4's 80K threshold this means compact
+        # at ~72K, which catches the request before it includes a fresh
+        # tool result that pushes past 80K.
+        self.proactive_threshold = int(threshold * 0.9)
+        self._last_proactive_fire_at_tokens = 0
 
     async def before_turn(self, context: ConversationContext) -> MiddlewareResult:
+        # Hard threshold — always compact
         if context.stats.context_tokens >= self.threshold:
+            import logging
+            logging.getLogger("drydock").warning(
+                "[AUTO-COMPACT] firing at %d tokens (threshold %d)",
+                context.stats.context_tokens, self.threshold,
+            )
             return MiddlewareResult(
                 action=MiddlewareAction.COMPACT,
                 metadata={
@@ -91,10 +104,28 @@ class AutoCompactMiddleware:
                     "threshold": self.threshold,
                 },
             )
+        # Proactive — fire at 90% of threshold but at most once per
+        # ~10K-token growth window so we don't spam.
+        if (context.stats.context_tokens >= self.proactive_threshold
+                and context.stats.context_tokens - self._last_proactive_fire_at_tokens >= 10_000):
+            self._last_proactive_fire_at_tokens = context.stats.context_tokens
+            import logging
+            logging.getLogger("drydock").warning(
+                "[AUTO-COMPACT proactive] firing at %d tokens (90%% of %d)",
+                context.stats.context_tokens, self.threshold,
+            )
+            return MiddlewareResult(
+                action=MiddlewareAction.COMPACT,
+                metadata={
+                    "old_tokens": context.stats.context_tokens,
+                    "threshold": self.threshold,
+                    "proactive": True,
+                },
+            )
         return MiddlewareResult()
 
     def reset(self, reset_reason: ResetReason = ResetReason.STOP) -> None:
-        pass
+        self._last_proactive_fire_at_tokens = 0
 
 
 class ContextWarningMiddleware:
