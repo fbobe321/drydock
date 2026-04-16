@@ -617,6 +617,17 @@ class AgentLoop:
         if user_message.message_id is None:
             raise AgentLoopError("User message must have a message_id")
 
+        # Flush the user message to disk RIGHT NOW, before the LLM call.
+        # Without this, messages.jsonl only updates after the model yields
+        # — for silent/slow prompts the user message is invisible to any
+        # process tailing the session log (e.g. the stress harness),
+        # which then thinks the prompt was never delivered and retries
+        # or skips. Cheap: save_interaction only writes the delta.
+        try:
+            await self._save_messages()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[session] early user-message flush failed: %s", exc)
+
         yield UserMessageEvent(content=user_msg, message_id=user_message.message_id)
 
         # === AUTO-CONTEXT ===
