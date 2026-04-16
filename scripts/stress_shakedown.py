@@ -119,15 +119,15 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     total = len(prompts_only)
     print(f"Loaded {total} prompts.\n")
 
-    # Reset package dir + stale stuff ONCE, at the very start.
+    # Reset PRD but DON'T wipe the package — if it exists and is
+    # functional, the stress test should ADD to it, not rebuild.
+    # Wiping caused incomplete builds that broke all subsequent
+    # feature additions (missing __main__.py etc.).
     master = cwd / "PRD.master.md"
     target = cwd / "PRD.md"
     if master.exists():
         shutil.copy2(master, target)
     pkg_dir = cwd / pkg
-    if pkg_dir.exists():
-        print(f"  (fresh run — wiping {pkg}/)")
-        shutil.rmtree(pkg_dir)
     for entry in cwd.iterdir():
         if entry.is_dir() and entry.name != pkg and entry.name.startswith(pkg.split("_")[0]):
             if entry.name not in ("test_docs", "test_data", "plugins", ".git"):
