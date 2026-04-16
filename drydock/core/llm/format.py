@@ -228,6 +228,12 @@ class APIToolFormatHandler:
             # Strip leading "thought"/"(thought)" filler and match the
             # `call:name{...}` shape so the agent loop sees empty content
             # and can fire its recovery nudge.
+            #
+            # IMPORTANT: `stripped` is for PATTERN MATCHING ONLY. We must
+            # NOT replace `content` with `stripped` in the no-match case —
+            # that ate leading/trailing spaces from every streaming chunk
+            # (issue #1: a Gemma chunk like " received" became "received"
+            # so the rendered text had no spaces between words).
             stripped = content.strip()
             # Peel "thought" or "(thought)" prefix (case-insensitive, optional
             # whitespace)
@@ -250,7 +256,12 @@ class APIToolFormatHandler:
                 # this..." — only the bare-word leak with `/` or `\n`.
                 content = None
             else:
-                content = stripped or None
+                # Preserve original whitespace. Only collapse to None when
+                # the chunk is genuinely empty after stripping (so we don't
+                # ship pure-whitespace chunks to downstream consumers).
+                if not stripped:
+                    content = None
+                # else: leave `content` as-is (with leading/trailing spaces)
 
         clean_message = {
             "role": message.role,

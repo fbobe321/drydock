@@ -6,7 +6,12 @@ from rich import print as rprint
 from textual.app import App
 
 from drydock.core.paths import GLOBAL_ENV_FILE
-from drydock.setup.onboarding.screens import ApiKeyScreen, WelcomeScreen
+from drydock.setup.onboarding.screens import (
+    ApiKeyScreen,
+    ChoiceScreen,
+    LocalModelScreen,
+    WelcomeScreen,
+)
 
 
 class OnboardingApp(App[str | None]):
@@ -16,6 +21,8 @@ class OnboardingApp(App[str | None]):
         self.theme = "textual-ansi"
 
         self.install_screen(WelcomeScreen(), "welcome")
+        self.install_screen(ChoiceScreen(), "choice")
+        self.install_screen(LocalModelScreen(), "local_model")
         self.install_screen(ApiKeyScreen(), "api_key")
         self.push_screen("welcome")
 

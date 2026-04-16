@@ -287,6 +287,48 @@ class TestAPIToolFormatHandlerReasoningContent:
         assert result.content == "Hello"
         assert result.reasoning_content is None
 
+    def test_process_api_response_message_preserves_leading_space(self):
+        """Streaming chunks like ' received' must keep their leading space —
+        otherwise the rendered text reads 'Whatwouldyoulikemetotest' (issue
+        #1: spaces stripped from streaming output with Gemma vLLM)."""
+        handler = APIToolFormatHandler()
+        mock_message = MagicMock(spec=["role", "content", "tool_calls"])
+        mock_message.role = "assistant"
+        mock_message.content = " received"
+        mock_message.tool_calls = None
+        result = handler.process_api_response_message(mock_message)
+        assert result.content == " received"
+
+    def test_process_api_response_message_preserves_trailing_space(self):
+        handler = APIToolFormatHandler()
+        mock_message = MagicMock(spec=["role", "content", "tool_calls"])
+        mock_message.role = "assistant"
+        mock_message.content = "What "
+        mock_message.tool_calls = None
+        result = handler.process_api_response_message(mock_message)
+        assert result.content == "What "
+
+    def test_process_api_response_message_preserves_internal_whitespace(self):
+        """Multi-word chunks must preserve all internal whitespace too."""
+        handler = APIToolFormatHandler()
+        mock_message = MagicMock(spec=["role", "content", "tool_calls"])
+        mock_message.role = "assistant"
+        mock_message.content = " I am working\n  correctly."
+        mock_message.tool_calls = None
+        result = handler.process_api_response_message(mock_message)
+        assert result.content == " I am working\n  correctly."
+
+    def test_process_api_response_message_pure_whitespace_becomes_none(self):
+        """A chunk that's entirely whitespace should still collapse to None
+        — we don't want to ship '   ' as a content chunk."""
+        handler = APIToolFormatHandler()
+        mock_message = MagicMock(spec=["role", "content", "tool_calls"])
+        mock_message.role = "assistant"
+        mock_message.content = "    "
+        mock_message.tool_calls = None
+        result = handler.process_api_response_message(mock_message)
+        assert result.content is None
+
 
 class TestAgentLoopStreamingReasoningEvents:
     @pytest.mark.asyncio

@@ -19,10 +19,10 @@ from drydock.core.telemetry.send import TelemetryClient
 from drydock.setup.onboarding.base import OnboardingScreen
 
 PROVIDER_HELP = {
-    "mistral": ("https://console.mistral.ai/codestral/cli", "Mistral AI Studio")
+    "mistral": ("https://console.mistral.ai/codestral/cli", "Mistral AI Studio"),
 }
 CONFIG_DOCS_URL = (
-    "https://github.com/mistralai/mistral-vibe?tab=readme-ov-file#configuration"
+    "https://github.com/fbobe321/drydock?tab=readme-ov-file#configuration"
 )
 
 
