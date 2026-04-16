@@ -2787,6 +2787,25 @@ class AgentLoop:
             self.stats.context_tokens = actual_context_tokens
 
             self._reset_session()
+
+            # Reset agent-level state derived from prior context, same
+            # as /clear. After compact, the OLD messages are gone — so
+            # circuit-breaker counts, loop signals, hot-path mutes,
+            # and read-state tracking based on those messages are stale.
+            # Without this, freq_penalty stickiness etc. would survive
+            # across compact and re-poison the new compacted session.
+            # Keeps _successful_test_runs and stats since those reflect
+            # the user's actual progress (visible in the summary).
+            self._tool_call_history = {}
+            self._consecutive_circuit_breaker_fires = 0
+            self._loop_detected = False
+            self._loop_signal = None
+            self._hot_tool_path = None
+            self._consecutive_empty_turns = 0
+            self._empty_nudge_last_user_idx = -1
+            self._total_error_rounds = 0
+            self._read_file_state = {}
+
             await self.session_logger.save_interaction(
                 self.messages,
                 self.stats,
