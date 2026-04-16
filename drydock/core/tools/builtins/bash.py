@@ -370,7 +370,19 @@ class Bash(
             return False
 
         def is_allowlisted(command: str) -> bool:
-            return any(command.startswith(pattern) for pattern in self.config.allowlist)
+            # Direct prefix match first ("find . -name x" vs "find").
+            if any(command.startswith(pattern) for pattern in self.config.allowlist):
+                return True
+            # Also match on basename so "/usr/bin/find ..." or "./grep ..."
+            # auto-approve alongside bare "find" / "grep". Without this,
+            # the model invoking a fully-qualified path would drop to the
+            # approval prompt unnecessarily (GitHub issue #6).
+            parts = command.split(None, 1)
+            if not parts:
+                return False
+            base = os.path.basename(parts[0])
+            rest = f"{base} {parts[1]}" if len(parts) > 1 else base
+            return any(rest.startswith(pattern) for pattern in self.config.allowlist)
 
         for part in command_parts:
             if is_denylisted(part):

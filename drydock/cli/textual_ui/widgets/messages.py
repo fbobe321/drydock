@@ -163,7 +163,24 @@ class AssistantMessage(StreamingMessageBase):
         self.add_class("assistant-message")
 
     async def append_content(self, content: str) -> None:
-        await super().append_content(_preserve_line_breaks(content))
+        # _preserve_line_breaks doubles \n → \n\n WITHIN a chunk. Streaming
+        # chunks routinely split on the newline boundary ("abc\n" then
+        # "def"), which that function can't upgrade — the single \n stays
+        # and markdown renders it as a space, collapsing lists and
+        # paragraphs. We bridge the gap here by checking the join point:
+        # if the accumulated content ends with a single \n and the new
+        # chunk starts with non-whitespace, inject an extra \n so markdown
+        # sees the paragraph break. Handles issue #5 (v2.6.130).
+        prepared = _preserve_line_breaks(content)
+        if (
+            prepared
+            and self._content.endswith("\n")
+            and not self._content.endswith("\n\n")
+            and not self._content.endswith("\t\n")
+            and prepared[0] not in ("\n", " ", "\t")
+        ):
+            prepared = "\n" + prepared
+        await super().append_content(prepared)
 
     def compose(self) -> ComposeResult:
         if self._content:

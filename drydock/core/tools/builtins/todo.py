@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from enum import StrEnum, auto
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from drydock.core.tools.base import (
     BaseTool,
@@ -91,6 +91,19 @@ class TodoArgs(BaseModel):
                     result.append({"content": str(item), "status": "pending"})
             return result
         return v
+
+    @model_validator(mode="after")
+    def _infer_write_action(self) -> "TodoArgs":
+        """Gemma 4 often calls todo with a todos list but forgets
+        action='write' (leaving it at the default 'read'). Drydock
+        would then silently do a read, return 0 todos, and the model
+        would loop trying to write and read empty. If todos is
+        populated, treat that as a write — the caller's intent is
+        clear. See GitHub issue #4.
+        """
+        if self.todos and self.action == "read":
+            object.__setattr__(self, "action", "write")
+        return self
 
 
 class TodoResult(BaseModel):
