@@ -1462,7 +1462,6 @@ class AgentLoop:
             content = str(msg.content or "")
             if len(content) <= SOFT_CAP_BYTES:
                 continue
-            # Idempotent guard — already truncated by us
             if "[…truncated " in content and "bytes…]" in content:
                 continue
             head = content[:HEAD_BYTES]
@@ -1471,6 +1470,38 @@ class AgentLoop:
             msg.content = (
                 f"{head}\n[…truncated {removed} bytes…]\n{tail}"
             )
+
+        # Also truncate old ASSISTANT tool_call arguments (the REQUEST
+        # side). Every write_file call carries the FULL file content in
+        # function.arguments — this was the #1 context consumer (89K
+        # tokens in the v2.6.102 session that rotted at prompt 23,
+        # pushing total context to 131K = 100% of Gemma 4's limit).
+        # Claude Code's microCompact targets BOTH tool results AND
+        # tool_use blocks; our old code only shrunk results.
+        # Keep the last KEEP_RECENT assistant-with-tools messages full;
+        # truncate older ones' arguments to just {tool_name, path}.
+        assistant_tc_idxs = [
+            i for i, m in enumerate(self.messages)
+            if m.role == Role.assistant and m.tool_calls
+        ]
+        if len(assistant_tc_idxs) > KEEP_RECENT:
+            for idx in assistant_tc_idxs[:-KEEP_RECENT]:
+                msg = self.messages[idx]
+                if not msg.tool_calls:
+                    continue
+                for tc in msg.tool_calls:
+                    if not tc.function or not tc.function.arguments:
+                        continue
+                    args = tc.function.arguments
+                    if len(args) <= SOFT_CAP_BYTES:
+                        continue
+                    if "[…truncated" in args:
+                        continue
+                    # Keep just enough to identify what was called
+                    tc.function.arguments = (
+                        args[:HEAD_BYTES]
+                        + f"\n[…truncated {len(args) - HEAD_BYTES} bytes…]"
+                    )
 
     def _sanitize_message_ordering(self) -> None:
         """Fix any role ordering violations before sending to vLLM/Mistral.
