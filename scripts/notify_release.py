@@ -8,6 +8,15 @@ BOT_TOKEN = "8488479213:AAGd2tMUrqc-Xse14IQ6yfoMudAAal7odio"
 CHAT_ID = 8431425848
 
 
+def _escape_markdown(text: str) -> str:
+    """Escape the Telegram legacy-Markdown special chars that commonly
+    appear in commit messages: _ * ` [ ]. Telegram's 400 Bad Request
+    response fires when these are unbalanced."""
+    for ch in ("_", "*", "`", "[", "]"):
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
 def send_telegram(message: str, parse_mode: str = "Markdown"):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     params = {
@@ -21,6 +30,17 @@ def send_telegram(message: str, parse_mode: str = "Markdown"):
         urllib.request.urlopen(url, data, timeout=10)
     except Exception as e:
         print(f"Telegram send failed: {e}")
+        # Retry in plain text if Markdown parse failed — this fires when
+        # a commit message has unbalanced underscores from identifiers
+        # like `write_file` or `search_replace`.
+        if parse_mode:
+            fallback_params = {"chat_id": CHAT_ID, "text": message}
+            fallback_data = urllib.parse.urlencode(fallback_params).encode()
+            try:
+                urllib.request.urlopen(url, fallback_data, timeout=10)
+                print("Retried in plain text — delivered.")
+            except Exception as e2:
+                print(f"Plain-text retry also failed: {e2}")
 
 
 if __name__ == "__main__":

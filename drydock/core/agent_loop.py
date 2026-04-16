@@ -1556,8 +1556,18 @@ class AgentLoop:
 
         if last.role == Role.user:
             content = str(last.content or "")
-            # System note / loop nudge → act immediately
-            if "[SYSTEM" in content:
+            # System note / loop nudge → act immediately.
+            # BUT only when the whole message is the note. _auto_route_task
+            # appends "[SYSTEM: PROJECT FILES ...]" AFTER the user's actual
+            # prompt ("sha1 hash\n\n[SYSTEM: ...]"), and turning thinking
+            # off on those caused the 2026-04-16 stress regression: Gemma 4
+            # returned empty responses for every prompt after the initial
+            # build, only recovering after /clear (which wiped the context
+            # including the project-file injection). Only strip thinking
+            # when the message STARTS with [SYSTEM: — i.e. it's a pure
+            # injection, not a user ask with context appended.
+            stripped = content.lstrip()
+            if stripped.startswith("[SYSTEM"):
                 return "off"
             # Real user message → full thinking (they're asking something new)
             return base

@@ -104,6 +104,24 @@ COMMIT_MSG=$(git log --oneline -n 10 --pretty=format:'%s' 2>/dev/null \
 if [ -z "$COMMIT_MSG" ]; then
     COMMIT_MSG=$(git log --oneline -1 2>/dev/null | cut -d' ' -f2-)
 fi
+
+# Append highest step reached by the most recent 2000-step stress run.
+# Helps the release note show progress: "last run got to 42/1658 before
+# the regression — this fix should push past it."
+LAST_STRESS_LOG=$(ls -1t /tmp/stress_2000_*.log 2>/dev/null | head -1)
+if [ -n "$LAST_STRESS_LOG" ]; then
+    STRESS_MAX=$(grep -oE '^\[ *[0-9]+/[0-9]+\]' "$LAST_STRESS_LOG" 2>/dev/null \
+        | tr -d '[] ' | awk -F/ '{print $1}' | sort -n | tail -1)
+    STRESS_TOTAL=$(grep -oE '^\[ *[0-9]+/[0-9]+\]' "$LAST_STRESS_LOG" 2>/dev/null \
+        | tr -d '[] ' | awk -F/ '{print $2}' | head -1)
+    if [ -n "$STRESS_MAX" ] && [ -n "$STRESS_TOTAL" ]; then
+        STRESS_LOG_NAME=$(basename "$LAST_STRESS_LOG")
+        COMMIT_MSG="${COMMIT_MSG}
+
+Previous stress run (${STRESS_LOG_NAME}) reached ${STRESS_MAX}/${STRESS_TOTAL} steps before stopping."
+    fi
+fi
+
 $PYTHON "$DRYDOCK_SRC/scripts/notify_release.py" "$NEW_VERSION" "$COMMIT_MSG" 2>/dev/null || true
 
 log "Published drydock-cli $NEW_VERSION to PyPI"
