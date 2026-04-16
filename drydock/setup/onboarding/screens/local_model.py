@@ -26,39 +26,82 @@ _DEFAULT_API_BASE = "http://localhost:8000/v1"
 _DEFAULT_MODEL = "local"
 
 
-def _write_local_config(api_base: str, model_name: str) -> Path:
-    """Write a minimal local-model config to ~/.drydock/config.toml.
+def _detect_model_name(api_base: str) -> str | None:
+    """Try to detect the model name from the vLLM/Ollama server.
 
-    Adds a 'local' provider pointing at api_base, a 'local' model alias
-    pointing at the user's model name, and sets it as the active model.
-    Doesn't touch the existing Mistral defaults — the user can still
-    add a Mistral key later if they want.
+    Returns the first model ID if the server responds, else None.
+    """
+    import urllib.request
+    url = f"{api_base.rstrip('/')}/models"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            import json as _json
+            data = _json.loads(resp.read())
+            models = data.get("data", [])
+            if models:
+                return models[0].get("id")
+    except Exception:
+        pass
+    return None
+
+
+def _write_local_config(api_base: str, model_name: str) -> Path:
+    """Merge a local-model provider into ~/.drydock/config.toml.
+
+    PRESERVES existing config (read → merge → write) so defaults,
+    existing providers, and user customisations survive. Adds the 'local'
+    provider and model, sets active_model to point at it. If the config
+    file doesn't exist yet, creates a full default one from VibeConfig.
     """
     config_dir = Path.home() / ".drydock"
     config_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = config_dir / "config.toml"
-    payload = {
-        "active_model": model_name or _DEFAULT_MODEL,
-        "providers": [
-            {
-                "name": "local",
-                "api_base": api_base,
-                "api_key_env_var": "",
-                "backend": "generic",
-            },
-        ],
-        "models": [
-            {
-                "name": model_name or _DEFAULT_MODEL,
-                "provider": "local",
-                "alias": model_name or _DEFAULT_MODEL,
-                "input_price": 0.0,
-                "output_price": 0.0,
-            },
-        ],
-    }
+
+    # Load existing config (or start from defaults)
+    existing: dict = {}
+    if cfg_path.is_file():
+        try:
+            import tomli
+            with cfg_path.open("rb") as f:
+                existing = tomli.load(f)
+        except Exception:
+            pass
+
+    # Ensure providers / models lists exist
+    providers = existing.get("providers", [])
+    if not isinstance(providers, list):
+        providers = []
+    models = existing.get("models", [])
+    if not isinstance(models, list):
+        models = []
+
+    # Remove any previous 'local' entries (idempotent)
+    providers = [p for p in providers if p.get("name") != "local"]
+    models = [m for m in models if m.get("provider") != "local"]
+
+    # Add the new local provider + model
+    providers.append({
+        "name": "local",
+        "api_base": api_base,
+        "api_key_env_var": "",
+        "backend": "generic",
+    })
+    model_alias = model_name or _DEFAULT_MODEL
+    models.append({
+        "name": model_alias,
+        "provider": "local",
+        "alias": model_alias,
+        "input_price": 0.0,
+        "output_price": 0.0,
+    })
+
+    existing["providers"] = providers
+    existing["models"] = models
+    existing["active_model"] = model_alias
+
     with cfg_path.open("wb") as f:
-        tomli_w.dump(payload, f)
+        tomli_w.dump(existing, f)
     return cfg_path
 
 
@@ -129,7 +172,13 @@ class LocalModelScreen(OnboardingScreen):
 
     def _save_and_finish(self) -> None:
         api_base = self.api_base_input.value.strip() or _DEFAULT_API_BASE
-        model_name = self.model_input.value.strip() or _DEFAULT_MODEL
+        model_name = self.model_input.value.strip()
+        if not model_name:
+            detected = _detect_model_name(api_base)
+            if detected:
+                model_name = detected
+            else:
+                model_name = _DEFAULT_MODEL
         try:
             _write_local_config(api_base, model_name)
         except OSError as err:
