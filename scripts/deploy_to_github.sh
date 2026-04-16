@@ -91,4 +91,18 @@ EOF
 # Push
 git push 2>&1 | grep -v "^remote:" || true
 
+# Tag the GitHub-side commit with vX.Y.Z if a version was passed.
+# Local tags point to local dev commits that don't exist on the remote
+# (we use rsync + Daily sync commits, so git history diverges), so local
+# tags can't be pushed — we tag the synthetic sync commit instead so
+# GitHub's Releases / tag view stays current. See learning 2026-04-16.
+RELEASE_VERSION="${1:-${RELEASE_VERSION:-}}"
+if [ -n "$RELEASE_VERSION" ]; then
+    git -c user.name="Drydock Deploy" -c user.email="deploy@drydock" \
+        tag -a "v$RELEASE_VERSION" -m "Release v$RELEASE_VERSION" 2>/dev/null || \
+        log "WARN: tag v$RELEASE_VERSION already exists on remote — skipping"
+    git push origin "v$RELEASE_VERSION" 2>&1 | grep -v "^remote:" || true
+    log "Tagged remote with v$RELEASE_VERSION"
+fi
+
 log "Deploy complete. $(git log --oneline -1)"

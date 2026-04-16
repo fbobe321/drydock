@@ -393,17 +393,19 @@ class WriteFile(
         file_path, file_existed, content_bytes = self._prepare_and_validate_path(args)
 
         # Read-before-Write enforcement (Claude Code tool contract).
-        # Overwriting a file the model hasn't read this session is the
-        # root cause of the oscillation loop: model writes broken V1,
-        # gets syntax warning, writes broken V2, gets different warning,
-        # writes V1 again, etc. Forcing it to read first means it CAN
-        # see the current state and do targeted search_replace instead.
-        # Returned as a structured no-op result (not ToolError) so the
-        # model doesn't panic — per Claude Code pattern and per
-        # feedback_no_tool_errors_for_loop_detection.md.
+        # Only applies when overwrite=False — if the caller explicitly
+        # passed overwrite=True (the default), honor that intent and do
+        # the write. Blocking an explicit overwrite on "read it first"
+        # caused an infinite loop in the 2026-04-16 stress run: a stale
+        # 22-byte __init__.py from a prior test triggered the advisory,
+        # and the model kept retrying write_file with overwrite=True —
+        # each call returned bytes_written=0 with the same reminder,
+        # the model never escaped, and drydock eventually died from
+        # consecutive API errors. Per feedback_no_tool_errors_for_loop_detection.md
+        # the safety net must not become its own loop source.
         read_state = ctx.read_file_state if ctx else None
         path_key = str(file_path)
-        if file_existed and read_state is not None:
+        if file_existed and read_state is not None and not args.overwrite:
             prior = read_state.get(path_key)
             current_mtime = 0
             try:
@@ -422,7 +424,8 @@ class WriteFile(
                         "see the current contents, then either:\n"
                         "  • edit with search_replace for targeted changes, "
                         "or\n"
-                        "  • call write_file again to do a full rewrite.\n"
+                        "  • call write_file again with overwrite=true to "
+                        "do a full rewrite.\n"
                         "This write was NOT applied to disk.\n"
                         "</system-reminder>"
                     ),

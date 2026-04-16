@@ -67,9 +67,12 @@ git commit -m "Bump version to $NEW_VERSION for PyPI release
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>" 2>/dev/null || true
 
 # --- Deploy to GitHub too ---
+# Pass NEW_VERSION so deploy_to_github.sh can tag the synthetic sync
+# commit — local tags can't be pushed because our rsync + Daily-sync
+# approach means local and remote histories are disjoint.
 if [ -x "$DRYDOCK_SRC/scripts/deploy_to_github.sh" ]; then
     log "Deploying to GitHub..."
-    "$DRYDOCK_SRC/scripts/deploy_to_github.sh" 2>&1 || log "GitHub deploy failed (non-fatal)"
+    "$DRYDOCK_SRC/scripts/deploy_to_github.sh" "$NEW_VERSION" 2>&1 || log "GitHub deploy failed (non-fatal)"
 fi
 
 # --- Git tag ---
@@ -93,7 +96,14 @@ fi
 rm -rf "$TMPVENV"
 
 # --- Send Telegram notification ---
-COMMIT_MSG=$(git log --oneline -1 2>/dev/null | cut -d' ' -f2-)
+# Pull the most recent meaningful commit (skip version-bump and auto-release
+# commits so the summary actually describes what changed).
+COMMIT_MSG=$(git log --oneline -n 10 --pretty=format:'%s' 2>/dev/null \
+    | grep -vE '^(Bump version|v[0-9]+\.[0-9]+\.[0-9]+:|Daily sync|Auto-release)' \
+    | head -1)
+if [ -z "$COMMIT_MSG" ]; then
+    COMMIT_MSG=$(git log --oneline -1 2>/dev/null | cut -d' ' -f2-)
+fi
 $PYTHON "$DRYDOCK_SRC/scripts/notify_release.py" "$NEW_VERSION" "$COMMIT_MSG" 2>/dev/null || true
 
 log "Published drydock-cli $NEW_VERSION to PyPI"
