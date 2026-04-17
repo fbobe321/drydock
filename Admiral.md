@@ -118,7 +118,22 @@ Detectors (Phase 1):
    `write_file`/`search_replace`/`edit_file` → inject "write code or
    tell the user you're stuck."
 
-### Phase 2 — DESIGNED (target v2.6.139+)
+### Phase 2 — SHIPPED (v2.6.139)
+
+* `drydock/admiral/llm_analyzer.py` — `analyze(agent_loop, finding)`
+  sends the last 12 turns + the finding code to the local Gemma 4
+  backend (reuses `AgentLoop.backend`, temperature 0.1, 400 max
+  tokens). Expects `DIRECTIVE: ...` or `STUMPED: ...` response.
+* `drydock/admiral/opus_escalator.py` — `escalate(finding, messages)`
+  tries Anthropic SDK (if `ANTHROPIC_API_KEY` set) then falls back to
+  `claude -p "<prompt>"` subprocess. Capped at 3 calls per session,
+  90s timeout per call. Model: `claude-opus-4-7`.
+* `drydock/admiral/worker.py::_resolve_directive` — escalation ladder:
+  1. local LLM (reuses agent's backend), 2. Opus if stumped,
+  3. canned fallback directive. Every source logged to
+  `admiral_history.log` as a `directive-source` entry.
+
+### Phase 2 — ORIGINAL DESIGN (kept for reference)
 
 Escalation ladder for when heuristics aren't enough:
 
@@ -165,22 +180,34 @@ Open design questions for Phase 2:
 
 ## 9. Continuity Notes (if this session is lost)
 
-If you restart mid-Phase-2:
-* **What ships:** `drydock/admiral/` (Phase 1, working) + PRD (this
-  file). Check `git log --oneline -20` — Phase 1 commit should name
-  "Admiral Phase 1".
-* **What's missing:** `drydock/admiral/llm_analyzer.py` (local LLM)
-  and `drydock/admiral/opus_escalator.py` (Claude Code fallback).
-  Neither exists yet — start them from the Phase 2 section above.
-* **Audit log:** `~/.vibe/logs/admiral_history.log` shows every
-  intervention Admiral has applied in real user sessions.
-* **User directives recorded so far in this session:**
-  - Architecture: option C (in-process Textual worker).
-  - Approval: auto-apply, no Y/N dialog.
-  - Phase 2: Admiral uses local LLM first; escalates to Claude Code
-    (Opus) when stumped.
-  - Keep updating this PRD as work progresses so a session loss
-    doesn't cost context.
+**Latest shipped:** v2.6.139 — Admiral Phase 1 + Phase 2 both in PyPI.
+
+Files that exist (check `git log --oneline -20`):
+* `drydock/admiral/{__init__,detectors,interventions,history,worker,llm_analyzer,opus_escalator}.py`
+* `tests/test_admiral.py` (5 tests, all passing)
+* `drydock/cli/textual_ui/app.py::on_mount` — calls `admiral.attach()`
+* `Admiral.md` — this file
+
+**Audit log:** `~/.vibe/logs/admiral_history.log` shows every
+intervention Admiral has applied in real user sessions, including
+the `directive-source` for each (local-llm / opus / canned).
+
+**User directives recorded in this build session:**
+* Architecture: option C (in-process Textual worker).
+* Approval: auto-apply, no Y/N dialog.
+* Phase 2: Admiral uses local LLM first; escalates to Claude Code
+  (Opus) when stumped. SHIPPED v2.6.139.
+* Keep updating this PRD as work progresses so a session loss
+  doesn't cost context.
+
+**Open follow-ups (Phase 3 / nice-to-have):**
+* TUI widget showing recent Admiral findings + outcomes (audit view).
+* Learning-rate scheduler: track manual overrides, dampen
+  auto-apply in stable mode.
+* Session vs Global memory split (PRD §6) — session wiped per run,
+  global only promoted after ≥2 successful sessions.
+* More detectors: hallucinated tool names, PRD/spec drift,
+  "edit-undo-edit" ping-pong on the same file.
 
 ***
 
