@@ -643,11 +643,13 @@ class AgentLoop:
             tool_turns = 0
             api_error_count = 0
             has_made_edit = False  # Track if model has used search_replace/write_file
-            # Per-user-prompt wall-clock budget. Gemma 4 routinely
-            # spends 60+ minutes on a single prompt without closing it
-            # — looks like work is happening, but the user is staring
-            # at a non-responsive TUI. Cap at 15 minutes per prompt.
-            PER_PROMPT_BUDGET_SEC = 15 * 60
+            # Per-user-prompt wall-clock budget. Gemma 4 can spend 60+
+            # minutes on a single prompt without closing it, but user
+            # feedback (issue #9) showed 15 min was cutting off legitimate
+            # "really difficult" builds. Bumped to 30 min — long enough
+            # for a multi-file refactor, short enough that a runaway loop
+            # still hands control back before the user gives up.
+            PER_PROMPT_BUDGET_SEC = 30 * 60
             _prompt_start = time.perf_counter()
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
@@ -681,27 +683,26 @@ class AgentLoop:
                         stopped_by_middleware=True,
                     )
                     return
-                if tool_turns == 15:
+                if tool_turns == 30:
                     self._inject_system_note(
                         f"You have used {tool_turns} tool calls on this "
                         "single user request. Start wrapping up — make "
                         "your next 3-5 calls count, then stop with a "
                         "summary so the user can review."
                     )
-                elif tool_turns == 25:
+                elif tool_turns == 60:
                     self._inject_system_note(
                         f"You have used {tool_turns} tool calls on this "
                         "single request. STOP NOW. Emit a final text "
                         "response summarizing what you did (or what is "
                         "blocked) so the user can take the next step."
                     )
-                elif tool_turns >= 50:
+                elif tool_turns >= 100:
                     # Hard end-of-turn: synthesize a user-facing message
-                    # and stop. Was 35 but that truncated initial builds
-                    # (tool_agent stress: agent.py never got written,
-                    # breaking the whole subsequent run). 50 is generous
-                    # enough for a full build while still preventing
-                    # infinite loops.
+                    # and stop. Was 50 but issue #9 showed "really
+                    # difficult" tasks legitimately need more than 50
+                    # tool calls. 100 preserves the runaway-loop safety
+                    # while giving complex builds room to finish.
                     yield AssistantEvent(
                         content=(
                             f"\n\n[Drydock: stopped after {tool_turns} tool "
