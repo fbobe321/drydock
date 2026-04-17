@@ -86,3 +86,101 @@ Drydock is a highly modular, state-driven execution loop.
 
 ***
 
+## 8. Implementation Status (2026-04-17)
+
+### Phase 1 — SHIPPED (module present in v2.6.137, wiring in flight for v2.6.138)
+
+Architecture: **in-process** (option C). Admiral runs as an asyncio.Task
+inside the Textual app's event loop — same process as the agent, no IPC.
+Auto-apply default (no Y/N approval) per user directive.
+
+Files:
+* `drydock/admiral/__init__.py` — public API (`attach(agent_loop)`).
+* `drydock/admiral/detectors.py` — `detect_tool_call_loop`,
+  `detect_struggle`, `run_all`. Pure functions; return `Finding(code, directive)`.
+* `drydock/admiral/interventions.py` — `apply(agent_loop, finding)` →
+  calls `AgentLoop._inject_system_note` + appends to audit log.
+* `drydock/admiral/history.py` — append-only timestamped log at
+  `~/.vibe/logs/admiral_history.log`.
+* `drydock/admiral/worker.py` — `AdmiralWorker` async task that polls
+  every 5s, dedup window 60s per finding code.
+* `tests/test_admiral.py` — 5 tests for detector correctness.
+
+Integration:
+* `drydock/cli/textual_ui/app.py::on_mount` — `admiral.attach(agent_loop)`
+  after approval callbacks are set. Stored on `self._admiral`. Any Admiral
+  import/startup error is logged but never prevents the TUI from starting.
+
+Detectors (Phase 1):
+1. **Loop detection** — 3+ identical (tool_name + arguments) calls in a
+   row → inject directive telling the model to stop the loop.
+2. **Struggle detection** — 20+ non-write tool calls since the last
+   `write_file`/`search_replace`/`edit_file` → inject "write code or
+   tell the user you're stuck."
+
+### Phase 2 — DESIGNED (target v2.6.139+)
+
+Escalation ladder for when heuristics aren't enough:
+
+```
+[Admiral detector fires]
+        |
+        v
+[local Gemma 4 meta-analysis] — send the last N turns + the finding to
+                                the local vLLM endpoint asking "what
+                                is really going wrong? what directive
+                                would unstick the agent?"
+        |
+        v (low confidence / model also stumped)
+[Claude Code (Opus) escalation] — shell out to `claude -p "<analysis>"`
+                                   (or the Anthropic SDK) for a second
+                                   opinion. Cap at N escalations per
+                                   session.
+        |
+        v
+[Admiral applies Opus's directive via _inject_system_note]
+```
+
+Open design questions for Phase 2:
+* Local LLM reuse: should Admiral reuse the agent's own backend
+  connection, or open its own at a different temperature?
+  → **Lean:** reuse `AgentLoop.backend` with a separate message list
+  and lower temperature (0.1 vs 0.7) so the analysis is deterministic.
+* Opus access: `claude -p` CLI or `anthropic` SDK?
+  → **Lean:** SDK when `ANTHROPIC_API_KEY` is set; fall back to
+  `claude -p` when not (so users who already have Claude Code auth
+  don't need to re-enter a key).
+* Rate-limiting: prevent Opus blast during a bad run. Max 3 escalations
+  per session by default. Override via env var.
+
+### Phase 3 — IDEAS (not started)
+
+* **Learning-rate scheduler (PRD §4.1.D)** — cold start accepts many
+  tweaks, stable mode accepts few. Implement by tracking how many
+  interventions the user manually undid via slash-commands.
+* **Session vs Global memory (PRD §6)** — session state wiped per run;
+  global state only promoted if a fix worked across ≥2 sessions.
+* **TUI widget** — a collapsible Admiral panel showing recent findings
+  and their outcomes, so the user can audit the supervisor.
+
+## 9. Continuity Notes (if this session is lost)
+
+If you restart mid-Phase-2:
+* **What ships:** `drydock/admiral/` (Phase 1, working) + PRD (this
+  file). Check `git log --oneline -20` — Phase 1 commit should name
+  "Admiral Phase 1".
+* **What's missing:** `drydock/admiral/llm_analyzer.py` (local LLM)
+  and `drydock/admiral/opus_escalator.py` (Claude Code fallback).
+  Neither exists yet — start them from the Phase 2 section above.
+* **Audit log:** `~/.vibe/logs/admiral_history.log` shows every
+  intervention Admiral has applied in real user sessions.
+* **User directives recorded so far in this session:**
+  - Architecture: option C (in-process Textual worker).
+  - Approval: auto-apply, no Y/N dialog.
+  - Phase 2: Admiral uses local LLM first; escalates to Claude Code
+    (Opus) when stumped.
+  - Keep updating this PRD as work progresses so a session loss
+    doesn't cost context.
+
+***
+
