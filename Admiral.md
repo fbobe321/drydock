@@ -616,19 +616,38 @@ applied, including the `directive-source` (local-llm / opus / canned).
   started ~Apr-16, currently at ~826/1658 (approaching 50%).
   DO NOT interrupt.
 
-**Open follow-ups:**
-* **Phase 3a (designed, not started):** hyperparameter adaptation.
-  `drydock/admiral/{task_classifier,metrics,tuning,policy}.py` to
-  be created. See §8 Phase 3a spec.
-* **Phase 3b (designed, not started):** code proposals. Proposer →
-  validator → staged local branch; never auto-commits. User
-  approves via `/admiral-apply <branch>`. See §8 Phase 3b.
-* systemd the admiral_probe.
+**Open follow-ups (post-observation period):**
+* systemd the admiral_probe (currently `nohup &`, dies on logout).
 * TUI widget showing recent Admiral findings (in-app audit view).
+* More detectors driven by observed data: hallucinated tool names,
+  edit-undo-edit ping-pong, PRD/spec drift.
 * Learning-rate scheduler (Phase 4).
 * Session vs Global memory split (PRD §6).
-* More detectors: hallucinated tool names, PRD/spec drift,
-  edit-undo-edit ping-pong.
+* Tune Phase 3a knob bounds + Phase 3b promotion criteria from real
+  finding-rate data after the 24h observation window.
+
+## 10. Observation mode (active 2026-04-17 → 2026-04-18)
+
+Per user directive ("let's slow down, and watch for now"). All
+Admiral feature work is paused. What's still running automatically:
+
+* **Stress-test status check** every 30 min (Telegram).
+* **GitHub issue check** every hour for fbobe321 issues.
+* **stress_watcher.py** on the live stress run (PID 1860693) —
+  detects stalls/timeout-spikes/completion, emits Telegram + audit log.
+* **admiral_probe.py** on `192.168.50.22:8878` — dashboard tab
+  consuming it.
+* **Admiral itself** is live in every drydock TUI session — Phase 1
+  + Phase 2 fully active, Phase 3a tuning enabled (no-op until
+  `admiral_tuning.json` gets written), Phase 3a policy gated behind
+  `DRYDOCK_ADMIRAL_POLICY=1`, Phase 3b proposer gated behind
+  `DRYDOCK_ADMIRAL_PROPOSER=1` (both default OFF).
+
+**Cron `7a2a593c` fires Sat 2026-04-18 18:13 CDT** — at that point I
+will read `~/.drydock/logs/admiral_history.log` event counts, scan
+`~/.drydock/logs/admiral_metrics.jsonl`, check the dashboard, and
+propose 1–2 next features grounded in what actually fired in the
+past 24h. **No new code without observed evidence it's needed.**
 
 ***
 
