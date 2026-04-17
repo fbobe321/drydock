@@ -288,6 +288,7 @@ class VibeApp(App):  # noqa: PLR0904
         self._last_escape_time: float | None = None
         self._banner: Banner | None = None
         self._whats_new_message: WhatsNewMessage | None = None
+        self._admiral = None  # type: ignore[var-annotated]
         self._cached_messages_area: Widget | None = None
         self._cached_chat: ChatScroll | None = None
         self._cached_loading_area: Widget | None = None
@@ -352,6 +353,14 @@ class VibeApp(App):  # noqa: PLR0904
         self.agent_loop.set_approval_callback(self._approval_callback)
         self.agent_loop.set_user_input_callback(self._user_input_callback)
         self._refresh_profile_widgets()
+
+        try:
+            from drydock.admiral import attach as _admiral_attach
+            self._admiral = _admiral_attach(self.agent_loop)
+        except Exception as e:
+            # Admiral must never prevent the TUI from starting.
+            import logging
+            logging.getLogger(__name__).warning("Admiral failed to start: %s", e)
 
         chat_input_container = self.query_one(ChatInputContainer)
         chat_input_container.focus_input()

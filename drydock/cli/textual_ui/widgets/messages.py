@@ -114,32 +114,63 @@ class StreamingMessageBase(Static):
 _INLINE_ENUM_RE = re.compile(r" (?=\d{1,2}\. [A-Z])")
 _INLINE_HEADING_RE = re.compile(r" (?=\*\*[A-Z][A-Za-z ]{1,20}:\*\*)")
 _INLINE_DASH_BULLET_RE = re.compile(r"(?<=[.!?]) (?=- [A-Z])")
+_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?]) (?=[A-Z])")
+_INLINE_CAPWORD_HEADING_RE = re.compile(
+    r"(?<=[.!?]) (?=[A-Z][A-Za-z]{1,15}:\s)"
+)
+
+
+def _sentence_chunks(text: str, group: int = 2) -> str:
+    """Break a long flat string into paragraphs every `group` sentences.
+
+    Conservative: only fires when there are at least 2 sentences to
+    split between. Splits on real sentence boundaries (`. `, `! `, `? `
+    followed by a capital).
+    """
+    sentences = _SENTENCE_BOUNDARY_RE.split(text)
+    if len(sentences) < 2:
+        return text
+    paragraphs: list[str] = []
+    for i in range(0, len(sentences), group):
+        paragraphs.append(" ".join(sentences[i:i + group]))
+    return "\n\n".join(paragraphs)
 
 
 def _break_walls_of_text(text: str) -> str:
-    """Insert line breaks before inline enumerations and bold headings
-    in a flat string with no newlines.
+    """Make flat, low-newline assistant responses readable.
 
-    Gemma 4 often emits responses like `Changes: 1. Added X 2. Added Y
-    3. Fixed Z` as a single paragraph with zero `\\n`. The Markdown
-    widget renders that as one long line, which users correctly call
-    "a wall of text". We can't insert newlines the model didn't write
-    inside a code fence, but we can break up inline numbered items
-    (` 1. Foo 2. Bar `) and inline bold headings (` **Usage:** `) into
-    separate markdown blocks by injecting `\\n` before the enumeration
-    or heading marker. Conservative patterns only — must match a space
-    followed by `\\d+\\. [A-Z]` or `**Heading:**`.
+    Gemma 4 regularly emits responses with zero `\\n` — either a block
+    of enumerated items jammed together (`Changes: 1. A 2. B 3. C`) or
+    a long paragraph of prose (`I fixed X. The Y class now uses Z.
+    All tests pass.`). The Markdown widget renders both as one line.
 
-    Runs OUTSIDE code fences only.
+    Strategy, applied in order:
+    1. Break before inline `**Heading:**` markers.
+    2. Break before inline numbered items (` 1. Foo 2. Bar`).
+    3. Break before inline `CapWord:` mini-headings (`Changes: ...`).
+    4. If still a wall (long + zero newlines), split every 2 sentences
+       at real sentence boundaries so readers get paragraph breaks.
+
+    Conservative guards: nothing fires unless the chunk is >200 chars
+    and has fewer than 3 newlines. Short responses and already-
+    structured markdown pass through untouched.
     """
-    if not text or "\n" in text and text.count("\n") >= 2:
+    if not text or len(text) < 200:
         return text
-    # Only intervene for "wall of text" — long, low-newline content.
-    if len(text) < 200:
+    nl = text.count("\n")
+    if nl >= 3:
         return text
-    out = _INLINE_ENUM_RE.sub("\n", text)
-    out = _INLINE_HEADING_RE.sub("\n\n", out)
+    out = _INLINE_HEADING_RE.sub("\n\n", text)
+    out = _INLINE_ENUM_RE.sub("\n", out)
     out = _INLINE_DASH_BULLET_RE.sub("\n", out)
+    out = _INLINE_CAPWORD_HEADING_RE.sub("\n\n", out)
+    # If inline markers didn't produce any breaks AND the text is long
+    # enough that one paragraph hurts readability, split at sentence
+    # boundaries. group=1 = each sentence on its own paragraph (most
+    # aggressive — user-requested in issue #8 reopen). Threshold is
+    # 250 so medium-length responses also get paragraphs.
+    if "\n" not in out and len(out) > 250:
+        out = _sentence_chunks(out, group=1)
     return out
 
 
@@ -166,10 +197,9 @@ def _preserve_line_breaks(text: str) -> str:
     """
     if not text:
         return text
-    # First pass: if the whole chunk has no newlines, try to rescue
-    # inline-enumeration wall-of-text.
-    if "\n" not in text:
-        text = _break_walls_of_text(text)
+    # First pass: rescue wall-of-text responses (flat prose, inline
+    # enumerations, inline bold headings). See _break_walls_of_text.
+    text = _break_walls_of_text(text)
     out: list[str] = []
     in_fence = False
     lines = text.split("\n")
