@@ -40,7 +40,7 @@ from pathlib import Path
 import pexpect
 
 DRYDOCK_BIN = "/home/bobef/miniforge3/envs/drydock/bin/drydock"
-SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
+SESSION_ROOT = Path.home() / ".drydock" / "logs" / "session"
 
 
 def sh(cmd: str, cwd: str | None = None, timeout: int = 300) -> tuple[int, str, str]:

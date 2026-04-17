@@ -109,13 +109,13 @@ def update_changelog(current_version: str, new_version: str) -> None:
     prompt = f"""Fill the new CHANGELOG.md section for version {new_version} (the one that was just added).
 
 Rules:
-- Use only commits that touch the `vibe` folder in this repo since version {current_version}. Inspect git history to list relevant changes.
+- Use only commits that touch the `drydock` folder in this repo since version {current_version}. Inspect git history to list relevant changes.
 - Follow the existing file convention: Keep a Changelog format with ### Added, ### Changed, ### Fixed, ### Removed. One bullet per line, concise. Match the tone and style of the entries already in the file.
 - Do not mention commit hashes or PR numbers.
 - Remove any subsection that has no bullets (leave no empty ### Added / ### Changed / etc)."""
     try:
         result = subprocess.run(
-            ["vibe", "-p", prompt], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            ["drydock", "-p", prompt], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         if result.returncode != 0:
             raise RuntimeError("Failed to auto-fill CHANGELOG.md")
@@ -127,14 +127,14 @@ Rules:
 
 
 def fill_whats_new_message(new_version: str) -> None:
-    whats_new_path = Path("vibe/whats_new.md")
+    whats_new_path = Path("drydock/whats_new.md")
     if not whats_new_path.exists():
         raise FileNotFoundError("whats_new.md not found in current directory")
 
     whats_new_path.write_text("")
 
     print("Filling whats_new.md...")
-    prompt = f"""Fill vibe/whats_new.md using only the CHANGELOG.md section for version {new_version}.
+    prompt = f"""Fill drydock/whats_new.md using only the CHANGELOG.md section for version {new_version}.
 
 Rules:
 - Include only the most important user-facing changes: visible CLI/UI behavior, new commands or key bindings, UX improvements. Exclude internal refactors, API-only changes, and dev/tooling updates.
@@ -143,7 +143,7 @@ Rules:
 - Do not copy the full changelog; summarize only what matters to someone reading "what's new" in the app."""
     try:
         result = subprocess.run(
-            ["vibe", "-p", prompt], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            ["drydock", "-p", prompt], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         if result.returncode != 0:
             raise RuntimeError("Failed to auto-fill whats_new.md")
@@ -206,9 +206,9 @@ Examples:
             ".vscode/launch.json",
             [(f'"version": "{current_version}"', f'"version": "{new_version}"')],
         )
-        # Update vibe/core/__init__.py
+        # Update drydock/core/__init__.py
         update_hard_values_files(
-            "vibe/__init__.py",
+            "drydock/__init__.py",
             [(f'__version__ = "{current_version}"', f'__version__ = "{new_version}"')],
         )
         # Update tests/acp/test_initialize.py

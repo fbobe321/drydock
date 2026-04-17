@@ -20,10 +20,10 @@ from drydock.core.types import BaseEvent, ToolResultEvent
 
 CANCELLATION_TAG = "user_cancellation"
 TOOL_ERROR_TAG = "tool_error"
-VIBE_STOP_EVENT_TAG = "vibe_stop_event"
-VIBE_WARNING_TAG = "vibe_warning"
+DRYDOCK_STOP_EVENT_TAG = "drydock_stop_event"
+DRYDOCK_WARNING_TAG = "drydock_warning"
 
-KNOWN_TAGS = [CANCELLATION_TAG, TOOL_ERROR_TAG, VIBE_STOP_EVENT_TAG, VIBE_WARNING_TAG]
+KNOWN_TAGS = [CANCELLATION_TAG, TOOL_ERROR_TAG, DRYDOCK_STOP_EVENT_TAG, DRYDOCK_WARNING_TAG]
 
 
 class TaggedText:

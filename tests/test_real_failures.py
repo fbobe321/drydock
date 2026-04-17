@@ -23,7 +23,7 @@ except RuntimeError:
 
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import Backend, ModelConfig, ProviderConfig, VibeConfig
+from drydock.core.config import Backend, ModelConfig, ProviderConfig, DrydockConfig
 from drydock.core.types import (
     AssistantEvent,
     BaseEvent,
@@ -42,8 +42,8 @@ def _vllm_ok() -> bool:
 pytestmark = pytest.mark.skipif(not _vllm_ok(), reason="vLLM not running")
 
 
-def _config(tmp_path: Path) -> VibeConfig:
-    return VibeConfig(
+def _config(tmp_path: Path) -> DrydockConfig:
+    return DrydockConfig(
         active_model="devstral", auto_approve=True, enable_telemetry=False,
         include_project_context=False, system_prompt_id="tests",
         providers=[ProviderConfig(name="local", api_base="http://localhost:8000/v1", api_key_env_var="", backend=Backend.GENERIC)],

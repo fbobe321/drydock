@@ -41,7 +41,7 @@ from pathlib import Path
 import pexpect
 
 DRYDOCK_BIN = "/home/bobef/miniforge3/envs/drydock/bin/drydock"
-SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
+SESSION_ROOT = Path.home() / ".drydock" / "logs" / "session"
 WORKED_EXAMPLES_DIR = Path("/data3/drydock/worked_examples")
 
 

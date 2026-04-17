@@ -11,7 +11,7 @@ from acp.schema import (
     WaitForTerminalExitResponse,
 )
 
-from drydock import VIBE_ROOT
+from drydock import DRYDOCK_ROOT
 from drydock.acp.tools.base import AcpToolState, BaseAcpTool
 from drydock.core.logger import logger
 from drydock.core.tools.base import BaseToolState, InvokeContext, ToolError
@@ -24,7 +24,7 @@ class AcpBashState(BaseToolState, AcpToolState):
 
 
 class Bash(CoreBashTool, BaseAcpTool[AcpBashState]):
-    prompt_path = VIBE_ROOT / "core" / "tools" / "builtins" / "prompts" / "bash.md"
+    prompt_path = DRYDOCK_ROOT / "core" / "tools" / "builtins" / "prompts" / "bash.md"
     state: AcpBashState
 
     @classmethod

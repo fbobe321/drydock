@@ -98,8 +98,8 @@ class HookManager:
             search_paths.insert(0, project_hooks)
 
         try:
-            from drydock.core.paths import VIBE_HOME
-            user_hooks = VIBE_HOME.path / "hooks.json"
+            from drydock.core.paths import DRYDOCK_HOME
+            user_hooks = DRYDOCK_HOME.path / "hooks.json"
             if user_hooks.exists():
                 search_paths.append(user_hooks)
         except Exception:

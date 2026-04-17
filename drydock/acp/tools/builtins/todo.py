@@ -5,7 +5,7 @@ from typing import cast
 from acp.helpers import SessionUpdate
 from acp.schema import AgentPlanUpdate, PlanEntry, PlanEntryPriority, PlanEntryStatus
 
-from drydock import VIBE_ROOT
+from drydock import DRYDOCK_ROOT
 from drydock.acp.tools.base import AcpToolState, BaseAcpTool
 from drydock.core.tools.builtins.todo import (
     Todo as CoreTodoTool,
@@ -26,7 +26,7 @@ class AcpTodoState(TodoState, AcpToolState):
 
 class Todo(CoreTodoTool, BaseAcpTool[AcpTodoState]):
     state: AcpTodoState
-    prompt_path = VIBE_ROOT / "core" / "tools" / "builtins" / "prompts" / "todo.md"
+    prompt_path = DRYDOCK_ROOT / "core" / "tools" / "builtins" / "prompts" / "todo.md"
 
     @classmethod
     def _get_tool_state_class(cls) -> type[AcpTodoState]:

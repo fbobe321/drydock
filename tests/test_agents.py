@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import build_test_agent_loop, build_test_vibe_config
+from tests.conftest import build_test_agent_loop, build_test_drydock_config
 from tests.stubs.fake_backend import FakeBackend
 from drydock.core.agents.manager import AgentManager
 from drydock.core.agents.models import (
@@ -15,7 +15,7 @@ from drydock.core.agents.models import (
     BuiltinAgentName,
     _deep_merge,
 )
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.config.harness_files import HarnessFilesManager
 from drydock.core.tools.base import ToolPermission
 from drydock.core.types import LLMChunk, LLMMessage, LLMUsage, Role
@@ -166,12 +166,12 @@ class TestAgentApplyToConfig:
 
         When a custom prompt .md file is absent from the project-local prompts
         directory, the system_prompt property should fall back to the global
-        ~/.vibe/prompts/ directory and load the file from there.
+        ~/.drydock/prompts/ directory and load the file from there.
         """
-        project_prompts = tmp_path / "project" / ".vibe" / "prompts"
+        project_prompts = tmp_path / "project" / ".drydock" / "prompts"
         project_prompts.mkdir(parents=True)
 
-        global_prompts = tmp_path / "home" / ".vibe" / "prompts"
+        global_prompts = tmp_path / "home" / ".drydock" / "prompts"
         global_prompts.mkdir(parents=True)
         (global_prompts / "cc.md").write_text("Global custom prompt")
 
@@ -189,7 +189,7 @@ class TestAgentApplyToConfig:
             "drydock.core.config._settings.get_harness_files_manager", lambda: mock_manager
         )
 
-        base = VibeConfig(include_project_context=False, include_prompt_detail=False)
+        base = DrydockConfig(include_project_context=False, include_prompt_detail=False)
         agent = AgentProfile(
             name="cc",
             display_name="Cc",
@@ -233,8 +233,8 @@ class TestAgentProfileOverrides:
 
 class TestAgentManagerCycling:
     @pytest.fixture
-    def base_config(self) -> VibeConfig:
-        return build_test_vibe_config(
+    def base_config(self) -> DrydockConfig:
+        return build_test_drydock_config(
             include_project_context=False, include_prompt_detail=False
         )
 
@@ -248,7 +248,7 @@ class TestAgentManagerCycling:
         ])
 
     def test_get_agent_order_includes_primary_agents(
-        self, base_config: VibeConfig, backend: FakeBackend
+        self, base_config: DrydockConfig, backend: FakeBackend
     ) -> None:
         agent = build_test_agent_loop(
             config=base_config, agent_name=BuiltinAgentName.DEFAULT, backend=backend
@@ -261,7 +261,7 @@ class TestAgentManagerCycling:
         assert BuiltinAgentName.ACCEPT_EDITS in order
 
     def test_next_agent_cycles_through_all(
-        self, base_config: VibeConfig, backend: FakeBackend
+        self, base_config: DrydockConfig, backend: FakeBackend
     ) -> None:
         agent = build_test_agent_loop(
             config=base_config, agent_name=BuiltinAgentName.DEFAULT, backend=backend
@@ -275,7 +275,7 @@ class TestAgentManagerCycling:
         assert len(set(visited)) == len(order)
 
     def test_next_agent_wraps_around(
-        self, base_config: VibeConfig, backend: FakeBackend
+        self, base_config: DrydockConfig, backend: FakeBackend
     ) -> None:
         agent = build_test_agent_loop(
             config=base_config, agent_name=BuiltinAgentName.DEFAULT, backend=backend
@@ -300,8 +300,8 @@ class TestAgentProfileConfig:
 
 class TestAgentSwitchAgent:
     @pytest.fixture
-    def base_config(self) -> VibeConfig:
-        return build_test_vibe_config(
+    def base_config(self) -> DrydockConfig:
+        return build_test_drydock_config(
             include_project_context=False, include_prompt_detail=False
         )
 
@@ -316,7 +316,7 @@ class TestAgentSwitchAgent:
 
     @pytest.mark.asyncio
     async def test_switch_to_plan_agent_has_tools_with_restricted_permissions(
-        self, base_config: VibeConfig, backend: FakeBackend
+        self, base_config: DrydockConfig, backend: FakeBackend
     ) -> None:
         agent = build_test_agent_loop(
             config=base_config, agent_name=BuiltinAgentName.DEFAULT, backend=backend
@@ -337,7 +337,7 @@ class TestAgentSwitchAgent:
 
     @pytest.mark.asyncio
     async def test_switch_from_plan_to_default_restores_tools(
-        self, base_config: VibeConfig, backend: FakeBackend
+        self, base_config: DrydockConfig, backend: FakeBackend
     ) -> None:
         agent = build_test_agent_loop(
             config=base_config, agent_name=BuiltinAgentName.PLAN, backend=backend
@@ -352,7 +352,7 @@ class TestAgentSwitchAgent:
 
     @pytest.mark.asyncio
     async def test_switch_agent_preserves_conversation_history(
-        self, base_config: VibeConfig, backend: FakeBackend
+        self, base_config: DrydockConfig, backend: FakeBackend
     ) -> None:
         agent = build_test_agent_loop(
             config=base_config, agent_name=BuiltinAgentName.DEFAULT, backend=backend
@@ -370,7 +370,7 @@ class TestAgentSwitchAgent:
 
     @pytest.mark.asyncio
     async def test_switch_to_same_agent_is_noop(
-        self, base_config: VibeConfig, backend: FakeBackend
+        self, base_config: DrydockConfig, backend: FakeBackend
     ) -> None:
         agent = build_test_agent_loop(
             config=base_config, agent_name=BuiltinAgentName.DEFAULT, backend=backend
@@ -396,7 +396,7 @@ class TestAcceptEditsAgent:
     async def test_accept_edits_agent_auto_approves_write_file(self) -> None:
         backend = FakeBackend([])
 
-        config = build_test_vibe_config(enabled_tools=["write_file"])
+        config = build_test_drydock_config(enabled_tools=["write_file"])
         agent = build_test_agent_loop(
             config=config, agent_name=BuiltinAgentName.ACCEPT_EDITS, backend=backend
         )
@@ -408,7 +408,7 @@ class TestAcceptEditsAgent:
     async def test_accept_edits_agent_requires_approval_for_other_tools(self) -> None:
         backend = FakeBackend([])
 
-        config = build_test_vibe_config(enabled_tools=["bash"])
+        config = build_test_drydock_config(enabled_tools=["bash"])
         agent = build_test_agent_loop(
             config=config, agent_name=BuiltinAgentName.ACCEPT_EDITS, backend=backend
         )
@@ -428,7 +428,7 @@ class TestPlanAgentToolRestriction:
                 usage=LLMUsage(prompt_tokens=10, completion_tokens=5),
             )
         ])
-        config = build_test_vibe_config()
+        config = build_test_drydock_config()
         agent = build_test_agent_loop(
             config=config, agent_name=BuiltinAgentName.PLAN, backend=backend
         )
@@ -453,7 +453,7 @@ class TestPlanAgentToolRestriction:
 
 class TestAgentManagerFiltering:
     def test_enabled_agents_filters_to_only_enabled(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False,
             include_prompt_detail=False,
             enabled_agents=["default", "plan"],
@@ -468,7 +468,7 @@ class TestAgentManagerFiltering:
         assert "accept-edits" not in agents
 
     def test_disabled_agents_excludes_disabled(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False,
             include_prompt_detail=False,
             disabled_agents=["auto-approve", "accept-edits"],
@@ -483,7 +483,7 @@ class TestAgentManagerFiltering:
         assert "accept-edits" not in agents
 
     def test_enabled_agents_takes_precedence_over_disabled(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False,
             include_prompt_detail=False,
             enabled_agents=["default"],
@@ -496,7 +496,7 @@ class TestAgentManagerFiltering:
         assert "default" in agents
 
     def test_glob_pattern_matching(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False,
             include_prompt_detail=False,
             disabled_agents=["auto-*", "accept-*"],
@@ -510,7 +510,7 @@ class TestAgentManagerFiltering:
         assert "accept-edits" not in agents
 
     def test_regex_pattern_matching(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False,
             include_prompt_detail=False,
             enabled_agents=["re:^(default|plan)$"],
@@ -523,7 +523,7 @@ class TestAgentManagerFiltering:
         assert "plan" in agents
 
     def test_empty_enabled_agents_returns_all(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False,
             include_prompt_detail=False,
             enabled_agents=[],
@@ -537,7 +537,7 @@ class TestAgentManagerFiltering:
         assert "explore" in agents
 
     def test_get_subagents_respects_filtering(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False,
             include_prompt_detail=False,
             disabled_agents=["explore"],
@@ -553,10 +553,10 @@ class TestAgentLoopInitialization:
     def test_agent_system_prompt_id_is_applied_on_init(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        project_prompts = tmp_path / "project" / ".vibe" / "prompts"
+        project_prompts = tmp_path / "project" / ".drydock" / "prompts"
         project_prompts.mkdir(parents=True)
 
-        global_prompts = tmp_path / "home" / ".vibe" / "prompts"
+        global_prompts = tmp_path / "home" / ".drydock" / "prompts"
         global_prompts.mkdir(parents=True)
         custom_prompt_content = "CUSTOM_AGENT_PROMPT_MARKER"
         (global_prompts / "custom_agent.md").write_text(custom_prompt_content)
@@ -586,7 +586,7 @@ class TestAgentLoopInitialization:
         monkeypatch.setattr("drydock.core.agents.models.BUILTIN_AGENTS", patched_agents)
         monkeypatch.setattr("drydock.core.agents.manager.BUILTIN_AGENTS", patched_agents)
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False, include_prompt_detail=False
         )
         assert config.system_prompt_id == "cli", (

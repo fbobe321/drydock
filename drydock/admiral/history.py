@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def _log_path() -> Path:
-    d = Path.home() / ".vibe" / "logs"
+    d = Path.home() / ".drydock" / "logs"
     d.mkdir(parents=True, exist_ok=True)
     return d / "admiral_history.log"
 

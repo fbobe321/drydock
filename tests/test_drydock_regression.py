@@ -5,7 +5,7 @@ Tests the key improvements made to drydock over the upstream mistral-vibe:
 - Loop detection and nudge escalation
 - Bash abuse detection
 - Wave spinner
-- Config path resolution (.drydock vs .vibe)
+- Config path resolution (.drydock)
 - Permission flags
 - Thinking state terms
 - search_replace test file warnings
@@ -190,23 +190,14 @@ class TestConfigPaths:
     def test_default_is_drydock(self):
         # Verify the source code defines .drydock as the default
         import inspect
-        from drydock.core.paths import _vibe_home
-        source = inspect.getsource(_vibe_home)
+        from drydock.core.paths import _drydock_home
+        source = inspect.getsource(_drydock_home)
         assert '".drydock"' in source
 
-    def test_drydock_home_env_takes_priority(self, tmp_path):
-        with patch.dict(os.environ, {"DRYDOCK_HOME": str(tmp_path), "VIBE_HOME": "/should/not/use"}):
-            from drydock.core.paths._vibe_home import _get_vibe_home
-            assert _get_vibe_home() == tmp_path
-
-    def test_vibe_home_env_fallback(self, tmp_path):
-        env = {"VIBE_HOME": str(tmp_path)}
-        with patch.dict(os.environ, env, clear=False):
-            # Remove DRYDOCK_HOME if set
-            os.environ.pop("DRYDOCK_HOME", None)
-            from drydock.core.paths._vibe_home import _get_vibe_home
-            result = _get_vibe_home()
-            assert result == tmp_path
+    def test_drydock_home_env_override(self, tmp_path):
+        with patch.dict(os.environ, {"DRYDOCK_HOME": str(tmp_path)}):
+            from drydock.core.paths._drydock_home import _get_drydock_home
+            assert _get_drydock_home() == tmp_path
 
 
 # ============================================================================

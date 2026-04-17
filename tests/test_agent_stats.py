@@ -6,7 +6,7 @@ import pytest
 
 from tests.conftest import (
     build_test_agent_loop,
-    build_test_vibe_config,
+    build_test_drydock_config,
     make_test_models,
 )
 from tests.mock.utils import mock_llm_chunk
@@ -17,7 +17,7 @@ from drydock.core.config import (
     ModelConfig,
     ProviderConfig,
     SessionLoggingConfig,
-    VibeConfig,
+    DrydockConfig,
 )
 from drydock.core.tools.base import BaseToolConfig, ToolPermission
 from drydock.core.types import (
@@ -45,7 +45,7 @@ def make_config(
     include_prompt_detail: bool = False,
     enabled_tools: list[str] | None = None,
     todo_permission: ToolPermission = ToolPermission.ALWAYS,
-) -> VibeConfig:
+) -> DrydockConfig:
     models = [
         ModelConfig(
             name="mistral-vibe-cli-latest",
@@ -86,7 +86,7 @@ def make_config(
             backend=Backend.MISTRAL,
         ),
     ]
-    return build_test_vibe_config(
+    return build_test_drydock_config(
         session_logging=SessionLoggingConfig(enabled=not disable_logging),
         system_prompt_id=system_prompt_id,
         include_project_context=include_project_context,
@@ -511,7 +511,7 @@ class TestAutoCompactIntegration:
             [mock_llm_chunk(content="<summary>")],
             [mock_llm_chunk(content="<final>")],
         ])
-        cfg = build_test_vibe_config(models=make_test_models(auto_compact_threshold=1))
+        cfg = build_test_drydock_config(models=make_test_models(auto_compact_threshold=1))
         agent = build_test_agent_loop(
             config=cfg, message_observer=observer, backend=backend
         )

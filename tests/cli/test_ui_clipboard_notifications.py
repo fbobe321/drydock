@@ -7,7 +7,7 @@ from textual.selection import Selection
 from textual.widget import Widget
 
 from drydock.cli.clipboard import copy_selection_to_clipboard
-from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.app import DrydockApp
 
 
 class ClipboardSelectionWidget(Widget):
@@ -25,15 +25,15 @@ class ClipboardSelectionWidget(Widget):
 
 @pytest.mark.asyncio
 async def test_ui_clipboard_notification_does_not_crash_on_markup_text(
-    monkeypatch: pytest.MonkeyPatch, vibe_app: VibeApp
+    monkeypatch: pytest.MonkeyPatch, drydock_app: DrydockApp
 ) -> None:
-    async with vibe_app.run_test(notifications=True) as pilot:
-        await vibe_app.mount(ClipboardSelectionWidget("[/]"))
+    async with drydock_app.run_test(notifications=True) as pilot:
+        await drydock_app.mount(ClipboardSelectionWidget("[/]"))
         with patch("drydock.cli.clipboard._copy_to_clipboard"):
-            copy_selection_to_clipboard(vibe_app)
+            copy_selection_to_clipboard(drydock_app)
 
         await pilot.pause(0.1)
-        notifications = list(vibe_app._notifications)
+        notifications = list(drydock_app._notifications)
         assert notifications
         notification = notifications[-1]
         assert notification.markup is False

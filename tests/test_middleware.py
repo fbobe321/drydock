@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from tests.conftest import build_test_agent_loop, build_test_vibe_config
+from tests.conftest import build_test_agent_loop, build_test_drydock_config
 from drydock.core.agents.models import BUILTIN_AGENTS, CHAT, AgentProfile, BuiltinAgentName
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.middleware import (
     CHAT_AGENT_EXIT,
     CHAT_AGENT_REMINDER,
@@ -33,9 +33,9 @@ def _build_middleware(
 
 
 @pytest.fixture
-def ctx(vibe_config: VibeConfig) -> ConversationContext:
+def ctx(drydock_config: DrydockConfig) -> ConversationContext:
     return ConversationContext(
-        messages=MessageList(), stats=AgentStats(), config=vibe_config
+        messages=MessageList(), stats=AgentStats(), config=drydock_config
     )
 
 
@@ -422,7 +422,7 @@ class TestReadOnlyAgentMiddlewareIntegration:
     async def test_switch_agent_preserves_middleware_state_for_exit_message(
         self,
     ) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             include_prompt_detail=False,
@@ -455,7 +455,7 @@ class TestReadOnlyAgentMiddlewareIntegration:
 
     @pytest.mark.asyncio
     async def test_switch_agent_allows_reinjection_on_reentry(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             include_prompt_detail=False,
@@ -491,7 +491,7 @@ class TestReadOnlyAgentMiddlewareIntegration:
 
     @pytest.mark.asyncio
     async def test_switch_plan_to_auto_approve_fires_exit(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             include_prompt_detail=False,
@@ -519,7 +519,7 @@ class TestReadOnlyAgentMiddlewareIntegration:
 
     @pytest.mark.asyncio
     async def test_switch_between_non_plan_agents_no_injection(self) -> None:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             include_prompt_detail=False,
@@ -550,7 +550,7 @@ class TestReadOnlyAgentMiddlewareIntegration:
     @pytest.mark.asyncio
     async def test_full_lifecycle_plan_default_plan_default(self) -> None:
         """Integration test for a full plan -> default -> plan -> default cycle."""
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             include_prompt_detail=False,

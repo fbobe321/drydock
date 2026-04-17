@@ -64,7 +64,7 @@ def multi_select_args() -> AskUserQuestionArgs:
 
 
 class QuestionAppTestApp(App):
-    CSS_PATH = "../../vibe/cli/textual_ui/app.tcss"
+    CSS_PATH = "../../drydock/cli/textual_ui/app.tcss"
 
     def __init__(self, args: AskUserQuestionArgs):
         super().__init__()

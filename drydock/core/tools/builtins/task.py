@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import AgentType, BuiltinAgentName
-from drydock.core.config import SessionLoggingConfig, VibeConfig
+from drydock.core.config import SessionLoggingConfig, DrydockConfig
 from drydock.core.tools.base import (
     BaseTool,
     BaseToolConfig,
@@ -144,7 +144,7 @@ class Task(
             session_prefix=args.agent,
             enabled=ctx.session_dir is not None,
         )
-        base_config = VibeConfig.load(session_logging=session_logging)
+        base_config = DrydockConfig.load(session_logging=session_logging)
 
         # Apply per-agent model if configured
         if agent_profile.model:

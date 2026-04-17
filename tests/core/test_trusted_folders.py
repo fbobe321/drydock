@@ -217,26 +217,26 @@ class TestHasAgentsMdFile:
         (tmp_path / "AGENTS.md").write_text("# Agents", encoding="utf-8")
         assert has_agents_md_file(tmp_path) is True
 
-    def test_returns_true_when_vibe_md_exists(self, tmp_path: Path) -> None:
-        (tmp_path / "VIBE.md").write_text("# Vibe", encoding="utf-8")
+    def test_returns_true_when_drydock_md_exists(self, tmp_path: Path) -> None:
+        (tmp_path / "DRYDOCK.md").write_text("# Drydock", encoding="utf-8")
         assert has_agents_md_file(tmp_path) is True
 
-    def test_returns_true_when_dot_vibe_md_exists(self, tmp_path: Path) -> None:
-        (tmp_path / ".vibe.md").write_text("# Vibe", encoding="utf-8")
+    def test_returns_true_when_dot_drydock_md_exists(self, tmp_path: Path) -> None:
+        (tmp_path / ".drydock.md").write_text("# Drydock", encoding="utf-8")
         assert has_agents_md_file(tmp_path) is True
 
     def test_returns_false_when_only_other_files_exist(self, tmp_path: Path) -> None:
         (tmp_path / "README.md").write_text("", encoding="utf-8")
-        (tmp_path / ".vibe").mkdir()
+        (tmp_path / ".drydock").mkdir()
         assert has_agents_md_file(tmp_path) is False
 
     def test_agents_md_filenames_constant(self) -> None:
-        assert AGENTS_MD_FILENAMES == ["AGENTS.md", "VIBE.md", ".vibe.md"]
+        assert AGENTS_MD_FILENAMES == ["AGENTS.md", "DRYDOCK.md", ".drydock.md"]
 
 
 class TestHasTrustableContent:
-    def test_returns_true_when_vibe_dir_exists(self, tmp_path: Path) -> None:
-        (tmp_path / ".vibe" / "skills").mkdir(parents=True)
+    def test_returns_true_when_drydock_dir_exists(self, tmp_path: Path) -> None:
+        (tmp_path / ".drydock" / "skills").mkdir(parents=True)
         assert has_trustable_content(tmp_path) is True
 
     def test_returns_true_when_agents_dir_exists(self, tmp_path: Path) -> None:
@@ -253,8 +253,8 @@ class TestHasTrustableContent:
         (tmp_path / "other.txt").write_text("", encoding="utf-8")
         assert has_trustable_content(tmp_path) is False
 
-    def test_returns_true_when_vibe_config_in_subfolder(self, tmp_path: Path) -> None:
-        (tmp_path / "sub" / ".vibe" / "skills").mkdir(parents=True)
+    def test_returns_true_when_drydock_config_in_subfolder(self, tmp_path: Path) -> None:
+        (tmp_path / "sub" / ".drydock" / "skills").mkdir(parents=True)
         assert has_trustable_content(tmp_path) is True
 
     def test_returns_true_when_agents_skills_in_subfolder(self, tmp_path: Path) -> None:
@@ -264,5 +264,5 @@ class TestHasTrustableContent:
     def test_returns_false_when_config_only_inside_ignored_dir(
         self, tmp_path: Path
     ) -> None:
-        (tmp_path / "node_modules" / ".vibe" / "skills").mkdir(parents=True)
+        (tmp_path / "node_modules" / ".drydock" / "skills").mkdir(parents=True)
         assert has_trustable_content(tmp_path) is False

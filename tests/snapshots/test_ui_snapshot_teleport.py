@@ -15,7 +15,7 @@ from drydock.core.tools.builtins.ask_user_question import (
 
 
 class TeleportMessageTestApp(App):
-    CSS_PATH = "../../vibe/cli/textual_ui/app.tcss"
+    CSS_PATH = "../../drydock/cli/textual_ui/app.tcss"
 
     def compose(self) -> ComposeResult:
         with Container():
@@ -99,7 +99,7 @@ def _push_confirmation_args(count: int) -> AskUserQuestionArgs:
 
 
 class TeleportPushConfirmationTestApp(App):
-    CSS_PATH = "../../vibe/cli/textual_ui/app.tcss"
+    CSS_PATH = "../../drydock/cli/textual_ui/app.tcss"
 
     def __init__(self, count: int = 3):
         super().__init__()

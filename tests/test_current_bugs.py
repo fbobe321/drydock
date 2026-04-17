@@ -21,7 +21,7 @@ except RuntimeError:
 
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import Backend, ModelConfig, ProviderConfig, VibeConfig
+from drydock.core.config import Backend, ModelConfig, ProviderConfig, DrydockConfig
 from drydock.core.types import (
     AssistantEvent, BaseEvent, Role, ToolCallEvent, ToolResultEvent,
 )
@@ -37,7 +37,7 @@ pytestmark = pytest.mark.skipif(not _vllm_ok(), reason="vLLM not running")
 
 
 def _config(tmp_path):
-    return VibeConfig(
+    return DrydockConfig(
         active_model="devstral", auto_approve=True, enable_telemetry=False,
         include_project_context=False, system_prompt_id="cli",
         providers=[ProviderConfig(name="local", api_base="http://localhost:8000/v1", api_key_env_var="", backend=Backend.GENERIC)],
@@ -81,13 +81,11 @@ class TestVibeReferences:
         assert "vibe" not in _DEFAULT_CLIENT_METADATA.name.lower(), \
             f"Client metadata '{_DEFAULT_CLIENT_METADATA.name}' still references 'vibe'"
 
-    def test_no_vibe_in_stop_event_tag(self):
-        """Internal tags should use drydock not vibe."""
-        from drydock.core.utils import VIBE_STOP_EVENT_TAG, VIBE_WARNING_TAG
-        # These are internal protocol tags — checking they exist
-        # but flagging the naming for awareness
-        assert VIBE_STOP_EVENT_TAG  # exists
-        assert VIBE_WARNING_TAG  # exists
+    def test_drydock_named_event_tags(self):
+        """Internal protocol tags use drydock, not vibe."""
+        from drydock.core.utils import DRYDOCK_STOP_EVENT_TAG, DRYDOCK_WARNING_TAG
+        assert DRYDOCK_STOP_EVENT_TAG == "drydock_stop_event"
+        assert DRYDOCK_WARNING_TAG == "drydock_warning"
 
 
 # ============================================================================

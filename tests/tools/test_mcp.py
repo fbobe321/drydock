@@ -141,8 +141,8 @@ class TestMCPStderrCapture:
     def test_stderr_logger_thread_logs_decoded_lines(self):
         r_fd, w_fd = os.pipe()
         try:
-            vibe_logger = logging.getLogger("vibe")
-            with patch.object(vibe_logger, "debug") as debug_mock:
+            drydock_logger = logging.getLogger("drydock")
+            with patch.object(drydock_logger, "debug") as debug_mock:
                 thread = threading.Thread(
                     target=_stderr_logger_thread, args=(r_fd,), daemon=True
                 )
@@ -171,8 +171,8 @@ class TestMCPStderrCapture:
 
     @pytest.mark.asyncio
     async def test_mcp_stderr_capture_logs_written_data(self):
-        vibe_logger = logging.getLogger("vibe")
-        with patch.object(vibe_logger, "debug") as debug_mock:
+        drydock_logger = logging.getLogger("drydock")
+        with patch.object(drydock_logger, "debug") as debug_mock:
             async with _mcp_stderr_capture() as stream:
                 stream.write("captured line\n")
             time.sleep(0.05)
@@ -180,8 +180,8 @@ class TestMCPStderrCapture:
 
     @pytest.mark.asyncio
     async def test_mcp_stderr_capture_ignores_empty_lines(self):
-        vibe_logger = logging.getLogger("vibe")
-        with patch.object(vibe_logger, "debug") as debug_mock:
+        drydock_logger = logging.getLogger("drydock")
+        with patch.object(drydock_logger, "debug") as debug_mock:
             async with _mcp_stderr_capture() as stream:
                 stream.write("\n\n")
             time.sleep(0.05)

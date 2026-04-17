@@ -22,12 +22,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from drydock.core.config import ProviderConfig, VibeConfig
+from drydock.core.config import ProviderConfig, DrydockConfig
 from drydock.core.llm.types import BackendLike
 from drydock.core.types import LLMMessage, MessageList, Role
 
 
-def _get_active_provider(config: VibeConfig) -> ProviderConfig | None:
+def _get_active_provider(config: DrydockConfig) -> ProviderConfig | None:
     """Get the provider that serves the active model.
 
     The config may have multiple providers (e.g., Mistral cloud + local vLLM).
@@ -368,7 +368,7 @@ def _extract_public_api(file_path: Path) -> str:
 async def implement_file(
     file_spec: FileSpec,
     plan: BuildPlan,
-    config: VibeConfig,
+    config: DrydockConfig,
     base_dir: Path,
     backend: BackendLike | None = None,
 ) -> bool:
@@ -497,7 +497,7 @@ async def implement_file(
 
 async def run_build_pipeline(
     user_prompt: str,
-    config: VibeConfig,
+    config: DrydockConfig,
     base_dir: Path | None = None,
     backend: BackendLike | None = None,
 ) -> str:

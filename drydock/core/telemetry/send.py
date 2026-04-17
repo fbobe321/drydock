@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 
 from drydock import __version__
-from drydock.core.config import Backend, VibeConfig
+from drydock.core.config import Backend, DrydockConfig
 from drydock.core.llm.format import ResolvedToolCall
 from drydock.core.utils import get_user_agent
 
@@ -21,7 +21,7 @@ DATALAKE_EVENTS_URL = "https://codestral.mistral.ai/v1/datalake/events"
 class TelemetryClient:
     def __init__(
         self,
-        config_getter: Callable[[], VibeConfig],
+        config_getter: Callable[[], DrydockConfig],
         session_id_getter: Callable[[], str | None] | None = None,
     ) -> None:
         self._config_getter = config_getter
@@ -151,25 +151,25 @@ class TelemetryClient:
             "nb_files_created": nb_files_created,
             "nb_files_modified": nb_files_modified,
         }
-        self.send_telemetry_event("vibe.tool_call_finished", payload)
+        self.send_telemetry_event("drydock.tool_call_finished", payload)
 
     def send_user_copied_text(self, text: str) -> None:
         payload = {"text_length": len(text)}
-        self.send_telemetry_event("vibe.user_copied_text", payload)
+        self.send_telemetry_event("drydock.user_copied_text", payload)
 
     def send_user_cancelled_action(self, action: str) -> None:
         payload = {"action": action}
-        self.send_telemetry_event("vibe.user_cancelled_action", payload)
+        self.send_telemetry_event("drydock.user_cancelled_action", payload)
 
     def send_auto_compact_triggered(self) -> None:
         payload = {}
-        self.send_telemetry_event("vibe.auto_compact_triggered", payload)
+        self.send_telemetry_event("drydock.auto_compact_triggered", payload)
 
     def send_slash_command_used(
         self, command: str, command_type: Literal["builtin", "skill"]
     ) -> None:
         payload = {"command": command.lstrip("/"), "command_type": command_type}
-        self.send_telemetry_event("vibe.slash_command_used", payload)
+        self.send_telemetry_event("drydock.slash_command_used", payload)
 
     def send_new_session(
         self,
@@ -189,9 +189,9 @@ class TelemetryClient:
             "version": __version__,
             "terminal_emulator": terminal_emulator,
         }
-        self.send_telemetry_event("vibe.new_session", payload)
+        self.send_telemetry_event("drydock.new_session", payload)
 
     def send_onboarding_api_key_added(self) -> None:
         self.send_telemetry_event(
-            "vibe.onboarding_api_key_added", {"version": __version__}
+            "drydock.onboarding_api_key_added", {"version": __version__}
         )

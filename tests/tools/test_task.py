@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import build_test_vibe_config
+from tests.conftest import build_test_drydock_config
 from tests.mock.utils import collect_result
 from drydock.core.agents.manager import AgentManager
 from drydock.core.agents.models import BUILTIN_AGENTS, AgentType
@@ -32,7 +32,7 @@ class TestTaskArgs:
 class TestTaskToolValidation:
     @pytest.fixture
     def ctx(self) -> InvokeContext:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False, include_prompt_detail=False
         )
         manager = AgentManager(lambda: config)
@@ -123,7 +123,7 @@ class TestTaskToolResolvePermission:
 class TestTaskToolExecution:
     @pytest.fixture
     def ctx(self) -> InvokeContext:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False, include_prompt_detail=False
         )
         manager = AgentManager(lambda: config)

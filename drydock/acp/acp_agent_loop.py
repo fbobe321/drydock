@@ -53,7 +53,7 @@ from acp.schema import (
 )
 from pydantic import BaseModel, ConfigDict
 
-from drydock import VIBE_ROOT, __version__
+from drydock import DRYDOCK_ROOT, __version__
 from drydock.acp.acp_logger import acp_message_observer
 from drydock.acp.tools.base import BaseAcpTool
 from drydock.acp.tools.session_update import (
@@ -81,7 +81,7 @@ from drydock.core.autocompletion.path_prompt_adapter import render_path_prompt
 from drydock.core.config import (
     MissingAPIKeyError,
     SessionLoggingConfig,
-    VibeConfig,
+    DrydockConfig,
     load_dotenv_values,
 )
 from drydock.core.proxy_setup import (
@@ -117,7 +117,7 @@ class AcpSessionLoop(BaseModel):
     task: asyncio.Task[None] | None = None
 
 
-class VibeAcpAgentLoop(AcpAgent):
+class DrydockAcpAgentLoop(AcpAgent):
     client: Client
 
     def __init__(self) -> None:
@@ -137,12 +137,12 @@ class VibeAcpAgentLoop(AcpAgent):
         self.client_info = client_info
 
         # The ACP Agent process can be launched in 3 different ways, depending on installation
-        #  - dev mode: `uv run vibe-acp`, ran from the project root
-        #  - uv tool install: `vibe-acp`, similar to dev mode, but uv takes care of path resolution
-        #  - bundled binary: `./vibe-acp` from binary location
+        #  - dev mode: `uv run drydock-acp`, ran from the project root
+        #  - uv tool install: `drydock-acp`, similar to dev mode, but uv takes care of path resolution
+        #  - bundled binary: `./drydock-acp` from binary location
         # The 2 first modes are working similarly, under the hood uv runs `/some/python /my/entrypoint.py``
         # The last mode is quite different as our bundler also includes the python install.
-        # So sys.executable is already /path/to/binary/vibe-acp.
+        # So sys.executable is already /path/to/binary/drydock-acp.
         # For this reason, we make a distinction in the way we call the setup command
         command = sys.executable
         if "python" not in Path(command).name:
@@ -161,7 +161,7 @@ class VibeAcpAgentLoop(AcpAgent):
         auth_methods = (
             [
                 AuthMethod(
-                    id="vibe-setup",
+                    id="drydock-setup",
                     name="Register your API Key",
                     description="Register your API Key inside Drydock",
                     field_meta={
@@ -211,9 +211,9 @@ class VibeAcpAgentLoop(AcpAgent):
             client_version=self.client_info.version if self.client_info else "",
         )
 
-    def _load_config(self) -> VibeConfig:
+    def _load_config(self) -> DrydockConfig:
         try:
-            config = VibeConfig.load(
+            config = DrydockConfig.load(
                 disabled_tools=["ask_user_question", "exit_plan_mode"]
             )
             config.tool_paths.extend(self._get_acp_tool_overrides())
@@ -291,7 +291,7 @@ class VibeAcpAgentLoop(AcpAgent):
                     overrides.extend(["write_file", "search_replace"])
 
         return [
-            VIBE_ROOT / "acp" / "tools" / "builtins" / f"{override}.py"
+            DRYDOCK_ROOT / "acp" / "tools" / "builtins" / f"{override}.py"
             for override in overrides
         ]
 
@@ -413,10 +413,10 @@ class VibeAcpAgentLoop(AcpAgent):
                 key, value = parse_proxy_command(args)
                 if value is not None:
                     set_proxy_var(key, value)
-                    message = f"Set `{key}={value}` in ~/.vibe/.env\n\nPlease start a new chat for changes to take effect."
+                    message = f"Set `{key}={value}` in ~/.drydock/.env\n\nPlease start a new chat for changes to take effect."
                 else:
                     unset_proxy_var(key)
-                    message = f"Removed `{key}` from ~/.vibe/.env\n\nPlease start a new chat for changes to take effect."
+                    message = f"Removed `{key}` from ~/.drydock/.env\n\nPlease start a new chat for changes to take effect."
         except ProxySetupError as e:
             message = f"Error: {e}"
 
@@ -510,9 +510,9 @@ class VibeAcpAgentLoop(AcpAgent):
         if model_id not in model_aliases:
             return False
 
-        VibeConfig.save_updates({"active_model": model_id})
+        DrydockConfig.save_updates({"active_model": model_id})
 
-        new_config = VibeConfig.load(
+        new_config = DrydockConfig.load(
             tool_paths=session.agent_loop.config.tool_paths,
             disabled_tools=["ask_user_question", "exit_plan_mode"],
         )
@@ -577,7 +577,7 @@ class VibeAcpAgentLoop(AcpAgent):
         self, cursor: str | None = None, cwd: str | None = None, **kwargs: Any
     ) -> ListSessionsResponse:
         try:
-            config = VibeConfig.load()
+            config = DrydockConfig.load()
             session_logging_config = config.session_logging
         except MissingAPIKeyError:
             session_logging_config = SessionLoggingConfig()
@@ -804,7 +804,7 @@ def run_acp_server() -> None:
     try:
         asyncio.run(
             run_agent(
-                agent=VibeAcpAgentLoop(),
+                agent=DrydockAcpAgentLoop(),
                 use_unstable_protocol=True,
                 observers=[acp_message_observer],
             )

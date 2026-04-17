@@ -11,11 +11,11 @@ from drydock.core.skills.parser import SkillParseError, parse_frontmatter
 from drydock.core.utils import name_matches
 
 if TYPE_CHECKING:
-    from drydock.core.config import VibeConfig
+    from drydock.core.config import DrydockConfig
 
 
 class SkillManager:
-    def __init__(self, config_getter: Callable[[], VibeConfig]) -> None:
+    def __init__(self, config_getter: Callable[[], DrydockConfig]) -> None:
         self._config_getter = config_getter
         self._search_paths = self._compute_search_paths(self._config)
         self._available: dict[str, SkillInfo] = self._discover_skills()
@@ -28,7 +28,7 @@ class SkillManager:
             )
 
     @property
-    def _config(self) -> VibeConfig:
+    def _config(self) -> DrydockConfig:
         return self._config_getter()
 
     @property
@@ -48,7 +48,7 @@ class SkillManager:
         return dict(self._available)
 
     @staticmethod
-    def _compute_search_paths(config: VibeConfig) -> list[Path]:
+    def _compute_search_paths(config: DrydockConfig) -> list[Path]:
         paths: list[Path] = []
 
         for path in config.skill_paths:

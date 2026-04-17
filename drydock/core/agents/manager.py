@@ -15,13 +15,13 @@ from drydock.core.logger import logger
 from drydock.core.utils import name_matches
 
 if TYPE_CHECKING:
-    from drydock.core.config import VibeConfig
+    from drydock.core.config import DrydockConfig
 
 
 class AgentManager:
     def __init__(
         self,
-        config_getter: Callable[[], VibeConfig],
+        config_getter: Callable[[], DrydockConfig],
         initial_agent: str = BuiltinAgentName.DEFAULT,
     ) -> None:
         self._config_getter = config_getter
@@ -42,10 +42,10 @@ class AgentManager:
         self.active_profile = self._available.get(
             initial_agent, self._available[BuiltinAgentName.DEFAULT]
         )
-        self._cached_config: VibeConfig | None = None
+        self._cached_config: DrydockConfig | None = None
 
     @property
-    def _config(self) -> VibeConfig:
+    def _config(self) -> DrydockConfig:
         return self._config_getter()
 
     @property
@@ -65,7 +65,7 @@ class AgentManager:
         return dict(self._available)
 
     @property
-    def config(self) -> VibeConfig:
+    def config(self) -> DrydockConfig:
         if self._cached_config is None:
             self._cached_config = self.active_profile.apply_to_config(self._config)
         return self._cached_config
@@ -82,7 +82,7 @@ class AgentManager:
         self._cached_config = None
 
     @staticmethod
-    def _compute_search_paths(config: VibeConfig) -> list[Path]:
+    def _compute_search_paths(config: DrydockConfig) -> list[Path]:
         paths: list[Path] = []
         for path in config.agent_paths:
             if path.is_dir():

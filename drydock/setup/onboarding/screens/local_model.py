@@ -52,7 +52,7 @@ def _write_local_config(api_base: str, model_name: str) -> Path:
     PRESERVES existing config (read → merge → write) so defaults,
     existing providers, and user customisations survive. Adds the 'local'
     provider and model, sets active_model to point at it. If the config
-    file doesn't exist yet, creates a full default one from VibeConfig.
+    file doesn't exist yet, creates a full default one from DrydockConfig.
     """
     config_dir = Path.home() / ".drydock"
     config_dir.mkdir(parents=True, exist_ok=True)

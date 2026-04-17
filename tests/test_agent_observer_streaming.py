@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, Mock
 import httpx
 import pytest
 
-from tests.conftest import build_test_agent_loop, build_test_vibe_config
+from tests.conftest import build_test_agent_loop, build_test_drydock_config
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.llm.exceptions import BackendErrorBuilder
 from drydock.core.middleware import (
     ConversationContext,
@@ -56,8 +56,8 @@ def make_config(
     *,
     enabled_tools: list[str] | None = None,
     tools: dict[str, BaseToolConfig] | None = None,
-) -> VibeConfig:
-    return build_test_vibe_config(
+) -> DrydockConfig:
+    return build_test_drydock_config(
         system_prompt_id="tests",
         include_project_context=False,
         include_prompt_detail=False,

@@ -10,7 +10,7 @@ from acp.schema import (
     ToolCallStart,
 )
 
-from drydock import VIBE_ROOT
+from drydock import DRYDOCK_ROOT
 from drydock.acp.tools.base import AcpToolState, BaseAcpTool
 from drydock.core.tools.base import BaseToolState, ToolError
 from drydock.core.tools.builtins.search_replace import (
@@ -28,7 +28,7 @@ class AcpSearchReplaceState(BaseToolState, AcpToolState):
 class SearchReplace(CoreSearchReplaceTool, BaseAcpTool[AcpSearchReplaceState]):
     state: AcpSearchReplaceState
     prompt_path = (
-        VIBE_ROOT / "core" / "tools" / "builtins" / "prompts" / "search_replace.md"
+        DRYDOCK_ROOT / "core" / "tools" / "builtins" / "prompts" / "search_replace.md"
     )
 
     @classmethod

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from drydock.core.paths import PLANS_DIR
 
 if TYPE_CHECKING:
-    from drydock.core.config import VibeConfig
+    from drydock.core.config import DrydockConfig
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -63,8 +63,8 @@ class AgentProfile:
     allowed_tools: list[str] = field(default_factory=list)  # Restrict tools
     hooks: list[str] = field(default_factory=list)  # Hook configs
 
-    def apply_to_config(self, base: VibeConfig) -> VibeConfig:
-        from drydock.core.config import VibeConfig as VC
+    def apply_to_config(self, base: DrydockConfig) -> DrydockConfig:
+        from drydock.core.config import DrydockConfig as VC
 
         merged = _deep_merge(base.model_dump(), self.overrides)
         # Apply per-subagent model if set

@@ -7,10 +7,9 @@ from pathlib import Path
 from drydock.core.autocompletion.file_indexer.ignore_rules import WALK_SKIP_DIR_NAMES
 
 _DRYDOCK_DIR = ".drydock"
-_VIBE_DIR = ".vibe"  # Legacy fallback
 _AGENTS_DIR = ".agents"
 
-_CONFIG_DIRS = (_DRYDOCK_DIR, _VIBE_DIR)  # Check .drydock first, fall back to .vibe
+_CONFIG_DIRS = (_DRYDOCK_DIR,)
 
 
 @cache
@@ -32,7 +31,7 @@ def walk_local_config_dirs_all(
                     skills_dirs.append(candidate)
                 if (candidate := path / config_dir / "agents").is_dir():
                     agents_dirs.append(candidate)
-                break  # Use first found (.drydock wins over .vibe)
+                break
         if _AGENTS_DIR in dir_set:
             if (candidate := path / _AGENTS_DIR / "skills").is_dir():
                 skills_dirs.append(candidate)

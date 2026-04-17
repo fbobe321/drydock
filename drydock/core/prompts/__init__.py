@@ -3,9 +3,9 @@ from __future__ import annotations
 from enum import StrEnum, auto
 from pathlib import Path
 
-from drydock import VIBE_ROOT
+from drydock import DRYDOCK_ROOT
 
-_PROMPTS_DIR = VIBE_ROOT / "core" / "prompts"
+_PROMPTS_DIR = DRYDOCK_ROOT / "core" / "prompts"
 
 
 class Prompt(StrEnum):

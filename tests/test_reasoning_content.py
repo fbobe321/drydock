@@ -7,18 +7,18 @@ import mistralai
 import pytest
 import respx
 
-from tests.conftest import build_test_agent_loop, build_test_vibe_config
+from tests.conftest import build_test_agent_loop, build_test_drydock_config
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
-from drydock.core.config import ModelConfig, ProviderConfig, VibeConfig
+from drydock.core.config import ModelConfig, ProviderConfig, DrydockConfig
 from drydock.core.llm.backend.generic import GenericBackend, OpenAIAdapter
 from drydock.core.llm.backend.mistral import MistralBackend, MistralMapper, ParsedContent
 from drydock.core.llm.format import APIToolFormatHandler
 from drydock.core.types import AssistantEvent, LLMMessage, ReasoningEvent, Role
 
 
-def make_config() -> VibeConfig:
-    return build_test_vibe_config(
+def make_config() -> DrydockConfig:
+    return build_test_drydock_config(
         system_prompt_id="tests",
         include_project_context=False,
         include_prompt_detail=False,

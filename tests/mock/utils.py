@@ -12,7 +12,7 @@ from drydock.core.types import (
     ToolStreamEvent,
 )
 
-MOCK_DATA_ENV_VAR = "VIBE_MOCK_LLM_DATA"
+MOCK_DATA_ENV_VAR = "DRYDOCK_MOCK_LLM_DATA"
 
 
 def mock_llm_chunk(

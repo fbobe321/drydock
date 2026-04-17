@@ -8,7 +8,7 @@ import sys
 from drydock import __version__
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.logger import logger
 from drydock.core.output_formatters import create_formatter
 from drydock.core.types import (
@@ -25,7 +25,7 @@ _DEFAULT_CLIENT_METADATA = ClientMetadata(name="drydock_programmatic", version=_
 
 
 def run_programmatic(
-    config: VibeConfig,
+    config: DrydockConfig,
     prompt: str,
     max_turns: int | None = None,
     max_price: float | None = None,

@@ -290,7 +290,7 @@ DEFAULT_MODELS = [
 ]
 
 
-class VibeConfig(BaseSettings):
+class DrydockConfig(BaseSettings):
     active_model: str = "devstral-2"
     vim_keybindings: bool = False
     disable_welcome_banner_animation: bool = False
@@ -327,12 +327,12 @@ class VibeConfig(BaseSettings):
         ),
     )
 
-    # TODO(vibe-nuage): remove exclude=True once the feature is publicly available
+    # TODO(nuage): remove exclude=True once the feature is publicly available
     nuage_enabled: bool = Field(default=False, exclude=True)
     nuage_base_url: str = Field(default="https://api.globalaegis.net", exclude=True)
     nuage_workflow_id: str = Field(default="__shared-nuage-workflow", exclude=True)
-    nuage_task_queue: str | None = Field(default="shared-vibe-nuage", exclude=True)
-    # TODO(vibe-nuage): change default value to MISTRAL_API_KEY once prod has shared vibe-nuage workers
+    nuage_task_queue: str | None = Field(default="shared-nuage", exclude=True)
+    # TODO(nuage): change default value to MISTRAL_API_KEY once prod has shared nuage workers
     nuage_api_key_env_var: str = Field(default="STAGING_MISTRAL_API_KEY", exclude=True)
 
     providers: list[ProviderConfig] = Field(
@@ -418,7 +418,7 @@ class VibeConfig(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_prefix="VIBE_", case_sensitive=False, extra="ignore"
+        env_prefix="DRYDOCK_", case_sensitive=False, extra="ignore"
     )
 
     @property
@@ -483,7 +483,7 @@ class VibeConfig(BaseSettings):
 
         Note: dotenv_settings is intentionally excluded. API keys and other
         non-config environment variables are stored in .env but loaded manually
-        into os.environ for use by providers. Only VIBE_* prefixed environment
+        into os.environ for use by providers. Only DRYDOCK_* prefixed environment
         variables (via env_settings) and TOML config are used for Pydantic settings.
         """
         return (
@@ -494,7 +494,7 @@ class VibeConfig(BaseSettings):
         )
 
     @model_validator(mode="after")
-    def _apply_global_auto_compact_threshold(self) -> VibeConfig:
+    def _apply_global_auto_compact_threshold(self) -> DrydockConfig:
         # Per-model compact threshold: Gemma 4 maxes at 131K context.
         # The default 200K never fires, so context bloats until the
         # model returns empty/garbage and stress-tests stall. Cap at
@@ -515,7 +515,7 @@ class VibeConfig(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _check_api_key(self) -> VibeConfig:
+    def _check_api_key(self) -> DrydockConfig:
         try:
             active_model = self.get_active_model()
             provider = self.get_provider_for_model(active_model)
@@ -558,7 +558,7 @@ class VibeConfig(BaseSettings):
         return normalized
 
     @model_validator(mode="after")
-    def _validate_model_uniqueness(self) -> VibeConfig:
+    def _validate_model_uniqueness(self) -> DrydockConfig:
         seen_aliases: set[str] = set()
         for model in self.models:
             if model.alias in seen_aliases:
@@ -569,7 +569,7 @@ class VibeConfig(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _check_system_prompt(self) -> VibeConfig:
+    def _check_system_prompt(self) -> DrydockConfig:
         _ = self.system_prompt
         return self
 
@@ -619,7 +619,7 @@ class VibeConfig(BaseSettings):
         pass
 
     @classmethod
-    def load(cls, **overrides: Any) -> VibeConfig:
+    def load(cls, **overrides: Any) -> DrydockConfig:
         cls._migrate()
         config = cls(**(overrides or {}))
 

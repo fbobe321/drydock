@@ -7,16 +7,16 @@ from textual.content import Content
 from textual.style import Style
 from textual.widgets import Markdown
 
-from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.app import DrydockApp
 from drydock.cli.textual_ui.widgets.chat_input.completion_popup import CompletionPopup
 from drydock.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
 
 
 @pytest.mark.asyncio
-async def test_popup_appears_with_matching_suggestions(vibe_app: VibeApp) -> None:
-    async with vibe_app.run_test() as pilot:
-        chat_input = vibe_app.query_one(ChatInputContainer)
-        popup = vibe_app.query_one(CompletionPopup)
+async def test_popup_appears_with_matching_suggestions(drydock_app: DrydockApp) -> None:
+    async with drydock_app.run_test() as pilot:
+        chat_input = drydock_app.query_one(ChatInputContainer)
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"/com")
 
@@ -28,9 +28,9 @@ async def test_popup_appears_with_matching_suggestions(vibe_app: VibeApp) -> Non
 
 
 @pytest.mark.asyncio
-async def test_popup_hides_when_input_cleared(vibe_app: VibeApp) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+async def test_popup_hides_when_input_cleared(drydock_app: DrydockApp) -> None:
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"/c")
         await pilot.press("backspace", "backspace")
@@ -40,11 +40,11 @@ async def test_popup_hides_when_input_cleared(vibe_app: VibeApp) -> None:
 
 @pytest.mark.asyncio
 async def test_pressing_tab_writes_selected_command_and_keeps_popup_visible(
-    vibe_app: VibeApp,
+    drydock_app: DrydockApp,
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        chat_input = vibe_app.query_one(ChatInputContainer)
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        chat_input = drydock_app.query_one(ChatInputContainer)
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"/co")
         await pilot.press("tab")
@@ -71,9 +71,9 @@ def ensure_selected_command(popup: CompletionPopup, expected_alias: str) -> None
 
 
 @pytest.mark.asyncio
-async def test_arrow_navigation_updates_selected_suggestion(vibe_app: VibeApp) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+async def test_arrow_navigation_updates_selected_suggestion(drydock_app: DrydockApp) -> None:
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"/c")
 
@@ -85,9 +85,9 @@ async def test_arrow_navigation_updates_selected_suggestion(vibe_app: VibeApp) -
 
 
 @pytest.mark.asyncio
-async def test_arrow_navigation_cycles_through_suggestions(vibe_app: VibeApp) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+async def test_arrow_navigation_cycles_through_suggestions(drydock_app: DrydockApp) -> None:
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"/co")
 
@@ -100,18 +100,18 @@ async def test_arrow_navigation_cycles_through_suggestions(vibe_app: VibeApp) ->
 
 @pytest.mark.asyncio
 async def test_pressing_enter_submits_selected_command_and_hides_popup(
-    vibe_app: VibeApp, telemetry_events: list[dict]
+    drydock_app: DrydockApp, telemetry_events: list[dict]
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        chat_input = vibe_app.query_one(ChatInputContainer)
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        chat_input = drydock_app.query_one(ChatInputContainer)
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"/hel")  # typos:disable-line
         await pilot.press("enter")
 
         assert chat_input.value == ""
         assert popup.styles.display == "none"
-        message = vibe_app.query_one(".user-command-message")
+        message = drydock_app.query_one(".user-command-message")
         message_content = message.query_one(Markdown)
         assert "Show help message" in message_content.source
 
@@ -137,9 +137,9 @@ def file_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tmp_path / "src" / "utils" / "sanitize.py").write_text("", encoding="utf-8")
     (tmp_path / "src" / "utils" / "validate.py").write_text("", encoding="utf-8")
     (tmp_path / "src" / "main.py").write_text("", encoding="utf-8")
-    (tmp_path / "vibe" / "acp").mkdir(parents=True)
-    (tmp_path / "vibe" / "acp" / "entrypoint.py").write_text("", encoding="utf-8")
-    (tmp_path / "vibe" / "acp" / "agent.py").write_text("", encoding="utf-8")
+    (tmp_path / "drydock" / "acp").mkdir(parents=True)
+    (tmp_path / "drydock" / "acp" / "entrypoint.py").write_text("", encoding="utf-8")
+    (tmp_path / "drydock" / "acp" / "agent.py").write_text("", encoding="utf-8")
     (tmp_path / "README.md").write_text("", encoding="utf-8")
     (tmp_path / ".env").write_text("", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -148,10 +148,10 @@ def file_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.mark.asyncio
 async def test_path_completion_popup_lists_files_and_directories(
-    vibe_app: VibeApp, file_tree: Path
+    drydock_app: DrydockApp, file_tree: Path
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"@s")
 
@@ -162,9 +162,9 @@ async def test_path_completion_popup_lists_files_and_directories(
 
 @pytest.mark.asyncio
 async def test_path_completion_popup_shows_up_to_ten_results(
-    vibe_app: VibeApp, file_tree: Path
+    drydock_app: DrydockApp, file_tree: Path
 ) -> None:
-    async with vibe_app.run_test() as pilot:
+    async with drydock_app.run_test() as pilot:
         (file_tree / "src" / "core" / "extra").mkdir(parents=True)
         [
             (file_tree / "src" / "core" / "extra" / f"extra_file_{i}.py").write_text(
@@ -172,7 +172,7 @@ async def test_path_completion_popup_shows_up_to_ten_results(
             )
             for i in range(1, 13)
         ]
-        popup = vibe_app.query_one(CompletionPopup)
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"@src/core/extra/")
 
@@ -192,11 +192,11 @@ async def test_path_completion_popup_shows_up_to_ten_results(
 
 @pytest.mark.asyncio
 async def test_pressing_tab_writes_selected_path_name_and_hides_popup(
-    vibe_app: VibeApp, file_tree: Path
+    drydock_app: DrydockApp, file_tree: Path
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        chat_input = vibe_app.query_one(ChatInputContainer)
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        chat_input = drydock_app.query_one(ChatInputContainer)
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"Print @REA")
         await pilot.press("tab")
@@ -207,11 +207,11 @@ async def test_pressing_tab_writes_selected_path_name_and_hides_popup(
 
 @pytest.mark.asyncio
 async def test_pressing_enter_writes_selected_path_name_and_hides_popup(
-    vibe_app: VibeApp, file_tree: Path
+    drydock_app: DrydockApp, file_tree: Path
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        chat_input = vibe_app.query_one(ChatInputContainer)
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        chat_input = drydock_app.query_one(ChatInputContainer)
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"Print @src/m")
         await pilot.press("enter")
@@ -222,10 +222,10 @@ async def test_pressing_enter_writes_selected_path_name_and_hides_popup(
 
 @pytest.mark.asyncio
 async def test_fuzzy_matches_subsequence_characters(
-    file_tree: Path, vibe_app: VibeApp
+    file_tree: Path, drydock_app: DrydockApp
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"@src/utils/handling")
 
@@ -236,10 +236,10 @@ async def test_fuzzy_matches_subsequence_characters(
 
 @pytest.mark.asyncio
 async def test_fuzzy_matches_word_boundaries(
-    file_tree: Path, vibe_app: VibeApp
+    file_tree: Path, drydock_app: DrydockApp
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"@src/utils/eh")
 
@@ -250,39 +250,39 @@ async def test_fuzzy_matches_word_boundaries(
 
 @pytest.mark.asyncio
 async def test_finds_files_recursively_by_filename(
-    file_tree: Path, vibe_app: VibeApp
+    file_tree: Path, drydock_app: DrydockApp
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"@entryp")
 
         popup_content = str(popup.render())
-        assert "@vibe/acp/entrypoint.py" in popup_content
+        assert "@drydock/acp/entrypoint.py" in popup_content
         assert popup.styles.display == "block"
 
 
 @pytest.mark.asyncio
 async def test_finds_files_recursively_with_partial_path(
-    file_tree: Path, vibe_app: VibeApp
+    file_tree: Path, drydock_app: DrydockApp
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        popup = drydock_app.query_one(CompletionPopup)
 
         await pilot.press(*"@acp/entry")
 
         popup_content = str(popup.render())
-        assert "@vibe/acp/entrypoint.py" in popup_content
+        assert "@drydock/acp/entrypoint.py" in popup_content
         assert popup.styles.display == "block"
 
 
 @pytest.mark.asyncio
 async def test_does_not_trigger_completion_when_navigating_history(
-    file_tree: Path, vibe_app: VibeApp
+    file_tree: Path, drydock_app: DrydockApp
 ) -> None:
-    async with vibe_app.run_test() as pilot:
-        chat_input = vibe_app.query_one(ChatInputContainer)
-        popup = vibe_app.query_one(CompletionPopup)
+    async with drydock_app.run_test() as pilot:
+        chat_input = drydock_app.query_one(ChatInputContainer)
+        popup = drydock_app.query_one(CompletionPopup)
         message_with_path = "Check @src/m"
         message_to_fill_history = "Yet another message to fill history"
 

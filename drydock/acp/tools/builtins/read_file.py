@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from drydock import VIBE_ROOT
+from drydock import DRYDOCK_ROOT
 from drydock.acp.tools.base import AcpToolState, BaseAcpTool
 from drydock.core.tools.base import BaseToolState, ToolError
 from drydock.core.tools.builtins.read_file import (
@@ -21,7 +21,7 @@ class AcpReadFileState(BaseToolState, AcpToolState):
 
 class ReadFile(CoreReadFileTool, BaseAcpTool[AcpReadFileState]):
     state: AcpReadFileState
-    prompt_path = VIBE_ROOT / "core" / "tools" / "builtins" / "prompts" / "read_file.md"
+    prompt_path = DRYDOCK_ROOT / "core" / "tools" / "builtins" / "prompts" / "read_file.md"
 
     @classmethod
     def _get_tool_state_class(cls) -> type[AcpReadFileState]:

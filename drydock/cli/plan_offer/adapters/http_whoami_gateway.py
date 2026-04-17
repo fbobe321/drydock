@@ -12,7 +12,7 @@ from drydock.cli.plan_offer.ports.whoami_gateway import (
 )
 
 BASE_URL = "https://console.mistral.ai"
-WHOAMI_PATH = "/api/vibe/whoami"
+WHOAMI_PATH = "/api/drydock/whoami"
 
 
 class HttpWhoAmIGateway:

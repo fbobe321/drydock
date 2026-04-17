@@ -12,10 +12,10 @@ from acp.schema import (
 )
 import pytest
 
-from tests.conftest import build_test_vibe_config
+from tests.conftest import build_test_drydock_config
 from tests.stubs.fake_backend import FakeBackend
 from tests.stubs.fake_client import FakeClient
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
 from drydock.core.config import ModelConfig, SessionLoggingConfig
@@ -25,11 +25,11 @@ from drydock.core.types import Role
 @pytest.fixture
 def acp_agent_with_session_config(
     backend: FakeBackend, temp_session_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[VibeAcpAgentLoop, FakeClient]:
+) -> tuple[DrydockAcpAgentLoop, FakeClient]:
     session_config = SessionLoggingConfig(
         save_dir=str(temp_session_dir), session_prefix="session", enabled=True
     )
-    config = build_test_vibe_config(
+    config = build_test_drydock_config(
         active_model="devstral-latest",
         models=[
             ModelConfig(
@@ -49,21 +49,21 @@ def acp_agent_with_session_config(
             self.agent_manager.invalidate_config()
 
     monkeypatch.setattr("drydock.acp.acp_agent_loop.AgentLoop", PatchedAgentLoop)
-    monkeypatch.setattr(VibeAcpAgentLoop, "_load_config", lambda self: config)
+    monkeypatch.setattr(DrydockAcpAgentLoop, "_load_config", lambda self: config)
 
-    vibe_acp_agent = VibeAcpAgentLoop()
+    drydock_acp_agent = DrydockAcpAgentLoop()
     client = FakeClient()
-    vibe_acp_agent.on_connect(client)
-    client.on_connect(vibe_acp_agent)
+    drydock_acp_agent.on_connect(client)
+    client.on_connect(drydock_acp_agent)
 
-    return vibe_acp_agent, client
+    return drydock_acp_agent, client
 
 
 class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_response_structure(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:
@@ -126,7 +126,7 @@ class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_registers_session_with_original_id(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:
@@ -144,7 +144,7 @@ class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_injects_messages_into_agent_loop(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:
@@ -171,7 +171,7 @@ class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_replays_user_messages(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:
@@ -193,7 +193,7 @@ class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_replays_assistant_messages(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:
@@ -220,7 +220,7 @@ class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_replays_tool_calls(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:
@@ -267,7 +267,7 @@ class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_replays_reasoning_content(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:
@@ -297,7 +297,7 @@ class TestLoadSession:
 
     @pytest.mark.asyncio
     async def test_load_session_not_found_raises_error(
-        self, acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient]
+        self, acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient]
     ) -> None:
         acp_agent, _client = acp_agent_with_session_config
 
@@ -309,7 +309,7 @@ class TestLoadSession:
     @pytest.mark.asyncio
     async def test_load_session_replays_full_conversation(
         self,
-        acp_agent_with_session_config: tuple[VibeAcpAgentLoop, FakeClient],
+        acp_agent_with_session_config: tuple[DrydockAcpAgentLoop, FakeClient],
         temp_session_dir: Path,
         create_test_session,
     ) -> None:

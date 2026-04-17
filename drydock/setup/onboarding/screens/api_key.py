@@ -13,7 +13,7 @@ from textual.widgets import Input, Link, Static
 
 from drydock.cli.clipboard import copy_selection_to_clipboard
 from drydock.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
-from drydock.core.config import Backend, VibeConfig
+from drydock.core.config import Backend, DrydockConfig
 from drydock.core.paths import GLOBAL_ENV_FILE
 from drydock.core.telemetry.send import TelemetryClient
 from drydock.setup.onboarding.base import OnboardingScreen
@@ -41,7 +41,7 @@ class ApiKeyScreen(OnboardingScreen):
 
     def __init__(self) -> None:
         super().__init__()
-        config = VibeConfig.model_construct()
+        config = DrydockConfig.model_construct()
         active_model = config.get_active_model()
         self.provider = config.get_provider_for_model(active_model)
 
@@ -132,7 +132,7 @@ class ApiKeyScreen(OnboardingScreen):
             return
         if self.provider.backend == Backend.MISTRAL:
             try:
-                telemetry = TelemetryClient(config_getter=VibeConfig)
+                telemetry = TelemetryClient(config_getter=DrydockConfig)
                 telemetry.send_onboarding_api_key_added()
             except Exception:
                 pass  # Telemetry is fire-and-forget; don't fail onboarding

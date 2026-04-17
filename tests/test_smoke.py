@@ -24,8 +24,8 @@ class TestImports:
         assert MessageList
 
     def test_config_imports(self):
-        from drydock.core.config import VibeConfig, ModelConfig, ProviderConfig
-        assert VibeConfig
+        from drydock.core.config import DrydockConfig, ModelConfig, ProviderConfig
+        assert DrydockConfig
 
     def test_tool_imports(self):
         from drydock.core.tools.builtins.bash import Bash
@@ -148,13 +148,13 @@ class TestSkills:
 
 class TestConfig:
     def test_consultant_model_field(self):
-        from drydock.core.config import VibeConfig
-        assert "consultant_model" in VibeConfig.model_fields
+        from drydock.core.config import DrydockConfig
+        assert "consultant_model" in DrydockConfig.model_fields
 
     def test_drydock_home_default(self):
         import inspect
-        from drydock.core.paths import _vibe_home
-        src = inspect.getsource(_vibe_home)
+        from drydock.core.paths import _drydock_home
+        src = inspect.getsource(_drydock_home)
         assert ".drydock" in src
 
 

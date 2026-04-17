@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 NOTIFY = Path("/data3/drydock/scripts/notify_release.py")
-SESSION_DIR = Path("/home/bobef/.vibe/logs/session")
+SESSION_DIR = Path("/home/bobef/.drydock/logs/session")
 
 
 def _stress_log_path() -> Path | None:

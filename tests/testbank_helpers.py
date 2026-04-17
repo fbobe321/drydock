@@ -28,7 +28,7 @@ except RuntimeError:
 
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import Backend, ModelConfig, ProviderConfig, VibeConfig
+from drydock.core.config import Backend, ModelConfig, ProviderConfig, DrydockConfig
 from drydock.core.types import AssistantEvent, ToolCallEvent, ToolResultEvent
 
 
@@ -51,7 +51,7 @@ requires_vllm = pytest.mark.skipif(not vllm_ok(), reason="vLLM not running at lo
 
 def make_agent(work_dir: Path, max_turns: int = 25, system_prompt_id: str = "cli") -> AgentLoop:
     """Create an auto-approve AgentLoop pointed at local vLLM."""
-    config = VibeConfig(
+    config = DrydockConfig(
         active_model="devstral",
         auto_approve=True,
         enable_telemetry=False,

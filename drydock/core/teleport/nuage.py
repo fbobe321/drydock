@@ -122,7 +122,7 @@ class NuageClient:
         )
         if not response.is_success:
             error_msg = f"Nuage workflow trigger failed: {response.text}"
-            # TODO(vibe-nuage): remove this once prod has shared vibe-nuage workers
+            # TODO(nuage): remove this once prod has shared nuage workers
             if "Unauthorized" in response.text or "unauthorized" in response.text:
                 error_msg += (
                     "\n\nHint: This version uses Mistral staging environment. "

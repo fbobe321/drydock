@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.conftest import build_test_vibe_config
+from tests.conftest import build_test_drydock_config
 from tests.mock.mock_backend_factory import mock_backend_factory
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
@@ -41,7 +41,7 @@ def test_run_programmatic_preload_streaming_is_batched(
             )
         ),
     ):
-        cfg = build_test_vibe_config(
+        cfg = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             include_prompt_detail=False,
@@ -109,7 +109,7 @@ def test_run_programmatic_ignores_system_messages_in_previous(
         Backend.MISTRAL,
         lambda provider, **kwargs: FakeBackend([mock_llm_chunk(content="Understood.")]),
     ):
-        cfg = build_test_vibe_config(
+        cfg = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             include_prompt_detail=False,

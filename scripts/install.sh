@@ -78,23 +78,23 @@ function install_uv() {
     fi
 }
 
-function check_vibe_installed() {
-    if command -v vibe &> /dev/null; then
-        info "vibe is already installed"
-        VIBE_INSTALLED=true
+function check_drydock_installed() {
+    if command -v drydock &> /dev/null; then
+        info "drydock is already installed"
+        DRYDOCK_INSTALLED=true
     else
-        VIBE_INSTALLED=false
+        DRYDOCK_INSTALLED=false
     fi
 }
 
-function install_vibe() {
+function install_drydock() {
     info "Installing Drydock from GitHub repository using uv..."
     uv tool install drydock
 
     success "Drydock installed successfully! (commands: drydock, drydock-acp)"
 }
 
-function update_vibe() {
+function update_drydock() {
     info "Updating Drydock from GitHub repository using uv..."
     uv tool upgrade drydock
 
@@ -124,24 +124,24 @@ function main() {
         install_uv
     fi
 
-    check_vibe_installed
+    check_drydock_installed
 
-    if [[ "$VIBE_INSTALLED" == "false" ]]; then
-        install_vibe
+    if [[ "$DRYDOCK_INSTALLED" == "false" ]]; then
+        install_drydock
     else
-        update_vibe
+        update_drydock
     fi
 
-    if command -v vibe &> /dev/null; then
+    if command -v drydock &> /dev/null; then
         success "Installation completed successfully!"
         echo
-        echo "You can now run vibe with:"
-        echo "  vibe"
+        echo "You can now run drydock with:"
+        echo "  drydock"
         echo
         echo "Or for ACP mode:"
-        echo "  vibe-acp"
+        echo "  drydock-acp"
     else
-        error "Installation completed but 'vibe' command not found"
+        error "Installation completed but 'drydock' command not found"
         error "Please check your installation and PATH settings"
         exit 1
     fi

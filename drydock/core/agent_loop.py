@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from drydock.cli.terminal_setup import detect_terminal
 from drydock.core.agents.manager import AgentManager
 from drydock.core.agents.models import AgentProfile, BuiltinAgentName
-from drydock.core.config import Backend, ProviderConfig, VibeConfig
+from drydock.core.config import Backend, ProviderConfig, DrydockConfig
 from drydock.core.llm.backend.factory import BACKEND_FACTORY
 from drydock.core.llm.exceptions import BackendError
 from drydock.core.llm.format import (
@@ -90,7 +90,7 @@ from drydock.core.types import (
 )
 from drydock.core.utils import (
     TOOL_ERROR_TAG,
-    VIBE_STOP_EVENT_TAG,
+    DRYDOCK_STOP_EVENT_TAG,
     CancellationReason,
     get_user_agent,
     get_user_cancellation_message,
@@ -153,7 +153,7 @@ def _should_raise_rate_limit_error(e: Exception) -> bool:
 class AgentLoop:
     def __init__(
         self,
-        config: VibeConfig,
+        config: DrydockConfig,
         agent_name: str = BuiltinAgentName.DEFAULT,
         message_observer: Callable[[LLMMessage], None] | None = None,
         max_turns: int | None = None,
@@ -244,7 +244,7 @@ class AgentLoop:
         return self.agent_manager.active_profile
 
     @property
-    def config(self) -> VibeConfig:
+    def config(self) -> DrydockConfig:
         return self.agent_manager.config
 
     @property
@@ -255,7 +255,7 @@ class AgentLoop:
         self, tool_name: str, permission: ToolPermission, save_permanently: bool = False
     ) -> None:
         if save_permanently:
-            VibeConfig.save_updates({
+            DrydockConfig.save_updates({
                 "tools": {tool_name: {"permission": permission.value}}
             })
 
@@ -474,7 +474,7 @@ class AgentLoop:
             )
         return self._teleport_service
 
-    def teleport_to_vibe_nuage(
+    def teleport_to_nuage(
         self, prompt: str | None
     ) -> AsyncGenerator[TeleportYieldEvent, TeleportPushResponseEvent | None]:
         from drydock.core.teleport.nuage import TeleportSession
@@ -552,7 +552,7 @@ class AgentLoop:
         match result.action:
             case MiddlewareAction.STOP:
                 yield AssistantEvent(
-                    content=f"<{VIBE_STOP_EVENT_TAG}>{result.reason}</{VIBE_STOP_EVENT_TAG}>",
+                    content=f"<{DRYDOCK_STOP_EVENT_TAG}>{result.reason}</{DRYDOCK_STOP_EVENT_TAG}>",
                     stopped_by_middleware=True,
                 )
 
@@ -2985,7 +2985,7 @@ class AgentLoop:
 
     async def reload_with_initial_messages(
         self,
-        base_config: VibeConfig | None = None,
+        base_config: DrydockConfig | None = None,
         max_turns: int | None = None,
         max_price: float | None = None,
         reset_middleware: bool = True,

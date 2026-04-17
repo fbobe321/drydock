@@ -11,12 +11,12 @@ from acp.schema import (
 )
 import pytest
 
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 
 
 class TestACPInitialize:
     @pytest.mark.asyncio
-    async def test_initialize(self, acp_agent_loop: VibeAcpAgentLoop) -> None:
+    async def test_initialize(self, acp_agent_loop: DrydockAcpAgentLoop) -> None:
         response = await acp_agent_loop.initialize(protocol_version=PROTOCOL_VERSION)
 
         assert response.protocol_version == PROTOCOL_VERSION
@@ -35,7 +35,7 @@ class TestACPInitialize:
 
     @pytest.mark.asyncio
     async def test_initialize_with_terminal_auth(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         """Test initialize with terminal-auth capabilities to check it was included."""
         client_capabilities = ClientCapabilities(field_meta={"terminal-auth": True})
@@ -58,7 +58,7 @@ class TestACPInitialize:
         assert response.auth_methods is not None
         assert len(response.auth_methods) == 1
         auth_method = response.auth_methods[0]
-        assert auth_method.id == "vibe-setup"
+        assert auth_method.id == "drydock-setup"
         assert auth_method.name == "Register your API Key"
         assert auth_method.description == "Register your API Key inside Drydock"
         assert auth_method.field_meta is not None

@@ -36,7 +36,7 @@ async def ask_consultant(
     ----------
     question : str
         The specific question to ask.
-    config : VibeConfig, optional
+    config : DrydockConfig, optional
         DryDock config with providers/models. If None, uses env vars.
     model : str, optional
         Model name override. If None, uses config.consultant_model or env var.

@@ -8,7 +8,7 @@ from textual.widgets import Button
 from tests.cli.plan_offer.adapters.fake_whoami_gateway import FakeWhoAmIGateway
 from tests.conftest import build_test_agent_loop
 from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from drydock.cli.textual_ui.app import ChatScroll, VibeApp
+from drydock.cli.textual_ui.app import ChatScroll, DrydockApp
 from drydock.cli.textual_ui.widgets.load_more import (
     HistoryLoadMoreMessage,
     HistoryLoadMoreRequested,
@@ -18,13 +18,13 @@ from drydock.cli.textual_ui.windowing import (
     HISTORY_RESUME_TAIL_MESSAGES,
     LOAD_MORE_BATCH_SIZE,
 )
-from drydock.core.config import SessionLoggingConfig, VibeConfig
+from drydock.core.config import SessionLoggingConfig, DrydockConfig
 from drydock.core.types import LLMMessage, Role
 
 
 @pytest.fixture
-def vibe_config() -> VibeConfig:
-    return VibeConfig(
+def drydock_config() -> DrydockConfig:
+    return DrydockConfig(
         session_logging=SessionLoggingConfig(enabled=False), enable_update_checks=False
     )
 
@@ -48,13 +48,13 @@ async def _wait_until(pause, predicate, timeout: float = 2.0) -> None:
     raise AssertionError("Condition was not met within the timeout")
 
 
-async def _wait_for_load_more(app: VibeApp, pause) -> None:
+async def _wait_for_load_more(app: DrydockApp, pause) -> None:
     await _wait_until(
         pause, lambda: len(app.query(HistoryLoadMoreMessage)) == 1, timeout=5.0
     )
 
 
-def _load_more_remaining(app: VibeApp) -> int:
+def _load_more_remaining(app: DrydockApp) -> int:
     label = app.query_one(HistoryLoadMoreMessage).query_one(Button).label
     text = str(label)
     _, _, remainder = text.rpartition("(")
@@ -63,14 +63,14 @@ def _load_more_remaining(app: VibeApp) -> int:
 
 @pytest.mark.asyncio
 async def test_ui_session_incremental_loader_shows_tail_and_load_more(
-    vibe_config: VibeConfig,
+    drydock_config: DrydockConfig,
 ) -> None:
-    agent_loop = build_test_agent_loop(config=vibe_config, enable_streaming=False)
+    agent_loop = build_test_agent_loop(config=drydock_config, enable_streaming=False)
     agent_loop.messages.extend([
         LLMMessage(role=Role.user, content=f"msg-{idx}") for idx in range(66)
     ])
 
-    app = VibeApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
+    app = DrydockApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
 
     async with app.run_test() as pilot:
         await _wait_until(
@@ -88,16 +88,16 @@ async def test_ui_session_incremental_loader_shows_tail_and_load_more(
 
 @pytest.mark.asyncio
 async def test_ui_session_incremental_loader_load_more_shows_remaining_count(
-    vibe_config: VibeConfig,
+    drydock_config: DrydockConfig,
 ) -> None:
     total_messages = 31
-    agent_loop = build_test_agent_loop(config=vibe_config, enable_streaming=False)
+    agent_loop = build_test_agent_loop(config=drydock_config, enable_streaming=False)
     agent_loop.messages.extend([
         LLMMessage(role=Role.user, content=f"msg-{idx}")
         for idx in range(total_messages)
     ])
 
-    app = VibeApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
+    app = DrydockApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
 
     async with app.run_test() as pilot:
         await _wait_until(
@@ -121,14 +121,14 @@ async def test_ui_session_incremental_loader_load_more_shows_remaining_count(
 
 @pytest.mark.asyncio
 async def test_ui_session_incremental_loader_load_more_batches_until_done(
-    vibe_config: VibeConfig,
+    drydock_config: DrydockConfig,
 ) -> None:
-    agent_loop = build_test_agent_loop(config=vibe_config, enable_streaming=False)
+    agent_loop = build_test_agent_loop(config=drydock_config, enable_streaming=False)
     agent_loop.messages.extend([
         LLMMessage(role=Role.user, content=f"msg-{idx}") for idx in range(31)
     ])
 
-    app = VibeApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
+    app = DrydockApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
 
     async with app.run_test() as pilot:
         await _wait_until(
@@ -156,15 +156,15 @@ async def test_ui_session_incremental_loader_load_more_batches_until_done(
 
 @pytest.mark.asyncio
 async def test_ui_session_incremental_loader_keeps_top_alignment_when_not_scrollable(
-    vibe_config: VibeConfig,
+    drydock_config: DrydockConfig,
 ) -> None:
-    agent_loop = build_test_agent_loop(config=vibe_config, enable_streaming=False)
+    agent_loop = build_test_agent_loop(config=drydock_config, enable_streaming=False)
     agent_loop.messages.extend([
         LLMMessage(role=Role.user, content=f"msg-{idx}")
         for idx in range(HISTORY_RESUME_TAIL_MESSAGES + 1)
     ])
 
-    app = VibeApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
+    app = DrydockApp(agent_loop=agent_loop, plan_offer_gateway=_pro_plan_gateway())
 
     async with app.run_test(size=(120, 80)) as pilot:
         await _wait_for_load_more(app, pilot.pause)

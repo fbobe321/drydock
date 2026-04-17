@@ -8,7 +8,7 @@ import sys
 import tomli_w
 
 from drydock import __version__
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.config.harness_files import (
     get_harness_files_manager,
     init_harness_files_manager,
@@ -44,7 +44,7 @@ def bootstrap_config_files() -> None:
         try:
             config_file.parent.mkdir(parents=True, exist_ok=True)
             with config_file.open("wb") as f:
-                tomli_w.dump(VibeConfig.create_default(), f)
+                tomli_w.dump(DrydockConfig.create_default(), f)
         except Exception as e:
             logger.error(f"Could not create default config file: {e}")
             raise

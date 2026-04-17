@@ -14,14 +14,14 @@ from tests.update_notifier.adapters.fake_update_cache_repository import (
 )
 from tests.update_notifier.adapters.fake_update_gateway import FakeUpdateGateway
 from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from drydock.cli.textual_ui.app import CORE_VERSION, VibeApp
+from drydock.cli.textual_ui.app import CORE_VERSION, DrydockApp
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
 from drydock.core.config import (
     DEFAULT_MODELS,
     ModelConfig,
     SessionLoggingConfig,
-    VibeConfig,
+    DrydockConfig,
 )
 from drydock.core.config.harness_files import (
     init_harness_files_manager,
@@ -65,13 +65,13 @@ def tmp_working_directory(
 def config_dir(
     monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
 ) -> Path:
-    tmp_path = tmp_path_factory.mktemp("vibe")
-    config_dir = tmp_path / ".vibe"
+    tmp_path = tmp_path_factory.mktemp("drydock")
+    config_dir = tmp_path / ".drydock"
     config_dir.mkdir(parents=True, exist_ok=True)
     config_file = config_dir / "config.toml"
     config_file.write_text(tomli_w.dumps(get_base_config()), encoding="utf-8")
 
-    monkeypatch.setattr("drydock.core.paths._vibe_home._DEFAULT_DRYDOCK_HOME", config_dir)
+    monkeypatch.setattr("drydock.core.paths._drydock_home._DEFAULT_DRYDOCK_HOME", config_dir)
     return config_dir
 
 
@@ -121,8 +121,8 @@ def telemetry_events(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def vibe_app() -> VibeApp:
-    return build_test_vibe_app()
+def drydock_app() -> DrydockApp:
+    return build_test_drydock_app()
 
 
 @pytest.fixture
@@ -131,8 +131,8 @@ def agent_loop() -> AgentLoop:
 
 
 @pytest.fixture
-def vibe_config() -> VibeConfig:
-    return build_test_vibe_config()
+def drydock_config() -> DrydockConfig:
+    return build_test_drydock_config()
 
 
 def make_test_models(auto_compact_threshold: int) -> list[ModelConfig]:
@@ -142,7 +142,7 @@ def make_test_models(auto_compact_threshold: int) -> list[ModelConfig]:
     ]
 
 
-def build_test_vibe_config(**kwargs) -> VibeConfig:
+def build_test_drydock_config(**kwargs) -> DrydockConfig:
     session_logging = kwargs.pop("session_logging", None)
     resolved_session_logging = (
         SessionLoggingConfig(enabled=False)
@@ -155,7 +155,7 @@ def build_test_vibe_config(**kwargs) -> VibeConfig:
     )
     if kwargs.get("models"):
         kwargs.setdefault("active_model", kwargs["models"][0].alias)
-    return VibeConfig(
+    return DrydockConfig(
         session_logging=resolved_session_logging,
         enable_update_checks=resolved_enable_update_checks,
         **kwargs,
@@ -164,14 +164,14 @@ def build_test_vibe_config(**kwargs) -> VibeConfig:
 
 def build_test_agent_loop(
     *,
-    config: VibeConfig | None = None,
+    config: DrydockConfig | None = None,
     agent_name: str = BuiltinAgentName.DEFAULT,
     backend: BackendLike | None = None,
     enable_streaming: bool = False,
     **kwargs,
 ) -> AgentLoop:
 
-    resolved_config = config or build_test_vibe_config()
+    resolved_config = config or build_test_drydock_config()
 
     return AgentLoop(
         config=resolved_config,
@@ -182,10 +182,10 @@ def build_test_agent_loop(
     )
 
 
-def build_test_vibe_app(
-    *, config: VibeConfig | None = None, agent_loop: AgentLoop | None = None, **kwargs
-) -> VibeApp:
-    app_config = config or build_test_vibe_config()
+def build_test_drydock_app(
+    *, config: DrydockConfig | None = None, agent_loop: AgentLoop | None = None, **kwargs
+) -> DrydockApp:
+    app_config = config or build_test_drydock_config()
 
     resolved_agent_loop = agent_loop or build_test_agent_loop(config=app_config)
 
@@ -216,7 +216,7 @@ def build_test_vibe_app(
         CORE_VERSION if current_version is None else current_version
     )
 
-    return VibeApp(
+    return DrydockApp(
         agent_loop=resolved_agent_loop,
         current_version=resolved_current_version,
         update_notifier=resolved_update_notifier,

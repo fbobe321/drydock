@@ -31,11 +31,11 @@ class TestNuageModels:
         assert config.branch == "main"
         assert config.commit == "abc123"
 
-    def test_vibe_sandbox_config_defaults(self) -> None:
+    def test_drydock_sandbox_config_defaults(self) -> None:
         config = VibeSandboxConfig()
         assert config.git_repo is None
 
-    def test_vibe_new_sandbox_defaults(self) -> None:
+    def test_drydock_new_sandbox_defaults(self) -> None:
         sandbox = VibeNewSandbox()
         assert sandbox.type == "new"
         assert sandbox.config.git_repo is None

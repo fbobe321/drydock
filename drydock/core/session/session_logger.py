@@ -22,7 +22,7 @@ from drydock.core.utils import is_windows, utc_now
 
 if TYPE_CHECKING:
     from drydock.core.agents.models import AgentProfile
-    from drydock.core.config import SessionLoggingConfig, VibeConfig
+    from drydock.core.config import SessionLoggingConfig, DrydockConfig
     from drydock.core.tools.manager import ToolManager
 
 
@@ -206,7 +206,7 @@ class SessionLogger:
         self,
         messages: Sequence[LLMMessage],
         stats: AgentStats,
-        base_config: VibeConfig,
+        base_config: DrydockConfig,
         tool_manager: ToolManager,
         agent_profile: AgentProfile,
     ) -> None:

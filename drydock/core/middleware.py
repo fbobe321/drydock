@@ -6,10 +6,10 @@ from enum import StrEnum, auto
 from typing import TYPE_CHECKING, Any, Protocol
 
 from drydock.core.agents import AgentProfile
-from drydock.core.utils import VIBE_WARNING_TAG
+from drydock.core.utils import DRYDOCK_WARNING_TAG
 
 if TYPE_CHECKING:
-    from drydock.core.config import VibeConfig
+    from drydock.core.config import DrydockConfig
     from drydock.core.types import AgentStats, MessageList
 
 
@@ -29,7 +29,7 @@ class ResetReason(StrEnum):
 class ConversationContext:
     messages: MessageList
     stats: AgentStats
-    config: VibeConfig
+    config: DrydockConfig
 
 
 @dataclass
@@ -179,7 +179,7 @@ class ContextWarningMiddleware:
                 self._tier_warned.add(tier_name)
                 self._calls_since_last_warn = 0
 
-                warning_msg = f"<{VIBE_WARNING_TAG}>{template.format(pct=pct_used * 100, used=context.stats.context_tokens, max=max_context)}</{VIBE_WARNING_TAG}>"
+                warning_msg = f"<{DRYDOCK_WARNING_TAG}>{template.format(pct=pct_used * 100, used=context.stats.context_tokens, max=max_context)}</{DRYDOCK_WARNING_TAG}>"
                 return MiddlewareResult(
                     action=MiddlewareAction.INJECT_MESSAGE, message=warning_msg
                 )
@@ -193,7 +193,7 @@ class ContextWarningMiddleware:
 
 
 def make_plan_agent_reminder(plan_file_path: str) -> str:
-    return f"""<{VIBE_WARNING_TAG}>Plan mode is active. You MUST NOT make any edits (except to the plan file below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
+    return f"""<{DRYDOCK_WARNING_TAG}>Plan mode is active. You MUST NOT make any edits (except to the plan file below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
 
 ## Plan File Info
 Create or edit your plan at {plan_file_path} using the write_file and search_replace tools.
@@ -204,18 +204,18 @@ This is the only file you are allowed to edit. Make sure to create it early and 
 1. Research the user's query using read-only tools (grep, read_file, etc.)
 2. If you are unsure about requirements or approach, use the ask_user_question tool to clarify before finalizing your plan
 3. Write your plan to the plan file above
-4. When your plan is complete, call the exit_plan_mode tool to request user approval and switch to implementation mode</{VIBE_WARNING_TAG}>"""
+4. When your plan is complete, call the exit_plan_mode tool to request user approval and switch to implementation mode</{DRYDOCK_WARNING_TAG}>"""
 
 
-PLAN_AGENT_EXIT = f"""<{VIBE_WARNING_TAG}>Plan mode has ended. If you have a plan ready, you can now start executing it. If not, you can now use editing tools and make changes to the system.</{VIBE_WARNING_TAG}>"""
+PLAN_AGENT_EXIT = f"""<{DRYDOCK_WARNING_TAG}>Plan mode has ended. If you have a plan ready, you can now start executing it. If not, you can now use editing tools and make changes to the system.</{DRYDOCK_WARNING_TAG}>"""
 
-CHAT_AGENT_REMINDER = f"""<{VIBE_WARNING_TAG}>Chat mode is active. The user wants to have a conversation -- ask questions, get explanations, or discuss code and architecture. You MUST NOT make any edits, run any non-readonly tools, or otherwise make any changes to the system. This supersedes any other instructions you have received. Instead, you should:
+CHAT_AGENT_REMINDER = f"""<{DRYDOCK_WARNING_TAG}>Chat mode is active. The user wants to have a conversation -- ask questions, get explanations, or discuss code and architecture. You MUST NOT make any edits, run any non-readonly tools, or otherwise make any changes to the system. This supersedes any other instructions you have received. Instead, you should:
 1. Answer the user's questions directly and comprehensively
 2. Explain code, concepts, or architecture as requested
 3. Use read-only tools (grep, read_file) to look up relevant code when needed
-4. Focus on being informative and conversational -- your response IS the deliverable, not a precursor to action</{VIBE_WARNING_TAG}>"""
+4. Focus on being informative and conversational -- your response IS the deliverable, not a precursor to action</{DRYDOCK_WARNING_TAG}>"""
 
-CHAT_AGENT_EXIT = f"""<{VIBE_WARNING_TAG}>Chat mode has ended. You can now use editing tools and make changes to the system.</{VIBE_WARNING_TAG}>"""
+CHAT_AGENT_EXIT = f"""<{DRYDOCK_WARNING_TAG}>Chat mode has ended. You can now use editing tools and make changes to the system.</{DRYDOCK_WARNING_TAG}>"""
 
 
 class ReadOnlyAgentMiddleware:

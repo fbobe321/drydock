@@ -11,7 +11,7 @@ from textual.widgets import Static
 from drydock import __version__
 from drydock.cli.textual_ui.widgets.banner.petit_chat import PetitChat
 from drydock.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.skills.manager import SkillManager
 
 
@@ -28,7 +28,7 @@ class Banner(Static):
     state = reactive(BannerState(), init=False)
 
     def __init__(
-        self, config: VibeConfig, skill_manager: SkillManager, **kwargs: Any
+        self, config: DrydockConfig, skill_manager: SkillManager, **kwargs: Any
     ) -> None:
         super().__init__(**kwargs)
         self.can_focus = False
@@ -75,7 +75,7 @@ class Banner(Static):
 
     def set_state(
         self,
-        config: VibeConfig,
+        config: DrydockConfig,
         skill_manager: SkillManager,
         plan_description: str | None = None,
     ) -> None:

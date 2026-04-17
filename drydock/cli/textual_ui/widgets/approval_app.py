@@ -12,7 +12,7 @@ from textual.widgets import Static
 
 from drydock.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
 from drydock.cli.textual_ui.widgets.tool_widgets import get_approval_widget
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 
 
 class ApprovalApp(Container):
@@ -52,7 +52,7 @@ class ApprovalApp(Container):
             self.tool_args = tool_args
 
     def __init__(
-        self, tool_name: str, tool_args: BaseModel, config: VibeConfig
+        self, tool_name: str, tool_args: BaseModel, config: DrydockConfig
     ) -> None:
         super().__init__(id="approval-app")
         self.tool_name = tool_name

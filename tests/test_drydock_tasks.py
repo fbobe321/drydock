@@ -168,20 +168,20 @@ class TestSkillDiscovery:
     """Bundled skills are discoverable."""
 
     def test_bundled_skills_dir_exists(self):
-        from drydock import VIBE_ROOT
-        skills_dir = VIBE_ROOT / "skills"
+        from drydock import DRYDOCK_ROOT
+        skills_dir = DRYDOCK_ROOT / "skills"
         assert skills_dir.is_dir()
 
     def test_pptx_skill_exists(self):
-        from drydock import VIBE_ROOT
-        skill_file = VIBE_ROOT / "skills" / "create-presentation" / "SKILL.md"
+        from drydock import DRYDOCK_ROOT
+        skill_file = DRYDOCK_ROOT / "skills" / "create-presentation" / "SKILL.md"
         assert skill_file.is_file()
 
     def test_pptx_skill_has_valid_frontmatter(self):
-        from drydock import VIBE_ROOT
+        from drydock import DRYDOCK_ROOT
         from drydock.core.skills.parser import parse_frontmatter
 
-        skill_file = VIBE_ROOT / "skills" / "create-presentation" / "SKILL.md"
+        skill_file = DRYDOCK_ROOT / "skills" / "create-presentation" / "SKILL.md"
         content = skill_file.read_text()
         metadata, body = parse_frontmatter(content)
         assert metadata["name"] == "create-presentation"
@@ -189,25 +189,18 @@ class TestSkillDiscovery:
         assert metadata.get("user-invocable", metadata.get("user_invocable")) is True
 
 
-class TestConfigPathMigration:
-    """Config path resolution handles .drydock and .vibe correctly."""
+class TestConfigPaths:
+    """Config path resolution uses .drydock only (no legacy fallback)."""
 
-    def test_drydock_dir_checked_first(self):
+    def test_only_drydock_dir(self):
         from drydock.core.paths._local_config_walk import _CONFIG_DIRS
-        assert _CONFIG_DIRS[0] == ".drydock"
-        assert _CONFIG_DIRS[1] == ".vibe"
+        assert _CONFIG_DIRS == (".drydock",)
 
-    @pytest.mark.xfail(reason="Stale: HarnessFilesManager retains legacy "
-                              "'.vibe' fallback alongside '.drydock' for "
-                              "backward-compat on existing user installs.")
     def test_harness_manager_uses_drydock(self):
-        """Project config should look in .drydock/, not .vibe/."""
         import inspect
         from drydock.core.config.harness_files._harness_manager import HarnessFilesManager
         source = inspect.getsource(HarnessFilesManager)
         assert ".drydock" in source
-        # .vibe should NOT appear (we replaced it)
-        assert '".vibe"' not in source
 
 
 class TestSystemPrompt:

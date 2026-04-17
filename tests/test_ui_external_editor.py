@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.app import DrydockApp
 from drydock.cli.textual_ui.widgets.chat_input.container import ChatInputContainer
 
 
@@ -19,7 +19,7 @@ def mock_suspend():
 
 @pytest.mark.asyncio
 async def test_ctrl_g_opens_external_editor_and_updates_input(
-    vibe_app: VibeApp,
+    drydock_app: DrydockApp,
 ) -> None:
     """Test that Ctrl+G triggers external editor and updates input with result."""
     with patch(
@@ -30,13 +30,13 @@ async def test_ctrl_g_opens_external_editor_and_updates_input(
         mock_instance.edit.return_value = "edited content"
         MockEditor.return_value = mock_instance
 
-        async with vibe_app.run_test() as pilot:
-            chat_input = vibe_app.query_one(ChatInputContainer)
+        async with drydock_app.run_test() as pilot:
+            chat_input = drydock_app.query_one(ChatInputContainer)
             chat_input.value = "original"
             chat_input.focus_input()
             await pilot.pause()
 
-            with patch.object(vibe_app, "suspend", mock_suspend):
+            with patch.object(drydock_app, "suspend", mock_suspend):
                 await pilot.press("ctrl+g")
                 await pilot.pause()
 
@@ -45,7 +45,7 @@ async def test_ctrl_g_opens_external_editor_and_updates_input(
 
 
 @pytest.mark.asyncio
-async def test_ctrl_g_works_with_empty_input(vibe_app: VibeApp) -> None:
+async def test_ctrl_g_works_with_empty_input(drydock_app: DrydockApp) -> None:
     """Test that Ctrl+G works when input is empty."""
     with patch(
         "drydock.cli.textual_ui.widgets.chat_input.text_area.ExternalEditor"
@@ -55,13 +55,13 @@ async def test_ctrl_g_works_with_empty_input(vibe_app: VibeApp) -> None:
         mock_instance.edit.return_value = "new content"
         MockEditor.return_value = mock_instance
 
-        async with vibe_app.run_test() as pilot:
-            chat_input = vibe_app.query_one(ChatInputContainer)
+        async with drydock_app.run_test() as pilot:
+            chat_input = drydock_app.query_one(ChatInputContainer)
             assert chat_input.value == ""
             chat_input.focus_input()
             await pilot.pause()
 
-            with patch.object(vibe_app, "suspend", mock_suspend):
+            with patch.object(drydock_app, "suspend", mock_suspend):
                 await pilot.press("ctrl+g")
                 await pilot.pause()
 

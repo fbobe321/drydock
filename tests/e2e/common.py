@@ -11,7 +11,7 @@ from typing import Protocol
 import pexpect
 
 
-class SpawnedVibeProcessFixture(Protocol):
+class SpawnedDrydockProcessFixture(Protocol):
     def __call__(
         self, workdir: Path
     ) -> AbstractContextManager[tuple[pexpect.spawn, io.StringIO]]: ...
@@ -22,9 +22,9 @@ def ansi_tolerant_pattern(text: str) -> re.Pattern[str]:
     return re.compile(ansi.join(re.escape(char) for char in text))
 
 
-def write_e2e_config(vibe_home: Path, api_base: str) -> None:
-    vibe_home.mkdir(parents=True, exist_ok=True)
-    (vibe_home / "config.toml").write_text(
+def write_e2e_config(drydock_home: Path, api_base: str) -> None:
+    drydock_home.mkdir(parents=True, exist_ok=True)
+    (drydock_home / "config.toml").write_text(
         "\n".join([
             'active_model = "mock-model"',
             "enable_update_checks = false",

@@ -6,16 +6,16 @@ from unittest.mock import patch
 import pytest
 
 from tests.acp.conftest import _create_acp_agent
-from tests.conftest import build_test_vibe_config
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from tests.conftest import build_test_drydock_config
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import ModelConfig, VibeConfig
+from drydock.core.config import ModelConfig, DrydockConfig
 
 
 @pytest.fixture
-def acp_agent_loop(backend) -> VibeAcpAgentLoop:
-    config = build_test_vibe_config(
+def acp_agent_loop(backend) -> DrydockAcpAgentLoop:
+    config = build_test_drydock_config(
         active_model="devstral-latest",
         models=[
             ModelConfig(
@@ -35,7 +35,7 @@ def acp_agent_loop(backend) -> VibeAcpAgentLoop:
         ],
     )
 
-    VibeConfig.dump_config(config.model_dump())
+    DrydockConfig.dump_config(config.model_dump())
 
     class PatchedAgentLoop(AgentLoop):
         def __init__(self, *args, **kwargs) -> None:
@@ -57,7 +57,7 @@ def acp_agent_loop(backend) -> VibeAcpAgentLoop:
 class TestACPSetConfigOptionMode:
     @pytest.mark.asyncio
     async def test_set_config_option_mode_to_auto_approve(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -88,7 +88,7 @@ class TestACPSetConfigOptionMode:
 
     @pytest.mark.asyncio
     async def test_set_config_option_mode_to_plan(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -108,7 +108,7 @@ class TestACPSetConfigOptionMode:
 
     @pytest.mark.asyncio
     async def test_set_config_option_mode_to_chat(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -138,7 +138,7 @@ class TestACPSetConfigOptionMode:
 
     @pytest.mark.asyncio
     async def test_set_config_option_mode_invalid_returns_none(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -159,7 +159,7 @@ class TestACPSetConfigOptionMode:
 
     @pytest.mark.asyncio
     async def test_set_config_option_mode_empty_string_returns_none(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -182,7 +182,7 @@ class TestACPSetConfigOptionMode:
 class TestACPSetConfigOptionModel:
     @pytest.mark.asyncio
     async def test_set_config_option_model_success(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -210,7 +210,7 @@ class TestACPSetConfigOptionModel:
 
     @pytest.mark.asyncio
     async def test_set_config_option_model_invalid_returns_none(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -231,7 +231,7 @@ class TestACPSetConfigOptionModel:
 
     @pytest.mark.asyncio
     async def test_set_config_option_model_empty_string_returns_none(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -252,14 +252,14 @@ class TestACPSetConfigOptionModel:
 
     @pytest.mark.asyncio
     async def test_set_config_option_model_saves_to_config(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
         )
         session_id = session_response.session_id
 
-        with patch("drydock.acp.acp_agent_loop.VibeConfig.save_updates") as mock_save:
+        with patch("drydock.acp.acp_agent_loop.DrydockConfig.save_updates") as mock_save:
             response = await acp_agent_loop.set_config_option(
                 session_id=session_id, config_id="model", value="devstral-small"
             )
@@ -269,14 +269,14 @@ class TestACPSetConfigOptionModel:
 
     @pytest.mark.asyncio
     async def test_set_config_option_model_does_not_save_on_invalid(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
         )
         session_id = session_response.session_id
 
-        with patch("drydock.acp.acp_agent_loop.VibeConfig.save_updates") as mock_save:
+        with patch("drydock.acp.acp_agent_loop.DrydockConfig.save_updates") as mock_save:
             response = await acp_agent_loop.set_config_option(
                 session_id=session_id, config_id="model", value="non-existent-model"
             )
@@ -288,7 +288,7 @@ class TestACPSetConfigOptionModel:
 class TestACPSetConfigOptionInvalidConfigId:
     @pytest.mark.asyncio
     async def test_set_config_option_invalid_config_id_returns_none(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -303,7 +303,7 @@ class TestACPSetConfigOptionInvalidConfigId:
 
     @pytest.mark.asyncio
     async def test_set_config_option_empty_config_id_returns_none(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]

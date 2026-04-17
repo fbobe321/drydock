@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from tests.conftest import build_test_agent_loop, build_test_vibe_config
+from tests.conftest import build_test_agent_loop, build_test_drydock_config
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
 from drydock.core.agent_loop import AgentLoop
@@ -45,7 +45,7 @@ def _count(events: list[BaseEvent], event_type: type) -> int:
 
 
 def _agent(backend: FakeBackend) -> AgentLoop:
-    config = build_test_vibe_config(
+    config = build_test_drydock_config(
         system_prompt_id="tests",
         include_project_context=False,
         include_prompt_detail=False,
@@ -166,7 +166,7 @@ async def test_task_turn_limit_stops_agent(telemetry_events):
         [mock_llm_chunk(content="First turn.")],
         [mock_llm_chunk(content="Should not reach this.")],
     ])
-    config = build_test_vibe_config(
+    config = build_test_drydock_config(
         system_prompt_id="tests",
         include_project_context=False,
         include_prompt_detail=False,

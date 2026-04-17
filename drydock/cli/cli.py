@@ -14,7 +14,7 @@ from drydock.core.agents.models import BuiltinAgentName
 from drydock.core.config import (
     MissingAPIKeyError,
     MissingPromptFileError,
-    VibeConfig,
+    DrydockConfig,
     load_dotenv_values,
 )
 from drydock.core.config.harness_files import get_harness_files_manager
@@ -48,12 +48,12 @@ def get_prompt_from_stdin() -> str | None:
     return None
 
 
-def load_config_or_exit() -> VibeConfig:
+def load_config_or_exit() -> DrydockConfig:
     try:
-        return VibeConfig.load()
+        return DrydockConfig.load()
     except MissingAPIKeyError:
         run_onboarding()
-        return VibeConfig.load()
+        return DrydockConfig.load()
     except MissingPromptFileError as e:
         rprint(f"[yellow]Invalid system prompt id: {e}[/]")
         sys.exit(1)
@@ -69,7 +69,7 @@ def bootstrap_config_files() -> None:
         try:
             config_file.parent.mkdir(parents=True, exist_ok=True)
             with config_file.open("wb") as f:
-                tomli_w.dump(VibeConfig.create_default(), f)
+                tomli_w.dump(DrydockConfig.create_default(), f)
         except Exception as e:
             rprint(f"[yellow]Could not create default config file: {e}[/]")
 
@@ -83,7 +83,7 @@ def bootstrap_config_files() -> None:
 
 
 def load_session(
-    args: argparse.Namespace, config: VibeConfig
+    args: argparse.Namespace, config: DrydockConfig
 ) -> tuple[list[LLMMessage], Path] | None:
     if not args.continue_session and not args.resume:
         return None

@@ -17,7 +17,7 @@ import pytest
 
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import Backend, ModelConfig, ProviderConfig, VibeConfig
+from drydock.core.config import Backend, ModelConfig, ProviderConfig, DrydockConfig
 from drydock.core.types import (
     AssistantEvent,
     BaseEvent,
@@ -37,8 +37,8 @@ def _vllm_available() -> bool:
 pytestmark = pytest.mark.skipif(not _vllm_available(), reason="vLLM not running")
 
 
-def _config(tmp_path: Path) -> VibeConfig:
-    return VibeConfig(
+def _config(tmp_path: Path) -> DrydockConfig:
+    return DrydockConfig(
         active_model="devstral",
         auto_approve=True,
         enable_telemetry=False,
@@ -237,8 +237,8 @@ async def test_agent_stops_cleanly(tmp_path):
 
 @pytest.mark.asyncio
 async def test_consultant_config_real(tmp_path):
-    """VibeConfig should accept consultant_model field without error."""
-    config = VibeConfig(
+    """DrydockConfig should accept consultant_model field without error."""
+    config = DrydockConfig(
         active_model="devstral",
         consultant_model="gemini-2.5-pro",
         auto_approve=True,

@@ -26,7 +26,7 @@ init_harness_files_manager()
 
 from drydock.cli.cli import get_initial_agent_name
 from drydock.core.agent_loop import AgentLoop
-from drydock.core.config import VibeConfig, SessionLoggingConfig
+from drydock.core.config import DrydockConfig, SessionLoggingConfig
 from drydock.core.types import (
     AssistantEvent, ToolCallEvent, ToolResultEvent, UserMessageEvent,
 )
@@ -39,7 +39,7 @@ async def run_tui_path(prompt: str, timeout: int = 300, cwd: str = "."):
     """Run the exact TUI code path but capture output."""
     os.chdir(cwd)
 
-    config = VibeConfig.load(
+    config = DrydockConfig.load(
         session_logging=SessionLoggingConfig(enabled=False)
     )
     # Ensure we use the user's active model

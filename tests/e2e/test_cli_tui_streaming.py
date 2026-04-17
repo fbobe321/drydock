@@ -6,7 +6,7 @@ import pexpect
 import pytest
 
 from tests.e2e.common import (
-    SpawnedVibeProcessFixture,
+    SpawnedDrydockProcessFixture,
     ansi_tolerant_pattern,
     wait_for_main_screen,
     wait_for_request_count,
@@ -19,9 +19,9 @@ def test_spawn_cli_to_send_and_receive_message(
     streaming_mock_server: StreamingMockServer,
     setup_e2e_env: None,
     e2e_workdir: Path,
-    spawned_vibe_process: SpawnedVibeProcessFixture,
+    spawned_drydock_process: SpawnedDrydockProcessFixture,
 ) -> None:
-    with spawned_vibe_process(e2e_workdir) as (child, captured):
+    with spawned_drydock_process(e2e_workdir) as (child, captured):
         wait_for_main_screen(child, timeout=15)
         child.send("Greet")
         child.send("\r")

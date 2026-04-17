@@ -6,16 +6,16 @@ from unittest.mock import patch
 import pytest
 
 from tests.acp.conftest import _create_acp_agent
-from tests.conftest import build_test_vibe_config
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from tests.conftest import build_test_drydock_config
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
 from drydock.core.config import ModelConfig
 
 
 @pytest.fixture
-def acp_agent_loop(backend) -> VibeAcpAgentLoop:
-    config = build_test_vibe_config(
+def acp_agent_loop(backend) -> DrydockAcpAgentLoop:
+    config = build_test_drydock_config(
         active_model="devstral-latest",
         models=[
             ModelConfig(
@@ -41,7 +41,7 @@ def acp_agent_loop(backend) -> VibeAcpAgentLoop:
 class TestACPNewSession:
     @pytest.mark.asyncio
     async def test_new_session_response_structure(
-        self, acp_agent_loop: VibeAcpAgentLoop, telemetry_events: list[dict]
+        self, acp_agent_loop: DrydockAcpAgentLoop, telemetry_events: list[dict]
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -128,7 +128,7 @@ class TestACPNewSession:
     @pytest.mark.skip(reason="TODO: Fix this test")
     @pytest.mark.asyncio
     async def test_new_session_preserves_model_after_set_model(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]

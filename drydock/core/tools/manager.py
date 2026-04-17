@@ -17,11 +17,11 @@ from drydock.core.tools.mcp import MCPRegistry
 from drydock.core.utils import name_matches
 
 if TYPE_CHECKING:
-    from drydock.core.config import VibeConfig
+    from drydock.core.config import DrydockConfig
 
 
 def _try_canonical_module_name(path: Path) -> str | None:
-    """Extract canonical module name for vibe package files.
+    """Extract canonical module name for drydock package files.
 
     Prevents Pydantic class identity mismatches when the same module
     is imported via dynamic discovery and regular imports.
@@ -32,26 +32,26 @@ def _try_canonical_module_name(path: Path) -> str | None:
         return None
 
     try:
-        vibe_idx = parts.index("vibe")
+        drydock_idx = parts.index("drydock")
     except ValueError:
         return None
 
-    if vibe_idx + 1 >= len(parts):
+    if drydock_idx + 1 >= len(parts):
         return None
 
-    module_parts = [p.removesuffix(".py") for p in parts[vibe_idx:]]
+    module_parts = [p.removesuffix(".py") for p in parts[drydock_idx:]]
     return ".".join(module_parts)
 
 
 def _compute_module_name(path: Path) -> str:
-    """Return canonical module name for vibe files, hash-based synthetic name otherwise."""
+    """Return canonical module name for drydock files, hash-based synthetic name otherwise."""
     if canonical := _try_canonical_module_name(path):
         return canonical
 
     resolved = path.resolve()
     path_hash = hashlib.sha256(str(resolved).encode()).hexdigest()[:8]
     stem = re.sub(r"[^0-9A-Za-z_]", "_", path.stem) or "mod"
-    return f"vibe_tools_discovered_{stem}_{path_hash}"
+    return f"drydock_tools_discovered_{stem}_{path_hash}"
 
 
 class NoSuchToolError(Exception):
@@ -67,7 +67,7 @@ class ToolManager:
 
     def __init__(
         self,
-        config_getter: Callable[[], VibeConfig],
+        config_getter: Callable[[], DrydockConfig],
         mcp_registry: MCPRegistry | None = None,
     ) -> None:
         self._config_getter = config_getter
@@ -81,11 +81,11 @@ class ToolManager:
         self._integrate_mcp()
 
     @property
-    def _config(self) -> VibeConfig:
+    def _config(self) -> DrydockConfig:
         return self._config_getter()
 
     @staticmethod
-    def _compute_search_paths(config: VibeConfig) -> list[Path]:
+    def _compute_search_paths(config: DrydockConfig) -> list[Path]:
         paths: list[Path] = [DEFAULT_TOOL_DIR.path]
 
         paths.extend(config.tool_paths)

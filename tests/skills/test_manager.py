@@ -4,22 +4,22 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import build_test_vibe_config
+from tests.conftest import build_test_drydock_config
 from tests.skills.conftest import create_skill
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.skills.manager import SkillManager
 from drydock.core.trusted_folders import trusted_folders_manager
 
 
 @pytest.fixture
-def config() -> VibeConfig:
-    return build_test_vibe_config(
+def config() -> DrydockConfig:
+    return build_test_drydock_config(
         system_prompt_id="tests", include_project_context=False
     )
 
 
 @pytest.fixture
-def skill_manager(config: VibeConfig) -> SkillManager:
+def skill_manager(config: DrydockConfig) -> SkillManager:
     return SkillManager(lambda: config)
 
 
@@ -32,7 +32,7 @@ class TestSkillManagerDiscovery:
     def test_discovers_skill_from_skill_paths(self, skills_dir: Path) -> None:
         create_skill(skills_dir, "test-skill", "A test skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -47,7 +47,7 @@ class TestSkillManagerDiscovery:
         create_skill(skills_dir, "skill-two", "Second skill")
         create_skill(skills_dir, "skill-three", "Third skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -68,7 +68,7 @@ class TestSkillManagerDiscovery:
         # Create a valid skill
         create_skill(skills_dir, "valid-skill", "A valid skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -87,7 +87,7 @@ class TestSkillManagerDiscovery:
         # Create a valid skill
         create_skill(skills_dir, "valid-skill", "A valid skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -111,7 +111,7 @@ class TestSkillManagerParsing:
             allowed_tools="bash read_file",
         )
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -130,7 +130,7 @@ class TestSkillManagerParsing:
     def test_sets_correct_skill_path(self, skills_dir: Path) -> None:
         create_skill(skills_dir, "test-skill", "A test skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -151,7 +151,7 @@ class TestSkillManagerParsing:
         # Create a valid skill
         create_skill(skills_dir, "valid-skill", "A valid skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -172,7 +172,7 @@ class TestSkillManagerParsing:
         # Create a valid skill
         create_skill(skills_dir, "valid-skill", "A valid skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -185,23 +185,23 @@ class TestSkillManagerParsing:
 
 
 class TestSkillManagerSearchPaths:
-    def test_discovers_from_vibe_skills_when_cwd_trusted(
+    def test_discovers_from_drydock_skills_when_cwd_trusted(
         self, tmp_working_directory: Path
     ) -> None:
         trusted_folders_manager.add_trusted(tmp_working_directory)
-        vibe_skills = tmp_working_directory / ".vibe" / "skills"
-        vibe_skills.mkdir(parents=True)
-        create_skill(vibe_skills, "vibe-skill", "Skill from .vibe/skills")
+        drydock_skills = tmp_working_directory / ".drydock" / "skills"
+        drydock_skills.mkdir(parents=True)
+        create_skill(drydock_skills, "drydock-skill", "Skill from .drydock/skills")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests", include_project_context=False, skill_paths=[]
         )
         manager = SkillManager(lambda: config)
 
-        assert "vibe-skill" in manager.available_skills
+        assert "drydock-skill" in manager.available_skills
         assert (
-            manager.available_skills["vibe-skill"].description
-            == "Skill from .vibe/skills"
+            manager.available_skills["drydock-skill"].description
+            == "Skill from .drydock/skills"
         )
 
     def test_discovers_from_agents_skills_when_cwd_trusted(
@@ -212,7 +212,7 @@ class TestSkillManagerSearchPaths:
         agents_skills.mkdir(parents=True)
         create_skill(agents_skills, "agents-skill", "Skill from .agents/skills")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests", include_project_context=False, skill_paths=[]
         )
         manager = SkillManager(lambda: config)
@@ -223,45 +223,45 @@ class TestSkillManagerSearchPaths:
             == "Skill from .agents/skills"
         )
 
-    def test_discovers_from_both_vibe_and_agents_skills_when_cwd_trusted(
+    def test_discovers_from_both_drydock_and_agents_skills_when_cwd_trusted(
         self, tmp_working_directory: Path
     ) -> None:
         trusted_folders_manager.add_trusted(tmp_working_directory)
-        vibe_skills = tmp_working_directory / ".vibe" / "skills"
+        drydock_skills = tmp_working_directory / ".drydock" / "skills"
         agents_skills = tmp_working_directory / ".agents" / "skills"
-        vibe_skills.mkdir(parents=True)
+        drydock_skills.mkdir(parents=True)
         agents_skills.mkdir(parents=True)
-        create_skill(vibe_skills, "vibe-only", "From .vibe")
+        create_skill(drydock_skills, "drydock-only", "From .drydock")
         create_skill(agents_skills, "agents-only", "From .agents")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests", include_project_context=False, skill_paths=[]
         )
         manager = SkillManager(lambda: config)
 
         assert len(manager.available_skills) == 2
-        assert manager.available_skills["vibe-only"].description == "From .vibe"
+        assert manager.available_skills["drydock-only"].description == "From .drydock"
         assert manager.available_skills["agents-only"].description == "From .agents"
 
-    def test_first_discovered_wins_when_same_skill_in_vibe_and_agents(
+    def test_first_discovered_wins_when_same_skill_in_drydock_and_agents(
         self, tmp_working_directory: Path
     ) -> None:
         trusted_folders_manager.add_trusted(tmp_working_directory)
-        vibe_skills = tmp_working_directory / ".vibe" / "skills"
+        drydock_skills = tmp_working_directory / ".drydock" / "skills"
         agents_skills = tmp_working_directory / ".agents" / "skills"
-        vibe_skills.mkdir(parents=True)
+        drydock_skills.mkdir(parents=True)
         agents_skills.mkdir(parents=True)
-        create_skill(vibe_skills, "shared-skill", "First from .vibe")
+        create_skill(drydock_skills, "shared-skill", "First from .drydock")
         create_skill(agents_skills, "shared-skill", "Second from .agents")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests", include_project_context=False, skill_paths=[]
         )
         manager = SkillManager(lambda: config)
 
         assert len(manager.available_skills) == 1
         assert (
-            manager.available_skills["shared-skill"].description == "First from .vibe"
+            manager.available_skills["shared-skill"].description == "First from .drydock"
         )
 
     def test_discovers_from_multiple_skill_paths(self, tmp_path: Path) -> None:
@@ -274,7 +274,7 @@ class TestSkillManagerSearchPaths:
         skills_dir_2.mkdir()
         create_skill(skills_dir_2, "skill-from-dir2", "Skill from directory 2")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir_1, skills_dir_2],
@@ -296,7 +296,7 @@ class TestSkillManagerSearchPaths:
         skills_dir_2.mkdir()
         create_skill(skills_dir_2, "duplicate-skill", "Second version")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir_1, skills_dir_2],
@@ -312,7 +312,7 @@ class TestSkillManagerSearchPaths:
         skills_dir.mkdir()
         create_skill(skills_dir, "valid-skill", "A valid skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir, tmp_path / "nonexistent"],
@@ -327,7 +327,7 @@ class TestSkillManagerGetSkill:
     def test_returns_skill_by_name(self, skills_dir: Path) -> None:
         create_skill(skills_dir, "test-skill", "A test skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -348,7 +348,7 @@ class TestSkillManagerFiltering:
         create_skill(skills_dir, "skill-b", "Skill B")
         create_skill(skills_dir, "skill-c", "Skill C")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -367,7 +367,7 @@ class TestSkillManagerFiltering:
         create_skill(skills_dir, "skill-b", "Skill B")
         create_skill(skills_dir, "skill-c", "Skill C")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -387,7 +387,7 @@ class TestSkillManagerFiltering:
         create_skill(skills_dir, "skill-a", "Skill A")
         create_skill(skills_dir, "skill-b", "Skill B")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -405,7 +405,7 @@ class TestSkillManagerFiltering:
         create_skill(skills_dir, "search-docs", "Search docs")
         create_skill(skills_dir, "other-skill", "Other skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -424,7 +424,7 @@ class TestSkillManagerFiltering:
         create_skill(skills_dir, "skill-v2", "Skill v2")
         create_skill(skills_dir, "other-skill", "Other skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -442,7 +442,7 @@ class TestSkillManagerFiltering:
         create_skill(skills_dir, "enabled-skill", "Enabled")
         create_skill(skills_dir, "disabled-skill", "Disabled")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -458,7 +458,7 @@ class TestSkillUserInvocable:
     def test_user_invocable_defaults_to_true(self, skills_dir: Path) -> None:
         create_skill(skills_dir, "default-skill", "A default skill")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -472,7 +472,7 @@ class TestSkillUserInvocable:
     def test_user_invocable_can_be_set_to_false(self, skills_dir: Path) -> None:
         create_skill(skills_dir, "hidden-skill", "A hidden skill", user_invocable=False)
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -490,7 +490,7 @@ class TestSkillUserInvocable:
             skills_dir, "explicit-skill", "An explicit skill", user_invocable=True
         )
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],
@@ -506,7 +506,7 @@ class TestSkillUserInvocable:
         create_skill(skills_dir, "hidden-skill", "Hidden", user_invocable=False)
         create_skill(skills_dir, "default-skill", "Default")
 
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             system_prompt_id="tests",
             include_project_context=False,
             skill_paths=[skills_dir],

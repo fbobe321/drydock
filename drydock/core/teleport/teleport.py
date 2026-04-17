@@ -34,7 +34,7 @@ from drydock.core.teleport.types import (
     TeleportYieldEvent,
 )
 
-# TODO(vibe-nuage): update URL once prod has shared vibe-nuage workers
+# TODO(nuage): update URL once prod has shared nuage workers
 _NUAGE_EXECUTION_URL_TEMPLATE = "https://console.globalaegis.net/build/workflows/{workflow_id}?tab=executions&executionId={execution_id}"
 _DEFAULT_TELEPORT_PROMPT = "please continue where you left off"
 
@@ -181,7 +181,7 @@ class TeleportService:
             raise ServiceTeleportError("Failed to push current branch to remote.")
 
     def _validate_config(self) -> None:
-        # TODO(vibe-nuage): update error message once prod has shared vibe-nuage workers
+        # TODO(nuage): update error message once prod has shared nuage workers
         if not self._nuage_api_key:
             raise ServiceTeleportError(
                 "STAGING_MISTRAL_API_KEY not set. "

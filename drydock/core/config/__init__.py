@@ -16,7 +16,7 @@ from drydock.core.config._settings import (
     ProviderConfig,
     SessionLoggingConfig,
     TomlFileSettingsSource,
-    VibeConfig,
+    DrydockConfig,
     load_dotenv_values,
 )
 
@@ -36,6 +36,6 @@ __all__ = [
     "ProviderConfig",
     "SessionLoggingConfig",
     "TomlFileSettingsSource",
-    "VibeConfig",
+    "DrydockConfig",
     "load_dotenv_values",
 ]

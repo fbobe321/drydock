@@ -34,10 +34,10 @@ def setup_e2e_env(
     monkeypatch: pytest.MonkeyPatch,
     streaming_mock_server: StreamingMockServer,
 ) -> None:
-    vibe_home = tmp_path / "vibe-home"
-    write_e2e_config(vibe_home, streaming_mock_server.api_base)
+    drydock_home = tmp_path / "drydock-home"
+    write_e2e_config(drydock_home, streaming_mock_server.api_base)
     monkeypatch.setenv("MISTRAL_API_KEY", "fake-key")
-    monkeypatch.setenv("VIBE_HOME", str(vibe_home))
+    monkeypatch.setenv("DRYDOCK_HOME", str(drydock_home))
     monkeypatch.setenv("TERM", "xterm-256color")
 
 
@@ -56,13 +56,13 @@ type SpawnedVibeFactory = Callable[[Path], SpawnedVibeContextManager]
 
 
 @pytest.fixture
-def spawned_vibe_process() -> SpawnedVibeFactory:
+def spawned_drydock_process() -> SpawnedVibeFactory:
     @contextmanager
     def spawn(workdir: Path) -> SpawnedVibeContext:
         captured = io.StringIO()
         child = pexpect.spawn(
             "uv",
-            ["run", "vibe", "--workdir", str(workdir)],
+            ["run", "drydock", "--workdir", str(workdir)],
             cwd=str(TESTS_ROOT.parent),
             env=os.environ,
             encoding="utf-8",

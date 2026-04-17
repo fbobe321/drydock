@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.conftest import build_test_vibe_app
+from tests.conftest import build_test_drydock_app
 from drydock.cli.textual_ui.widgets.chat_input import ChatInputContainer
 from drydock.cli.textual_ui.widgets.chat_input.body import ChatInputBody, _PromptSpinner
 from drydock.cli.textual_ui.widgets.messages import UserMessage
@@ -11,7 +11,7 @@ from drydock.cli.textual_ui.widgets.messages import UserMessage
 @pytest.mark.asyncio
 async def test_submit_ignored_while_switching_mode() -> None:
     """Enter press during mode switch must not clear input or send a message."""
-    app = build_test_vibe_app()
+    app = build_test_drydock_app()
     async with app.run_test() as pilot:
         await pilot.pause(0.1)
 
@@ -33,7 +33,7 @@ async def test_submit_ignored_while_switching_mode() -> None:
 @pytest.mark.asyncio
 async def test_submit_works_after_switching_mode_ends() -> None:
     """After switching_mode is set back to False, Enter should work normally."""
-    app = build_test_vibe_app()
+    app = build_test_drydock_app()
     async with app.run_test() as pilot:
         await pilot.pause(0.1)
 
@@ -56,7 +56,7 @@ async def test_submit_works_after_switching_mode_ends() -> None:
 @pytest.mark.asyncio
 async def test_spinner_shown_while_switching_mode() -> None:
     """Prompt widget is hidden and spinner is mounted when switching_mode is True."""
-    app = build_test_vibe_app()
+    app = build_test_drydock_app()
     async with app.run_test() as pilot:
         await pilot.pause(0.1)
 
@@ -76,7 +76,7 @@ async def test_spinner_shown_while_switching_mode() -> None:
 @pytest.mark.asyncio
 async def test_spinner_removed_after_switching_mode_ends() -> None:
     """Prompt is restored and spinner removed when switching_mode becomes False."""
-    app = build_test_vibe_app()
+    app = build_test_drydock_app()
     async with app.run_test() as pilot:
         await pilot.pause(0.1)
 
@@ -94,7 +94,7 @@ async def test_spinner_removed_after_switching_mode_ends() -> None:
 @pytest.mark.asyncio
 async def test_rapid_switching_mode_no_duplicate_spinners() -> None:
     """Rapidly toggling switching_mode must never produce duplicate spinners."""
-    app = build_test_vibe_app()
+    app = build_test_drydock_app()
     async with app.run_test() as pilot:
         await pilot.pause(0.1)
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from drydock.core.paths._local_config_walk import walk_local_config_dirs_all
-from drydock.core.paths._vibe_home import (
+from drydock.core.paths._drydock_home import (
     DEFAULT_TOOL_DIR,
     GLOBAL_ENV_FILE,
     HISTORY_FILE,
@@ -10,7 +10,7 @@ from drydock.core.paths._vibe_home import (
     PLANS_DIR,
     SESSION_LOG_DIR,
     TRUSTED_FOLDERS_FILE,
-    VIBE_HOME,
+    DRYDOCK_HOME,
     GlobalPath,
 )
 from drydock.core.paths.conventions import AGENTS_MD_FILENAMES
@@ -25,7 +25,7 @@ __all__ = [
     "PLANS_DIR",
     "SESSION_LOG_DIR",
     "TRUSTED_FOLDERS_FILE",
-    "VIBE_HOME",
+    "DRYDOCK_HOME",
     "GlobalPath",
     "walk_local_config_dirs_all",
 ]

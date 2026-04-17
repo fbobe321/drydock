@@ -94,7 +94,7 @@ from drydock.cli.update_notifier.update import do_update
 from drydock.core.agent_loop import AgentLoop, TeleportError
 from drydock.core.agents import AgentProfile
 from drydock.core.autocompletion.path_prompt_adapter import render_path_prompt
-from drydock.core.config import Backend, VibeConfig
+from drydock.core.config import Backend, DrydockConfig
 from drydock.core.logger import logger
 from drydock.core.paths import HISTORY_FILE
 from drydock.core.session.session_loader import SessionLoader
@@ -214,7 +214,7 @@ async def prune_oldest_children(
     return True
 
 
-class VibeApp(App):  # noqa: PLR0904
+class DrydockApp(App):  # noqa: PLR0904
     ENABLE_COMMAND_PALETTE = False
     CSS_PATH = "app.tcss"
 
@@ -296,7 +296,7 @@ class VibeApp(App):  # noqa: PLR0904
         self._plan_info: PlanInfo | None = None
 
     @property
-    def config(self) -> VibeConfig:
+    def config(self) -> DrydockConfig:
         return self.agent_loop.config
 
     def compose(self) -> ComposeResult:
@@ -498,7 +498,7 @@ class VibeApp(App):  # noqa: PLR0904
         self, message: ConfigApp.ConfigClosed
     ) -> None:
         if message.changes:
-            VibeConfig.save_updates(message.changes)
+            DrydockConfig.save_updates(message.changes)
             await self._reload_config()
         else:
             await self._mount_and_scroll(
@@ -909,7 +909,7 @@ class VibeApp(App):  # noqa: PLR0904
         await self._mount_and_scroll(teleport_msg)
 
         try:
-            gen = self.agent_loop.teleport_to_vibe_nuage(prompt)
+            gen = self.agent_loop.teleport_to_nuage(prompt)
             async for event in gen:
                 match event:
                     case TeleportCheckingGitEvent():
@@ -1561,7 +1561,7 @@ class VibeApp(App):  # noqa: PLR0904
         try:
             self._reset_ui_state()
             await self._load_more.hide()
-            base_config = VibeConfig.load()
+            base_config = DrydockConfig.load()
 
             await self.agent_loop.reload_with_initial_messages(base_config=base_config)
             await self._resolve_plan()
@@ -2231,7 +2231,7 @@ def run_textual_ui(
     update_notifier = PyPIUpdateGateway(project_name="drydock")
     update_cache_repository = FileSystemUpdateCacheRepository()
     plan_offer_gateway = HttpWhoAmIGateway()
-    app = VibeApp(
+    app = DrydockApp(
         agent_loop=agent_loop,
         initial_prompt=initial_prompt,
         teleport_on_start=teleport_on_start,

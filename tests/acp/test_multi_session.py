@@ -11,14 +11,14 @@ from pytest import raises
 
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 from drydock.core.types import Role
 
 
 class TestMultiSessionCore:
     @pytest.mark.asyncio
     async def test_different_sessions_use_different_agents(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         await acp_agent_loop.initialize(protocol_version=PROTOCOL_VERSION)
         session1_response = await acp_agent_loop.new_session(
@@ -37,7 +37,7 @@ class TestMultiSessionCore:
 
     @pytest.mark.asyncio
     async def test_error_on_nonexistent_session(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         await acp_agent_loop.initialize(protocol_version=PROTOCOL_VERSION)
         await acp_agent_loop.new_session(cwd=str(Path.cwd()), mcp_servers=[])
@@ -55,7 +55,7 @@ class TestMultiSessionCore:
 
     @pytest.mark.asyncio
     async def test_simultaneous_message_processing(
-        self, acp_agent_loop: VibeAcpAgentLoop, backend: FakeBackend
+        self, acp_agent_loop: DrydockAcpAgentLoop, backend: FakeBackend
     ) -> None:
         await acp_agent_loop.initialize(protocol_version=PROTOCOL_VERSION)
         session1_response = await acp_agent_loop.new_session(

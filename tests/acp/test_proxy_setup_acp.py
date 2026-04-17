@@ -7,15 +7,15 @@ from acp.schema import AgentMessageChunk, AvailableCommandsUpdate, TextContentBl
 import pytest
 
 from tests.acp.conftest import _create_acp_agent
-from tests.conftest import build_test_vibe_config
+from tests.conftest import build_test_drydock_config
 from tests.stubs.fake_client import FakeClient
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 from drydock.core.agent_loop import AgentLoop
 
 
 @pytest.fixture
-def acp_agent_loop(backend) -> VibeAcpAgentLoop:
-    config = build_test_vibe_config()
+def acp_agent_loop(backend) -> DrydockAcpAgentLoop:
+    config = build_test_drydock_config()
 
     class PatchedAgentLoop(AgentLoop):
         def __init__(self, *args, **kwargs) -> None:
@@ -28,7 +28,7 @@ def acp_agent_loop(backend) -> VibeAcpAgentLoop:
     return _create_acp_agent()
 
 
-def _get_fake_client(acp_agent_loop: VibeAcpAgentLoop) -> FakeClient:
+def _get_fake_client(acp_agent_loop: DrydockAcpAgentLoop) -> FakeClient:
     assert isinstance(acp_agent_loop.client, FakeClient)
     return acp_agent_loop.client
 
@@ -36,7 +36,7 @@ def _get_fake_client(acp_agent_loop: VibeAcpAgentLoop) -> FakeClient:
 class TestAvailableCommandsUpdate:
     @pytest.mark.asyncio
     async def test_available_commands_sent_on_new_session(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         import asyncio
 
@@ -60,7 +60,7 @@ class TestProxySetupCommand:
     @pytest.mark.asyncio
     async def test_proxy_setup_shows_help_when_no_args(
         self,
-        acp_agent_loop: VibeAcpAgentLoop,
+        acp_agent_loop: DrydockAcpAgentLoop,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -100,7 +100,7 @@ class TestProxySetupCommand:
     @pytest.mark.asyncio
     async def test_proxy_setup_sets_value(
         self,
-        acp_agent_loop: VibeAcpAgentLoop,
+        acp_agent_loop: DrydockAcpAgentLoop,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -149,7 +149,7 @@ class TestProxySetupCommand:
     @pytest.mark.asyncio
     async def test_proxy_setup_unsets_value(
         self,
-        acp_agent_loop: VibeAcpAgentLoop,
+        acp_agent_loop: DrydockAcpAgentLoop,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -193,7 +193,7 @@ class TestProxySetupCommand:
     @pytest.mark.asyncio
     async def test_proxy_setup_invalid_key_returns_error(
         self,
-        acp_agent_loop: VibeAcpAgentLoop,
+        acp_agent_loop: DrydockAcpAgentLoop,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -235,7 +235,7 @@ class TestProxySetupCommand:
     @pytest.mark.asyncio
     async def test_proxy_setup_case_insensitive(
         self,
-        acp_agent_loop: VibeAcpAgentLoop,
+        acp_agent_loop: DrydockAcpAgentLoop,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:

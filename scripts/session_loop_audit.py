@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-SESSION_ROOT = Path.home() / ".vibe/logs/session"
+SESSION_ROOT = Path.home() / ".drydock/logs/session"
 
 
 def hash_tool_call(tc: dict) -> str:

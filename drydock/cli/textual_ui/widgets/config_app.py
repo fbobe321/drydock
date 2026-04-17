@@ -12,7 +12,7 @@ from textual.widgets import Static
 from drydock.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
 
 if TYPE_CHECKING:
-    from drydock.core.config import VibeConfig
+    from drydock.core.config import DrydockConfig
 
 
 class SettingDefinition(TypedDict):
@@ -44,7 +44,7 @@ class ConfigApp(Container):
             super().__init__()
             self.changes = changes
 
-    def __init__(self, config: VibeConfig) -> None:
+    def __init__(self, config: DrydockConfig) -> None:
         super().__init__(id="config-app")
         self.config = config
         self.selected_index = 0

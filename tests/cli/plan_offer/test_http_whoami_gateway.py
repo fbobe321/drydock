@@ -15,7 +15,7 @@ from drydock.cli.plan_offer.ports.whoami_gateway import (
 
 @pytest.mark.asyncio
 async def test_returns_plan_flags(respx_mock: respx.MockRouter) -> None:
-    route = respx_mock.get("http://test/api/vibe/whoami").mock(
+    route = respx_mock.get("http://test/api/drydock/whoami").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -42,7 +42,7 @@ async def test_returns_plan_flags(respx_mock: respx.MockRouter) -> None:
 async def test_raises_on_unauthorized(
     respx_mock: respx.MockRouter, status_code: int
 ) -> None:
-    respx_mock.get("http://test/api/vibe/whoami").mock(
+    respx_mock.get("http://test/api/drydock/whoami").mock(
         return_value=httpx.Response(status_code, json={"error": "unauthorized"})
     )
 
@@ -54,7 +54,7 @@ async def test_raises_on_unauthorized(
 
 @pytest.mark.asyncio
 async def test_raises_on_non_success(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("http://test/api/vibe/whoami").mock(
+    respx_mock.get("http://test/api/drydock/whoami").mock(
         return_value=httpx.Response(500, json={"error": "boom"})
     )
 
@@ -68,7 +68,7 @@ async def test_raises_on_non_success(respx_mock: respx.MockRouter) -> None:
 async def test_incomplete_payload_defaults_missing_flags_to_false(
     respx_mock: respx.MockRouter,
 ) -> None:
-    respx_mock.get("http://test/api/vibe/whoami").mock(
+    respx_mock.get("http://test/api/drydock/whoami").mock(
         return_value=httpx.Response(
             200, json={"plan_type": "CHAT", "plan_name": "INDIVIDUAL"}
         )
@@ -85,7 +85,7 @@ async def test_incomplete_payload_defaults_missing_flags_to_false(
 
 @pytest.mark.asyncio
 async def test_raises_on_missing_plan_info(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("http://test/api/vibe/whoami").mock(
+    respx_mock.get("http://test/api/drydock/whoami").mock(
         return_value=httpx.Response(200, json={"prompt_switching_to_pro_plan": False})
     )
 
@@ -96,7 +96,7 @@ async def test_raises_on_missing_plan_info(respx_mock: respx.MockRouter) -> None
 
 @pytest.mark.asyncio
 async def test_wraps_request_error(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("http://test/api/vibe/whoami").mock(
+    respx_mock.get("http://test/api/drydock/whoami").mock(
         side_effect=httpx.ConnectError("boom")
     )
 
@@ -108,7 +108,7 @@ async def test_wraps_request_error(respx_mock: respx.MockRouter) -> None:
 
 @pytest.mark.asyncio
 async def test_parses_boolean_strings(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("http://test/api/vibe/whoami").mock(
+    respx_mock.get("http://test/api/drydock/whoami").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -130,7 +130,7 @@ async def test_parses_boolean_strings(respx_mock: respx.MockRouter) -> None:
 
 @pytest.mark.asyncio
 async def test_raises_on_invalid_boolean_string(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("http://test/api/vibe/whoami").mock(
+    respx_mock.get("http://test/api/drydock/whoami").mock(
         return_value=httpx.Response(
             200,
             json={

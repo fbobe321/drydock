@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.conftest import build_test_vibe_config
+from tests.conftest import build_test_drydock_config
 from drydock.core.agents.manager import AgentManager
 from drydock.core.agents.models import BUILTIN_AGENTS, EXPLORE, AgentSafety, AgentType
 
@@ -31,7 +31,7 @@ class TestAgentProfile:
 class TestAgentManager:
     @pytest.fixture
     def manager(self) -> AgentManager:
-        config = build_test_vibe_config(
+        config = build_test_drydock_config(
             include_project_context=False, include_prompt_detail=False
         )
         return AgentManager(lambda: config)

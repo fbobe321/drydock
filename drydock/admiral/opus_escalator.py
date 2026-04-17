@@ -17,7 +17,7 @@ import shutil
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from drydock.admiral.llm_analyzer import _render_turns
+from drydock.admiral.llm_analyzer import _DIRECTIVES_RUBRIC, _render_turns
 
 if TYPE_CHECKING:
     from drydock.admiral.detectors import Finding
@@ -35,6 +35,8 @@ session and couldn't figure it out. Give one short actionable directive the \
 agent can follow to unstick itself — or, if the agent should stop and ask \
 the user, say so explicitly.
 
+{rubric}
+
 Detector: {code}
 Admiral's canned fallback: "{fallback}"
 
@@ -43,8 +45,11 @@ Recent conversation:
 {context}
 </conversation>
 
-Reply with ONE directive, imperative voice, 1-3 sentences. No preamble, \
-no markdown, no quotes. Just the directive text.
+Reply with ONE directive on the FIRST line prefixed by the directive codes \
+from the rubric that the agent is violating, e.g. "[B5,B8] Write the \
+interpreter.py file now and stop re-reading the PRD." Imperative voice, \
+1-3 sentences. No preamble, no markdown, no quotes — just the bracketed \
+codes and the directive text.
 """
 
 
@@ -106,6 +111,7 @@ async def escalate(
 ) -> str | None:
     """Ask Opus for a directive. Returns directive text or None."""
     prompt = _OPUS_PROMPT.format(
+        rubric=_DIRECTIVES_RUBRIC,
         code=finding.code,
         fallback=finding.directive[:200],
         context=_render_turns(messages, n_turns=12),

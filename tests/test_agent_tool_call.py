@@ -6,13 +6,13 @@ import json
 from pydantic import BaseModel
 import pytest
 
-from tests.conftest import build_test_agent_loop, build_test_vibe_config
+from tests.conftest import build_test_agent_loop, build_test_drydock_config
 from tests.mock.utils import mock_llm_chunk
 from tests.stubs.fake_backend import FakeBackend
 from tests.stubs.fake_tool import FakeTool
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.tools.base import BaseToolConfig, ToolPermission
 from drydock.core.tools.builtins.todo import TodoItem
 from drydock.core.types import (
@@ -34,8 +34,8 @@ async def act_and_collect_events(agent_loop: AgentLoop, prompt: str) -> list[Bas
     return [ev async for ev in agent_loop.act(prompt)]
 
 
-def make_config(todo_permission: ToolPermission = ToolPermission.ALWAYS) -> VibeConfig:
-    return build_test_vibe_config(
+def make_config(todo_permission: ToolPermission = ToolPermission.ALWAYS) -> DrydockConfig:
+    return build_test_drydock_config(
         enabled_tools=["todo"],
         tools={"todo": BaseToolConfig(permission=todo_permission)},
         system_prompt_id="tests",
@@ -447,7 +447,7 @@ async def test_tool_call_can_be_interrupted() -> None:
     tool_call = ToolCall(
         id="call_8", index=0, function=FunctionCall(name="stub_tool", arguments="{}")
     )
-    config = build_test_vibe_config(enabled_tools=["stub_tool"])
+    config = build_test_drydock_config(enabled_tools=["stub_tool"])
     agent_loop = build_test_agent_loop(
         config=config,
         agent_name=BuiltinAgentName.AUTO_APPROVE,

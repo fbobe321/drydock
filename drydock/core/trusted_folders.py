@@ -17,7 +17,7 @@ def has_agents_md_file(path: Path) -> bool:
 
 
 def has_trustable_content(path: Path) -> bool:
-    if (path / ".vibe").exists():
+    if (path / ".drydock").exists():
         return True
     tools_dirs, skills_dirs, agents_dirs = walk_local_config_dirs_all(path)
     return bool(tools_dirs or skills_dirs or agents_dirs) or has_agents_md_file(path)

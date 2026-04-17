@@ -139,7 +139,7 @@ async def test_cloudflare_retry_on_challenge(webfetch):
     assert route.call_count == 2
 
     second_request = route.calls[1].request
-    assert second_request.headers["User-Agent"] == "vibe-cli"
+    assert second_request.headers["User-Agent"] == "drydock-cli"
 
 
 @pytest.mark.asyncio

@@ -13,7 +13,7 @@ from drydock.core.utils import is_dangerous_directory, is_windows
 
 if TYPE_CHECKING:
     from drydock.core.agents import AgentManager
-    from drydock.core.config import ProjectContextConfig, VibeConfig
+    from drydock.core.config import ProjectContextConfig, DrydockConfig
     from drydock.core.skills.manager import SkillManager
     from drydock.core.tools.manager import ToolManager
 
@@ -242,7 +242,7 @@ def _get_available_subagents_section(agent_manager: AgentManager) -> str:
 
 def get_universal_system_prompt(
     tool_manager: ToolManager,
-    config: VibeConfig,
+    config: DrydockConfig,
     skill_manager: SkillManager,
     agent_manager: AgentManager,
 ) -> str:

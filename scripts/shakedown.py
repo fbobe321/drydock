@@ -46,7 +46,7 @@ from pathlib import Path
 import pexpect
 
 DRYDOCK_BIN = "/home/bobef/miniforge3/envs/drydock/bin/drydock"
-SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
+SESSION_ROOT = Path.home() / ".drydock" / "logs" / "session"
 
 # Failure thresholds (user-perceptible pain)
 DUP_WRITE_LOOP_THRESHOLD = 3       # 3+ identical-content writes = loop

@@ -4,16 +4,16 @@ from rich.style import Style
 from textual.widgets.text_area import TextAreaTheme
 
 from tests.cli.plan_offer.adapters.fake_whoami_gateway import FakeWhoAmIGateway
-from tests.conftest import build_test_agent_loop, build_test_vibe_config
+from tests.conftest import build_test_agent_loop, build_test_drydock_config
 from tests.stubs.fake_backend import FakeBackend
 from drydock.cli.plan_offer.ports.whoami_gateway import WhoAmIPlanType, WhoAmIResponse
-from drydock.cli.textual_ui.app import VibeApp
+from drydock.cli.textual_ui.app import DrydockApp
 from drydock.cli.textual_ui.widgets.chat_input import ChatTextArea
 from drydock.core.agents.models import BuiltinAgentName
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 
 
-def default_config() -> VibeConfig:
+def default_config() -> DrydockConfig:
     """Default configuration for snapshot testing.
     Remove as much interference as possible from the snapshot comparison, in order to get a clean pixel-to-pixel comparison.
     - Injects a fake backend to prevent (or stub) LLM calls.
@@ -21,18 +21,18 @@ def default_config() -> VibeConfig:
     - Forces a value for the displayed workdir
     - Hides the chat input cursor (as the blinking animation is not deterministic).
     """
-    return build_test_vibe_config(
+    return build_test_drydock_config(
         disable_welcome_banner_animation=True, displayed_workdir="/test/workdir"
     )
 
 
-class BaseSnapshotTestApp(VibeApp):
-    CSS_PATH = "../../vibe/cli/textual_ui/app.tcss"
+class BaseSnapshotTestApp(DrydockApp):
+    CSS_PATH = "../../drydock/cli/textual_ui/app.tcss"
     _current_agent_name: str = BuiltinAgentName.DEFAULT
 
     def __init__(
         self,
-        config: VibeConfig | None = None,
+        config: DrydockConfig | None = None,
         backend: FakeBackend | None = None,
         **kwargs,
     ):

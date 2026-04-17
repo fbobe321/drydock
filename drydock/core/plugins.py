@@ -44,8 +44,8 @@ class PluginInfo:
 def _plugins_dir() -> Path:
     """Get the plugins directory."""
     try:
-        from drydock.core.paths import VIBE_HOME
-        return VIBE_HOME.path / "plugins"
+        from drydock.core.paths import DRYDOCK_HOME
+        return DRYDOCK_HOME.path / "plugins"
     except Exception:
         return Path.home() / ".drydock" / "plugins"
 

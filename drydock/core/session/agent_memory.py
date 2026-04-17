@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 def _get_memory_dir(agent_name: str) -> Path:
     """Get the memory directory for a specific agent."""
     try:
-        from drydock.core.paths import VIBE_HOME
-        base = VIBE_HOME.path / "agent_memory" / agent_name
+        from drydock.core.paths import DRYDOCK_HOME
+        base = DRYDOCK_HOME.path / "agent_memory" / agent_name
     except Exception:
         base = Path.home() / ".drydock" / "agent_memory" / agent_name
     base.mkdir(parents=True, exist_ok=True)

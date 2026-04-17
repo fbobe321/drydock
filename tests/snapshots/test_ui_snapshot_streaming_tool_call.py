@@ -15,7 +15,7 @@ from drydock.core.types import ToolCallEvent
 
 
 class ToolCallStreamingUpdateTest(App):
-    CSS_PATH = "../../vibe/cli/textual_ui/app.tcss"
+    CSS_PATH = "../../drydock/cli/textual_ui/app.tcss"
 
     def __init__(self) -> None:
         super().__init__()

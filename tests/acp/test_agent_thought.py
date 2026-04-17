@@ -7,10 +7,10 @@ from acp.schema import AgentThoughtChunk, TextContentBlock
 import pytest
 
 from tests.acp.conftest import _create_acp_agent
-from tests.conftest import build_test_vibe_config
+from tests.conftest import build_test_drydock_config
 from tests.stubs.fake_backend import FakeBackend
 from tests.stubs.fake_client import FakeClient
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 from drydock.core.agent_loop import AgentLoop
 from drydock.core.types import LLMChunk, LLMMessage, LLMUsage, Role
 
@@ -38,8 +38,8 @@ def backend_with_reasoning() -> FakeBackend:
 @pytest.fixture
 def acp_agent_loop_with_reasoning(
     backend_with_reasoning: FakeBackend,
-) -> VibeAcpAgentLoop:
-    config = build_test_vibe_config(active_model="devstral-latest")
+) -> DrydockAcpAgentLoop:
+    config = build_test_drydock_config(active_model="devstral-latest")
 
     class PatchedAgentLoop(AgentLoop):
         def __init__(self, *args, **kwargs) -> None:
@@ -54,7 +54,7 @@ def acp_agent_loop_with_reasoning(
 class TestACPAgentThought:
     @pytest.mark.asyncio
     async def test_prompt_with_reasoning_emits_agent_thought_chunk(
-        self, acp_agent_loop_with_reasoning: VibeAcpAgentLoop
+        self, acp_agent_loop_with_reasoning: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop_with_reasoning.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -82,7 +82,7 @@ class TestACPAgentThought:
 
     @pytest.mark.asyncio
     async def test_prompt_without_reasoning_does_not_emit_agent_thought_chunk(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -105,7 +105,7 @@ class TestACPAgentThought:
 
     @pytest.mark.asyncio
     async def test_agent_thought_chunk_contains_text_content_block(
-        self, acp_agent_loop_with_reasoning: VibeAcpAgentLoop
+        self, acp_agent_loop_with_reasoning: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop_with_reasoning.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]
@@ -129,7 +129,7 @@ class TestACPAgentThought:
 
     @pytest.mark.asyncio
     async def test_agent_thought_chunk_contains_message_id(
-        self, acp_agent_loop_with_reasoning: VibeAcpAgentLoop
+        self, acp_agent_loop_with_reasoning: DrydockAcpAgentLoop
     ) -> None:
         session_response = await acp_agent_loop_with_reasoning.new_session(
             cwd=str(Path.cwd()), mcp_servers=[]

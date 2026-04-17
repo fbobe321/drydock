@@ -10,7 +10,7 @@ from drydock.core.config.harness_files._paths import (
     GLOBAL_SKILLS_DIR,
     GLOBAL_TOOLS_DIR,
 )
-from drydock.core.paths import AGENTS_MD_FILENAMES, VIBE_HOME, walk_local_config_dirs_all
+from drydock.core.paths import AGENTS_MD_FILENAMES, DRYDOCK_HOME, walk_local_config_dirs_all
 from drydock.core.trusted_folders import trusted_folders_manager
 
 FileSource = Literal["user", "project"]
@@ -43,7 +43,7 @@ class HarnessFilesManager:
             if candidate.is_file():
                 return candidate
         if "user" in self.sources:
-            return VIBE_HOME.path / "config.toml"
+            return DRYDOCK_HOME.path / "config.toml"
         return None
 
     @property
@@ -61,21 +61,21 @@ class HarnessFilesManager:
     def user_skills_dirs(self) -> list[Path]:
         dirs: list[Path] = []
         # Bundled skills shipped with drydock (always available)
-        from drydock import VIBE_ROOT
-        bundled = VIBE_ROOT / "skills"
+        from drydock import DRYDOCK_ROOT
+        bundled = DRYDOCK_ROOT / "skills"
         if bundled.is_dir():
             dirs.append(bundled)
         # Project skills in .drydock/skills/ (current directory)
         project_skills = Path.cwd() / ".drydock" / "skills"
         if project_skills.is_dir():
             dirs.append(project_skills)
-        # User skills in ~/.drydock/skills/ (and ~/.vibe/skills/ for backward compat)
+        # User skills in ~/.drydock/skills/ (and ~/.drydock/skills/ for backward compat)
         if "user" in self.sources:
             d = GLOBAL_SKILLS_DIR.path
             if d.is_dir():
                 dirs.append(d)
-            # Always check legacy ~/.vibe/skills/ in case migration didn't complete
-            legacy_skills = Path.home() / ".vibe" / "skills"
+            # Always check legacy ~/.drydock/skills/ in case migration didn't complete
+            legacy_skills = Path.home() / ".drydock" / "skills"
             if legacy_skills.is_dir() and legacy_skills != d:
                 dirs.append(legacy_skills)
         # Plugin skills
@@ -115,7 +115,7 @@ class HarnessFilesManager:
 
     @property
     def user_config_file(self) -> Path:
-        return VIBE_HOME.path / "config.toml"
+        return DRYDOCK_HOME.path / "config.toml"
 
     @property
     def project_prompts_dirs(self) -> list[Path]:

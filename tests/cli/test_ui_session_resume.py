@@ -9,8 +9,8 @@ import pytest
 from tests.cli.plan_offer.adapters.fake_whoami_gateway import FakeWhoAmIGateway
 from tests.conftest import (
     build_test_agent_loop,
-    build_test_vibe_app,
-    build_test_vibe_config,
+    build_test_drydock_app,
+    build_test_drydock_config,
 )
 from tests.update_notifier.adapters.fake_update_cache_repository import (
     FakeUpdateCacheRepository,
@@ -24,16 +24,16 @@ from drydock.cli.textual_ui.widgets.messages import (
 )
 from drydock.cli.textual_ui.widgets.tools import ToolCallMessage, ToolResultMessage
 from drydock.cli.update_notifier import UpdateCache
-from drydock.core.config import VibeConfig
+from drydock.core.config import DrydockConfig
 from drydock.core.types import FunctionCall, LLMMessage, Role, ToolCall
 
 
 @pytest.mark.asyncio
 async def test_ui_displays_messages_when_resuming_session(
-    vibe_config: VibeConfig,
+    drydock_config: DrydockConfig,
 ) -> None:
     """Test that messages are properly displayed when resuming a session."""
-    agent_loop = build_test_agent_loop(config=vibe_config)
+    agent_loop = build_test_agent_loop(config=drydock_config)
 
     # Simulate a previous session with messages
     user_msg = LLMMessage(role=Role.user, content="Hello, how are you?")
@@ -59,7 +59,7 @@ async def test_ui_displays_messages_when_resuming_session(
 
     agent_loop.messages.extend([user_msg, assistant_msg, tool_result_msg])
 
-    app = build_test_vibe_app(agent_loop=agent_loop)
+    app = build_test_drydock_app(agent_loop=agent_loop)
 
     async with app.run_test() as pilot:
         # Wait for the app to initialize and rebuild history
@@ -89,16 +89,16 @@ async def test_ui_displays_messages_when_resuming_session(
 
 @pytest.mark.asyncio
 async def test_ui_does_not_display_messages_when_only_system_messages_exist(
-    vibe_config: VibeConfig,
+    drydock_config: DrydockConfig,
 ) -> None:
     """Test that no messages are displayed when only system messages exist."""
-    agent_loop = build_test_agent_loop(config=vibe_config)
+    agent_loop = build_test_agent_loop(config=drydock_config)
 
     # Only system messages
     system_msg = LLMMessage(role=Role.system, content="System prompt")
     agent_loop.messages.append(system_msg)
 
-    app = build_test_vibe_app(agent_loop=agent_loop)
+    app = build_test_drydock_app(agent_loop=agent_loop)
 
     async with app.run_test() as pilot:
         await pilot.pause(0.5)
@@ -113,10 +113,10 @@ async def test_ui_does_not_display_messages_when_only_system_messages_exist(
 
 @pytest.mark.asyncio
 async def test_ui_displays_multiple_user_assistant_turns(
-    vibe_config: VibeConfig,
+    drydock_config: DrydockConfig,
 ) -> None:
     """Test that multiple conversation turns are properly displayed."""
-    agent_loop = build_test_agent_loop(config=vibe_config)
+    agent_loop = build_test_agent_loop(config=drydock_config)
 
     # Multiple conversation turns
     messages = [
@@ -128,7 +128,7 @@ async def test_ui_displays_multiple_user_assistant_turns(
 
     agent_loop.messages.extend(messages)
 
-    app = build_test_vibe_app(agent_loop=agent_loop)
+    app = build_test_drydock_app(agent_loop=agent_loop)
 
     async with app.run_test() as pilot:
         await pilot.pause(0.5)
@@ -151,7 +151,7 @@ async def test_ui_rebuilds_history_when_whats_new_is_shown(
 ) -> None:
     # we have to define an api key to make sure we display the Plan Offer message
     monkeypatch.setenv("MISTRAL_API_KEY", "api-key")
-    config = build_test_vibe_config(enable_update_checks=True)
+    config = build_test_drydock_config(enable_update_checks=True)
     agent_loop = build_test_agent_loop(config=config)
     agent_loop.messages.extend([
         LLMMessage(role=Role.user, content="Hello from the previous session."),
@@ -170,7 +170,7 @@ async def test_ui_rebuilds_history_when_whats_new_is_shown(
             prompt_switching_to_pro_plan=False,
         )
     )
-    app = build_test_vibe_app(
+    app = build_test_drydock_app(
         agent_loop=agent_loop,
         update_notifier=FakeUpdateGateway(update=None),
         update_cache_repository=update_cache_repository,
@@ -179,7 +179,7 @@ async def test_ui_rebuilds_history_when_whats_new_is_shown(
         config=config,
     )
 
-    with patch("drydock.cli.update_notifier.whats_new.VIBE_ROOT", tmp_path):
+    with patch("drydock.cli.update_notifier.whats_new.DRYDOCK_ROOT", tmp_path):
         whats_new_file = tmp_path / "whats_new.md"
         whats_new_file.write_text("# What's New\n\n- Feature 1")
 

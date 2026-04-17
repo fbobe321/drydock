@@ -16,7 +16,7 @@ from mcp.types import (
 from drydock.core.llm.types import BackendLike
 from drydock.core.types import LLMMessage, Role
 
-logger = getLogger("vibe")
+logger = getLogger("drydock")
 
 
 class MCPSamplingHandler:

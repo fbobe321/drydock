@@ -25,7 +25,7 @@ from drydock.core.config import (
     Backend,
     ModelConfig,
     ProviderConfig,
-    VibeConfig,
+    DrydockConfig,
 )
 from drydock.core.types import (
     AssistantEvent,
@@ -58,9 +58,9 @@ pytestmark = pytest.mark.skipif(
 # Helpers
 # ============================================================================
 
-def _make_config(tmp_path: Path) -> VibeConfig:
+def _make_config(tmp_path: Path) -> DrydockConfig:
     """Create a config that uses local vLLM."""
-    return VibeConfig(
+    return DrydockConfig(
         active_model="devstral",
         auto_approve=True,
         enable_telemetry=False,

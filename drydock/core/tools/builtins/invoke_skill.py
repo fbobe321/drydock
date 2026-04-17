@@ -168,14 +168,14 @@ class InvokeSkill(
                 agent_profile = BUILTIN_AGENTS.get(agent_name)
                 if agent_profile and agent_profile.agent_type == AgentType.SUBAGENT:
                     from drydock.core.agent_loop import AgentLoop
-                    from drydock.core.config import SessionLoggingConfig, VibeConfig
+                    from drydock.core.config import SessionLoggingConfig, DrydockConfig
 
                     session_logging = SessionLoggingConfig(
                         save_dir=str(ctx.session_dir / "skills") if ctx.session_dir else "",
                         session_prefix=f"skill-{args.skill_name}",
                         enabled=ctx.session_dir is not None,
                     )
-                    sub_config = VibeConfig.load(session_logging=session_logging)
+                    sub_config = DrydockConfig.load(session_logging=session_logging)
                     if agent_profile.model:
                         sub_config = agent_profile.apply_to_config(sub_config)
 

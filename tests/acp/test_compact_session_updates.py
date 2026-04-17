@@ -7,34 +7,34 @@ from unittest.mock import patch
 from acp.schema import TextContentBlock, ToolCallProgress, ToolCallStart
 import pytest
 
-from tests.conftest import build_test_vibe_config, make_test_models
+from tests.conftest import build_test_drydock_config, make_test_models
 from tests.stubs.fake_backend import FakeBackend
 from tests.stubs.fake_client import FakeClient
-from drydock.acp.acp_agent_loop import VibeAcpAgentLoop
+from drydock.acp.acp_agent_loop import DrydockAcpAgentLoop
 from drydock.core.agent_loop import AgentLoop
 
 
 @pytest.fixture
-def acp_agent_loop(backend: FakeBackend) -> VibeAcpAgentLoop:
+def acp_agent_loop(backend: FakeBackend) -> DrydockAcpAgentLoop:
     class PatchedAgent(AgentLoop):
         def __init__(self, *args, **kwargs) -> None:
-            kwargs["config"] = build_test_vibe_config(
+            kwargs["config"] = build_test_drydock_config(
                 models=make_test_models(auto_compact_threshold=1)
             )
             super().__init__(*args, **kwargs, backend=backend)
 
     patch("drydock.acp.acp_agent_loop.AgentLoop", side_effect=PatchedAgent).start()
-    vibe_acp_agent = VibeAcpAgentLoop()
+    drydock_acp_agent = DrydockAcpAgentLoop()
     client = FakeClient()
-    vibe_acp_agent.on_connect(client)
-    client.on_connect(vibe_acp_agent)
-    return vibe_acp_agent
+    drydock_acp_agent.on_connect(client)
+    client.on_connect(drydock_acp_agent)
+    return drydock_acp_agent
 
 
 class TestCompactEventHandling:
     @pytest.mark.asyncio
     async def test_prompt_handles_compact_events(
-        self, acp_agent_loop: VibeAcpAgentLoop
+        self, acp_agent_loop: DrydockAcpAgentLoop
     ) -> None:
         """Verify prompt() sends tool_call session updates for compact events."""
         session_response = await acp_agent_loop.new_session(
