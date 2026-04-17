@@ -93,6 +93,24 @@ class CommandRegistry:
                 description="Configure a local LLM (vLLM, Ollama, LM Studio, etc.)",
                 handler="_setup_model_command",
             ),
+            "admiral-apply": Command(
+                aliases=frozenset(["/admiral-apply"]),
+                description="Merge an Admiral-staged proposal branch into main "
+                            "(usage: /admiral-apply <branch>)",
+                handler="_admiral_apply_command",
+            ),
+            "admiral-reject": Command(
+                aliases=frozenset(["/admiral-reject"]),
+                description="Reject and delete an Admiral proposal branch "
+                            "(usage: /admiral-reject <branch>)",
+                handler="_admiral_reject_command",
+            ),
+            "admiral-status": Command(
+                aliases=frozenset(["/admiral-status", "/admiral"]),
+                description="Show Admiral state, recent findings, pending "
+                            "proposals.",
+                handler="_admiral_status_command",
+            ),
         }
 
         for command in excluded_commands:

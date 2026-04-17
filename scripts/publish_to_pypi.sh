@@ -27,7 +27,7 @@ PYPI_TOKEN=$(cat "$TOKEN_FILE")
 # --- Run tests ---
 log "Running regression tests..."
 $PYTHON -m pip install -q "pytest>=9.0" 2>/dev/null
-if ! $PYTHON -m pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py tests/test_loop_detection.py tests/test_agent_tasks.py tests/test_integration.py tests/test_user_issues.py tests/test_real_issues.py \
+if ! $PYTHON -m pytest tests/test_drydock_regression.py tests/test_drydock_tasks.py tests/test_loop_detection.py tests/test_agent_tasks.py tests/test_integration.py tests/test_user_issues.py tests/test_real_issues.py tests/test_admiral.py tests/test_admiral_phase3.py \
     -p no:xdist -p no:cov --override-ini="addopts=" -q 2>&1; then
     log "TESTS FAILED — publish aborted."
     exit 1

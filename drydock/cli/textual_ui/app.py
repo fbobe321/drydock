@@ -1447,6 +1447,132 @@ class DrydockApp(App):  # noqa: PLR0904
             )
         )
 
+    async def _admiral_apply_command(self, args: str = "") -> None:
+        """Merge an Admiral-staged proposal branch into main."""
+        import subprocess
+        branch = args.strip()
+        if not branch:
+            await self._mount_and_scroll(
+                UserCommandMessage(
+                    "**Usage:** `/admiral-apply <branch>`\n\n"
+                    "Available proposals: see `~/.drydock/admiral_proposals/` "
+                    "or run `git branch --list 'admiral/*'`."
+                )
+            )
+            return
+        if not branch.startswith("admiral/"):
+            branch = f"admiral/{branch}"
+        try:
+            check = subprocess.run(
+                ["git", "rev-parse", "--verify", branch],
+                cwd="/data3/drydock", capture_output=True, text=True, timeout=5,
+            )
+            if check.returncode != 0:
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"Branch `{branch}` not found.\n\n```\n{check.stderr}\n```"
+                ))
+                return
+            merge = subprocess.run(
+                ["git", "merge", "--no-ff", branch],
+                cwd="/data3/drydock", capture_output=True, text=True, timeout=30,
+            )
+            if merge.returncode != 0:
+                subprocess.run(["git", "merge", "--abort"], cwd="/data3/drydock",
+                               capture_output=True, timeout=5)
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"Merge failed for `{branch}` — aborted.\n\n"
+                    f"```\n{merge.stderr[:1500]}\n```"
+                ))
+                return
+            from drydock.admiral import history as _h
+            _h.append("proposal-applied", f"branch={branch}")
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Merged `{branch}` into main. Inspect with "
+                f"`git log -1`. Don't forget `publish_to_pypi.sh` if "
+                f"you want to release."
+            ))
+        except Exception as e:
+            await self._mount_and_scroll(UserCommandMessage(f"Error: {e}"))
+
+    async def _admiral_reject_command(self, args: str = "") -> None:
+        """Reject an Admiral proposal branch — delete + record fingerprint."""
+        import subprocess
+        branch = args.strip()
+        if not branch:
+            await self._mount_and_scroll(
+                UserCommandMessage("**Usage:** `/admiral-reject <branch>`")
+            )
+            return
+        if not branch.startswith("admiral/"):
+            branch = f"admiral/{branch}"
+        try:
+            sha = subprocess.run(
+                ["git", "rev-parse", branch],
+                cwd="/data3/drydock", capture_output=True, text=True, timeout=5,
+            )
+            if sha.returncode != 0:
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"Branch `{branch}` not found."
+                ))
+                return
+            # Pull commit message to get the fingerprint we recorded.
+            msg = subprocess.run(
+                ["git", "log", "-1", "--format=%B", branch],
+                cwd="/data3/drydock", capture_output=True, text=True, timeout=5,
+            )
+            import re as _re
+            fp_m = _re.search(r"Fingerprint:\s*(\w+)", msg.stdout)
+            code_m = _re.search(r"^admiral-proposed:\s*(\S+)", msg.stdout, _re.M)
+            from drydock.admiral import persistence as _p, history as _h
+            if fp_m and code_m:
+                _p.record_proposal_fingerprint(code_m.group(1), fp_m.group(1), "rejected")
+            subprocess.run(["git", "branch", "-D", branch],
+                           cwd="/data3/drydock", capture_output=True, timeout=5)
+            _h.append("proposal-rejected-by-user", f"branch={branch}")
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Rejected `{branch}`. Branch deleted; "
+                f"Admiral will not re-propose this fingerprint."
+            ))
+        except Exception as e:
+            await self._mount_and_scroll(UserCommandMessage(f"Error: {e}"))
+
+    async def _admiral_status_command(self, args: str = "") -> None:
+        """Show a brief Admiral state summary in the chat."""
+        try:
+            from drydock.admiral import persistence as _p
+            state = _p.load_state()
+            findings = state.get("findings", {})
+            top = sorted(
+                findings.items(), key=lambda kv: -int(kv[1].get("total_fires", 0))
+            )[:5]
+            lines = [
+                "### Admiral status",
+                "",
+                f"- Total finding codes seen: **{len(findings)}**",
+                f"- Proposals tracked: **{sum(len(v) for v in state.get('proposals', {}).values())}**",
+                "",
+                "#### Top finding codes",
+                "",
+            ]
+            if not top:
+                lines.append("_(no findings yet)_")
+            for code, entry in top:
+                lines.append(
+                    f"- `{code}` — {entry.get('total_fires', 0)} fires, "
+                    f"{len(entry.get('sessions', []))} sessions, "
+                    f"unstuck={entry.get('prompt_unstuck', 0)}, "
+                    f"failed={entry.get('prompt_failed', 0)}"
+                )
+            lines += [
+                "",
+                "Audit log: `~/.drydock/logs/admiral_history.log`",
+                "Proposals: `~/.drydock/admiral_proposals/`",
+                "Tuning: `~/.drydock/admiral_tuning.json`",
+            ]
+            await self._mount_and_scroll(UserCommandMessage("\n".join(lines)))
+        except Exception as e:
+            await self._mount_and_scroll(UserCommandMessage(f"Error: {e}"))
+
     async def _show_config(self) -> None:
         """Switch to the configuration app in the bottom panel."""
         if self._current_bottom_app == BottomApp.Config:

@@ -239,6 +239,28 @@ class AgentLoop:
         )
         thread.start()
 
+        # Admiral Phase 3a: apply any `(model, unknown)` tuning knobs
+        # before the loop starts. Safe no-op if no tuning is configured.
+        self._admiral_task_type = "unknown"
+        try:
+            from drydock.admiral import tuning as _admiral_tuning
+            _admiral_tuning.apply_to_agent_loop(self)
+        except Exception as _e:  # never let Admiral break boot
+            logger.debug("Admiral tuning apply failed: %s", _e)
+
+        # Admiral Phase 3a: record session metrics on interpreter exit.
+        try:
+            import atexit, uuid as _uuid
+            from drydock.admiral import metrics as _admiral_metrics
+            self._admiral_session_id = str(_uuid.uuid4())
+            atexit.register(
+                lambda al=self: _admiral_metrics.record(
+                    _admiral_metrics.collect(al, al._admiral_session_id, outcome="unknown")
+                )
+            )
+        except Exception as _e:
+            logger.debug("Admiral metrics hook failed: %s", _e)
+
     @property
     def agent_profile(self) -> AgentProfile:
         return self.agent_manager.active_profile
@@ -649,7 +671,15 @@ class AgentLoop:
             # "really difficult" builds. Bumped to 30 min — long enough
             # for a multi-file refactor, short enough that a runaway loop
             # still hands control back before the user gives up.
-            PER_PROMPT_BUDGET_SEC = 30 * 60
+            # Admiral Phase 3a: per-(model, task) override if configured.
+            PER_PROMPT_BUDGET_SEC = int(
+                getattr(self, "_admiral_per_prompt_budget_sec", 30 * 60)
+            )
+            HARD_STOP_CALLS = int(
+                getattr(self, "_admiral_hard_stop_tool_calls", 100)
+            )
+            WRAP_UP_WARN_AT = int(getattr(self, "_admiral_wrap_up_warn_at", 30))
+            STOP_NOW_WARN_AT = int(getattr(self, "_admiral_stop_now_warn_at", 60))
             _prompt_start = time.perf_counter()
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
@@ -683,21 +713,21 @@ class AgentLoop:
                         stopped_by_middleware=True,
                     )
                     return
-                if tool_turns == 30:
+                if tool_turns == WRAP_UP_WARN_AT:
                     self._inject_system_note(
                         f"You have used {tool_turns} tool calls on this "
                         "single user request. Start wrapping up — make "
                         "your next 3-5 calls count, then stop with a "
                         "summary so the user can review."
                     )
-                elif tool_turns == 60:
+                elif tool_turns == STOP_NOW_WARN_AT:
                     self._inject_system_note(
                         f"You have used {tool_turns} tool calls on this "
                         "single request. STOP NOW. Emit a final text "
                         "response summarizing what you did (or what is "
                         "blocked) so the user can take the next step."
                     )
-                elif tool_turns >= 100:
+                elif tool_turns >= HARD_STOP_CALLS:
                     # Hard end-of-turn: synthesize a user-facing message
                     # and stop. Was 50 but issue #9 showed "really
                     # difficult" tasks legitimately need more than 50

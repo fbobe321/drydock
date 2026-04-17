@@ -285,7 +285,7 @@ Open design questions for Phase 2:
 * Rate-limiting: prevent Opus blast during a bad run. Max 3 escalations
   per session by default. Override via env var.
 
-### Phase 3a — DESIGNED (not started): Hyperparameter adaptation per (model, task)
+### Phase 3a — SHIPPED (v2.6.141): Hyperparameter adaptation per (model, task)
 
 **Goal.** Admiral learns the strengths and weaknesses of the current
 model + tool set and tunes the harness hyperparameters accordingly,
@@ -388,7 +388,7 @@ then Admiral re-evaluates once and possibly re-tunes.
 
 ---
 
-### Phase 3b — DESIGNED (not started): Self-improving drydock via gated code proposals
+### Phase 3b — SHIPPED (v2.6.141, default-OFF via DRYDOCK_ADMIRAL_PROPOSER=1)
 
 **Goal.** Close the loop from detection → proposed fix → validated
 branch, without ever writing to `main` or PyPI automatically. The
@@ -558,8 +558,8 @@ having to tail a log file.
 
 ## 9. Continuity Notes (if this session is lost)
 
-**Latest shipped:** v2.6.139 (Phase 1 + Phase 2 module, Opus escalation,
-Directives rubric wired into prompts).
+**Latest shipped:** v2.6.141 — Phase 3a (hyperparameter adaptation)
+and Phase 3b (gated code proposals, default-OFF) both in PyPI.
 
 **Shipped this session (2026-04-17):**
 * v2.6.134 — wall-of-text inline-marker breaker (issue #8).
@@ -571,6 +571,11 @@ Directives rubric wired into prompts).
 * v2.6.138 — Admiral Phase 1 module + TUI integration.
 * v2.6.139 — Admiral Phase 2 (local-LLM analyzer, Opus escalator,
   Directives rubric in prompts).
+* v2.6.140 — full `.vibe → .drydock` rename (zero vibe refs left).
+* v2.6.141 — Phase 3a (task_classifier, metrics, tuning, policy +
+  AgentLoop integration) + Phase 3b (proposer, validator, stager +
+  /admiral-apply, /admiral-reject, /admiral-status slash commands)
+  + scripts/stress_watcher.py harness-level babysitter.
 
 **Files (check `git log --oneline -30`):**
 * `drydock/admiral/{__init__,detectors,interventions,history,worker,

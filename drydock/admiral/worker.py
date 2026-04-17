@@ -18,7 +18,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from drydock.admiral import detectors, history, interventions, llm_analyzer, opus_escalator
+from drydock.admiral import detectors, history, interventions, llm_analyzer, opus_escalator, persistence
 
 if TYPE_CHECKING:
     from drydock.admiral.detectors import Finding
@@ -93,8 +93,18 @@ class AdmiralWorker:
             )
 
     async def _handle_finding(self, finding: Finding) -> None:
-        """Escalation ladder: local LLM → Opus → canned directive."""
+        """Escalation ladder: local LLM → Opus → canned directive.
+
+        Also records the finding to the cross-session state so the
+        Phase 3b proposer can check promotion criteria, and — if the
+        proposer is enabled AND criteria are met — drafts a code
+        proposal in the background.
+        """
         try:
+            # Record for Phase 3b promotion criteria.
+            session_id = getattr(self.agent_loop, "_admiral_session_id", "")
+            persistence.record_finding(finding.code, session_id)
+
             directive, source = await self._resolve_directive(finding)
             history.append(
                 "directive-source",
@@ -102,11 +112,53 @@ class AdmiralWorker:
             )
             finding_with_text = type(finding)(code=finding.code, directive=directive)
             interventions.apply(self.agent_loop, finding_with_text)
+
+            # Phase 3b: if same finding qualifies and proposer is enabled,
+            # kick off a code-proposal draft in the background.
+            if persistence.finding_qualifies_for_code_change(finding.code):
+                asyncio.create_task(
+                    self._maybe_propose_code(finding_with_text),
+                    name=f"admiral-propose:{finding.code[:32]}",
+                )
         except Exception as e:
             logger.warning("Admiral handle_finding failed: %s", e)
             history.append("error", f"handle_finding failed: {finding.code} :: {e}")
         finally:
             self._in_flight.discard(finding.code)
+
+    async def _maybe_propose_code(self, finding: Finding) -> None:
+        """Phase 3b: draft → validate → stage. Every step logged."""
+        try:
+            from drydock.admiral import proposer, stager, validator
+        except Exception as e:
+            logger.debug("Admiral phase3b imports failed: %s", e)
+            return
+        try:
+            proposal = await proposer.propose(self.agent_loop, finding)
+            if not proposal:
+                return
+            history.append(
+                "proposal-draft",
+                f"{proposal.code} :: source={proposal.source} :: fp={proposal.fingerprint}",
+            )
+            # Validation runs in a thread — it's subprocess-heavy.
+            import asyncio as _asyncio
+            result = await _asyncio.to_thread(validator.validate, proposal.diff)
+            if not result.ok:
+                history.append(
+                    "proposal-rejected",
+                    f"{proposal.code} :: validation failed: {result.stderr[:200]}",
+                )
+                return
+            staged = await _asyncio.to_thread(stager.stage, proposal, result)
+            if staged:
+                history.append(
+                    "proposal-ready",
+                    f"branch={staged.branch} :: {staged.proposal_path}",
+                )
+        except Exception as e:
+            logger.warning("Admiral phase3b pipeline error: %s", e)
+            history.append("error", f"phase3b: {e}")
 
     async def _resolve_directive(self, finding: Finding) -> tuple[str, str]:
         """Return (directive_text, source) for the finding.
