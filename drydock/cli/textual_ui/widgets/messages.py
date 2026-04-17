@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from textual.app import ComposeResult
@@ -110,6 +111,38 @@ class StreamingMessageBase(Static):
         return self._content.strip() == ""
 
 
+_INLINE_ENUM_RE = re.compile(r" (?=\d{1,2}\. [A-Z])")
+_INLINE_HEADING_RE = re.compile(r" (?=\*\*[A-Z][A-Za-z ]{1,20}:\*\*)")
+_INLINE_DASH_BULLET_RE = re.compile(r"(?<=[.!?]) (?=- [A-Z])")
+
+
+def _break_walls_of_text(text: str) -> str:
+    """Insert line breaks before inline enumerations and bold headings
+    in a flat string with no newlines.
+
+    Gemma 4 often emits responses like `Changes: 1. Added X 2. Added Y
+    3. Fixed Z` as a single paragraph with zero `\\n`. The Markdown
+    widget renders that as one long line, which users correctly call
+    "a wall of text". We can't insert newlines the model didn't write
+    inside a code fence, but we can break up inline numbered items
+    (` 1. Foo 2. Bar `) and inline bold headings (` **Usage:** `) into
+    separate markdown blocks by injecting `\\n` before the enumeration
+    or heading marker. Conservative patterns only — must match a space
+    followed by `\\d+\\. [A-Z]` or `**Heading:**`.
+
+    Runs OUTSIDE code fences only.
+    """
+    if not text or "\n" in text and text.count("\n") >= 2:
+        return text
+    # Only intervene for "wall of text" — long, low-newline content.
+    if len(text) < 200:
+        return text
+    out = _INLINE_ENUM_RE.sub("\n", text)
+    out = _INLINE_HEADING_RE.sub("\n\n", out)
+    out = _INLINE_DASH_BULLET_RE.sub("\n", out)
+    return out
+
+
 def _preserve_line_breaks(text: str) -> str:
     """Promote single \\n to markdown paragraph-break (\\n\\n) so the
     rendered output keeps line breaks the model wrote.
@@ -122,12 +155,21 @@ def _preserve_line_breaks(text: str) -> str:
     run-on. Doubling the newline preserves visual breaks AND renders
     cleanly.
 
+    Also handles the "wall of text" case (issue #8): model emits a
+    long flat string with no newlines but inline numbered lists and
+    bold headings. We inject newlines before those markers so the
+    Markdown widget renders them as real blocks.
+
     Skips: code fences (preserved verbatim), markdown lists (already
     render with proper spacing), and any line ending in a trailing
     backslash (markdown escape).
     """
     if not text:
         return text
+    # First pass: if the whole chunk has no newlines, try to rescue
+    # inline-enumeration wall-of-text.
+    if "\n" not in text:
+        text = _break_walls_of_text(text)
     out: list[str] = []
     in_fence = False
     lines = text.split("\n")

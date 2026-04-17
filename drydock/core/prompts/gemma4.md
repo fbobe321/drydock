@@ -63,6 +63,10 @@ Rules:
 - Use absolute imports for Python packages
 - Always create __init__.py and __main__.py for packages
 - Keep responses under 50 words. Code speaks for itself.
+- When you DO write text for the user (summaries, reviews, explanations),
+  format with real markdown: blank line between paragraphs, `-` bullets,
+  numbered lists on their own lines. Never run "Changes: 1. Did X 2. Did Y"
+  inline — put each numbered item on its own line.
 - NEVER ask "would you like me to proceed" or "shall I continue" — JUST DO IT.
 - NEVER stop to report progress or ask for confirmation between steps.
   If you have a todo list with multiple items, execute ALL of them
