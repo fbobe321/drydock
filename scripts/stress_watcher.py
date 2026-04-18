@@ -59,6 +59,20 @@ def _tail_lines(path: Path) -> list[str]:
         return []
 
 
+def _rss_kb(pid: int | None) -> int:
+    """Return RSS in KB for `pid` (0 if unknown/dead)."""
+    if pid is None:
+        return 0
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1])
+    except Exception:
+        return 0
+    return 0
+
+
 def _count_orphan_drydock_tuis() -> int:
     """Count drydock TUI processes whose parent is init (ppid=1).
 
@@ -239,7 +253,22 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                     cooldown=1800,
                 )
 
-            # 7. Completion.
+            # 7. Harness memory bloat — pexpect + SessionWatcher leaks
+            # observed at ~130MB/h on long runs. By 4GB, GC thrash in
+            # the harness causes it to miss TUI idle windows → retries
+            # and skips. Alert early so operator can catch it before
+            # the degradation becomes visible downstream.
+            harness_rss_mb = _rss_kb(pid) // 1024
+            if harness_rss_mb > 2500:
+                _alert_once(
+                    "harness-memory-bloat",
+                    f"stress harness RSS {harness_rss_mb} MB — likely "
+                    f"SessionWatcher / pexpect buffer leak; harness "
+                    f"will start missing TUI idle windows soon.",
+                    cooldown=3600,
+                )
+
+            # 8. Completion.
             if state.last_total and state.last_step >= state.last_total:
                 _alert_once(
                     "complete",

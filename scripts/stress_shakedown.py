@@ -399,6 +399,12 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
             watcher.session_dir = None
             watcher.since = time.time()
             watcher.messages = []
+            # Critical: also reset the byte-offset cache so the next
+            # refresh re-reads the NEW session's messages.jsonl from
+            # the start — otherwise the watcher reads 0 new bytes and
+            # reports "no new messages" forever.
+            if hasattr(watcher, "_reset_offsets"):
+                watcher._reset_offsets()
             # Wait for the new session dir to appear before continuing.
             for _ in range(30):
                 if watcher.find_session() is not None:

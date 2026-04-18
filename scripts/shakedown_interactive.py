@@ -1326,13 +1326,31 @@ AUTONOMOUS_SCRIPTS: dict[str, list[tuple[str, str, int]]] = {
 
 
 class SessionWatcher:
-    """Lightweight session log poller."""
+    """Lightweight session log poller.
+
+    Earlier version re-read the entire `messages.jsonl` file on every
+    refresh — on long stress runs (1k+ prompts, 36h+ runtimes) this
+    accumulated into ~130 MB/hour of harness RSS growth because
+    Python couldn't always free the replaced list fast enough and
+    pexpect's poll loop slowed down with GC pressure, which made the
+    harness miss the TUI's idle windows and retry/skip prompts that
+    drydock was actually handling fine. Fix: keep a byte offset per
+    file, read only the new tail each refresh, and cap the retained
+    message window.
+
+    Keeps only MAX_KEPT_MSGS most recent messages in memory. Callers
+    that need older messages should scan the file directly.
+    """
+
+    MAX_KEPT_MSGS = 500
 
     def __init__(self, cwd: Path, since: float):
         self.cwd = cwd.resolve()
         self.since = since
         self.session_dir: Path | None = None
         self.messages: list[dict] = []
+        # Per-file byte offsets: {path_str: last_read_byte}
+        self._offsets: dict[str, int] = {}
 
     def find_session(self) -> Path | None:
         if self.session_dir is not None:
@@ -1352,20 +1370,42 @@ class SessionWatcher:
                 continue
         return None
 
+    def _reset_offsets(self) -> None:
+        """Called when the session dir changes — clear everything."""
+        self._offsets.clear()
+        self.messages.clear()
+
     def refresh(self) -> int:
         sd = self.find_session()
         if sd is None:
             return 0
-        msgs: list[dict] = []
+        new_msgs = False
         for msg_file in sorted(sd.rglob("messages.jsonl")):
+            key = str(msg_file)
             try:
-                for line in msg_file.read_text().strip().split("\n"):
-                    if line.strip():
-                        msgs.append(json.loads(line))
+                with msg_file.open("rb") as f:
+                    f.seek(self._offsets.get(key, 0))
+                    chunk = f.read()
+                    self._offsets[key] = f.tell()
+                if not chunk:
+                    continue
+                for raw in chunk.decode("utf-8", errors="replace").split("\n"):
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    try:
+                        self.messages.append(json.loads(line))
+                        new_msgs = True
+                    except Exception:
+                        continue
             except Exception:
                 continue
-        self.messages = msgs
-        return len(msgs)
+        # Cap the in-memory window so long sessions don't bloat RAM.
+        if len(self.messages) > self.MAX_KEPT_MSGS:
+            self.messages = self.messages[-self.MAX_KEPT_MSGS:]
+        if new_msgs:
+            pass  # (noop; kept for potential telemetry hook later)
+        return len(self.messages)
 
     def count_writes(self) -> int:
         n = 0
