@@ -25,7 +25,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _PROGRESS_RE = re.compile(r"^\[\s*(\d+)/(\d+)\]\s+(.*)$")
-_TIMEOUT_RE = re.compile(r"TIMEOUT:")
+_TIMEOUT_RE = re.compile(r"^\s*TIMEOUT:")
+_RETRY_RE = re.compile(r"\[retry \d+: prompt not accepted")
+_SKIP_RE = re.compile(r"SKIP: TUI did not accept")
 _CHECKPOINT_RE = re.compile(
     r"accepted:\s+(\d+).*?skipped:\s+(\d+).*?timed_out:\s+(\d+)",
     re.DOTALL,
@@ -41,6 +43,11 @@ class ProgressState:
     timeouts: int = 0
     skipped: int = 0
     accepted: int = 0
+    # Recent-window degradation signals (counted from last 200 log lines).
+    recent_retries: int = 0
+    recent_skips: int = 0
+    recent_timeouts: int = 0
+    recent_prompts: int = 0
 
 
 def _tail_lines(path: Path) -> list[str]:
@@ -50,6 +57,34 @@ def _tail_lines(path: Path) -> list[str]:
         return path.read_text(errors="replace").splitlines()
     except Exception:
         return []
+
+
+def _count_orphan_drydock_tuis() -> int:
+    """Count drydock TUI processes whose parent is init (ppid=1).
+
+    These are leaks from prior killed harnesses. They starve vLLM and
+    are the #1 cause of the late-run degradation pattern we keep
+    seeing. Phase-1 stress_watcher missed this because it only
+    looked at the progress log, not the OS state.
+    """
+    try:
+        out = subprocess.check_output(
+            ["ps", "-eo", "pid,ppid,cmd"], text=True, timeout=3,
+        )
+    except Exception:
+        return 0
+    n = 0
+    for line in out.splitlines()[1:]:
+        parts = line.strip().split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            ppid = int(parts[1])
+        except ValueError:
+            continue
+        if ppid == 1 and "drydock/bin/drydock" in parts[2]:
+            n += 1
+    return n
 
 
 def _parse(lines: list[str]) -> ProgressState:
@@ -68,6 +103,18 @@ def _parse(lines: list[str]) -> ProgressState:
             s.accepted = int(m.group(1))
             s.skipped = int(m.group(2))
             s.timeouts = int(m.group(3))
+    # Recent-window degradation: count signals in the last 200 log
+    # lines (≈ last 30-60 prompts depending on verbosity).
+    tail = lines[-200:]
+    for line in tail:
+        if _RETRY_RE.search(line):
+            s.recent_retries += 1
+        elif _SKIP_RE.search(line):
+            s.recent_skips += 1
+        elif _TIMEOUT_RE.match(line):
+            s.recent_timeouts += 1
+        elif _PROGRESS_RE.match(line):
+            s.recent_prompts += 1
     return s
 
 
@@ -155,7 +202,44 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                         f"({state.timeouts}/{state.last_step})",
                     )
 
-            # 4. Completion.
+            # 4. Orphan drydock TUIs starving vLLM (the bug that
+            # caused the p1066+ degradation cluster on 2026-04-18).
+            orphans = _count_orphan_drydock_tuis()
+            if orphans > 0:
+                _alert_once(
+                    "orphan-drydock-tuis",
+                    f"{orphans} orphan drydock TUI(s) detected (ppid=1) — "
+                    f"these starve vLLM and degrade the active stress run. "
+                    f"Run: pkill-by-pid the orphans (NOT pkill-by-name).",
+                    cooldown=1800,
+                )
+
+            # 5. Retry-rate spike — TUI input layer is choking even when
+            # prompts technically still get through.
+            if state.recent_prompts > 5:
+                retry_rate = state.recent_retries / max(state.recent_prompts, 1)
+                if retry_rate > 0.5:
+                    _alert_once(
+                        "retry-spike",
+                        f"retry rate {retry_rate:.0%} in last "
+                        f"{state.recent_prompts} prompts "
+                        f"({state.recent_retries} retries) — TUI input "
+                        f"layer choking; check vLLM contention",
+                        cooldown=1800,
+                    )
+
+            # 6. Skip cluster — harness is giving up on prompts entirely.
+            if state.recent_skips >= 2:
+                _alert_once(
+                    "skip-cluster",
+                    f"{state.recent_skips} SKIP events in last "
+                    f"{state.recent_prompts} prompts — harness is "
+                    f"abandoning prompts after 3 retries; degradation "
+                    f"is severe",
+                    cooldown=1800,
+                )
+
+            # 7. Completion.
             if state.last_total and state.last_step >= state.last_total:
                 _alert_once(
                     "complete",
