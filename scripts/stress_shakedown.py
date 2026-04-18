@@ -41,6 +41,64 @@ from shakedown_interactive import (  # noqa: E402
 )
 
 
+def _kill_orphan_drydock_tuis() -> int:
+    """Kill any drydock TUI whose parent is init (ppid=1) — these are
+    leaked children of previous stress runs. Returns the count killed.
+
+    Only targets processes that:
+    * ARE a drydock CLI invocation (matches drydock/bin/drydock),
+    * have parent pid 1 (init — i.e. their real parent died),
+    * are NOT this script's own pid.
+    """
+    try:
+        out = subprocess.check_output(
+            ["ps", "-eo", "pid,ppid,cmd"], text=True, timeout=5,
+        )
+    except Exception:
+        return 0
+    killed = 0
+    my_pid = os.getpid()
+    for line in out.splitlines()[1:]:
+        parts = line.strip().split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            pid = int(parts[0])
+            ppid = int(parts[1])
+        except ValueError:
+            continue
+        cmd = parts[2]
+        if pid == my_pid or ppid != 1:
+            continue
+        if "drydock/bin/drydock" not in cmd:
+            continue
+        try:
+            os.kill(pid, 15)  # SIGTERM
+            killed += 1
+        except Exception:
+            pass
+    if killed:
+        time.sleep(2)
+        # SIGKILL holdouts
+        for line in out.splitlines()[1:]:
+            parts = line.strip().split(None, 2)
+            if len(parts) < 3:
+                continue
+            try:
+                pid = int(parts[0]); ppid = int(parts[1])
+            except ValueError:
+                continue
+            cmd = parts[2]
+            if pid == my_pid or ppid != 1 or "drydock/bin/drydock" not in cmd:
+                continue
+            try:
+                os.kill(pid, 0)
+                os.kill(pid, 9)
+            except Exception:
+                pass
+    return killed
+
+
 def _parse_prompts(path: Path) -> list[tuple[str | None, str]]:
     """Return a list of (section_header | None, prompt_text)."""
     items: list[tuple[str | None, str]] = []
@@ -243,10 +301,39 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     log_path = Path(f"/tmp/stress_shakedown_{int(time.time())}.tui.log")
     print(f"  TUI log: {log_path}\n")
 
+    # First scan for orphan drydock TUIs from prior killed runs — they
+    # starve vLLM and make every subsequent stress run degrade. Orphans
+    # have ppid=1 (init adopted them) and run the drydock entrypoint.
+    _killed = _kill_orphan_drydock_tuis()
+    if _killed:
+        print(f"  cleaned {_killed} orphan drydock TUI(s) from prior runs")
+
     start_time = time.time()
     env = {**os.environ, "TERM": "xterm-256color", "COLUMNS": "120", "LINES": "40"}
     child = pexpect.spawn(DRYDOCK_BIN, encoding="utf-8", timeout=5,
                           maxread=100000, env=env, cwd=str(cwd))
+
+    # Critical: make sure the TUI child dies with us. Three layers so
+    # no exit path (clean return, exception, SIGTERM, Ctrl+C) leaves
+    # an orphan. SIGKILL against the harness itself still can't be
+    # caught, but at that point the whole process tree is going anyway.
+    def _cleanup_child(*_args) -> None:
+        try:
+            if child.isalive():
+                child.sendcontrol("c")
+                time.sleep(0.5)
+            if child.isalive():
+                child.terminate(force=True)
+        except Exception:
+            pass
+    import atexit as _atexit
+    import signal as _signal
+    _atexit.register(_cleanup_child)
+    for _sig in (_signal.SIGTERM, _signal.SIGINT, _signal.SIGHUP):
+        try:
+            _signal.signal(_sig, lambda *a: (_cleanup_child(), os._exit(1)))
+        except Exception:
+            pass
     child.logfile_read = open(log_path, "w", buffering=1)
     child.expect([r">", r"Drydock", r"┌"], timeout=30)
     time.sleep(2)
