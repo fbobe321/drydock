@@ -70,6 +70,41 @@ def _running_drydock_pids() -> list[int]:
         return []
 
 
+def _active_alerts(entries: list[dict]) -> dict:
+    """Per-alert key, surface (count, last_ts, last_detail) in the last
+    window. Lets the dashboard render "active issues" without scrolling
+    history_tail and matching on prefixes.
+
+    Stale threshold: an alert is considered "current" only if it fired in
+    the last hour. Older occurrences are reported under `resolved`.
+    """
+    now = datetime.now(timezone.utc)
+    active: dict[str, dict] = {}
+    resolved: dict[str, dict] = {}
+    for e in entries:
+        if e["event"] != "stress-alert":
+            continue
+        detail = e["detail"]
+        key = detail.split(":", 1)[0].strip() if ":" in detail else "unknown"
+        try:
+            ts = datetime.fromisoformat(e["ts"])
+        except ValueError:
+            continue
+        age = (now - ts).total_seconds()
+        bucket = active if age < 3600 else resolved
+        cur = bucket.get(key)
+        if cur is None or ts > datetime.fromisoformat(cur["last_ts"]):
+            bucket[key] = {
+                "last_ts": e["ts"],
+                "last_detail": detail,
+                "age_s": int(age),
+                "count_in_window": bucket.get(key, {}).get("count_in_window", 0) + 1,
+            }
+        else:
+            bucket[key]["count_in_window"] += 1
+    return {"active": active, "resolved_recently": resolved}
+
+
 def _snapshot() -> dict:
     raw_lines = _tail(HISTORY_LOG, 200)
     entries = [e for e in (_parse_history_line(l) for l in raw_lines) if e]
@@ -107,6 +142,7 @@ def _snapshot() -> dict:
         "directive_source_counts": dict(source_counts),
         "tuning": tuning,
         "recent_metrics": metrics[-10:],
+        "alerts": _active_alerts(entries),
     }
 
 

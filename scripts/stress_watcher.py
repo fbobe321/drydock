@@ -164,19 +164,42 @@ def _pid_alive(pid: int) -> bool:
 
 
 def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> None:
-    """Poll loop. One alert per distinct stall window — no spam."""
-    last_alert_at: dict[str, float] = {}
+    """Poll loop. One alert per distinct stall window — no spam.
 
-    def _alert_once(key: str, msg: str, cooldown: float = 1800) -> None:
+    Previously cooldown-only: every detector re-fired every 30 min for as
+    long as the condition held, flooding admiral_history.log with dozens
+    of copies of the same message. Now we additionally suppress re-alerts
+    whose "quantity" hasn't changed meaningfully since the last fire —
+    memory-bloat must grow ≥20 %, spike/skip/timeout must advance with
+    new step progress.
+    """
+    last_alert_at: dict[str, float] = {}
+    last_alert_qty: dict[str, float] = {}
+
+    def _alert_once(key: str, msg: str, cooldown: float = 1800,
+                    qty: float | None = None,
+                    qty_growth_ratio: float = 0.2) -> None:
         now = time.time()
         if now - last_alert_at.get(key, 0) < cooldown:
             return
+        if qty is not None:
+            prev = last_alert_qty.get(key)
+            # Re-fire only if the measurement has grown meaningfully.
+            if prev is not None and qty <= prev * (1.0 + qty_growth_ratio):
+                return
+            last_alert_qty[key] = qty
         last_alert_at[key] = now
         _record("stress-alert", f"{key}: {msg}")
         _telegram(f"[stress-watcher] {msg}")
 
     last_step = 0
     last_step_ts = time.time()
+    # Step at which spike/skip detectors last fired, so we don't re-count
+    # the same stuck cluster as a "new" degradation.
+    last_spike_step = -1
+    last_skip_step = -1
+    # Composite pexpect-buffer-leak fingerprint fires at most once per run.
+    leak_fingerprint_fired = False
 
     while True:
         try:
@@ -229,10 +252,15 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                 )
 
             # 5. Retry-rate spike — TUI input layer is choking even when
-            # prompts technically still get through.
+            # prompts technically still get through. Only fires on a new
+            # cluster: if the step counter hasn't moved since the last
+            # spike, the harness is in the same stuck window — rely on
+            # the stall detector instead of re-alerting.
+            retry_rate = 0.0
             if state.recent_prompts > 5:
                 retry_rate = state.recent_retries / max(state.recent_prompts, 1)
-                if retry_rate > 0.5:
+                if retry_rate > 0.5 and state.last_step > last_spike_step:
+                    last_spike_step = state.last_step
                     _alert_once(
                         "retry-spike",
                         f"retry rate {retry_rate:.0%} in last "
@@ -243,7 +271,9 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                     )
 
             # 6. Skip cluster — harness is giving up on prompts entirely.
-            if state.recent_skips >= 2:
+            # Same guard: only a NEW stuck-window should alert.
+            if state.recent_skips >= 2 and state.last_step > last_skip_step:
+                last_skip_step = state.last_step
                 _alert_once(
                     "skip-cluster",
                     f"{state.recent_skips} SKIP events in last "
@@ -256,16 +286,36 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
             # 7. Harness memory bloat — pexpect + SessionWatcher leaks
             # observed at ~130MB/h on long runs. By 4GB, GC thrash in
             # the harness causes it to miss TUI idle windows → retries
-            # and skips. Alert early so operator can catch it before
-            # the degradation becomes visible downstream.
+            # and skips. Quantity-dedup: re-alert only if RSS has grown
+            # ≥20 % since the last fire, to stop the every-30-min noise
+            # floor once the operator has been notified.
             harness_rss_mb = _rss_kb(pid) // 1024
             if harness_rss_mb > 2500:
                 _alert_once(
                     "harness-memory-bloat",
                     f"stress harness RSS {harness_rss_mb} MB — likely "
-                    f"SessionWatcher / pexpect buffer leak; harness "
-                    f"will start missing TUI idle windows soon.",
-                    cooldown=3600,
+                    f"pexpect buffer leak (drain_pty truncates in newer "
+                    f"builds; confirm via git log shakedown_interactive.py). "
+                    f"Harness will start missing TUI idle windows.",
+                    cooldown=3600, qty=float(harness_rss_mb),
+                )
+
+            # 7b. Composite fingerprint: retry-spike + bloat + flat
+            # progress is the exact pexpect-buffer-leak signature. One
+            # actionable diagnosis beats three correlated symptoms.
+            if (not leak_fingerprint_fired
+                    and harness_rss_mb > 3000
+                    and retry_rate > 0.5
+                    and (now - last_step_ts) > 600):
+                leak_fingerprint_fired = True
+                _alert_once(
+                    "pexpect-buffer-leak",
+                    f"retry-spike + RSS={harness_rss_mb}MB + "
+                    f"progress flat {int((now - last_step_ts) / 60)}min. "
+                    f"Fingerprint of drain_pty pexpect-buffer bloat. "
+                    f"Restart harness; stress_shakedown.py supports "
+                    f"--resume-from-step N to continue from checkpoint.",
+                    cooldown=86400,
                 )
 
             # 8. Completion.

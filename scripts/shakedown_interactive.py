@@ -1534,13 +1534,45 @@ def send_prompt_and_confirm(child: pexpect.spawn, text: str,
 
 
 def drain_pty(child: pexpect.spawn, seconds: float = 2.0) -> None:
-    """Read PTY output to prevent buffer deadlock."""
+    """Read PTY output to prevent buffer deadlock.
+
+    Pexpect accumulates every read byte in `child.buffer` and `child.before`
+    until a pattern matches. We only ever expect TIMEOUT here, so nothing
+    matches, and those two attributes grow without bound for the life of
+    the harness. On 48h stress runs that was ~1GB/day of RSS growth — the
+    second half of the bloat that c541ed9 did not catch. The PTY is also
+    mirrored to `child.logfile_read` on disk, so truncating the in-memory
+    copy loses nothing.
+    """
     cycles = int(seconds / 0.1)
     for _ in range(cycles):
         try:
             child.expect(pexpect.TIMEOUT, timeout=0.1)
         except pexpect.EOF:
             break
+    _trim_pexpect_buffers(child)
+
+
+_PEXPECT_BUFFER_TAIL = 4096
+
+
+def _trim_pexpect_buffers(child: pexpect.spawn) -> None:
+    """Cap pexpect's in-memory buffers to the last 4KB.
+
+    `child.before` / `child.buffer` are plain strings; pexpect tolerates
+    callers slicing them. The only place this harness reads `.before` is
+    the one-shot Trust-folder check at startup, which runs before the
+    first drain_pty call, so tail-truncation is safe.
+    """
+    try:
+        before = getattr(child, "before", None)
+        if isinstance(before, str) and len(before) > _PEXPECT_BUFFER_TAIL:
+            child.before = before[-_PEXPECT_BUFFER_TAIL:]
+        buf = getattr(child, "buffer", None)
+        if isinstance(buf, str) and len(buf) > _PEXPECT_BUFFER_TAIL:
+            child.buffer = buf[-_PEXPECT_BUFFER_TAIL:]
+    except Exception:
+        pass
 
 
 def check_condition(cond: str, watcher: SessionWatcher, prev_msgs: int,
