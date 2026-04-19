@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -153,6 +154,61 @@ def _telegram(msg: str) -> None:
         pass
 
 
+# Per-alert-key throttle for Telegram pings. admiral_history.log is
+# still written unthrottled (dashboard needs the full signal), but the
+# user's phone only buzzes once per 6h per key regardless of how many
+# times the underlying condition keeps re-firing. This is what makes
+# the degradation signal survivable — a stuck run used to send one
+# Telegram per cooldown * N alert types, turning the phone into a
+# degradation barometer nobody wants.
+_TELEGRAM_THROTTLE_SECONDS = 6 * 3600
+_telegram_last_sent: dict[str, float] = {}
+
+
+def _telegram_throttled(key: str, msg: str) -> None:
+    now = time.time()
+    if now - _telegram_last_sent.get(key, 0) < _TELEGRAM_THROTTLE_SECONDS:
+        return
+    _telegram_last_sent[key] = now
+    _telegram(msg)
+
+
+# Actuation: ask the stress harness to kill+respawn its TUI child via
+# SIGUSR1. The harness registers _request_tui_recycle as the handler;
+# the flag is checked once per main-loop iteration. Rate-limited so a
+# chronic degradation doesn't thrash.
+_RECYCLE_COOLDOWN = 600
+_last_recycle_request_at = 0.0
+
+
+def _request_tui_recycle(harness_pid: int | None, reason: str) -> bool:
+    """Send SIGUSR1 to the harness. Returns True if the signal was sent.
+    Goes to admiral_history as a 'stress-action' entry (distinct event
+    type from 'stress-alert' so the dashboard can show what the watcher
+    actually DID vs. what it just warned about)."""
+    global _last_recycle_request_at
+    if harness_pid is None or not _pid_alive(harness_pid):
+        return False
+    now = time.time()
+    if now - _last_recycle_request_at < _RECYCLE_COOLDOWN:
+        return False
+    try:
+        os.kill(harness_pid, signal.SIGUSR1)
+    except Exception as e:
+        _record("stress-action",
+                f"tui-recycle-failed: pid={harness_pid} err={e}")
+        return False
+    _last_recycle_request_at = now
+    _record("stress-action",
+            f"tui-recycle-requested: pid={harness_pid} reason={reason}")
+    _telegram_throttled(
+        "tui-recycle",
+        f"[stress-watcher] asked harness PID {harness_pid} to recycle "
+        f"TUI: {reason}",
+    )
+    return True
+
+
 def _pid_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -190,7 +246,7 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
             last_alert_qty[key] = qty
         last_alert_at[key] = now
         _record("stress-alert", f"{key}: {msg}")
-        _telegram(f"[stress-watcher] {msg}")
+        _telegram_throttled(key, f"[stress-watcher] {msg}")
 
     last_step = 0
     last_step_ts = time.time()
@@ -271,7 +327,10 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                     )
 
             # 6. Skip cluster — harness is giving up on prompts entirely.
-            # Same guard: only a NEW stuck-window should alert.
+            # Same guard: only a NEW stuck-window should alert. 3+ skips
+            # in a window also triggers an actuator: the harness's own
+            # FORCE-RESET didn't unstick things, so we escalate to a full
+            # TUI respawn via SIGUSR1.
             if state.recent_skips >= 2 and state.last_step > last_skip_step:
                 last_skip_step = state.last_step
                 _alert_once(
@@ -282,6 +341,13 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                     f"is severe",
                     cooldown=1800,
                 )
+                if state.recent_skips >= 3:
+                    _request_tui_recycle(
+                        pid,
+                        f"{state.recent_skips} skips in last "
+                        f"{state.recent_prompts} prompts, harness FORCE-"
+                        f"RESET insufficient",
+                    )
 
             # 7. Harness memory bloat — pexpect + SessionWatcher leaks
             # observed at ~130MB/h on long runs. By 4GB, GC thrash in
@@ -299,6 +365,14 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                     f"Harness will start missing TUI idle windows.",
                     cooldown=3600, qty=float(harness_rss_mb),
                 )
+                # Bloat over 4GB is almost certainly unrecoverable
+                # without respawning the TUI. Actuate.
+                if harness_rss_mb > 4000:
+                    _request_tui_recycle(
+                        pid,
+                        f"harness RSS {harness_rss_mb} MB, pexpect "
+                        f"buffers likely unreclaimable mid-run",
+                    )
 
             # 7b. Composite fingerprint: retry-spike + bloat + flat
             # progress is the exact pexpect-buffer-leak signature. One
@@ -316,6 +390,12 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                     f"Restart harness; stress_shakedown.py supports "
                     f"--resume-from-step N to continue from checkpoint.",
                     cooldown=86400,
+                )
+                # This composite is the highest-confidence "TUI is dead"
+                # signal we have. Actuate immediately; the alert alone
+                # was what failed us on the v1→v5 debug cycle.
+                _request_tui_recycle(
+                    pid, "pexpect-buffer-leak composite fingerprint",
                 )
 
             # 8. Completion.

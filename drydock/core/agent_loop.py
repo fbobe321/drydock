@@ -7,6 +7,7 @@ import hashlib
 from http import HTTPStatus
 import json
 import logging
+import os
 from pathlib import Path
 from threading import Thread
 import time
@@ -1702,8 +1703,16 @@ class AgentLoop:
         if len(cleaned) != len(self.messages):
             self.messages.reset(cleaned)
 
-        # Fix 2: If last message is assistant, add a user "Continue." prompt
-        if self.messages and self.messages[-1].role == Role.assistant:
+        # Fix 2: If last message is assistant, add a user "Continue." prompt.
+        # The auto-Continue exists so Gemma 4 keeps executing multi-step plans
+        # without stopping prematurely at an intermediate text response. For
+        # stress runs against prompts that don't need tool calls (pure
+        # doc-writing tasks), it loops forever — model writes the answer,
+        # "Continue." is appended, model regenerates the same answer, repeat.
+        # Gate on DRYDOCK_AUTO_CONTINUE_DISABLE so stress harnesses can opt out
+        # without changing default behavior.
+        if (self.messages and self.messages[-1].role == Role.assistant
+                and not os.environ.get("DRYDOCK_AUTO_CONTINUE_DISABLE")):
             self.messages.append(LLMMessage(role=Role.user, content="Continue."))
 
     def _choose_thinking_level(self, active_model: Any) -> str:

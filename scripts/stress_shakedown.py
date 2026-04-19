@@ -23,7 +23,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -114,9 +116,19 @@ def _parse_prompts(path: Path) -> list[tuple[str | None, str]]:
     return items
 
 
-def _find_latest_checkpoint_session(cwd: Path) -> tuple[Path, dict] | None:
-    """Find the most recently-modified drydock checkpoint store whose
-    work_tree matches cwd. Returns (session_dir, state_data) or None."""
+def _find_latest_checkpoint_session(
+    cwd: Path, min_checkpoints: int = 0,
+) -> tuple[Path, dict] | None:
+    """Find a drydock checkpoint store whose work_tree matches cwd.
+
+    When `min_checkpoints` is set, prefer the most recent store that has
+    at least that many checkpoints; fall back to the most recent store
+    overall if none qualify (caller's clamping logic will cope). This
+    matters after a failed resume: the failed run creates its own (short)
+    checkpoint store whose mtime beats the original long one. Without the
+    filter we'd restore from the wrong store and lose 1000 prompts of
+    progress.
+    """
     base = Path.home() / ".drydock" / "checkpoints"
     if not base.is_dir():
         return None
@@ -141,6 +153,11 @@ def _find_latest_checkpoint_session(cwd: Path) -> tuple[Path, dict] | None:
     if not candidates:
         return None
     candidates.sort(reverse=True)
+    if min_checkpoints > 0:
+        qualified = [c for c in candidates
+                     if len(c[2].get("checkpoints", [])) >= min_checkpoints]
+        if qualified:
+            return qualified[0][1], qualified[0][2]
     return candidates[0][1], candidates[0][2]
 
 
@@ -196,6 +213,196 @@ def _restore_checkpoint_to_step(session_dir: Path, state_data: dict,
         env=env, check=True, capture_output=True, timeout=60,
     )
     return cp
+
+
+# Matches drydock's own circuit-breaker banner. Example:
+#   "[Stopping: 70+ API errors. The model cannot process this request.
+#    Try /compact or /clear to free context.]"
+# The TUI redraws this banner every turn once it's tripped. Without
+# /clear it never clears, and every typed prompt is silently dropped.
+_API_ERROR_BANNER_RE = re.compile(r"Stopping:\s*\d+\+\s*API errors",
+                                  re.IGNORECASE)
+
+
+# Window we scan for the banner. Each banner is ~4.6 KB of ANSI and the
+# TUI may issue tens of KB of post-banner cursor-move redraws (spinner,
+# idle flicker) that push the last banner off a small tail. Empirically
+# 25 KB/redraw-burst is typical, so 256 KB covers several minutes of
+# spinner noise and still catches a recent banner. If even this overflows
+# on some future TUI rewrite, we should switch to tracking the last-seen
+# banner byte-offset instead of rescanning.
+_BANNER_SCAN_WINDOW = 256 * 1024
+
+
+def _tui_has_api_error_banner(child: pexpect.spawn) -> bool:
+    """True if drydock is showing its 'N+ API errors' circuit breaker.
+
+    Reads the TUI's on-disk PTY log (via `child.logfile_read.name`) rather
+    than `child.before` / `child.buffer`, because drain_pty truncates the
+    in-memory copies to a 4KB tail — a redraw trivially pushes the banner
+    off the tail. The on-disk log is append-only; we scan the last
+    `_BANNER_SCAN_WINDOW` bytes for the banner text.
+    """
+    logfile = getattr(child, "logfile_read", None)
+    path_str = getattr(logfile, "name", None)
+    if path_str:
+        try:
+            p = Path(path_str)
+            size = p.stat().st_size
+            with p.open("rb") as f:
+                f.seek(max(0, size - _BANNER_SCAN_WINDOW))
+                tail = f.read().decode("utf-8", errors="replace")
+            return bool(_API_ERROR_BANNER_RE.search(tail))
+        except Exception:
+            pass
+    # Fallback: in-memory buffer (may be truncated).
+    before = getattr(child, "before", "") or ""
+    buf = getattr(child, "buffer", "") or ""
+    return bool(_API_ERROR_BANNER_RE.search(before + buf))
+
+
+def _send_clear_and_reset_watcher(child: pexpect.spawn,
+                                  watcher: SessionWatcher,
+                                  settle_seconds: float = 3.0) -> None:
+    """Interrupt any in-flight turn with ESC, type /clear, then repoint
+    the watcher at the new session dir. Shared by every-N-prompts reset,
+    API-error recovery, and the consecutive-SKIP force-reset path.
+
+    ESC-first matters because drydock's TUI explicitly lists "esc to
+    interrupt" on its thinking spinner. Without it, /clear issued while
+    the model is mid-thought may not register — the input component is
+    inactive until the turn yields.
+    """
+    from shakedown_interactive import type_message
+    try:
+        child.send("\x1b")  # ESC — interrupts current turn if any
+        time.sleep(0.6)
+    except Exception:
+        pass
+    type_message(child, "/clear")
+    time.sleep(settle_seconds)
+    watcher.session_dir = None
+    watcher.since = time.time()
+    watcher.messages.clear()
+    if hasattr(watcher, "_reset_offsets"):
+        watcher._reset_offsets()
+    for _ in range(30):
+        if watcher.find_session() is not None:
+            break
+        time.sleep(1)
+
+
+def _recover_if_api_error_banner(child: pexpect.spawn,
+                                 watcher: SessionWatcher) -> bool:
+    """If the TUI is stuck on the API-errors banner, send /clear and
+    wait for a fresh session. Returns True if recovery was attempted.
+
+    Without this, the original 1658-prompt stress run wedged at ~1100
+    and every subsequent prompt SKIPped because the harness was typing
+    into a circuit-broken TUI that wasn't reading stdin.
+    """
+    from shakedown_interactive import drain_pty as _drain
+    _drain(child, seconds=1.0)
+    has_banner = _tui_has_api_error_banner(child)
+    # Diagnostic: every call prints its result so we can audit whether
+    # the detector is firing when it should. Cheap (one line per iter).
+    logfile = getattr(child, "logfile_read", None)
+    path_str = getattr(logfile, "name", None)
+    log_size = 0
+    if path_str:
+        try:
+            log_size = Path(path_str).stat().st_size
+        except Exception:
+            pass
+    print(f"          [rec-check] banner={has_banner} "
+          f"log_size={log_size}", flush=True)
+    if not has_banner:
+        return False
+    print("          RECOVER: TUI shows drydock's API-errors banner; "
+          "sending /clear and rebinding watcher to new session",
+          flush=True)
+    _send_clear_and_reset_watcher(child, watcher, settle_seconds=5.0)
+    return True
+
+
+# Set by SIGUSR1 when stress_watcher's actuator decides the TUI is
+# unrecoverably wedged. Checked once per main-loop iteration (between
+# prompts, not inside pexpect calls, to avoid EINTR surprises). The
+# next iteration kills the current child, spawns a fresh drydock TUI,
+# and rebinds the watcher to the new session dir.
+_recycle_requested = False
+
+
+def _request_tui_recycle(_signum: int = 0, _frame: object = None) -> None:
+    global _recycle_requested
+    _recycle_requested = True
+
+
+def _spawn_tui_child(log_path: Path, cwd: Path,
+                     env: dict[str, str]) -> pexpect.spawn:
+    """Spawn a fresh drydock TUI child with the stress harness's standard
+    settings. Extracted from run() so the recycle path uses identical
+    spawn configuration. Appends to the existing log (don't wipe the
+    history — the watcher is polling it and the prior content is useful
+    for post-mortem)."""
+    child = pexpect.spawn(DRYDOCK_BIN, encoding="utf-8", timeout=5,
+                          maxread=100000, env=env, cwd=str(cwd))
+    child.logfile_read = open(log_path, "a", buffering=1)
+    child.expect([r">", r"Drydock", r"┌"], timeout=30)
+    time.sleep(2)
+    # Auto-dismiss trust dialog — same as the initial spawn path.
+    try:
+        if "Trust this folder" in (child.before or ""):
+            child.send("\x1b[D")
+            time.sleep(0.3)
+            child.send("\r")
+            time.sleep(2)
+    except Exception:
+        pass
+    return child
+
+
+def _recycle_tui_child(old_child: pexpect.spawn,
+                       watcher: SessionWatcher,
+                       log_path: Path, cwd: Path,
+                       env: dict[str, str]) -> pexpect.spawn:
+    """Kill the current TUI child and spawn a fresh one. Called when
+    _recycle_requested is set via SIGUSR1 from stress_watcher, or from
+    the harness itself if it decides the TUI is unrecoverable. Returns
+    the new child."""
+    old_pid = getattr(old_child, "pid", "?")
+    print(f"\n┈┈┈ RECYCLE-TUI: killing child PID {old_pid} and "
+          f"respawning a fresh drydock ┈┈┈", flush=True)
+    try:
+        if old_child.isalive():
+            old_child.sendcontrol("c")
+            time.sleep(0.5)
+        if old_child.isalive():
+            old_child.terminate(force=True)
+    except Exception:
+        pass
+    # Close old logfile handle so the new child can reopen cleanly
+    try:
+        lf = getattr(old_child, "logfile_read", None)
+        if lf is not None and hasattr(lf, "close"):
+            lf.close()
+    except Exception:
+        pass
+
+    new_child = _spawn_tui_child(log_path, cwd, env)
+    # Rebind the watcher to the new session dir drydock will create.
+    watcher.session_dir = None
+    watcher.since = time.time()
+    watcher.messages.clear()
+    if hasattr(watcher, "_reset_offsets"):
+        watcher._reset_offsets()
+    for _ in range(30):
+        if watcher.find_session() is not None:
+            break
+        time.sleep(1)
+    print(f"          recycle complete: new child PID "
+          f"{getattr(new_child, 'pid', '?')}", flush=True)
+    return new_child
 
 
 def _idle_wait(child: pexpect.spawn, watcher: SessionWatcher,
@@ -268,8 +475,11 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     skip_count = 0  # for --resume-from-step display
 
     if resume_from_step:
-        # Find the most recent drydock checkpoint store for this cwd.
-        found = _find_latest_checkpoint_session(cwd)
+        # Find the most recent drydock checkpoint store for this cwd
+        # that actually has enough checkpoints to reach resume_from_step.
+        found = _find_latest_checkpoint_session(
+            cwd, min_checkpoints=resume_from_step,
+        )
         if found is None:
             print(f"ERROR: no checkpoint store found for cwd={cwd}.")
             print("       (drydock must have run in this dir before with v2.6.125+)")
@@ -284,19 +494,33 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
         skip_count = resume_from_step
         prompts_only = prompts_only[resume_from_step:]
     else:
-        # Reset PRD but DON'T wipe the package — if it exists and is
-        # functional, the stress test should ADD to it, not rebuild.
-        # Wiping caused incomplete builds that broke all subsequent
-        # feature additions (missing __main__.py etc.).
+        # Fresh start from step 1: wipe everything except the fixtures
+        # needed to drive the build. Previous policy was "accumulate so
+        # the stress adds to an existing build"; in practice that meant
+        # every fresh run carried 200+ files of partially-written docs
+        # from prior runs, and drydock would spend its first turns
+        # exploring that junk instead of building the package. Clean
+        # slate each run → reproducible, faster start, no cross-run
+        # contamination.
+        _FIXTURES_TO_KEEP = {
+            "PRD.master.md", "PRD.md", "AGENTS.md", "functional_tests.sh",
+        }
+        for entry in cwd.iterdir():
+            if entry.name in _FIXTURES_TO_KEEP:
+                continue
+            if entry.is_dir():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                try:
+                    entry.unlink()
+                except OSError:
+                    pass
         master = cwd / "PRD.master.md"
         target = cwd / "PRD.md"
         if master.exists():
             shutil.copy2(master, target)
-        pkg_dir = cwd / pkg
-        for entry in cwd.iterdir():
-            if entry.is_dir() and entry.name != pkg and entry.name.startswith(pkg.split("_")[0]):
-                if entry.name not in ("test_docs", "test_data", "plugins", ".git"):
-                    shutil.rmtree(entry, ignore_errors=True)
+        kept = sorted(p.name for p in cwd.iterdir())
+        print(f"  fresh-start wipe: kept {kept}")
 
     log_path = Path(f"/tmp/stress_shakedown_{int(time.time())}.tui.log")
     print(f"  TUI log: {log_path}\n")
@@ -309,14 +533,30 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
         print(f"  cleaned {_killed} orphan drydock TUI(s) from prior runs")
 
     start_time = time.time()
-    env = {**os.environ, "TERM": "xterm-256color", "COLUMNS": "120", "LINES": "40"}
-    child = pexpect.spawn(DRYDOCK_BIN, encoding="utf-8", timeout=5,
-                          maxread=100000, env=env, cwd=str(cwd))
+    env = {
+        **os.environ,
+        "TERM": "xterm-256color",
+        "COLUMNS": "120",
+        "LINES": "40",
+        # Stop drydock's agent_loop from auto-appending "Continue." on
+        # text-only assistant turns — for doc-writing stress prompts the
+        # default behavior is an infinite loop (same answer regenerated
+        # each time the Continue prod arrives). See
+        # drydock/core/agent_loop.py::_sanitize_message_ordering.
+        "DRYDOCK_AUTO_CONTINUE_DISABLE": "1",
+    }
+    # Truncate any stale log file at this path (from a prior run) so we
+    # start fresh. _spawn_tui_child opens in append mode for the recycle
+    # path; this initial open wipes it first.
+    open(log_path, "w").close()
+    child = _spawn_tui_child(log_path, cwd, env)
 
     # Critical: make sure the TUI child dies with us. Three layers so
     # no exit path (clean return, exception, SIGTERM, Ctrl+C) leaves
     # an orphan. SIGKILL against the harness itself still can't be
     # caught, but at that point the whole process tree is going anyway.
+    # Closure captures `child` by name — the reference, not value — so
+    # after a recycle the cleanup operates on the CURRENT child.
     def _cleanup_child(*_args) -> None:
         try:
             if child.isalive():
@@ -327,24 +567,18 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
         except Exception:
             pass
     import atexit as _atexit
-    import signal as _signal
     _atexit.register(_cleanup_child)
-    for _sig in (_signal.SIGTERM, _signal.SIGINT, _signal.SIGHUP):
+    for _sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         try:
-            _signal.signal(_sig, lambda *a: (_cleanup_child(), os._exit(1)))
+            signal.signal(_sig, lambda *a: (_cleanup_child(), os._exit(1)))
         except Exception:
             pass
-    child.logfile_read = open(log_path, "w", buffering=1)
-    child.expect([r">", r"Drydock", r"┌"], timeout=30)
-    time.sleep(2)
-
-    # Auto-dismiss trust dialog
+    # SIGUSR1 from stress_watcher = "recycle the TUI child on the next
+    # iteration boundary". The handler only sets a flag; the recycle
+    # itself happens in the main loop between prompts (avoids EINTR
+    # inside active pexpect calls).
     try:
-        if "Trust this folder" in (child.before or ""):
-            child.send("\x1b[D")
-            time.sleep(0.3)
-            child.send("\r")
-            time.sleep(2)
+        signal.signal(signal.SIGUSR1, _request_tui_recycle)
     except Exception:
         pass
 
@@ -371,6 +605,15 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
 
     cur_section: str | None = None
     SESSION_RESET_EVERY = 15  # /clear every N prompts to bound context
+    # Number of consecutive SKIPs that triggers an ESC+/clear force
+    # reset. This catches stuck states the banner detector misses:
+    # "admiral directive + no-tool-call" loops, silent model hangs on
+    # huge context, spinner-for-20-minutes etc. — any case where the
+    # harness can't get prompts through for multiple iterations in a
+    # row means drydock is wedged regardless of whether it's showing
+    # the API-errors banner or not.
+    MAX_CONSECUTIVE_SKIPS_BEFORE_RESET = 2
+    consecutive_skips = 0
     # When resuming, step counter starts at the resumed step + 1 so the
     # printed log lines stay aligned with the original run.
     for raw_i, (section, prompt) in enumerate(prompts_only, start=1):
@@ -380,36 +623,43 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
             if section:
                 print(f"\n┈┈┈ {section} ┈┈┈")
 
+        # Watcher-triggered recycle: stress_watcher.py sends SIGUSR1 when
+        # it detects unrecoverable TUI wedge (memory bloat, pexpect-buffer-
+        # leak fingerprint, prolonged skip cluster). Flag is checked here
+        # so recycling happens cleanly between iterations, not mid-expect.
+        global _recycle_requested
+        if _recycle_requested:
+            _recycle_requested = False
+            child = _recycle_tui_child(child, watcher, log_path, cwd, env)
+            consecutive_skips = 0
+
         # Adversarial-code-review pattern from asdlc.io: every N user
-        # prompts, reset the session so context stays bounded. Just
-        # /clear — DON'T send a preamble (early version did and the
-        # model interpreted it as an investigation task, burning 30+
-        # tool calls before the next real prompt could land). Next
-        # user prompt will name the feature; model can run
-        # `--list-tools` itself if it wants to check state.
+        # prompts, reset the session so context stays bounded.
         if i > 1 and (i - 1) % SESSION_RESET_EVERY == 0:
             print(f"\n┈┈┈ session reset (after {i - 1} prompts) ┈┈┈")
-            from shakedown_interactive import type_message
-            type_message(child, "/clear")
-            time.sleep(3)  # let TUI drain the /clear command
-            # Invalidate session cache: /clear creates a new session
-            # dir; without resetting these, the watcher polls the
-            # OLD session forever and reports "prompt not accepted"
-            # for everything in the new batch.
-            watcher.session_dir = None
-            watcher.since = time.time()
-            watcher.messages = []
-            # Critical: also reset the byte-offset cache so the next
-            # refresh re-reads the NEW session's messages.jsonl from
-            # the start — otherwise the watcher reads 0 new bytes and
-            # reports "no new messages" forever.
-            if hasattr(watcher, "_reset_offsets"):
-                watcher._reset_offsets()
-            # Wait for the new session dir to appear before continuing.
-            for _ in range(30):
-                if watcher.find_session() is not None:
-                    break
-                time.sleep(1)
+            _send_clear_and_reset_watcher(child, watcher)
+            consecutive_skips = 0  # periodic reset also clears stuck state
+
+        # Force reset when drydock has silently swallowed multiple
+        # prompts. Happens when the model is stuck in an admiral-
+        # directive loop with no tool calls, or thinking for 20+
+        # minutes on a single turn — both cases dodge the banner
+        # detector below because drydock never tripped its own
+        # circuit breaker.
+        if consecutive_skips >= MAX_CONSECUTIVE_SKIPS_BEFORE_RESET:
+            print(f"          FORCE-RESET: {consecutive_skips} "
+                  f"consecutive SKIPs; ESC + /clear to unstick",
+                  flush=True)
+            _send_clear_and_reset_watcher(child, watcher,
+                                          settle_seconds=5.0)
+            consecutive_skips = 0
+
+        # Recover from drydock's API-errors circuit breaker if the
+        # previous turn tripped it. /clear between every prompt is
+        # too aggressive, but /clear WHEN we detect the banner is cheap
+        # and is the only thing that lets the run keep moving.
+        if _recover_if_api_error_banner(child, watcher):
+            consecutive_skips = 0
 
         # Wait for TUI to be truly idle before typing next prompt.
         # If we type while drydock is still working on the prior turn,
@@ -428,9 +678,11 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
         if not ok:
             print(f"          SKIP: TUI did not accept after 3 retries")
             skipped += 1
+            consecutive_skips += 1
             results.append({"i": i, "prompt": prompt[:60], "status": "skipped"})
             continue
         accepted += 1
+        consecutive_skips = 0
 
         stats = _idle_wait(child, watcher, prev_msgs,
                            max_seconds=max_per_prompt)
