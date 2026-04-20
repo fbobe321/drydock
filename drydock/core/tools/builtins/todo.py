@@ -119,6 +119,11 @@ class TodoConfig(BaseToolConfig):
 
 class TodoState(BaseToolState):
     todos: list[TodoItem] = Field(default_factory=list)
+    # Track consecutive empty reads so the tool can escalate its reply
+    # from "empty" to "stop calling me". GitHub #10: model asked to
+    # "review PRD and continue", read empty todos, and re-called the
+    # read 4× in a row hoping for a change.
+    consecutive_empty_reads: int = 0
 
 
 class Todo(
@@ -167,10 +172,36 @@ class Todo(
                 )
 
     def _read_todos(self) -> TodoResult:
+        count = len(self.state.todos)
+        if count == 0:
+            # Escalate the reply each consecutive empty read. GitHub #10:
+            # with a neutral "Retrieved 0 todos", the model kept calling
+            # read in a loop hoping for a change. Directive phrasing plus
+            # an explicit "stop re-reading" at attempt 2+ breaks the loop.
+            self.state.consecutive_empty_reads += 1
+            n = self.state.consecutive_empty_reads
+            if n == 1:
+                message = (
+                    "No todos yet. The list is empty because nothing has "
+                    "been written. If you want to track work items, call "
+                    "this tool with action='write' and a todos list. "
+                    "Do not call with action='read' again until you've "
+                    "written at least one."
+                )
+            else:
+                message = (
+                    f"Still no todos (this is read #{n} in a row with no "
+                    "write between them). Stop calling read. Either write "
+                    "a todos list, or proceed with the user's task "
+                    "directly — empty state will not change on its own."
+                )
+        else:
+            self.state.consecutive_empty_reads = 0
+            message = f"Retrieved {count} todos"
         return TodoResult(
-            message=f"Retrieved {len(self.state.todos)} todos",
+            message=message,
             todos=self.state.todos,
-            total_count=len(self.state.todos),
+            total_count=count,
         )
 
     def _write_todos(self, todos: list[TodoItem]) -> TodoResult:
@@ -182,6 +213,7 @@ class Todo(
             raise ToolError("Todo IDs must be unique")
 
         self.state.todos = todos
+        self.state.consecutive_empty_reads = 0
 
         return TodoResult(
             message=f"Updated {len(todos)} todos",

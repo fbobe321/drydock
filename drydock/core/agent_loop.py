@@ -2291,6 +2291,41 @@ class AgentLoop:
         sigs.reverse()
         tool_names.reverse()
 
+        # Check 0: Same call + empty-pattern result 3+ times in a row.
+        # Lower threshold than Check 1 (8) or the WARNING path (4) for
+        # the specific case where the tool keeps saying "nothing's
+        # here" — more calls literally cannot change state. GitHub #10:
+        # model called todo_list 4× getting "Retrieved 0 todos"; the
+        # existing Check 1 wouldn't fire until 8, leaving the user
+        # staring at a blob of empty calls for ~half a minute.
+        #
+        # We only fire when the result LOOKS empty (total_count: 0,
+        # "no todos", "no tasks", "no results", or entirely blank).
+        # Same call with a non-empty result (e.g., model re-reading a
+        # file whose content hasn't changed) is left to Check 1/WARNING
+        # — those cases often have legitimate ambiguity.
+        def _looks_empty(c: str) -> bool:
+            s = (c or "").lower().strip()
+            if not s:
+                return True
+            for p in ('"total_count": 0', '"total_count":0',
+                      'total_count: 0', 'retrieved 0 todos',
+                      'no todos', '0 tasks', 'no tasks',
+                      'no results', 'no matches', '0 matches'):
+                if p in s:
+                    return True
+            return False
+        if len(sigs) >= 3 and all(s == sigs[-1] for s in sigs[-3:]):
+            recent_results: list[str] = []
+            for msg in reversed(self.messages):
+                if msg.role == Role.tool:
+                    recent_results.append(str(msg.content or ""))
+                    if len(recent_results) >= 3:
+                        break
+            if (len(recent_results) >= 3
+                    and all(_looks_empty(r) for r in recent_results)):
+                return "FORCE_STOP"
+
         # Check 1: Exact same tool call repeated (same name + same args)
         last_tool = tool_names[-1] if tool_names else ""
         if (

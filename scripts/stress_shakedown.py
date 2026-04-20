@@ -223,6 +223,20 @@ def _restore_checkpoint_to_step(session_dir: Path, state_data: dict,
 _API_ERROR_BANNER_RE = re.compile(r"Stopping:\s*\d+\+\s*API errors",
                                   re.IGNORECASE)
 
+# Matches raw markdown syntax that would only be visible to the user
+# if the TUI's markdown widget failed to render it. User's 2026-04-20
+# feedback: "text is still a big blob on the screen, not formatted
+# nicely." If the screen shows literal `**bold**` or `##heading`
+# instead of the rendered equivalents, these patterns fire.
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
+_RAW_MARKDOWN_PATTERNS = [
+    re.compile(r"\*\*\w[^*]{1,80}\*\*"),   # **bold words**
+    re.compile(r"(?m)^#{1,6}\s+\w"),        # ##heading
+    re.compile(r"(?m)^\s*[-*]\s+\w"),       # - bullet (first char on line)
+    re.compile(r"(?m)^\s*\d+\.\s+\w"),      # 1. numbered
+    re.compile(r"\[[^\]]{1,40}\]\([^)]{1,80}\)"),  # [link](url)
+]
+
 
 # Window we scan for the banner. Each banner is ~4.6 KB of ANSI and the
 # TUI may issue tens of KB of post-banner cursor-move redraws (spinner,
@@ -259,6 +273,40 @@ def _tui_has_api_error_banner(child: pexpect.spawn) -> bool:
     before = getattr(child, "before", "") or ""
     buf = getattr(child, "buffer", "") or ""
     return bool(_API_ERROR_BANNER_RE.search(before + buf))
+
+
+def _count_raw_markdown_leakage(child: pexpect.spawn,
+                                window_bytes: int = 65536) -> int:
+    """Return the number of raw-markdown patterns visible in the recent
+    TUI output AFTER ANSI stripping. Non-zero = the TUI's Markdown widget
+    isn't rendering content properly and the user sees a text blob.
+
+    We read the tail of the on-disk PTY log, strip ANSI escapes, then
+    match for unescaped `**bold**`, `##heading`, `- bullet`, `1. item`,
+    and `[link](url)` patterns. These should be replaced by rendered
+    variants (bold text, colored heading, indented bullet, etc.) in a
+    working TUI. If they appear literally, rendering has failed.
+
+    Advisory — does not short-circuit the stress run. Logged at each
+    iteration so admiral/experimenter can track regressions.
+    """
+    logfile = getattr(child, "logfile_read", None)
+    path_str = getattr(logfile, "name", None)
+    if not path_str:
+        return 0
+    try:
+        p = Path(path_str)
+        size = p.stat().st_size
+        with p.open("rb") as f:
+            f.seek(max(0, size - window_bytes))
+            tail = f.read().decode("utf-8", errors="replace")
+    except Exception:
+        return 0
+    stripped = _ANSI_ESCAPE_RE.sub("", tail)
+    total = 0
+    for pat in _RAW_MARKDOWN_PATTERNS:
+        total += len(pat.findall(stripped))
+    return total
 
 
 def _send_clear_and_reset_watcher(child: pexpect.spawn,
@@ -314,8 +362,9 @@ def _recover_if_api_error_banner(child: pexpect.spawn,
             log_size = Path(path_str).stat().st_size
         except Exception:
             pass
+    raw_md = _count_raw_markdown_leakage(child)
     print(f"          [rec-check] banner={has_banner} "
-          f"log_size={log_size}", flush=True)
+          f"log_size={log_size} raw_md={raw_md}", flush=True)
     if not has_banner:
         return False
     print("          RECOVER: TUI shows drydock's API-errors banner; "
