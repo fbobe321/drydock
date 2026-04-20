@@ -865,17 +865,31 @@ class AgentLoop:
                                     has_made_edit = True
                                     break
 
-                # Only break when the model emits TEXT and hasn't made
-                # any tool calls this turn. If tool_turns > 0 the model
-                # is mid-work — a text message is an intermediate summary
-                # ("Wrote __init__.py, now I'll write cli.py") that used
-                # to force the user to type "continue" after every step.
-                # Keeping the loop alive lets the model chain through
-                # its entire plan in one user turn. The per-prompt budget
-                # (50 tool calls / 15 min) still provides a hard stop.
+                # Break when the model emits a text-only assistant
+                # response (no tool calls). That means the model is done
+                # with this user turn — return control so the user sees
+                # the response and can send the next prompt.
+                #
+                # The previous condition `last_message.role != Role.tool
+                # and tool_turns == 0` was unreachable: tool_turns is
+                # incremented to ≥1 at the top of every iteration, so
+                # the equality is never true after the first call. With
+                # the auto-"Continue." injection in _sanitize_message_
+                # ordering, the model re-ran forever on text-only
+                # prompts; with that injection disabled (via
+                # DRYDOCK_AUTO_CONTINUE_DISABLE=1) the model regenerated
+                # the same text response until PER_PROMPT_BUDGET_SEC
+                # timed out. Either way user turns never closed on a
+                # "done" state. See stress_shakedown.py runs v3–v7 for
+                # the full wedge picture.
+                #
+                # If Gemma 4 emits intermediate summaries without tool
+                # calls ("Wrote X, now I'll write Y") the user will see
+                # partial progress and have to prompt "continue". That's
+                # an acceptable cost compared to the forever-loop.
                 should_break_loop = (
-                    last_message.role != Role.tool
-                    and tool_turns == 0
+                    last_message.role == Role.assistant
+                    and not last_message.tool_calls
                 )
 
                 # No circuit breakers, no loop detection, no forced nudges.

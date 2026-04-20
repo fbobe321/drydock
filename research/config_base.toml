@@ -1,0 +1,93 @@
+# Baseline for the research experimenter.
+#
+# The knob array defines which admiral tunables the experimenter is
+# allowed to mutate. Bounds mirror drydock/admiral/tuning.py::KNOB_BOUNDS
+# exactly — if that file changes, mirror the change here. The kernel
+# validates bounds before writing admiral_tuning.json, so malformed
+# mutations fail fast rather than silently hitting admiral's clip.
+#
+# The experimenter NEVER edits this file. It writes to
+# research/config_best.toml on improvement. Swap this file's values
+# manually when you want to re-seed the search from a new baseline.
+#
+# Frozen (not mutable here, intentional):
+#   - drydock source code
+#   - prompts (gemma4.md, cli.md)
+#   - provider config
+#   - tool set
+#
+# Anything not in this file is frozen.
+
+[target]
+# admiral_tuning.json keys off (model, task). The kernel writes an entry
+# under this tuple when spawning drydock. Pick values that match what
+# admiral will classify stress-harness runs as.
+model = "mistral-vibe-cli-latest"
+task  = "unknown"
+
+# -----------------------------------------------------------------
+# Admiral knobs — bounded numeric tunables that affect agent_loop.
+# -----------------------------------------------------------------
+
+[[knob]]
+name    = "per_prompt_budget_sec"
+default = 300
+min     = 300
+max     = 3600
+mutable = true
+why     = "Hard ceiling on a single user turn. Too low wastes work; too high lets loops run wild."
+
+[[knob]]
+name    = "hard_stop_tool_calls"
+default = 100
+min     = 30
+max     = 250
+mutable = true
+why     = "HARD_STOP_CALLS in agent_loop. Cap on tool-call depth per user turn."
+
+[[knob]]
+name    = "wrap_up_warn_at"
+default = 40
+min     = 10
+max     = 100
+mutable = true
+why     = "First progressive nudge. Earlier = tighter turns, may lose quality."
+
+[[knob]]
+name    = "stop_now_warn_at"
+default = 60
+min     = 20
+max     = 150
+mutable = true
+why     = "Second progressive nudge. Gemma often ignores the wrap-up; this is the harder prod."
+
+[[knob]]
+name    = "temperature"
+default = 0.3
+min     = 0.0
+max     = 0.9
+mutable = true
+why     = "Sampling temperature. Lower = more deterministic; higher = more exploration."
+
+[[knob]]
+name    = "loop_detector_window"
+default = 3
+min     = 2
+max     = 6
+mutable = true
+why     = "How many consecutive identical tool calls trigger the loop advisor."
+
+[[knob]]
+name    = "struggle_threshold"
+default = 20
+min     = 10
+max     = 40
+mutable = true
+why     = "Reads-without-a-write before admiral fires the struggle directive."
+
+# -----------------------------------------------------------------
+# Environment flags — binary toggles the kernel sets in the TUI env.
+# -----------------------------------------------------------------
+
+[env_flags]
+DRYDOCK_AUTO_CONTINUE_DISABLE = "1"  # options: "0", "1"

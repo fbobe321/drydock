@@ -1,0 +1,37 @@
+# Fixed stimulus sequence for the research kernel. Each line is one user
+# turn. Blank lines and "#" headers are ignored by the kernel.
+#
+# The first prompt bootstraps mini_cli.py from PRD.md; the remaining 24
+# are small text/shell-bound queries designed to stay under ~10s each.
+# Total budget is 5 min; anything not reached by then gets counted as
+# "not attempted" (neither done nor skipped).
+
+# Bootstrap (one prompt, typically ~45-60s)
+Read PRD.md and write mini_cli.py implementing it. One file. Argparse with four subcommands: add, sub, mul, div. Print numeric result only. Integer-valued results print without trailing .0.
+
+# Quick text queries (should finish in <10s each)
+sha1 hash of mini_cli.py
+show me the add function
+what are the 4 operations
+rot13 "hello"
+reverse the string "abcdef"
+uppercase "test"
+count lines in mini_cli.py
+list files in this directory
+pi to 4 decimal places
+bin of 42
+hex of 42
+morse for SOS
+caesar cipher "hi" shift 3
+what imports does mini_cli.py use
+pwd
+lines in AGENTS.md
+what is the PRD file called
+first 3 lines of PRD.md
+sha256 of PRD.md
+word count of PRD.md
+show the add function again
+what does div do when b is zero
+explain the add function in one sentence
+list all function names in mini_cli.py
+one-sentence summary of what mini_cli does

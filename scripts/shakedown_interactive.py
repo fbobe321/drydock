@@ -25,7 +25,41 @@ from pathlib import Path
 import pexpect
 
 DRYDOCK_BIN = "/home/bobef/miniforge3/envs/drydock/bin/drydock"
-SESSION_ROOT = Path.home() / ".drydock" / "logs" / "session"
+def _resolve_session_root() -> Path:
+    """Match drydock's actual session-logging save_dir.
+
+    Users can (and do) override via ~/.drydock/config.toml's
+    [session_logging] save_dir. Historical default here was
+    ~/.drydock/logs/session, but current drydock defaults and the
+    user's config both point to ~/.vibe/logs/session. A hardcoded
+    wrong SESSION_ROOT silently broke SessionWatcher — find_session
+    always returned None, so every prompt looked like a SKIP even
+    though drydock was processing them fine.
+    """
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover — Python <3.11
+        tomllib = None
+    cfg = Path.home() / ".drydock" / "config.toml"
+    if cfg.is_file() and tomllib is not None:
+        try:
+            data = tomllib.loads(cfg.read_text())
+            sd = data.get("session_logging", {}).get("save_dir")
+            if sd:
+                p = Path(sd).expanduser()
+                if p.is_dir():
+                    return p
+        except Exception:
+            pass
+    # Fall back: current drydock default, then legacy path.
+    for candidate in (Path.home() / ".vibe" / "logs" / "session",
+                      Path.home() / ".drydock" / "logs" / "session"):
+        if candidate.is_dir():
+            return candidate
+    return Path.home() / ".vibe" / "logs" / "session"
+
+
+SESSION_ROOT = _resolve_session_root()
 
 # ── Conversation scripts per PRD ─────────────────────────────────────
 # Each step: (prompt_text, wait_condition, max_wait_seconds)
