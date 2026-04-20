@@ -33,6 +33,11 @@ _CHECKPOINT_RE = re.compile(
     r"accepted:\s+(\d+).*?skipped:\s+(\d+).*?timed_out:\s+(\d+)",
     re.DOTALL,
 )
+# Harness diagnostic line: "[rec-check] banner=... log_size=... raw_md=N"
+# raw_md > 0 means the TUI log contains unrendered markdown patterns,
+# which the user perceives as a "big blob of text". See
+# stress_shakedown.py::_count_raw_markdown_leakage.
+_RAW_MD_RE = re.compile(r"\[rec-check\]\s+banner=\S+\s+log_size=\S+\s+raw_md=(\d+)")
 
 
 @dataclass
@@ -49,6 +54,11 @@ class ProgressState:
     recent_skips: int = 0
     recent_timeouts: int = 0
     recent_prompts: int = 0
+    # Raw-markdown leakage: count of rec-check lines in the recent window
+    # where raw_md > 0 (TUI is rendering unformatted markdown as a blob).
+    recent_md_leaks: int = 0
+    recent_md_checks: int = 0
+    recent_md_total: int = 0
 
 
 def _tail_lines(path: Path) -> list[str]:
@@ -130,6 +140,14 @@ def _parse(lines: list[str]) -> ProgressState:
             s.recent_timeouts += 1
         elif _PROGRESS_RE.match(line):
             s.recent_prompts += 1
+        else:
+            md_match = _RAW_MD_RE.search(line)
+            if md_match:
+                s.recent_md_checks += 1
+                n = int(md_match.group(1))
+                if n > 0:
+                    s.recent_md_leaks += 1
+                    s.recent_md_total += n
     return s
 
 
@@ -396,6 +414,27 @@ def watch(log_path: Path, pid: int | None, stall_threshold_s: float = 900) -> No
                 # was what failed us on the v1→v5 debug cycle.
                 _request_tui_recycle(
                     pid, "pexpect-buffer-leak composite fingerprint",
+                )
+
+            # 7c. Raw-markdown leakage — the TUI's Markdown widget
+            # failed to render, user sees unformatted `##` / `**bold**`
+            # as a blob. Advisory signal only (no actuator); the fix
+            # lives in the TUI, not something a recycle can repair.
+            # Quantity-dedup: only re-alert if the total count grew
+            # meaningfully since the last fire.
+            if (state.recent_md_checks >= 10
+                    and state.recent_md_leaks >= 3):
+                leak_rate = state.recent_md_leaks / state.recent_md_checks
+                _alert_once(
+                    "raw-markdown-leakage",
+                    f"TUI blob: {state.recent_md_leaks}/{state.recent_md_checks} "
+                    f"recent rec-checks saw unrendered markdown "
+                    f"(leak rate {leak_rate:.0%}, {state.recent_md_total} raw "
+                    f"patterns total in window). Markdown widget is "
+                    f"failing to render — look at AssistantMessage + "
+                    f"AnsiMarkdown in cli/textual_ui/widgets/messages.py",
+                    cooldown=1800,
+                    qty=float(state.recent_md_total),
                 )
 
             # 8. Completion.

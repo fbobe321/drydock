@@ -100,6 +100,13 @@ Or with uv:
 uv tool install drydock-cli
 ```
 
+> [!TIP]
+> **New install hitting weird behavior?** See [DEPLOYMENT.md](DEPLOYMENT.md)
+> for the exact known-working vLLM launch flags, `~/.drydock/config.toml`,
+> env vars, and a diagnostic checklist. Most "DryDock doesn't work" issues
+> trace back to missing vLLM flags (`--tool-call-parser gemma4`,
+> `--enable-auto-tool-choice`) or temperature/thinking config drift.
+
 ## Quick Start
 
 ```bash
