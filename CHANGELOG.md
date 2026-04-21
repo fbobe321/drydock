@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-04-21
+
+### Added
+
+- **Meta-Harness autoresearch loop** (`research/` subsystem). Opus-driven
+  search over a bounded mutation surface. Fixed 5-minute kernel,
+  append-only results log, contrastive proposer with access to source +
+  top/bottom traces. See `research/domain_spec.md` for the design.
+- **Admiral actuator**: `scripts/stress_watcher.py` sends SIGUSR1 to the
+  stress harness on unrecoverable TUI wedges; the harness respawns its
+  drydock child at the next iteration boundary. Rate-limited. First loop
+  where admiral *acts* on its observations.
+- **Env override surface** for experiments:
+  `DRYDOCK_AUTO_CONTINUE_DISABLE`,
+  `DRYDOCK_STRESS_{SESSION_RESET_EVERY,MAX_CONSECUTIVE_SKIPS_BEFORE_RESET,SEND_PROMPT_RETRY_COUNT,SEND_PROMPT_WAIT_PER_RETRY_SEC}`,
+  `DRYDOCK_ADMIRAL_{REPEAT_WARNING_THRESHOLD,REPEAT_FORCE_STOP_THRESHOLD,EMPTY_RESULT_THRESHOLD,SAME_TOOL_NAME_REPEAT_LIMIT_{BASH,READ}}`,
+  `DRYDOCK_PROMPTS_DIR`. All default to the prior hardcoded values;
+  production behavior unchanged.
+- **`DEPLOYMENT.md`**: known-working hardware + vLLM Docker flags +
+  `~/.drydock/config.toml` template + env var table + diagnostic
+  checklist. Answers the "works on your machine, not mine" question.
+- **`scripts/stress_babysitter.sh`**: hourly monitor cron that
+  auto-restarts long stress runs from the last successful step. Silent
+  when healthy; Telegrams only on state change.
+- **Check 0 empty-result loop detector** in `agent_loop.py`. Fires
+  FORCE_STOP at 3 identical tool calls when the result matches an
+  empty pattern (`total_count: 0`, `no todos`, `no tasks`,
+  `no matches`, blank). Catches todo / task / grep-empty loops that
+  Check 1's threshold-of-8 is too lax for.
+- **Proactive write-oscillation prune** in
+  `_sanitize_message_ordering`. Any path with ≥3 `write_file` history
+  entries gets its older copies pruned before the next LLM call, so
+  context stays below Gemma 4's 131K ceiling instead of waiting for
+  a 400.
+- **Raw-markdown leakage detector** in stress harness + admiral.
+  Surfaces TUI rendering regressions as `stress-alert/raw-markdown-
+  leakage` on the admiral dashboard.
+- **`OVERNIGHT_PROGRESS.md`** session-continuity doc template.
+
+### Changed
+
+- **`should_break_loop`** in `agent_loop.py:876` — the condition
+  `tool_turns == 0` was unreachable since the file's current structure
+  landed. Text-only assistant responses now cleanly close the user
+  turn instead of regenerating until `PER_PROMPT_BUDGET_SEC` times
+  out. **This is a behavior fix users will notice immediately** —
+  questions the model asks now wait for input.
+- **Continue-loop**: env-gated via `DRYDOCK_AUTO_CONTINUE_DISABLE=1`
+  so stress runs (and any workflow hitting text-only prompt loops)
+  can opt out.
+- **`SESSION_ROOT` resolution** in `scripts/shakedown_interactive.py`:
+  now reads the path from `~/.drydock/config.toml`'s
+  `[session_logging].save_dir` instead of hardcoding
+  `~/.drydock/logs/session/`. Fixes false-SKIP reporting on any
+  machine whose drydock config has the newer default
+  `~/.vibe/logs/session/`.
+- **Todo tool** (`todo.py`): empty-read response now escalates.
+  First empty: *"No todos yet. Write one or proceed with the task."*
+  Second+: *"Still no todos. Stop calling read. Empty state will
+  not change on its own."* Closes GitHub #10.
+- **Fresh-start wipe** in stress harness: wipes cwd to fixtures
+  (PRD/AGENTS/functional_tests) instead of accumulating prior
+  runs' half-written artifacts.
+- **Raw-markdown detector** patterns tightened (`**bold**`,
+  `##heading`, `[link](url)` only — dropped bullet + numbered-list
+  patterns that matched rendered lists and generated 45 % false
+  positives).
+
+### Infrastructure
+
+- First clean 1658-prompt stress run completed 2026-04-21.
+  ~1622 successful prompts (run + babysitter auto-restart),
+  35 SKIPs, 0 TIMEOUTs, ~60 admiral-initiated TUI recycles.
+  ~46-hour wall-clock. Reference baseline for future experiments.
+- `scripts/auto_release.sh` supports `DRYDOCK_FORCE_VERSION` for
+  MINOR / MAJOR bumps (the ordinary PATCH-bumper would have taken
+  us to 2.6.149, not 2.7.0).
+
+### Known follow-ups
+
+- Meta-Harness median-of-3 replication before promotion (currently
+  single-sample).
+- TUI Markdown widget regression surfaced by admiral but not yet
+  fixed.
+
 ## [2.4.2] - 2026-03-12
 
 ### Added

@@ -1,1 +1,2 @@
 ts	exp_id	git_commit	config_sha	metric	done	skip	timeout	recycle	elapsed_s	note
+1776806910	exp_1776806574_0001	74075e4	81d102021a	0.000	0	6	0	0	329.5	opus knob:per_prompt_budget_sec -> 600 (No trace history yet. Seed search from a tighter per-turn budget (600s vs defaul

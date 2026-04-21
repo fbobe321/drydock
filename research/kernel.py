@@ -93,14 +93,46 @@ def setup_isolated_home(tmpdir: Path, cfg: dict) -> tuple[Path, Path, Path]:
     drydock_dir.mkdir(parents=True)
     cwd.mkdir(parents=True)
 
-    # Drydock config — point session_logging at the isolated session dir.
-    # Everything else falls back to drydock defaults.
-    (drydock_dir / "config.toml").write_text(
-        '[session_logging]\n'
-        f'save_dir = "{session_root}"\n'
-        'session_prefix = "session"\n'
-        'enabled = true\n'
-    )
+    # Drydock config — parse the USER'S real ~/.drydock/config.toml
+    # (so providers + models + tool permissions + MCP servers carry
+    # through) and overwrite ONLY [session_logging] with the
+    # per-experiment path. First pass just appended a second
+    # [session_logging] table, which tomllib correctly rejects with
+    # "Cannot declare ('session_logging',) twice". Parse → mutate →
+    # re-serialize is the only safe overlay.
+    real_config = Path.home() / ".drydock" / "config.toml"
+    base: dict = {}
+    if real_config.is_file():
+        try:
+            with real_config.open("rb") as f:
+                base = tomllib.load(f)
+        except (tomllib.TOMLDecodeError, OSError):
+            base = {}
+    base["session_logging"] = {
+        "save_dir": str(session_root),
+        "session_prefix": "session",
+        "enabled": True,
+    }
+    try:
+        import tomli_w
+        with (drydock_dir / "config.toml").open("wb") as f:
+            tomli_w.dump(base, f)
+    except ImportError:
+        # Fallback: if tomli_w isn't available, write just the minimal
+        # config. Drydock will start but without the user's providers
+        # — experiments will fail, but at least with a clear error.
+        (drydock_dir / "config.toml").write_text(
+            '[session_logging]\n'
+            f'save_dir = "{session_root}"\n'
+            'session_prefix = "session"\n'
+            'enabled = true\n'
+        )
+    # Trust the isolated cwd so drydock doesn't pop the modal — this
+    # is what shakedown_interactive's harness handles inline, but from
+    # a fresh HOME there's nothing to answer yet.
+    trusted = drydock_dir / "trusted_folders.toml"
+    if not trusted.exists():
+        trusted.write_text(f'trusted_folders = ["{cwd}"]\n')
 
     # Admiral tuning — write variant knobs keyed on (model, task).
     knobs = validate_and_collect_knobs(cfg)
@@ -169,6 +201,31 @@ def run_kernel(variant_path: Path, results_tsv: Path,
         val = d.get("value", d.get("default"))
         if name and val is not None:
             env[f"DRYDOCK_ADMIRAL_{name}"] = str(val)
+
+    # Variant prompt overrides. For each [prompts.<name>] with a
+    # non-empty source_path, copy into the isolated HOME's prompts
+    # dir. DRYDOCK_PROMPTS_DIR tells drydock (see core/prompts/__init__.py)
+    # to check there before the shipped prompt. Unset prompts fall
+    # through to the installed package defaults.
+    prompts_override_dir = home / ".drydock" / "prompts"
+    prompts_override_dir.mkdir(parents=True, exist_ok=True)
+    any_prompt_override = False
+    for prompt_name, entry in (cfg.get("prompts") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        source_path = entry.get("source_path", "")
+        if not source_path:
+            continue
+        try:
+            src = Path(source_path)
+            if src.is_file():
+                dest = prompts_override_dir / f"{prompt_name}.md"
+                dest.write_bytes(src.read_bytes())
+                any_prompt_override = True
+        except OSError:
+            continue
+    if any_prompt_override:
+        env["DRYDOCK_PROMPTS_DIR"] = str(prompts_override_dir)
 
     log_path = tmpdir / "tui.log"
     start = time.time()

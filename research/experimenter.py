@@ -135,10 +135,34 @@ def mutate_opus(cfg: dict) -> tuple[dict, str] | None:
     elif target == "env_flag":
         flags = new.setdefault("env_flags", {})
         flags[name] = str(value)
+    elif target == "prompt":
+        # Materialize the proposed prompt to a candidate-local file and
+        # point the variant's source_path at it. The kernel will copy
+        # this into the isolated HOME's DRYDOCK_PROMPTS_DIR at spawn.
+        # Staging dir mirrors the variant toml: one sibling per exp.
+        # Using a stable-per-variant name (no exp_id here yet — caller
+        # provides it via the outer staged path). We write into the
+        # per-variant staged_prompts subdir and let the kernel resolve.
+        prompts = new.setdefault("prompts", {})
+        prompt_entry = prompts.setdefault(name, {})
+        prompts_dir = STAGED_DIR / "prompts"
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        # Use a content-hash so concurrent / retried variants don't
+        # stomp each other. Kernel reads the file by source_path.
+        import hashlib as _hashlib
+        h = _hashlib.sha1(str(value).encode()).hexdigest()[:12]
+        target_file = prompts_dir / f"{name}_{h}.md"
+        target_file.write_text(str(value))
+        prompt_entry["source_path"] = str(target_file)
+        prompt_entry["mutable"] = True
     else:
         return None
 
-    desc = f"opus {target}:{name} -> {value} ({reason})"
+    if target == "prompt":
+        size = len(str(value))
+        desc = f"opus prompt:{name} -> [{size} chars] ({reason})"
+    else:
+        desc = f"opus {target}:{name} -> {value} ({reason})"
     return new, desc
 
 

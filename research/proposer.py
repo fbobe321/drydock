@@ -19,12 +19,20 @@ Scope (v1 — overnight build):
 
 Contract: returns either
   {
-    "target": "knob" | "harness_threshold" | "admiral_detector" | "env_flag",
+    "target": "knob" | "harness_threshold" | "admiral_detector"
+              | "env_flag" | "prompt",
     "name": "<field-name>",
-    "value": <numeric or string>,
+    "value": <numeric or string; for target=prompt, the FULL new
+             prompt text as a string>,
     "reason": "<≤200 char human-readable>",
   }
 or None on any failure — experimenter then falls through to random.
+
+For target="prompt", `name` must match a [prompts.<name>] entry with
+mutable=true in config_base.toml (currently "gemma4" or "cli"). The
+value is the complete replacement prompt. The kernel writes it to
+the candidate's isolated prompts dir and the TUI picks it up via
+DRYDOCK_PROMPTS_DIR.
 """
 from __future__ import annotations
 
@@ -38,7 +46,7 @@ import tomllib
 from pathlib import Path
 
 RESEARCH_DIR = Path(__file__).resolve().parent
-DRYDOCK_ROOT = RESEARCH_DIR.parent
+DRYDOCK_ROOT = RESEARCH_DIR.parent  # /data3/drydock — repo root
 OPUS_MODEL = "claude-opus-4-7"
 OPUS_TIMEOUT_SEC = 120
 MAX_TRACES_EACH_SIDE = 3          # top-N + bottom-N contrastive
@@ -206,6 +214,27 @@ def _build_prompt(config_base: dict, config_best: dict,
         for r in bottom
     )
 
+    # Include the current gemma4.md baseline when the proposer might
+    # want to mutate it. Opus needs to see what it's replacing.
+    def _current_prompt(name: str) -> str:
+        prompt_file = DRYDOCK_ROOT / "drydock" / "core" / "prompts" / f"{name}.md"
+        try:
+            return prompt_file.read_text()
+        except OSError:
+            return f"<{name}.md unreadable>"
+
+    prompts_cfg = config_base.get("prompts", {})
+    mutable_prompts = {n: e for n, e in prompts_cfg.items()
+                       if isinstance(e, dict) and e.get("mutable")}
+    prompt_bodies_section = ""
+    if mutable_prompts:
+        prompt_bodies_section = "\n# MUTABLE PROMPT BODIES (current)\n\n"
+        for name in mutable_prompts:
+            body = _current_prompt(name)
+            prompt_bodies_section += (
+                f"## prompts.{name}\n\n```\n{body}\n```\n\n"
+            )
+
     return f"""You are Meta-Harness Proposer for drydock. Your job is to \
 propose ONE mutation to the stress-harness config that will improve the \
 `effective_rate` metric (done_per_minute, cliff at >50% failure).
@@ -221,7 +250,8 @@ within the bounded surface declared in config_base.toml.
     "harness_thresholds": [h["name"] for h in config_base.get("harness_threshold", [])],
     "admiral_detectors": [d["name"] for d in config_base.get("admiral_detector", [])],
     "env_flags": list(config_base.get("env_flags", {}).keys()),
-}, indent=2)}
+    "prompts": list(mutable_prompts.keys()),
+}, indent=2)}{prompt_bodies_section}
 
 # CURRENT-BEST CONFIG
 
@@ -348,6 +378,14 @@ def _validate_mutation(m: dict, config_base: dict) -> bool:
     if target == "env_flag":
         flags = config_base.get("env_flags", {})
         return name in flags and isinstance(value, str)
+    if target == "prompt":
+        prompts = config_base.get("prompts", {})
+        entry = prompts.get(name)
+        if not isinstance(entry, dict) or not entry.get("mutable"):
+            return False
+        # Prompt value must be a non-empty string; set a sanity cap so
+        # a hallucinated 200KB prompt can't blow up context.
+        return isinstance(value, str) and 0 < len(value) <= 50_000
     return False
 
 

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776806574_0001",
+  "ts": 1776806910,
+  "git_commit": "74075e4",
+  "config_sha": "81d102021a",
+  "metric": 0.0,
+  "done": 0,
+  "skipped": 6,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 6,
+  "elapsed_s": 329.5,
+  "note": "opus knob:per_prompt_budget_sec -> 600 (No trace history yet. Seed search from a tighter per-turn budget (600s vs default 300 min / user 20min cap) to cut tail-latency stalls while leaving headroom for multi-tool turns; safest first mutatio)"
+}

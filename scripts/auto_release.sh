@@ -55,15 +55,25 @@ if [ "$ERRORS" -gt 0 ]; then
     exit 1
 fi
 
-# Get current version and bump patch
+# Get current version. Usual path bumps PATCH; DRYDOCK_FORCE_VERSION
+# overrides that (used for minor/major bumps like 2.6.x → 2.7.0 where
+# PATCH+1 is the wrong arithmetic).
 CURRENT=$(grep 'version = ' "$DRYDOCK/pyproject.toml" | head -1 | grep -oP '\d+\.\d+\.\d+')
-MAJOR=$(echo "$CURRENT" | cut -d. -f1)
-MINOR=$(echo "$CURRENT" | cut -d. -f2)
-PATCH=$(echo "$CURRENT" | cut -d. -f3)
-NEW_PATCH=$((PATCH + 1))
-NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-
-echo "[$(date)] Bumping $CURRENT -> $NEW_VERSION"
+if [ -n "${DRYDOCK_FORCE_VERSION:-}" ]; then
+    if ! echo "$DRYDOCK_FORCE_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo "ERROR: DRYDOCK_FORCE_VERSION=$DRYDOCK_FORCE_VERSION is not N.N.N"
+        exit 1
+    fi
+    NEW_VERSION="$DRYDOCK_FORCE_VERSION"
+    echo "[$(date)] Forcing $CURRENT -> $NEW_VERSION via DRYDOCK_FORCE_VERSION"
+else
+    MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+    MINOR=$(echo "$CURRENT" | cut -d. -f2)
+    PATCH=$(echo "$CURRENT" | cut -d. -f3)
+    NEW_PATCH=$((PATCH + 1))
+    NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+    echo "[$(date)] Bumping $CURRENT -> $NEW_VERSION"
+fi
 
 # Update version
 sed -i "s/version = \"$CURRENT\"/version = \"$NEW_VERSION\"/" "$DRYDOCK/pyproject.toml"
