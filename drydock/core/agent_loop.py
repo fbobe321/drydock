@@ -125,8 +125,36 @@ class ToolDecision(BaseModel):
 
 MAX_TOOL_TURNS = 200  # Bug fixes rarely need more than 50 turns; 200 is generous ceiling
 MAX_API_ERRORS = 5
-REPEAT_WARNING_THRESHOLD = 4  # Same exact call 4+ times before warning
-REPEAT_FORCE_STOP_THRESHOLD = 8  # Same exact call 8+ times before force-stop
+
+
+def _admiral_env_int(name: str, default: int) -> int:
+    """Read a DRYDOCK_ADMIRAL_<name> env var at module-load; fall back
+    to the hardcoded default on missing / empty / unparseable. This is
+    the knob the meta-harness kernel writes when running a variant
+    from research/experimenter.py. Production installs never set
+    these vars, so behavior is unchanged for normal drydock users."""
+    import os as _os
+    v = _os.environ.get(f"DRYDOCK_ADMIRAL_{name}", "")
+    if not v:
+        return default
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+# Same exact call N+ times before warning. Env: DRYDOCK_ADMIRAL_REPEAT_WARNING_THRESHOLD
+REPEAT_WARNING_THRESHOLD = _admiral_env_int("REPEAT_WARNING_THRESHOLD", 4)
+# Same exact call N+ times before force-stop. Env: DRYDOCK_ADMIRAL_REPEAT_FORCE_STOP_THRESHOLD
+REPEAT_FORCE_STOP_THRESHOLD = _admiral_env_int(
+    "REPEAT_FORCE_STOP_THRESHOLD", 8)
+# Check 0 (empty-result) threshold. Env: DRYDOCK_ADMIRAL_EMPTY_RESULT_THRESHOLD
+EMPTY_RESULT_THRESHOLD = _admiral_env_int("EMPTY_RESULT_THRESHOLD", 3)
+# Per-tool consecutive-call limits. Env: DRYDOCK_ADMIRAL_SAME_TOOL_NAME_REPEAT_LIMIT_{BASH,READ}
+SAME_TOOL_NAME_REPEAT_LIMIT_BASH = _admiral_env_int(
+    "SAME_TOOL_NAME_REPEAT_LIMIT_BASH", 5)
+SAME_TOOL_NAME_REPEAT_LIMIT_READ = _admiral_env_int(
+    "SAME_TOOL_NAME_REPEAT_LIMIT_READ", 7)
 
 logger = logging.getLogger(__name__)
 
@@ -1607,6 +1635,58 @@ class AgentLoop:
         )
         self.messages.reset(kept)
 
+    def _proactive_prune_write_oscillation(self) -> None:
+        """Prune duplicate writes BEFORE they push the session into a
+        vLLM 400 Bad Request (context overflow).
+
+        `_prune_duplicate_writes` above only fires after the hard-block
+        trips on the Nth write. By that point the model has already
+        written the file 4+ times, the context contains 4+ full copies
+        of the file content, and vLLM has started returning 400s on
+        every call.
+
+        This method runs as part of _sanitize_message_ordering, BEFORE
+        every LLM call. Any path with ≥3 `write_file` assistant-tool-
+        call entries in history gets pruned down to the most recent 2.
+        That leaves the latest attempt + one priored to compare against,
+        without carrying an arbitrary number of historical copies.
+
+        GitHub issue from 2026-04-21 user report: session wrote
+        prepare.py 4× before hitting 15+ 400 errors and giving up.
+        The existing `_prune_duplicate_writes` would have caught this,
+        but only AFTER the hard-block fired (8+ identical calls).
+        By 4× on a 600-line file we're already at ~75K tokens of
+        duplicate content.
+        """
+        PROACTIVE_PRUNE_THRESHOLD = 3
+        try:
+            path_counts: dict[str, int] = {}
+            for msg in self.messages:
+                if msg.role != Role.assistant or not msg.tool_calls:
+                    continue
+                for tc in msg.tool_calls:
+                    if not tc.function or tc.function.name != "write_file":
+                        continue
+                    try:
+                        args = json.loads(tc.function.arguments or "{}")
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    target = args.get("file_path") or args.get("path") or ""
+                    if not target:
+                        continue
+                    path_counts[target] = path_counts.get(target, 0) + 1
+            for target_path, count in path_counts.items():
+                if count >= PROACTIVE_PRUNE_THRESHOLD:
+                    logger.info(
+                        "Proactive prune: path %s has %d write_file "
+                        "entries (threshold %d). Pruning older writes "
+                        "before next LLM call to avoid context overflow.",
+                        target_path, count, PROACTIVE_PRUNE_THRESHOLD,
+                    )
+                    self._prune_duplicate_writes(target_path)
+        except Exception as e:
+            logger.debug("Proactive write prune failed: %s", e)
+
     def _truncate_old_tool_results(self) -> None:
         """Shrink old verbose tool results before they bloat context.
 
@@ -1697,6 +1777,7 @@ class AgentLoop:
         # Proactive context shrinkage runs first so the LLM call sees the
         # smaller payload.
         self._truncate_old_tool_results()
+        self._proactive_prune_write_oscillation()
 
         if not self.messages:
             return
@@ -2315,14 +2396,15 @@ class AgentLoop:
                 if p in s:
                     return True
             return False
-        if len(sigs) >= 3 and all(s == sigs[-1] for s in sigs[-3:]):
+        if (len(sigs) >= EMPTY_RESULT_THRESHOLD
+                and all(s == sigs[-1] for s in sigs[-EMPTY_RESULT_THRESHOLD:])):
             recent_results: list[str] = []
             for msg in reversed(self.messages):
                 if msg.role == Role.tool:
                     recent_results.append(str(msg.content or ""))
-                    if len(recent_results) >= 3:
+                    if len(recent_results) >= EMPTY_RESULT_THRESHOLD:
                         break
-            if (len(recent_results) >= 3
+            if (len(recent_results) >= EMPTY_RESULT_THRESHOLD
                     and all(_looks_empty(r) for r in recent_results)):
                 return "FORCE_STOP"
 
@@ -2430,12 +2512,14 @@ class AgentLoop:
         # Check 2: Same tool called N+ times consecutively with different args
         # Lower thresholds catch loops where the model uses the same tool
         # with slightly different args (e.g., grep with different paths).
+        # Limits are env-overridable via DRYDOCK_ADMIRAL_SAME_TOOL_NAME_REPEAT_LIMIT_*.
         if last_tool in ("bash", "run_command"):
-            same_tool_limit = 5
+            same_tool_limit = SAME_TOOL_NAME_REPEAT_LIMIT_BASH
         elif last_tool in ("grep", "read_file"):
-            same_tool_limit = 7  # investigation tools need some room
+            # investigation tools need some room
+            same_tool_limit = SAME_TOOL_NAME_REPEAT_LIMIT_READ
         else:
-            same_tool_limit = 5
+            same_tool_limit = SAME_TOOL_NAME_REPEAT_LIMIT_BASH
         if (
             len(tool_names) >= same_tool_limit
             and all(n == tool_names[-1] for n in tool_names[-same_tool_limit:])

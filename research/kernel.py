@@ -153,6 +153,23 @@ def run_kernel(variant_path: Path, results_tsv: Path,
     for k, v in (cfg.get("env_flags") or {}).items():
         env[str(k)] = str(v)
 
+    # Translate variant TOML sections into DRYDOCK_* env overrides the
+    # harness + agent_loop read at startup. Admiral's KNOB_BOUNDS path
+    # still writes to admiral_tuning.json (see validate_and_collect_knobs
+    # above) because those tunables flow through a different apply hook;
+    # these env overrides cover the constants that live in scripts/ and
+    # drydock/core/ sources, not in admiral's tuning store.
+    for h in (cfg.get("harness_threshold") or []):
+        name = h.get("name")
+        val = h.get("value", h.get("default"))
+        if name and val is not None:
+            env[f"DRYDOCK_STRESS_{name}"] = str(val)
+    for d in (cfg.get("admiral_detector") or []):
+        name = d.get("name")
+        val = d.get("value", d.get("default"))
+        if name and val is not None:
+            env[f"DRYDOCK_ADMIRAL_{name}"] = str(val)
+
     log_path = tmpdir / "tui.log"
     start = time.time()
 

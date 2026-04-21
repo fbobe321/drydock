@@ -223,18 +223,53 @@ def _restore_checkpoint_to_step(session_dir: Path, state_data: dict,
 _API_ERROR_BANNER_RE = re.compile(r"Stopping:\s*\d+\+\s*API errors",
                                   re.IGNORECASE)
 
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int from the named env var; fall back to `default` on
+    missing / empty / unparseable. Used for DRYDOCK_STRESS_* overrides
+    written by the meta-harness kernel — see research/config_base.toml."""
+    v = os.environ.get(name, "")
+    if not v:
+        return default
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    v = os.environ.get(name, "")
+    if not v:
+        return default
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
 # Matches raw markdown syntax that would only be visible to the user
 # if the TUI's markdown widget failed to render it. User's 2026-04-20
 # feedback: "text is still a big blob on the screen, not formatted
 # nicely." If the screen shows literal `**bold**` or `##heading`
 # instead of the rendered equivalents, these patterns fire.
+#
+# KEEP patterns whose syntax disappears after a working render:
+#   - `**bold**`  rendered as ANSI-bold without the asterisks
+#   - `##heading` rendered with styling, NO literal `##`
+#   - `[x](y)`    rendered as underlined text; the brackets + paren gone
+#
+# EXCLUDE patterns whose syntax legitimately remains visible:
+#   - `- bullet`  renderers often keep `-` (or use `•`, which our regex
+#                 wouldn't match either way)
+#   - `1. foo`    numerals + period remain as display text — literally
+#                 the correct rendering — so matching them generated
+#                 a 45% false-positive rate on the overnight run
+#                 (rec-checks fired raw_md=33 on fully-rendered
+#                 "1. Setup: Created a dummy test...").
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 _RAW_MARKDOWN_PATTERNS = [
-    re.compile(r"\*\*\w[^*]{1,80}\*\*"),   # **bold words**
-    re.compile(r"(?m)^#{1,6}\s+\w"),        # ##heading
-    re.compile(r"(?m)^\s*[-*]\s+\w"),       # - bullet (first char on line)
-    re.compile(r"(?m)^\s*\d+\.\s+\w"),      # 1. numbered
-    re.compile(r"\[[^\]]{1,40}\]\([^)]{1,80}\)"),  # [link](url)
+    re.compile(r"\*\*\w[^*]{1,80}\*\*"),            # **bold words**
+    re.compile(r"(?m)^#{1,6}\s+\w"),                 # ##heading
+    re.compile(r"\[[^\]]{1,40}\]\([^)]{1,80}\)"),    # [link](url)
 ]
 
 
@@ -653,15 +688,17 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
     timed_out = 0
 
     cur_section: str | None = None
-    SESSION_RESET_EVERY = 15  # /clear every N prompts to bound context
-    # Number of consecutive SKIPs that triggers an ESC+/clear force
-    # reset. This catches stuck states the banner detector misses:
-    # "admiral directive + no-tool-call" loops, silent model hangs on
-    # huge context, spinner-for-20-minutes etc. — any case where the
-    # harness can't get prompts through for multiple iterations in a
-    # row means drydock is wedged regardless of whether it's showing
-    # the API-errors banner or not.
-    MAX_CONSECUTIVE_SKIPS_BEFORE_RESET = 2
+    # Thresholds may be overridden via env for the meta-harness
+    # experimenter (see research/config_base.toml [[harness_threshold]]).
+    # Source defaults are unchanged — we fall back if the env var is
+    # unset, empty, or unparseable.
+    SESSION_RESET_EVERY = _env_int("DRYDOCK_STRESS_SESSION_RESET_EVERY", 15)
+    MAX_CONSECUTIVE_SKIPS_BEFORE_RESET = _env_int(
+        "DRYDOCK_STRESS_MAX_CONSECUTIVE_SKIPS_BEFORE_RESET", 2)
+    SEND_PROMPT_RETRY_COUNT = _env_int(
+        "DRYDOCK_STRESS_SEND_PROMPT_RETRY_COUNT", 3)
+    SEND_PROMPT_WAIT_PER_RETRY_SEC = _env_float(
+        "DRYDOCK_STRESS_SEND_PROMPT_WAIT_PER_RETRY_SEC", 120.0)
     consecutive_skips = 0
     # When resuming, step counter starts at the resumed step + 1 so the
     # printed log lines stay aligned with the original run.
@@ -722,10 +759,14 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
         prev_writes = watcher.count_writes()
         print(f"\n[{i:>3}/{total}] {prompt[:80]}{'...' if len(prompt) > 80 else ''}")
 
-        ok = send_prompt_and_confirm(child, prompt, watcher,
-                                     max_retries=3, wait_per_retry=120.0)
+        ok = send_prompt_and_confirm(
+            child, prompt, watcher,
+            max_retries=SEND_PROMPT_RETRY_COUNT,
+            wait_per_retry=SEND_PROMPT_WAIT_PER_RETRY_SEC,
+        )
         if not ok:
-            print(f"          SKIP: TUI did not accept after 3 retries")
+            print(f"          SKIP: TUI did not accept after "
+                  f"{SEND_PROMPT_RETRY_COUNT} retries")
             skipped += 1
             consecutive_skips += 1
             results.append({"i": i, "prompt": prompt[:60], "status": "skipped"})
