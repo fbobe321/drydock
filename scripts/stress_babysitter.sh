@@ -24,7 +24,7 @@ set -u
 LOG=/tmp/stress_babysitter.log
 STATE=/tmp/stress_babysitter.state
 PID_FILE=/tmp/stress_pid.txt
-STRESS_LOG=/tmp/stress_2000_v10.log
+STRESS_LOG=/tmp/stress_2000_v10_restart_1776736801.log
 NOTIFY=/data3/drydock/scripts/notify_release.py
 PY_CONDA=/home/bobef/miniconda3/bin/python3
 PY_DRYDOCK=/home/bobef/miniforge3/envs/drydock/bin/python3

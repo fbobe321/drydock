@@ -60,14 +60,12 @@ def write_toml(path: Path, data: dict) -> None:
         tomli_w.dump(data, f)
 
 
-def mutate(cfg: dict, rng: random.Random) -> tuple[dict, str]:
+def mutate_random(cfg: dict, rng: random.Random) -> tuple[dict, str]:
     """Pick one mutable knob and propose a new value.
 
     50/50 split between "sample uniformly across the full [min, max]
     range" and "nudge by ±20% of the range around the current value".
-    Uniform catches distant optima; nudges refine nearby ones. No
-    exploration history yet — pure random search. Upgrade to Bayesian
-    or LLM-proposed mutations only after random is tapped out.
+    Uniform catches distant optima; nudges refine nearby ones.
     """
     new = copy.deepcopy(cfg)
     knobs = new.get("knob", [])
@@ -89,7 +87,70 @@ def mutate(cfg: dict, rng: random.Random) -> tuple[dict, str]:
     else:
         val = round(val, 3)
     k["value"] = val
-    return new, f"{k['name']}: {current} -> {val}"
+    return new, f"random {k['name']}: {current} -> {val}"
+
+
+def mutate_opus(cfg: dict) -> tuple[dict, str] | None:
+    """Meta-Harness-style: ask Opus for a contrastive mutation.
+
+    Imports the proposer lazily so experimenter still runs in random
+    mode without the anthropic SDK installed. Returns None if the
+    proposer yields NO_PROPOSAL or errors — caller falls through to
+    random.
+    """
+    try:
+        sys.path.insert(0, str(RESEARCH_DIR))
+        import proposer  # type: ignore
+    except ImportError as e:
+        print(f"  opus mutator: proposer import failed: {e}", flush=True)
+        return None
+    mutation = proposer.propose(
+        config_base_path=CONFIG_BASE,
+        config_best_path=CONFIG_BEST if CONFIG_BEST.exists() else CONFIG_BASE,
+        results_tsv=DEFAULT_RESULTS,
+    )
+    if mutation is None:
+        return None
+
+    new = copy.deepcopy(cfg)
+    target = mutation["target"]
+    name = mutation["name"]
+    value = mutation["value"]
+    reason = str(mutation.get("reason", ""))[:200]
+
+    # Apply the mutation to the correct collection. Validation already
+    # happened in proposer._validate_mutation; we're just rewriting.
+    if target == "knob":
+        for k in new.get("knob", []):
+            if k["name"] == name:
+                k["value"] = int(value) if isinstance(k["default"], int) else float(value)
+    elif target == "harness_threshold":
+        for h in new.get("harness_threshold", []):
+            if h["name"] == name:
+                h["value"] = int(value) if isinstance(h["default"], int) else float(value)
+    elif target == "admiral_detector":
+        for d in new.get("admiral_detector", []):
+            if d["name"] == name:
+                d["value"] = int(value) if isinstance(d["default"], int) else float(value)
+    elif target == "env_flag":
+        flags = new.setdefault("env_flags", {})
+        flags[name] = str(value)
+    else:
+        return None
+
+    desc = f"opus {target}:{name} -> {value} ({reason})"
+    return new, desc
+
+
+def mutate(cfg: dict, rng: random.Random, mode: str) -> tuple[dict, str]:
+    """Dispatch to the requested proposer. Opus mode falls back to
+    random if the proposer doesn't deliver."""
+    if mode == "opus":
+        r = mutate_opus(cfg)
+        if r is not None:
+            return r
+        print("  opus mutator returned nothing; falling back to random", flush=True)
+    return mutate_random(cfg, rng)
 
 
 def read_metric_for(results_tsv: Path, exp_id: str) -> float:
@@ -179,6 +240,12 @@ def main() -> int:
     ap.add_argument("--cooldown-s", type=float, default=10.0,
                     help="Sleep between experiments (lets GPU settle).")
     ap.add_argument("--results-tsv", type=Path, default=DEFAULT_RESULTS)
+    ap.add_argument("--proposer", choices=("random", "opus"),
+                    default="random",
+                    help="random = bounded uniform + nudge sampling. "
+                         "opus = Meta-Harness-style LLM proposer using "
+                         "ANTHROPIC_API_KEY or the `claude` CLI; falls "
+                         "back to random on any failure.")
     args = ap.parse_args()
 
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -190,8 +257,8 @@ def main() -> int:
     best_cfg = load_toml(CONFIG_BEST) if CONFIG_BEST.exists() else base_cfg
     best_metric = current_best_metric(args.results_tsv)
 
-    print(f"experimenter starting | seed={args.seed} | "
-          f"cooldown={args.cooldown_s}s | "
+    print(f"experimenter starting | proposer={args.proposer} | "
+          f"seed={args.seed} | cooldown={args.cooldown_s}s | "
           f"best_metric={best_metric:.3f}", flush=True)
 
     n = 0
@@ -205,7 +272,7 @@ def main() -> int:
             break
         n += 1
         exp_id = f"exp_{int(time.time())}_{n:04d}"
-        variant, desc = mutate(best_cfg, rng)
+        variant, desc = mutate(best_cfg, rng, args.proposer)
         staged = STAGED_DIR / f"{exp_id}.toml"
         write_toml(staged, variant)
 

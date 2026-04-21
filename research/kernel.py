@@ -25,6 +25,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -244,6 +245,23 @@ def run_kernel(variant_path: Path, results_tsv: Path,
     except Exception:
         git_commit = "unknown"
 
+    # --- Trace capture ---
+    # Every kernel run leaves a reproducible artifact dir so the Meta-
+    # Harness proposer can read both what happened (messages, tui log)
+    # and the resulting score. Traces are the proposer's primary input
+    # when forming contrastive context (top-3 vs bottom-3).
+    _capture_trace(
+        exp_id=exp_id,
+        watcher_session_dir=watcher.session_dir if watcher else None,
+        tui_log_path=log_path,
+        config_sha=sha,
+        git_commit=git_commit,
+        metric=metric,
+        counts=counts,
+        elapsed=elapsed,
+        note=note,
+    )
+
     results_tsv.parent.mkdir(parents=True, exist_ok=True)
     if not results_tsv.exists():
         results_tsv.write_text(
@@ -267,6 +285,95 @@ def run_kernel(variant_path: Path, results_tsv: Path,
         f.write("\t".join(row) + "\n")
 
     return metric, {**counts, "elapsed_s": elapsed, "config_sha": sha}
+
+
+def _capture_trace(*, exp_id: str,
+                   watcher_session_dir: Path | None,
+                   tui_log_path: Path,
+                   config_sha: str,
+                   git_commit: str,
+                   metric: float,
+                   counts: dict,
+                   elapsed: float,
+                   note: str) -> None:
+    """Write research/traces/<exp_id>/ with the artifacts a proposer
+    needs to reason about this run. Never raises — trace capture is
+    best-effort instrumentation, not part of the metric path.
+    """
+    try:
+        trace_dir = RESEARCH_DIR / "traces" / exp_id
+        trace_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. messages.jsonl — the drydock session log (copy, don't link;
+        #    session dirs get garbage-collected).
+        if watcher_session_dir and watcher_session_dir.is_dir():
+            src_msgs = watcher_session_dir / "messages.jsonl"
+            if src_msgs.is_file():
+                try:
+                    (trace_dir / "messages.jsonl").write_bytes(src_msgs.read_bytes())
+                except OSError:
+                    pass
+            src_meta = watcher_session_dir / "meta.json"
+            if src_meta.is_file():
+                try:
+                    (trace_dir / "meta.json").write_bytes(src_meta.read_bytes())
+                except OSError:
+                    pass
+
+        # 2. tui.log — full pexpect PTY stream (may be large but the
+        #    proposer can tail it).
+        try:
+            if tui_log_path.is_file():
+                (trace_dir / "tui.log").write_bytes(tui_log_path.read_bytes())
+        except OSError:
+            pass
+
+        # 3. rec_check.jsonl — extract the per-iteration diagnostic
+        #    lines from the kernel's own stdout capture. Useful for
+        #    spotting banner / raw-md patterns without re-parsing the
+        #    big TUI log.
+        try:
+            rec_lines: list[dict] = []
+            if tui_log_path.is_file():
+                data = tui_log_path.read_text(errors="replace")
+                for line in data.splitlines():
+                    m = re.search(
+                        r"\[rec-check\]\s+banner=(\S+)\s+log_size=(\d+)"
+                        r"(?:\s+raw_md=(\d+))?",
+                        line,
+                    )
+                    if m:
+                        rec_lines.append({
+                            "banner": m.group(1),
+                            "log_size": int(m.group(2)),
+                            "raw_md": int(m.group(3)) if m.group(3) else 0,
+                        })
+            with (trace_dir / "rec_check.jsonl").open("w") as f:
+                for r in rec_lines:
+                    f.write(json.dumps(r) + "\n")
+        except OSError:
+            pass
+
+        # 4. summary.json — everything the proposer cares about at a
+        #    glance.
+        summary = {
+            "exp_id": exp_id,
+            "ts": int(time.time()),
+            "git_commit": git_commit,
+            "config_sha": config_sha,
+            "metric": round(float(metric), 4),
+            "done": counts.get("done", 0),
+            "skipped": counts.get("skipped", 0),
+            "timed_out": counts.get("timed_out", 0),
+            "recycles": counts.get("recycles", 0),
+            "prompts_attempted": counts.get("prompts_attempted", 0),
+            "elapsed_s": round(float(elapsed), 2),
+            "note": note or "",
+        }
+        (trace_dir / "summary.json").write_text(json.dumps(summary, indent=2))
+    except Exception:
+        # Trace capture must never break the run.
+        pass
 
 
 def main() -> int:

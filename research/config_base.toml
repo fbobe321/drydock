@@ -10,13 +10,22 @@
 # research/config_best.toml on improvement. Swap this file's values
 # manually when you want to re-seed the search from a new baseline.
 #
-# Frozen (not mutable here, intentional):
-#   - drydock source code
-#   - prompts (gemma4.md, cli.md)
-#   - provider config
-#   - tool set
+# FROZEN (NOT mutable — verified by experimenter before apply):
+#   - drydock/core/agent_loop.py (just stabilized 2026-04-19; untouchable)
+#   - Tool implementations (drydock/core/tools/)
+#   - Provider config
+#   - Core stress harness flow (scripts/stress_shakedown.py::run main loop)
 #
-# Anything not in this file is frozen.
+# MUTABLE surface (what the Opus proposer may change):
+#   - Admiral knobs (the [[knob]] array below)
+#   - Env flags (the [env_flags] section below)
+#   - Stress harness thresholds (the [harness_thresholds] section below)
+#   - Admiral detector thresholds (the [admiral_detectors] section below)
+#   - System prompts (the [prompts] section below — paths to override files)
+#
+# The experimenter writes prompt overrides to:
+#     research/candidates/<exp_id>/prompts/<name>.md
+# and the kernel mounts them under the isolated HOME's prompt dir.
 
 [target]
 # admiral_tuning.json keys off (model, task). The kernel writes an entry
@@ -91,3 +100,110 @@ why     = "Reads-without-a-write before admiral fires the struggle directive."
 
 [env_flags]
 DRYDOCK_AUTO_CONTINUE_DISABLE = "1"  # options: "0", "1"
+
+# -----------------------------------------------------------------
+# System prompt overrides. When `source_path` is set, the kernel
+# copies that file into the isolated HOME's prompt dir. When the
+# proposer mutates a prompt it writes to
+#     research/candidates/<exp_id>/prompts/<name>.md
+# and points the corresponding source_path here.
+# -----------------------------------------------------------------
+
+[prompts.gemma4]
+# Leave source_path empty to use the production gemma4.md shipped in
+# the installed drydock package. Opus proposer may replace this with
+# a candidate-local path.
+source_path = ""
+mutable = true
+why     = "Single highest-leverage mutable target. Governs how Gemma 4 interprets every turn."
+
+[prompts.cli]
+source_path = ""
+mutable = true
+why     = "Alternate non-Gemma system prompt. Rarely the right target but available for cross-model experiments."
+
+# -----------------------------------------------------------------
+# Stress harness threshold constants. These are hardcoded in
+# scripts/stress_shakedown.py today. The kernel reads them from here
+# via env overrides (DRYDOCK_STRESS_*) and the harness respects the
+# overrides if set, falling back to the source defaults otherwise.
+# -----------------------------------------------------------------
+
+[[harness_threshold]]
+name    = "MAX_CONSECUTIVE_SKIPS_BEFORE_RESET"
+default = 2
+min     = 1
+max     = 5
+mutable = true
+why     = "Force ESC+/clear after N consecutive SKIPs. Lower = aggressive recycling; higher = tolerant of transient wedges."
+
+[[harness_threshold]]
+name    = "SESSION_RESET_EVERY"
+default = 15
+min     = 5
+max     = 50
+mutable = true
+why     = "Periodic /clear cadence in prompts. Tight cadence bounds context but costs reset overhead every N prompts."
+
+[[harness_threshold]]
+name    = "SEND_PROMPT_RETRY_COUNT"
+default = 3
+min     = 1
+max     = 6
+mutable = true
+why     = "How many times send_prompt_and_confirm re-types before marking SKIP. Each retry is ~120s."
+
+[[harness_threshold]]
+name    = "SEND_PROMPT_WAIT_PER_RETRY_SEC"
+default = 120
+min     = 30
+max     = 300
+mutable = true
+why     = "Seconds to wait for user-msg confirmation before retyping. Tighter = faster SKIP, may miss slow prompts."
+
+# -----------------------------------------------------------------
+# Admiral detector thresholds. Currently hardcoded in
+# drydock/core/agent_loop.py and drydock/admiral/detectors.py.
+# Surface as env vars (DRYDOCK_ADMIRAL_*) that the detectors check
+# at init.
+# -----------------------------------------------------------------
+
+[[admiral_detector]]
+name    = "REPEAT_WARNING_THRESHOLD"
+default = 4
+min     = 2
+max     = 8
+mutable = true
+why     = "Consecutive identical tool calls before a WARNING. Lower = early nudge; higher = tolerant of legit repetition."
+
+[[admiral_detector]]
+name    = "REPEAT_FORCE_STOP_THRESHOLD"
+default = 8
+min     = 4
+max     = 20
+mutable = true
+why     = "Consecutive identical tool calls before FORCE_STOP. Must be >= REPEAT_WARNING_THRESHOLD."
+
+[[admiral_detector]]
+name    = "EMPTY_RESULT_THRESHOLD"
+default = 3
+min     = 2
+max     = 6
+mutable = true
+why     = "Check 0 (empty-result loop). Fire FORCE_STOP after N identical-call + empty-result in a row."
+
+[[admiral_detector]]
+name    = "SAME_TOOL_NAME_REPEAT_LIMIT_BASH"
+default = 5
+min     = 3
+max     = 10
+mutable = true
+why     = "Same-tool repetition limit for bash. Different from read/grep which need more headroom."
+
+[[admiral_detector]]
+name    = "SAME_TOOL_NAME_REPEAT_LIMIT_READ"
+default = 7
+min     = 4
+max     = 12
+mutable = true
+why     = "Same-tool repetition limit for read_file + grep. Investigation tools legitimately repeat more."
