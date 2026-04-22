@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776895045_0012",
+  "ts": 1776895343,
+  "git_commit": "c6d8e6f",
+  "config_sha": "25c2f4229c",
+  "metric": 3.6508,
+  "done": 18,
+  "skipped": 1,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 295.83,
+  "note": "llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) show that the 'Previous turn ended' hijack occurs during long tool sequences. Reducing struggle_threshold from 40 to 25 provides earlier intervention without the risk o)"
+}

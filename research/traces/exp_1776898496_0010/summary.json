@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776898496_0010",
+  "ts": 1776898787,
+  "git_commit": "75e50d2",
+  "config_sha": "b8de17fe55",
+  "metric": 4.5772,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 288.39,
+  "note": "llm knob:wrap_up_warn_at -> 100 (Traces show the 'Previous turn ended' hijack occurs during long tool-use chains. Increasing wrap_up_warn_at to 100 prevents premature admiral intervention during productive sequences.)"
+}

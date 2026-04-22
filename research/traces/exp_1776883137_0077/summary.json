@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776883137_0077",
+  "ts": 1776883430,
+  "git_commit": "5dcf9db",
+  "config_sha": "25c2f4229c",
+  "metric": 4.3297,
+  "done": 21,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 21,
+  "elapsed_s": 291.01,
+  "note": "llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) use lower struggle_threshold (20-25) to prevent the 'Previous turn ended' hijack that occurs during long tool-use chains, whereas current 40 allows the hijack to stall )"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776893561_0008",
+  "ts": 1776893866,
+  "git_commit": "c6d8e6f",
+  "config_sha": "1521a6d5df",
+  "metric": 4.0767,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 294.36,
+  "note": "llm knob:struggle_threshold -> 30 (Traces show 'Previous turn ended' hijacks occur after ~40 tool calls. Top performers (exp_0004, 0062) use 20-40 to prevent early intervention, while 40 is current-best. 30 tests the middle.)"
+}

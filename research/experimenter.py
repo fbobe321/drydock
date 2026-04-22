@@ -93,19 +93,25 @@ def mutate_random(cfg: dict, rng: random.Random,
     prompt text can't be randomly sampled. LLM-only for that target.
     """
     new = copy.deepcopy(cfg)
-    # Build (target_class, entry) candidates
+    # Build (target_class, entry) candidates. Entries marked banned=true
+    # in config_base.toml are excluded from the surface — used to retire
+    # knobs that dominate search without finding gains (see
+    # research/config_base.toml for the list of currently banned names).
+    def _usable(entry: dict) -> bool:
+        return entry.get("mutable", True) and not entry.get("banned", False)
+
     candidates: list[tuple[str, object]] = []
     if exclude_target != "knob":
         for k in new.get("knob", []):
-            if k.get("mutable", True):
+            if _usable(k):
                 candidates.append(("knob", k))
     if exclude_target != "harness_threshold":
         for h in new.get("harness_threshold", []):
-            if h.get("mutable", True):
+            if _usable(h):
                 candidates.append(("harness_threshold", h))
     if exclude_target != "admiral_detector":
         for d in new.get("admiral_detector", []):
-            if d.get("mutable", True):
+            if _usable(d):
                 candidates.append(("admiral_detector", d))
     if exclude_target != "env_flag":
         for name in (new.get("env_flags") or {}):
@@ -118,27 +124,38 @@ def mutate_random(cfg: dict, rng: random.Random,
     # the declared surface. Bad: dominated by whichever section has
     # the most entries. Counterbalanced by exclude_target when
     # rotation is active.
-    target_class, entry = rng.choice(candidates)
+    #
+    # Shuffle so we can walk the list if the first pick can't produce
+    # a value different from its current (integer ranges of size 1
+    # would otherwise burn a retry loop forever).
+    shuffled = list(candidates)
+    rng.shuffle(shuffled)
+    for target_class, entry in shuffled:
+        if target_class == "env_flag":
+            name = entry  # type: ignore
+            flags = new.setdefault("env_flags", {})
+            current = flags.get(name, "0")
+            new_value = "0" if current == "1" else "1"
+            if new_value == current:
+                continue
+            flags[name] = new_value
+            return new, (f"random env_flag:{name}: "
+                         f"{current!r} -> {new_value!r}")
 
-    if target_class == "env_flag":
-        # Binary flip on the current value. DRYDOCK_AUTO_CONTINUE_
-        # DISABLE is the only one we currently declare; it's "0" or
-        # "1". Generic flip is str("0" ↔ "1").
-        name = entry  # type: ignore
-        flags = new.setdefault("env_flags", {})
-        current = flags.get(name, "0")
-        new_value = "0" if current == "1" else "1"
-        flags[name] = new_value
-        return new, (f"random env_flag:{name}: "
-                     f"{current!r} -> {new_value!r}")
+        entry_dict = entry  # type: ignore
+        current = entry_dict.get("value", entry_dict["default"])
+        val = current
+        for _ in range(8):
+            val = _sample_numeric_mutation(entry_dict, rng)
+            if val != current:
+                break
+        if val == current:
+            continue
+        entry_dict["value"] = val
+        return new, (f"random {target_class}:{entry_dict['name']}: "
+                     f"{current} -> {val}")
 
-    # Numeric mutation for knob / harness_threshold / admiral_detector
-    entry_dict = entry  # type: ignore
-    current = entry_dict.get("value", entry_dict["default"])
-    val = _sample_numeric_mutation(entry_dict, rng)
-    entry_dict["value"] = val
-    return new, (f"random {target_class}:{entry_dict['name']}: "
-                 f"{current} -> {val}")
+    return new, "(no mutable target with a distinct alternative — noop)"
 
 
 def mutate_opus(cfg: dict) -> tuple[dict, str] | None:

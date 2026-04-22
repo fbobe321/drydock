@@ -233,6 +233,32 @@ def _load_agent_loop_excerpt() -> str:
     return out
 
 
+def _banned_entries(config_base: dict) -> list[dict]:
+    """Surface entries flagged `banned = true` in config_base.toml so
+    the proposer's prompt can name them explicitly. Returned as a list
+    of {class, name} dicts (no values/bounds — the ban is about names,
+    not ranges).
+    """
+    out: list[dict] = []
+    for cls in ("knob", "harness_threshold", "admiral_detector"):
+        for entry in config_base.get(cls, []):
+            if entry.get("banned", False):
+                out.append({"class": cls, "name": entry.get("name", "?")})
+    return out
+
+
+def _is_banned(m: dict, config_base: dict) -> bool:
+    """Return True if the mutation targets an entry marked banned=true."""
+    target = m.get("target")
+    name = m.get("name", "")
+    if target not in ("knob", "harness_threshold", "admiral_detector"):
+        return False
+    for entry in config_base.get(target, []):
+        if entry.get("name") == name:
+            return bool(entry.get("banned", False))
+    return False
+
+
 def _coverage_directive(coverage: dict[str, int]) -> str:
     """Given the recent-target distribution, return a directive the
     proposer prompt appends. When one class dominates, the directive
@@ -381,6 +407,12 @@ def _build_prompt(config_base: dict, config_best: dict,
                 f"## prompts.{name}\n\n```\n{body}\n```\n\n"
             )
 
+    def _active_names(section: list[dict]) -> list[str]:
+        return [e["name"] for e in section
+                if e.get("mutable", True) and not e.get("banned", False)]
+
+    banned_listing = _banned_entries(config_base)
+
     return f"""You are Meta-Harness Proposer for drydock. Your job is to \
 propose ONE mutation to the stress-harness config that will improve the \
 `effective_rate` metric (done_per_minute, cliff at >50% failure).
@@ -392,12 +424,20 @@ within the bounded surface declared in config_base.toml.
 # MUTATION SURFACE (bounded, declared in config_base.toml)
 
 {json.dumps({
-    "admiral_knobs": [k["name"] for k in config_base.get("knob", [])],
-    "harness_thresholds": [h["name"] for h in config_base.get("harness_threshold", [])],
-    "admiral_detectors": [d["name"] for d in config_base.get("admiral_detector", [])],
+    "admiral_knobs": _active_names(config_base.get("knob", [])),
+    "harness_thresholds": _active_names(config_base.get("harness_threshold", [])),
+    "admiral_detectors": _active_names(config_base.get("admiral_detector", [])),
     "env_flags": list(config_base.get("env_flags", {}).keys()),
     "prompts": list(mutable_prompts.keys()),
 }, indent=2)}{prompt_bodies_section}
+
+# BANNED NAMES (mined out — do NOT propose these)
+
+{json.dumps(banned_listing, indent=2) if banned_listing else '<none>'}
+
+These names are intentionally retired from the mutation surface because \
+prior experiments exhausted their leverage. Proposals targeting a banned \
+name will be rejected. Pick from the MUTATION SURFACE above.
 
 # RECENT MUTATION COVERAGE (last 15 experiments)
 
@@ -510,6 +550,15 @@ def propose(config_base_path: Path, config_best_path: Path | None,
     # Validate the mutation against the declared bounds.
     if not _validate_mutation(mutation, config_base):
         print(f"  proposer: invalid mutation: {mutation}", file=sys.stderr)
+        return None
+    # Banned-name filter — entries marked banned=true in config_base.toml
+    # are retired from the mutation surface. Reject the proposal so caller
+    # falls through to random (which also honors the ban).
+    if _is_banned(mutation, config_base):
+        print(f"  proposer: banned-name rejection — "
+              f"{mutation.get('target')}:{mutation.get('name')} is "
+              f"retired; re-prompt or fall through to random",
+              file=sys.stderr)
         return None
     # No-op filter — Gemma 4 has been proposing struggle_threshold=20
     # when current config already has struggle_threshold=40, which it

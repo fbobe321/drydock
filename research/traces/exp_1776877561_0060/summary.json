@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776877561_0060",
+  "ts": 1776877852,
+  "git_commit": "5dcf9db",
+  "config_sha": "06bdca8d44",
+  "metric": 3.7372,
+  "done": 18,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 18,
+  "elapsed_s": 288.99,
+  "note": "llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous turn ended' hijack that occurs after long tool-use sequences (~40 calls) when the model drifts into idle modes.)"
+}

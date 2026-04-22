@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776879187_0065",
+  "ts": 1776879481,
+  "git_commit": "5dcf9db",
+  "config_sha": "11ef58687d",
+  "metric": 4.3973,
+  "done": 21,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 21,
+  "elapsed_s": 286.54,
+  "note": "random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 3"
+}

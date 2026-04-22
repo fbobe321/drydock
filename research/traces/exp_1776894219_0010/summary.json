@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776894219_0010",
+  "ts": 1776894509,
+  "git_commit": "c6d8e6f",
+  "config_sha": "25c2f4229c",
+  "metric": 0.0,
+  "done": 1,
+  "skipped": 5,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 6,
+  "elapsed_s": 287.23,
+  "note": "llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) use lower struggle_threshold (20-25) to prevent 'Previous turn ended' hijacks in long investigation chains, while bottom runs (0053, 0019) hit the cliff at 40.)"
+}

@@ -92,6 +92,7 @@ default = 20
 min     = 10
 max     = 40
 mutable = true
+banned  = true  # 2026-04-22: 122 runs in 24h dominated the search; best 4.725 set on run 4 and never matched. Gemma confabulates this knob repeatedly. Unban by flipping to false once other knobs have comparable coverage. See feedback_local_proposer_only.md.
 why     = "Reads-without-a-write before admiral fires the struggle directive."
 
 # -----------------------------------------------------------------
