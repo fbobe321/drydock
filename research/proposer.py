@@ -233,12 +233,111 @@ def _load_agent_loop_excerpt() -> str:
     return out
 
 
+def _coverage_directive(coverage: dict[str, int]) -> str:
+    """Given the recent-target distribution, return a directive the
+    proposer prompt appends. When one class dominates, the directive
+    becomes a REQUIREMENT (not a suggestion) to pick a different class.
+    Soft hints didn't break Gemma 4's knob-rut; hard rotation does.
+    """
+    total = sum(coverage.values())
+    if total < 10:
+        return ""
+    # If any single class >= 70% of recent, require a different class.
+    MAX_DOMINANT = max(coverage.values()) if coverage else 0
+    if MAX_DOMINANT / total < 0.7:
+        return ("\nNote: coverage is reasonably balanced; propose "
+                "whatever mutation is best-supported by the traces.")
+    dominant = max(coverage, key=lambda k: coverage[k])
+    alternatives = [t for t in ("knob", "harness_threshold",
+                                "admiral_detector", "env_flag", "prompt")
+                    if t != dominant]
+    return (
+        f"\n⛔ MANDATORY ROTATION: '{dominant}' has taken "
+        f"{coverage[dominant]}/{total} of the last 15 mutations and "
+        f"the leaderboard has plateaued. Your proposal this round "
+        f"MUST have target ∈ {alternatives}. Proposing target="
+        f"'{dominant}' again will be rejected. Pick the "
+        f"most-likely-high-leverage target among the alternatives — "
+        f"prompts are usually the highest-leverage untouched lever "
+        f"when knobs have stopped producing gains."
+    )
+
+
+def _recent_mutation_coverage(results_tsv: Path,
+                              n: int = 15) -> dict[str, int]:
+    """Return {target_class: count} for the last N experiments' notes.
+
+    Used as a coverage hint in the proposer prompt. When the proposer
+    keeps proposing variations of the same 2-3 knobs ("knob-rut"), the
+    leaderboard plateaus. Feeding back the recent-target distribution
+    gives the model a reason to diversify without overriding its
+    judgment.
+    """
+    if not results_tsv.exists():
+        return {}
+    try:
+        lines = results_tsv.read_text().splitlines()
+        if len(lines) < 2:
+            return {}
+        header = lines[0].split("\t")
+        if "note" not in header:
+            return {}
+        note_idx = header.index("note")
+        recent = lines[-n:]
+        from collections import Counter
+        counts: Counter[str] = Counter()
+        for line in recent:
+            cols = line.split("\t")
+            if len(cols) <= note_idx:
+                continue
+            note = cols[note_idx]
+            # Notes have shape "llm <target>:<name> -> ..." or
+            # "random <target-hint>: ...". Extract the target class.
+            for token in ("knob:", "harness_threshold:",
+                          "admiral_detector:", "env_flag:", "prompt:"):
+                if token in note:
+                    counts[token.rstrip(":")] += 1
+                    break
+            else:
+                if note.startswith("random "):
+                    counts["random"] += 1
+        return dict(counts)
+    except Exception:
+        return {}
+
+
+def _current_values_table(config_best: dict) -> str:
+    """Flatten the mutable current values into a simple two-column
+    table. Gemma 4 reliably parses this; nested TOML values like
+    `value = 40` get missed inside the larger config dump."""
+    lines: list[str] = []
+    for k in config_best.get("knob", []):
+        val = k.get("value", k.get("default"))
+        lines.append(f"  knob:{k['name']} = {val}")
+    for h in config_best.get("harness_threshold", []):
+        val = h.get("value", h.get("default"))
+        lines.append(f"  harness_threshold:{h['name']} = {val}")
+    for d in config_best.get("admiral_detector", []):
+        val = d.get("value", d.get("default"))
+        lines.append(f"  admiral_detector:{d['name']} = {val}")
+    for name, v in (config_best.get("env_flags") or {}).items():
+        lines.append(f"  env_flag:{name} = {v!r}")
+    for name, entry in (config_best.get("prompts") or {}).items():
+        if isinstance(entry, dict):
+            src = entry.get("source_path", "")
+            state = "CUSTOM" if src else "default (from installed package)"
+            lines.append(f"  prompt:{name} = {state}")
+    return "\n".join(lines)
+
+
 def _build_prompt(config_base: dict, config_best: dict,
                   ranked_results: list[dict]) -> str:
     """Assemble the prompt the proposer sees. Concise — Opus is smart
     but the payload needs structure so it returns a parseable proposal."""
     top = ranked_results[:MAX_TRACES_EACH_SIDE]
     bottom = ranked_results[-MAX_TRACES_EACH_SIDE:] if len(ranked_results) >= MAX_TRACES_EACH_SIDE * 2 else []
+    coverage = _recent_mutation_coverage(RESEARCH_DIR / "results.tsv", n=15)
+    current_values = _current_values_table(config_best)
 
     domain_spec_path = RESEARCH_DIR / "domain_spec.md"
     claude_md_path = DRYDOCK_ROOT / "CLAUDE.md"
@@ -300,7 +399,21 @@ within the bounded surface declared in config_base.toml.
     "prompts": list(mutable_prompts.keys()),
 }, indent=2)}{prompt_bodies_section}
 
-# CURRENT-BEST CONFIG
+# RECENT MUTATION COVERAGE (last 15 experiments)
+
+{json.dumps(coverage, indent=2) if coverage else '<no history yet>'}
+{_coverage_directive(coverage)}
+
+# CURRENT VALUES (the config as actually set right now)
+
+{current_values}
+
+⚠ CRITICAL: Your proposal's `value` field MUST DIFFER from the
+current value above. Proposing the same value that is already set is
+a no-op that wastes an experiment cycle. Read the list above carefully
+before picking a value.
+
+# CURRENT-BEST CONFIG (full TOML for reference)
 
 ```toml
 {_read_head(RESEARCH_DIR / "config_best.toml" if (RESEARCH_DIR / "config_best.toml").exists() else RESEARCH_DIR / "config_base.toml", 4000)}
@@ -398,7 +511,59 @@ def propose(config_base_path: Path, config_best_path: Path | None,
     if not _validate_mutation(mutation, config_base):
         print(f"  proposer: invalid mutation: {mutation}", file=sys.stderr)
         return None
+    # No-op filter — Gemma 4 has been proposing struggle_threshold=20
+    # when current config already has struggle_threshold=40, which it
+    # mis-cited from the leaderboard. Reject proposals that don't
+    # actually change anything so we don't waste a kernel run.
+    config_best = _load_toml(RESEARCH_DIR / "config_best.toml") \
+        if (RESEARCH_DIR / "config_best.toml").exists() else config_base
+    if _is_noop_mutation(mutation, config_best):
+        print(f"  proposer: no-op mutation (value already set): "
+              f"{mutation.get('target')}:{mutation.get('name')}="
+              f"{mutation.get('value')}", file=sys.stderr)
+        return None
+    # Mandatory rotation enforcement. If one class dominates recent
+    # coverage, reject proposals in that class so caller falls back to
+    # random search (which is guaranteed to pick a different target
+    # eventually). Prompt-level hint alone hasn't been enough to break
+    # Gemma 4's rut; this is the backstop.
+    coverage = _recent_mutation_coverage(
+        RESEARCH_DIR / "results.tsv", n=15)
+    total = sum(coverage.values())
+    if total >= 10:
+        max_count = max(coverage.values())
+        if max_count / total >= 0.7:
+            dominant = max(coverage, key=lambda k: coverage[k])
+            if mutation.get("target") == dominant:
+                print(f"  proposer: mandatory rotation triggered — "
+                      f"'{dominant}' dominates recent coverage "
+                      f"({max_count}/{total}); rejecting same-class "
+                      f"proposal", file=sys.stderr)
+                return None
     return mutation
+
+
+def _is_noop_mutation(m: dict, config_best: dict) -> bool:
+    """Return True if the proposal sets a value equal to what's already
+    in config_best — a waste of a kernel run."""
+    target = m.get("target")
+    name = m.get("name", "")
+    value = m.get("value")
+    if target in ("knob", "harness_threshold", "admiral_detector"):
+        collection_key = {"knob": "knob",
+                          "harness_threshold": "harness_threshold",
+                          "admiral_detector": "admiral_detector"}[target]
+        for entry in config_best.get(collection_key, []):
+            if entry.get("name") == name:
+                current = entry.get("value", entry.get("default"))
+                try:
+                    return float(current) == float(value)
+                except (TypeError, ValueError):
+                    return current == value
+    if target == "env_flag":
+        current = (config_best.get("env_flags") or {}).get(name)
+        return current == value
+    return False
 
 
 def _validate_mutation(m: dict, config_base: dict) -> bool:

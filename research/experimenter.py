@@ -61,34 +61,84 @@ def write_toml(path: Path, data: dict) -> None:
         tomli_w.dump(data, f)
 
 
-def mutate_random(cfg: dict, rng: random.Random) -> tuple[dict, str]:
-    """Pick one mutable knob and propose a new value.
-
-    50/50 split between "sample uniformly across the full [min, max]
-    range" and "nudge by ±20% of the range around the current value".
-    Uniform catches distant optima; nudges refine nearby ones.
-    """
-    new = copy.deepcopy(cfg)
-    knobs = new.get("knob", [])
-    mutable_idxs = [i for i, k in enumerate(knobs)
-                    if k.get("mutable", True)]
-    if not mutable_idxs:
-        return new, "(no mutable knobs — noop)"
-    idx = rng.choice(mutable_idxs)
-    k = knobs[idx]
-    lo, hi = float(k["min"]), float(k["max"])
-    current = float(k.get("value", k["default"]))
+def _sample_numeric_mutation(entry: dict, rng: random.Random) -> float | int:
+    """Pick a new value for a numeric-range entry (knob, harness
+    threshold, admiral detector). 50/50 between uniform-over-bounds
+    and ±20 % nudge around the current value."""
+    lo, hi = float(entry["min"]), float(entry["max"])
+    current = float(entry.get("value", entry["default"]))
     if rng.random() < 0.5:
         val = rng.uniform(lo, hi)
     else:
         span = (hi - lo) * 0.2
         val = max(lo, min(hi, current + rng.uniform(-span, span)))
-    if isinstance(k["default"], int):
-        val = int(round(val))
-    else:
-        val = round(val, 3)
-    k["value"] = val
-    return new, f"random {k['name']}: {current} -> {val}"
+    if isinstance(entry.get("default"), int):
+        return int(round(val))
+    return round(val, 3)
+
+
+def mutate_random(cfg: dict, rng: random.Random,
+                  exclude_target: str | None = None) -> tuple[dict, str]:
+    """Pick one mutable entry across ALL classes (knob, harness_threshold,
+    admiral_detector, env_flag) and propose a change.
+
+    Previous version only sampled from `knob` — when mandatory rotation
+    rejected an LLM proposer's knob mutation, random fallback picked
+    another knob and nothing actually shifted. Now random picks a class
+    first (uniform), then an entry within it. Honors exclude_target so
+    the rotation caller can force diversification away from the
+    dominant class.
+
+    Prompts are intentionally NOT in the random surface — meaningful
+    prompt text can't be randomly sampled. LLM-only for that target.
+    """
+    new = copy.deepcopy(cfg)
+    # Build (target_class, entry) candidates
+    candidates: list[tuple[str, object]] = []
+    if exclude_target != "knob":
+        for k in new.get("knob", []):
+            if k.get("mutable", True):
+                candidates.append(("knob", k))
+    if exclude_target != "harness_threshold":
+        for h in new.get("harness_threshold", []):
+            if h.get("mutable", True):
+                candidates.append(("harness_threshold", h))
+    if exclude_target != "admiral_detector":
+        for d in new.get("admiral_detector", []):
+            if d.get("mutable", True):
+                candidates.append(("admiral_detector", d))
+    if exclude_target != "env_flag":
+        for name in (new.get("env_flags") or {}):
+            candidates.append(("env_flag", name))
+    if not candidates:
+        return new, "(no mutable targets — noop)"
+
+    # Uniform over candidates, NOT over classes. A class with more
+    # mutable entries gets proportionally more picks. Good: matches
+    # the declared surface. Bad: dominated by whichever section has
+    # the most entries. Counterbalanced by exclude_target when
+    # rotation is active.
+    target_class, entry = rng.choice(candidates)
+
+    if target_class == "env_flag":
+        # Binary flip on the current value. DRYDOCK_AUTO_CONTINUE_
+        # DISABLE is the only one we currently declare; it's "0" or
+        # "1". Generic flip is str("0" ↔ "1").
+        name = entry  # type: ignore
+        flags = new.setdefault("env_flags", {})
+        current = flags.get(name, "0")
+        new_value = "0" if current == "1" else "1"
+        flags[name] = new_value
+        return new, (f"random env_flag:{name}: "
+                     f"{current!r} -> {new_value!r}")
+
+    # Numeric mutation for knob / harness_threshold / admiral_detector
+    entry_dict = entry  # type: ignore
+    current = entry_dict.get("value", entry_dict["default"])
+    val = _sample_numeric_mutation(entry_dict, rng)
+    entry_dict["value"] = val
+    return new, (f"random {target_class}:{entry_dict['name']}: "
+                 f"{current} -> {val}")
 
 
 def mutate_opus(cfg: dict) -> tuple[dict, str] | None:
@@ -179,21 +229,51 @@ def mutate(cfg: dict, rng: random.Random, mode: str) -> tuple[dict, str]:
     DRYDOCK_RESEARCH_ALLOW_OPUS). `opus` only contacts the cloud if
     the operator explicitly set the env var; otherwise it behaves like
     `local` (which calls the on-box vLLM endpoint).
+
+    When the LLM proposer is rejected by mandatory rotation (because a
+    single target class has dominated recent coverage), the fallback
+    random mutator excludes that same class — so fallback actually
+    diversifies coverage instead of picking yet another knob.
     """
     if mode in ("opus", "local"):
-        # Hint to the proposer's transport preference via env var.
-        # propose() checks this before reaching for the cloud.
         if mode == "opus":
             os.environ["DRYDOCK_RESEARCH_ALLOW_OPUS"] = "1"
         else:
-            # Local mode: disable cloud fallback regardless of ambient env.
             os.environ["DRYDOCK_RESEARCH_ALLOW_OPUS"] = "0"
         r = mutate_opus(cfg)  # function name is historical; contract unchanged
         if r is not None:
             return r
         print(f"  {mode} mutator returned nothing; falling back to random",
               flush=True)
-    return mutate_random(cfg, rng)
+
+    # Compute rotation exclusion if a class dominates recent coverage.
+    exclude = _dominant_recent_class()
+    if exclude:
+        print(f"  random mutator: excluding dominant class '{exclude}' "
+              f"to diversify coverage", flush=True)
+    return mutate_random(cfg, rng, exclude_target=exclude)
+
+
+def _dominant_recent_class() -> str | None:
+    """Mirror of proposer._recent_mutation_coverage's logic: if a
+    single class has ≥70 % of the last 15 experiments, return its
+    name. Used by the random fallback to exclude it."""
+    try:
+        sys.path.insert(0, str(RESEARCH_DIR))
+        import proposer  # type: ignore
+    except ImportError:
+        return None
+    coverage = proposer._recent_mutation_coverage(
+        RESEARCH_DIR / "results.tsv", n=15)
+    total = sum(coverage.values())
+    if total < 10:
+        return None
+    if not coverage:
+        return None
+    dominant = max(coverage, key=lambda k: coverage[k])
+    if coverage[dominant] / total >= 0.7:
+        return dominant
+    return None
 
 
 def read_metric_for(results_tsv: Path, exp_id: str) -> float:
@@ -331,15 +411,57 @@ def main() -> int:
 
         print(f"\n[{n}] {exp_id} | mutate: {desc}", flush=True)
         metric = run_kernel(staged, args.results_tsv, exp_id, desc)
-        if metric > best_metric:
-            print(f"  PROMOTE: {metric:.3f} > best {best_metric:.3f}",
-                  flush=True)
-            shutil.copy2(staged, CONFIG_BEST)
-            best_cfg = variant
-            best_metric = metric
-        else:
+
+        if metric <= best_metric:
+            # Didn't beat current best on first run — don't bother
+            # replicating a likely-mediocre config.
             print(f"  keep best ({best_metric:.3f} >= {metric:.3f})",
                   flush=True)
+        else:
+            # First run beat current best. Before promoting, replicate
+            # twice more and take the median. The metric cliff (>50%
+            # failure → 0.0) produces noisy single-samples that
+            # previously promoted lucky configs and stayed there. The
+            # plateau at 4.725 on the local run was partially from
+            # one-shot noise: recent exps on the same proposal scored
+            # 0.000 / 4.151 / 4.609 — same config, wildly different
+            # outcomes. Median-of-3 is the cheapest filter.
+            print(f"  R1 beat best ({metric:.3f} > {best_metric:.3f}); "
+                  f"replicating to confirm", flush=True)
+            replicates = [metric]
+            for rep in (2, 3):
+                if _stop or STOP_SENTINEL.exists():
+                    break
+                # Brief cooldown between replicates.
+                for _ in range(int(args.cooldown_s * 10)):
+                    if _stop:
+                        break
+                    time.sleep(0.1)
+                if _stop:
+                    break
+                rep_exp_id = f"{exp_id}_rep{rep}"
+                rep_metric = run_kernel(staged, args.results_tsv,
+                                        rep_exp_id, f"{desc} [rep{rep}]")
+                replicates.append(rep_metric)
+                print(f"    R{rep}: {rep_metric:.3f} "
+                      f"(replicates so far: {replicates})",
+                      flush=True)
+            if len(replicates) >= 2:
+                sorted_reps = sorted(replicates)
+                median = sorted_reps[len(sorted_reps) // 2]
+            else:
+                median = replicates[0]
+            if median > best_metric:
+                print(f"  PROMOTE: median {median:.3f} > best "
+                      f"{best_metric:.3f} across {len(replicates)} runs",
+                      flush=True)
+                shutil.copy2(staged, CONFIG_BEST)
+                best_cfg = variant
+                best_metric = median
+            else:
+                print(f"  HOLD: R1 was lucky. median {median:.3f} "
+                      f"across {len(replicates)} runs ≤ best "
+                      f"{best_metric:.3f}", flush=True)
 
         # Small cooldown so successive kernels don't hammer vLLM.
         for _ in range(int(args.cooldown_s * 10)):

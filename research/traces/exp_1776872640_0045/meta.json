@@ -1,0 +1,859 @@
+{
+  "session_id": "479cadac-cd89-4d12-9fb4-275fb8c8cc9d",
+  "start_time": "2026-04-22T15:44:05.705984+00:00",
+  "end_time": "2026-04-22T15:48:50.206484+00:00",
+  "git_commit": null,
+  "git_branch": null,
+  "environment": {
+    "working_directory": "/tmp/research_exp_1776872640_0045/cwd"
+  },
+  "username": "bobef",
+  "stats": {
+    "steps": 76,
+    "session_prompt_tokens": 157289,
+    "session_completion_tokens": 1151,
+    "tool_calls_agreed": 8,
+    "tool_calls_rejected": 0,
+    "tool_calls_failed": 1,
+    "tool_calls_succeeded": 7,
+    "context_tokens": 7081,
+    "last_turn_prompt_tokens": 7055,
+    "last_turn_completion_tokens": 26,
+    "last_turn_duration": 1.4580370117910206,
+    "tokens_per_second": 17.832194786373886,
+    "input_price_per_million": 0.0,
+    "output_price_per_million": 0.0,
+    "session_total_llm_tokens": 158440,
+    "last_turn_total_tokens": 7081,
+    "session_cost": 0.0
+  },
+  "title": "Read PRD.md and write mini_cli.py implementing it.…",
+  "total_messages": 57,
+  "tools_available": [
+    {
+      "type": "function",
+      "function": {
+        "name": "glob",
+        "description": "Find files matching a glob pattern. Fast file discovery.",
+        "parameters": {
+          "properties": {
+            "pattern": {
+              "description": "Glob pattern (e.g., '**/*.py', 'src/**/*.ts')",
+              "type": "string"
+            },
+            "path": {
+              "default": ".",
+              "description": "Directory to search in",
+              "type": "string"
+            }
+          },
+          "required": [
+            "pattern"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "bash",
+        "description": "Run a one-off bash command and capture its output.",
+        "parameters": {
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "timeout": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Override the default command timeout."
+            }
+          },
+          "required": [
+            "command"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "cron_create",
+        "description": "Schedule a prompt to run on a recurring interval.",
+        "parameters": {
+          "properties": {
+            "prompt": {
+              "description": "The prompt to run on schedule",
+              "type": "string"
+            },
+            "interval_minutes": {
+              "default": 10,
+              "description": "Interval in minutes between runs",
+              "type": "integer"
+            },
+            "name": {
+              "default": "",
+              "description": "Optional name for the cron job",
+              "type": "string"
+            },
+            "max_runs": {
+              "default": 0,
+              "description": "Max runs (0 = unlimited)",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "cron_list",
+        "description": "List all scheduled cron jobs.",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "cron_delete",
+        "description": "Delete a scheduled cron job.",
+        "parameters": {
+          "properties": {
+            "cron_id": {
+              "description": "ID of the cron job to delete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "cron_id"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "read_file",
+        "description": "Read a UTF-8 file, returning content from a specific line range. Reading is capped by a byte limit for safety.",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "offset": {
+              "default": 0,
+              "description": "Line number to start reading from (0-indexed, inclusive).",
+              "type": "integer"
+            },
+            "limit": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Maximum number of lines to read."
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "notebook_edit",
+        "description": "Edit a cell in a Jupyter notebook (.ipynb file).",
+        "parameters": {
+          "properties": {
+            "path": {
+              "description": "Path to the .ipynb file",
+              "type": "string"
+            },
+            "cell_index": {
+              "description": "Cell index to edit (0-based)",
+              "type": "integer"
+            },
+            "new_source": {
+              "description": "New source content for the cell",
+              "type": "string"
+            },
+            "cell_type": {
+              "default": "code",
+              "description": "Cell type: 'code' or 'markdown'",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "cell_index",
+            "new_source"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "web_fetch",
+        "description": "Fetch content from a URL. Converts HTML to markdown for readability.",
+        "parameters": {
+          "properties": {
+            "url": {
+              "description": "URL to fetch (http/https)",
+              "type": "string"
+            },
+            "timeout": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Timeout in seconds (max 120)"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "exit_plan_mode",
+        "description": "Signal that your plan is complete and you are ready to start implementing. This will ask the user to confirm switching from plan mode to accept-edits mode. Only use this tool when you have finished writing your plan to the plan file and are ready for user approval to begin implementation.",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "list_mcp_resources",
+        "description": "List resources available from MCP servers.",
+        "parameters": {
+          "properties": {
+            "server_name": {
+              "default": "",
+              "description": "MCP server name (empty = all servers)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "read_mcp_resource",
+        "description": "Read a resource from an MCP server by URI.",
+        "parameters": {
+          "properties": {
+            "uri": {
+              "description": "Resource URI to read",
+              "type": "string"
+            },
+            "server_name": {
+              "default": "",
+              "description": "MCP server name (required if multiple servers)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "uri"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "lsp",
+        "description": "Language server integration: type checking, go-to-definition, find-references, list symbols. Requires pyright or similar LSP.",
+        "parameters": {
+          "properties": {
+            "action": {
+              "description": "Action: 'diagnostics', 'definition', 'references', 'symbols', 'hover'",
+              "type": "string"
+            },
+            "file": {
+              "description": "File path",
+              "type": "string"
+            },
+            "line": {
+              "default": 0,
+              "description": "Line number (0-based, for definition/references/hover)",
+              "type": "integer"
+            },
+            "column": {
+              "default": 0,
+              "description": "Column number (0-based)",
+              "type": "integer"
+            },
+            "symbol": {
+              "default": "",
+              "description": "Symbol name (for symbols action)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "file"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "web_search",
+        "description": "Search the web directly without an API key to find current information.",
+        "parameters": {
+          "properties": {
+            "query": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "write_file",
+        "description": "Create or overwrite a UTF-8 file. Fails if file exists unless 'overwrite=True'.",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            },
+            "overwrite": {
+              "default": true,
+              "description": "Whether to overwrite an existing file.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "search_replace",
+        "description": "Replace sections of files using SEARCH/REPLACE blocks. Supports fuzzy matching and detailed error reporting. Format: <<<<<<< SEARCH\\n[text]\\n=======\\n[replacement]\\n>>>>>>> REPLACE",
+        "parameters": {
+          "properties": {
+            "file_path": {
+              "default": "",
+              "description": "Path to the file to edit",
+              "type": "string"
+            },
+            "content": {
+              "default": "",
+              "description": "SEARCH/REPLACE blocks or JSON with old_string/new_string",
+              "type": "string"
+            },
+            "old_string": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Text to find (alternative to content blocks)"
+            },
+            "new_string": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Replacement text (alternative to content blocks)"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "grep",
+        "description": "Recursively search files for a regex pattern using ripgrep (rg) or grep. Respects .gitignore and .codeignore files by default when using ripgrep.",
+        "parameters": {
+          "properties": {
+            "pattern": {
+              "type": "string"
+            },
+            "path": {
+              "default": ".",
+              "type": "string"
+            },
+            "max_matches": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Override the default maximum number of matches."
+            },
+            "use_default_ignore": {
+              "default": true,
+              "description": "Whether to respect .gitignore and .ignore files.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "pattern"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "task",
+        "description": "Delegate a task to a subagent for independent execution. Useful for exploration, research, or parallel work that doesn't require user interaction. The subagent runs in-memory and saves interaction logs.",
+        "parameters": {
+          "properties": {
+            "task": {
+              "description": "The task to delegate to the subagent",
+              "type": "string"
+            },
+            "agent": {
+              "default": "explore",
+              "description": "Name of the agent profile to use (must be a subagent)",
+              "type": "string"
+            },
+            "background": {
+              "default": false,
+              "description": "Run in background (non-blocking). Results available via task_list.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "task"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "enter_worktree",
+        "description": "Create an isolated git worktree for parallel work.",
+        "parameters": {
+          "properties": {
+            "branch": {
+              "default": "",
+              "description": "Branch name for the worktree (auto-generated if empty)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "exit_worktree",
+        "description": "Exit the current git worktree and return to main directory.",
+        "parameters": {
+          "properties": {
+            "cleanup": {
+              "default": false,
+              "description": "Remove the worktree after exiting",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      }
+    }
+  ],
+  "config": {
+    "active_model": "local",
+    "vim_keybindings": false,
+    "disable_welcome_banner_animation": false,
+    "autocopy_to_clipboard": true,
+    "file_watcher_for_autocomplete": false,
+    "displayed_workdir": "",
+    "context_warnings": true,
+    "auto_approve": false,
+    "enable_telemetry": true,
+    "system_prompt_id": "ralph",
+    "include_commit_signature": true,
+    "include_model_info": true,
+    "include_project_context": true,
+    "include_prompt_detail": true,
+    "slim_system_prompt": true,
+    "enable_update_checks": true,
+    "enable_auto_update": true,
+    "enable_notifications": true,
+    "api_timeout": 600.0,
+    "auto_compact_threshold": 120000,
+    "consultant_model": "",
+    "providers": [
+      {
+        "name": "vllm",
+        "api_base": "http://localhost:8001/v1",
+        "api_key_env_var": "",
+        "api_style": "openai",
+        "backend": "generic",
+        "reasoning_field_name": "reasoning_content",
+        "project_id": "",
+        "region": ""
+      }
+    ],
+    "models": [
+      {
+        "name": "gemma4",
+        "provider": "vllm",
+        "alias": "local",
+        "temperature": 0.2,
+        "input_price": 0.0,
+        "output_price": 0.0,
+        "thinking": "high",
+        "auto_compact_threshold": 80000
+      }
+    ],
+    "project_context": {
+      "default_commit_count": 5,
+      "max_doc_bytes": 32768,
+      "timeout_seconds": 2.0
+    },
+    "session_logging": {
+      "save_dir": "/tmp/research_exp_1776872640_0045/home/.vibe/logs/session",
+      "session_prefix": "session",
+      "enabled": true
+    },
+    "tools": {
+      "bash": {
+        "permission": "always",
+        "allowlist": [
+          "echo",
+          "git diff",
+          "git log",
+          "git status",
+          "git add",
+          "git commit",
+          "git branch",
+          "git checkout",
+          "git stash",
+          "tree",
+          "whoami",
+          "cat",
+          "file",
+          "head",
+          "ls",
+          "pwd",
+          "stat",
+          "tail",
+          "uname",
+          "wc",
+          "which",
+          "python3",
+          "python",
+          "pip",
+          "pip3",
+          "mkdir",
+          "touch",
+          "cp",
+          "mv",
+          "rm",
+          "chmod",
+          "find",
+          "grep",
+          "sort",
+          "uniq",
+          "diff",
+          "curl",
+          "wget",
+          "pytest",
+          "mypy",
+          "ruff",
+          "black",
+          "cd",
+          "env",
+          "export",
+          "source",
+          "git show",
+          "git ls-files",
+          "git grep",
+          "git remote",
+          "git rev-parse",
+          "git blame",
+          "git config --get",
+          "git tag",
+          "git stash list",
+          "rg",
+          "fd",
+          "fdfind",
+          "ag",
+          "cmp",
+          "awk",
+          "cut",
+          "tr",
+          "basename",
+          "dirname",
+          "realpath",
+          "readlink",
+          "date",
+          "id",
+          "hostname",
+          "printenv",
+          "du",
+          "df",
+          "ps",
+          "free",
+          "uptime",
+          "pip install",
+          "pip list",
+          "pip show",
+          "pip freeze",
+          "pip check",
+          "pip install -e",
+          "pip install -r",
+          "conda install -y",
+          "conda list",
+          "conda info",
+          "conda env list",
+          "conda run",
+          "conda create -y",
+          "python -m pip",
+          "python3 -m pip",
+          "python -m pytest",
+          "python3 -m pytest",
+          "python -c",
+          "python3 -c",
+          "make",
+          "tox"
+        ],
+        "denylist": [
+          "gdb",
+          "pdb",
+          "passwd",
+          "nano",
+          "vim",
+          "vi",
+          "emacs",
+          "bash -i",
+          "sh -i",
+          "zsh -i",
+          "fish -i",
+          "dash -i",
+          "screen",
+          "tmux"
+        ],
+        "max_output_bytes": 16000,
+        "default_timeout": 300,
+        "denylist_standalone": [
+          "python",
+          "python3",
+          "ipython",
+          "bash",
+          "sh",
+          "nohup",
+          "vi",
+          "vim",
+          "emacs",
+          "nano",
+          "su"
+        ]
+      },
+      "todo": {
+        "permission": "always",
+        "allowlist": [],
+        "denylist": [],
+        "max_todos": 100
+      },
+      "read_file": {
+        "permission": "always",
+        "allowlist": [],
+        "denylist": [],
+        "max_read_bytes": 64000
+      },
+      "web_fetch": {
+        "permission": "ask",
+        "allowlist": [],
+        "denylist": [],
+        "default_timeout": 30,
+        "max_timeout": 120,
+        "max_content_bytes": 512000,
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      },
+      "web_search": {
+        "permission": "ask",
+        "allowlist": [],
+        "denylist": [],
+        "timeout": 120,
+        "model": "mistral-vibe-cli-with-tools"
+      },
+      "write_file": {
+        "permission": "always",
+        "allowlist": [],
+        "denylist": [],
+        "max_write_bytes": 64000,
+        "create_parent_dirs": true
+      },
+      "search_replace": {
+        "permission": "always",
+        "allowlist": [],
+        "denylist": [],
+        "max_content_size": 100000,
+        "create_backup": false,
+        "fuzzy_threshold": 0.9
+      },
+      "grep": {
+        "permission": "always",
+        "allowlist": [],
+        "denylist": [],
+        "max_output_bytes": 64000,
+        "default_max_matches": 100,
+        "default_timeout": 60,
+        "exclude_patterns": [
+          ".venv/",
+          "venv/",
+          ".env/",
+          "env/",
+          "node_modules/",
+          ".git/",
+          "__pycache__/",
+          ".pytest_cache/",
+          ".mypy_cache/",
+          ".tox/",
+          ".nox/",
+          ".coverage/",
+          "htmlcov/",
+          "dist/",
+          "build/",
+          ".idea/",
+          ".vscode/",
+          "*.egg-info",
+          "*.pyc",
+          "*.pyo",
+          "*.pyd",
+          ".DS_Store",
+          "Thumbs.db"
+        ],
+        "codeignore_file": ".vibeignore"
+      },
+      "task": {
+        "permission": "always",
+        "allowlist": [
+          "explore",
+          "diagnostic",
+          "planner",
+          "builder"
+        ],
+        "denylist": []
+      },
+      "ask_user_question": {
+        "permission": "always",
+        "allowlist": [],
+        "denylist": []
+      }
+    },
+    "tool_paths": [],
+    "mcp_servers": [
+      {
+        "name": "ralph",
+        "prompt": null,
+        "startup_timeout_sec": 10.0,
+        "tool_timeout_sec": 60.0,
+        "sampling_enabled": true,
+        "transport": "stdio",
+        "command": "python3",
+        "args": [
+          "/data3/test_mistral_cli/mcp_server/server.py"
+        ],
+        "env": {}
+      }
+    ],
+    "enabled_tools": [],
+    "disabled_tools": [],
+    "agent_paths": [],
+    "enabled_agents": [],
+    "disabled_agents": [],
+    "skill_paths": [],
+    "enabled_skills": [],
+    "disabled_skills": []
+  },
+  "agent_profile": {
+    "name": "default",
+    "overrides": {}
+  },
+  "system_prompt": {
+    "role": "system",
+    "content": "You are DryDock, a CLI coding agent. You write code, fix bugs, and build projects.\n\nACT IMMEDIATELY. Your FIRST response must be a tool call — not text. Do NOT explain, plan, or ask. Call a tool NOW.\n\nYour tools: read_file, write_file, search_replace, grep, glob, bash, task, web_search, web_fetch.\n\nWHEN TO USE WEB TOOLS (use sparingly, NOT for every task):\n- Stuck on an error you've tried to fix 2+ times without progress: `web_search` for the exact error message\n- Need an API example you don't remember (e.g. \"how do I parse TOML with stdlib?\"): `web_search`\n- Found a URL to a relevant SO post or doc page: `web_fetch` to read it\n- DO NOT web-search for things you already know how to do. Write the code first.\n\nDELEGATION (only for genuinely large tasks)\n\nFor tasks that need you to write 6+ source files OR have subdirectories\n(e.g. \"build the X package from PRD.md\" with multiple subpackages),\nDELEGATE the build to a subagent so the main agent's context stays small.\nThe Gemma 4 main loop slows down with bigger context — subagents work in\ntheir own scratch space.\n\n  task(agent=\"builder\", task=\"Read PRD.md and build the entire <pkg> package. \"\n                              \"Write every file the PRD lists. Verify \"\n                              \"python3 -m <pkg> --help works. Stop when \"\n                              \"the package executes cleanly.\")\n\nFor codebase exploration on an existing repo:\n  task(agent=\"explore\", task=\"Find where <function> is defined\")\n\nFor debugging a test failure or traceback:\n  task(agent=\"diagnostic\", task=\"A bash command failed with this traceback: ... \"\n                                \"Find the bug and report the file:line.\")\n\nFor multi-module changes that need a plan first:\n  task(agent=\"planner\", task=\"Plan the change: ...\")\n\nDO NOT delegate trivial work. Most PRDs are small — build them directly.\nRules of thumb:\n- 1-8 files → BUILD INLINE. Do not call task.\n- 9+ files with multiple subdirectories → DELEGATE to builder.\n- Editing an existing file or fixing a known bug → BUILD INLINE.\n- \"Where does function X live?\" → DELEGATE to explore.\n- If the user asks you to PLAN or EXPLAIN → respond with text. Do not delegate.\n\nWhen in doubt, build inline. A wasted delegation costs 60-90 seconds of\nextra context loading.\n\nWorkflow for building from a PRD or spec (when NOT delegating):\n1. Read the spec file\n2. Create each file with write_file — start with __init__.py and __main__.py\n3. After all files, verify with bash: ls package_name/ to confirm all files exist\n4. Test with bash: python3 -m package_name --help\n5. Test each subcommand from the PRD to verify it works\n6. Fix any errors\n\nWorkflow for fixing bugs:\n1. Grep for the function/class mentioned\n2. Read the source file\n3. Fix with search_replace\n4. Verify the fix\n\nRules:\n- Create files immediately. Do not plan or discuss — write code.\n- Use absolute imports for Python packages\n- Always create __init__.py and __main__.py for packages\n- Keep responses under 50 words. Code speaks for itself.\n- When you DO write text for the user (summaries, reviews, explanations),\n  format with real markdown: blank line between paragraphs, `-` bullets,\n  numbered lists on their own lines. Never run \"Changes: 1. Did X 2. Did Y\"\n  inline — put each numbered item on its own line.\n- NEVER ask \"would you like me to proceed\" or \"shall I continue\" — JUST DO IT.\n- NEVER stop to report progress or ask for confirmation between steps.\n- KNOW WHEN TO STOP. Two modes, and you must not confuse them:\n  * TODO MODE: if you created a todo list via the `todo` tool, or the\n    user gave a multi-step request (\"build the package\", \"plan then\n    build\", \"fix all the failing tests\"), execute ALL items without\n    pausing. Only stop when every item is done.\n  * SIMPLE MODE: if the user gave a single request (\"fix this bug\",\n    \"add this method\", \"explain how X works\"), do exactly that and\n    stop. Do NOT invent follow-up work (\"let me also add a test\",\n    \"let me refactor this too\") the user did not ask for. One ask,\n    one answer, then silence until the next prompt.\n  If you are about to do something the user did not explicitly ask\n  for, stop and let the user drive the next step.\n- Follow the EXACT CLI interface specified in the PRD. Match argument names, subcommands, and flags exactly.\n- Every subcommand in the PRD must have a working handler — not just argparse registration.\n- NEVER write `class X: def method(self): pass` inline in cli.py or __main__.py to silence ModuleNotFoundError. Write the REAL class in its own file (e.g. `interpreter.py`) and import it. Stub classes pass `--help` but fail every real task.\n- After creating files, run python3 -m package_name [subcommand] to verify each one works.\n- If you have a todo list, update it after completing each major step\n  (e.g. after building all files, after tests pass). Use todo(action=\"write\")\n  to mark items as done.\n- If a write_file result says \"BLOCKED:\" you've called it 3+ times with identical content. STOP that path. Write a DIFFERENT file or run bash. Never retry the blocked write.\n\nTEST QUALITY — THIS IS LOAD-BEARING. Writing or accepting weak tests\nmeans the build LOOKS good but IS broken. Strong tests prevent that.\n\nWhen you write or generate tests:\n\n1. **Exact match, not keyword grep.** Replace `grep -q \"prime\"` with\n   `[ \"$OUT\" = \"17 is prime\" ]`. `grep -q \"14\"` passes for \"14.0\" too;\n   that's a bug masker. Use `=` for exact lines, `diff` for multi-line.\n\n2. **Roundtrip properties.** Invertible operations get a self-test:\n   `decrypt(encrypt(x)) == x` for every cipher, `parse(serialize(x)) == x`\n   for data formats, `decode(encode(x)) == x`. These are impossible to\n   cheat — broken code fails immediately.\n\n3. **Hermetic fixtures.** Every stateful test (init/add/commit, create/\n   read, config write) MUST run in `/tmp/<name>_$$/` with\n   `rm -rf` before creation. NEVER trust `pwd` state from prior runs —\n   it hides bugs in init/create paths.\n\n4. **State sequences.** For stateful tools: after `add X` the `list`\n   MUST show X, after `delete X` the `list` MUST NOT. Test the\n   PROPERTY, not just the return code.\n\n5. **Error cases.** Division by zero, invalid input, missing file,\n   permission denied — each must produce a *specific* observable\n   error, not silently return 0 or empty.\n\n6. **Don't reuse 412-suite patterns for new work.** `[ -n \"$OUT\" ] &&\n   ! echo \"$OUT\" | grep -q \"Traceback\"` is a floor check, not a\n   feature test. Every test you write should tie to a real contract\n   from the PRD.\n\nWhen you RUN tests and they pass:\n- Run the \"strong_tests.sh\" if one exists in the PRD dir — that's\n  the real bar. The generated `functional_tests.sh` is a weak floor.\n- If only `functional_tests.sh` exists, spot-check 2-3 tests\n  manually by running the command and reading the output. If the\n  output looks wrong, write a stronger test.\n\nWhen you're asked to BUILD a package: always also write a\n`strong_tests.sh` that exercises the PRD's specific examples and\nroundtrip/state properties. A package with only `functional_tests.sh`\nis not finished.\n\nWhen you want to commit changes, you will always use the 'git commit' bash command.\nIt will always be suffixed with a line telling it was generated by Drydock with the appropriate co-authoring information.\nThe format you will always uses is the following heredoc.\n\n```bash\ngit commit -m <Commit message here>\n\nGenerated by Drydock.\nCo-Authored-By: Drydock <drydock@localhost>\n```\n\nYour model name is: `local`\n\nThe operating system is Linux with shell `/bin/bash`\n\nAbsolute path: /tmp/research_exp_1776872640_0045/cwd\n\ngitStatus: This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation.\nNot a git repository or git not available",
+    "reasoning_content": null,
+    "reasoning_signature": null,
+    "tool_calls": null,
+    "name": null,
+    "tool_call_id": null,
+    "message_id": "02d67ea7-4850-4c39-8ea9-673c7b2b8b7c"
+  }
+}

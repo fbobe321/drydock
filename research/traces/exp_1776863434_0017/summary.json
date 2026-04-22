@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776863434_0017",
+  "ts": 1776863731,
+  "git_commit": "e81b007",
+  "config_sha": "5b7880ae3c",
+  "metric": 4.1598,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 288.48,
+  "note": "llm prompt:gemma4 -> [35 chars] (Traces show Gemma 4 frequently hijacks the loop with 'Previous turn ended; awaiting your next instruction' after tool calls, causing context drift. Removing the 'if the user asks you to PLAN or EXPLAI)"
+}

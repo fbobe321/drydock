@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776859467_0005",
+  "ts": 1776859775,
+  "git_commit": "e81b007",
+  "config_sha": "4a1daa0cbc",
+  "metric": 3.89,
+  "done": 19,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 293.06,
+  "note": "llm prompt:gemma4 -> [1466 chars] (Trace analysis shows Gemma 4 frequently interrupts productive tool-use chains with 'Previous turn ended; awaiting your next instruction.' By stripping verbose/instructional weight and tightening the ')"
+}

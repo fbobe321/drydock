@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776858788_0003",
+  "ts": 1776859088,
+  "git_commit": "e81b007",
+  "config_sha": "339fa2ce22",
+  "metric": 3.5018,
+  "done": 17,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 17,
+  "elapsed_s": 291.28,
+  "note": "llm prompt:gemma4 -> [225 chars] (Traces show the 'Previous turn ended' hijack occurs when Gemma 4 gets stuck in repetitive tool-use or investigation loops. Strengthening the 'Break Loops' logic in the prompt targets the root cause.)"
+}

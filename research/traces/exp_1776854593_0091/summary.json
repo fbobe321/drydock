@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776854593_0091",
+  "ts": 1776854916,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.1514,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 289.06,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use lower struggle_thresholds to prevent the 'Previous turn ended' hijack from prematurely cutting off productive multi-tool sequences during long chains.)"
+}

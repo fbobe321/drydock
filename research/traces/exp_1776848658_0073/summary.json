@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776848658_0073",
+  "ts": 1776848948,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.5871,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 287.76,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) increased struggle_threshold to prevent premature admiral intervention during long tool-use chains where the model needs more breathing room before being flagged as stu)"
+}

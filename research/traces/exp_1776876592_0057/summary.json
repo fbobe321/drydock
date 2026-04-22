@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776876592_0057",
+  "ts": 1776876886,
+  "git_commit": "e81b007",
+  "config_sha": "06bdca8d44",
+  "metric": 4.3105,
+  "done": 21,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 21,
+  "elapsed_s": 292.31,
+  "note": "llm knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs when the model enters long investigation/Q&A sequences. Lowering struggle_threshold from 40 to 20 prevents premature admiral intervention.)"
+}

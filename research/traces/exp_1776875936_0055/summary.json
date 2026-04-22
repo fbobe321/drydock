@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776875936_0055",
+  "ts": 1776876234,
+  "git_commit": "e81b007",
+  "config_sha": "06bdca8d44",
+  "metric": 3.8437,
+  "done": 19,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 296.59,
+  "note": "llm knob:struggle_threshold -> 20 (Traces show 'Previous turn ended' hijacks occurring after ~40 tool calls in long investigation sequences. Lowering struggle_threshold to 20 prevents early admiral intervention in productive flows.)"
+}

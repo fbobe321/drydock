@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776854946_0092",
+  "ts": 1776855234,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.6093,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 286.38,
+  "note": "opus knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs during long tool chains. Top performers (exp_0004, 0062) use lower struggle_thresholds to prevent premature Admiral intervention.)"
+}

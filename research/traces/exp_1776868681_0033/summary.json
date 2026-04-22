@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776868681_0033",
+  "ts": 1776868980,
+  "git_commit": "e81b007",
+  "config_sha": "986aab8875",
+  "metric": 3.7544,
+  "done": 18,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 18,
+  "elapsed_s": 287.66,
+  "note": "llm prompt:gemma4 -> [416 chars] (Traces show a recurring 'Previous turn ended' hijack in long tool-use chains (e.g., exp_0004, 0062) where the model repeats previous states or stalls. Strengthening the prompt to focus on plan continu)"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776861147_0010",
+  "ts": 1776861442,
+  "git_commit": "e81b007",
+  "config_sha": "25c2f4229c",
+  "metric": 3.8932,
+  "done": 19,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 292.82,
+  "note": "llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) use lower struggle_threshold (20-25) to prevent 'Previous turn ended' hijacks during long sequences, while bottom runs suffer from premature or late intervention.)"
+}

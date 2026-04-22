@@ -87,3 +87,88 @@ ts	exp_id	git_commit	config_sha	metric	done	skip	timeout	recycle	elapsed_s	note
 1776847628	exp_1776847333_0069	359b180	06bdca8d44	4.128	20	0	0	0	290.7	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent early
 1776847947	exp_1776847658_0070	359b180	06bdca8d44	0.000	1	5	0	0	287.0	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show 'Previous turn ended' hijacks after long tool c
 1776848308	exp_1776847977_0071	359b180	06bdca8d44	4.124	20	0	0	0	291.0	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) reduced struggle_threshold to 20, whereas bottom per
+1776848628	exp_1776848338_0072	359b180	06bdca8d44	4.159	20	0	0	0	288.5	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show 'Previous turn ended' hijacks occurring during 
+1776848948	exp_1776848658_0073	359b180	06bdca8d44	4.587	22	0	0	0	287.8	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) increased struggle_threshold to prevent premature ad
+1776849273	exp_1776848978_0074	359b180	06bdca8d44	4.133	20	0	0	0	290.3	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) both lowered struggle_threshold to 20, preventing ea
+1776849594	exp_1776849303_0075	359b180	06bdca8d44	4.562	22	0	0	0	289.3	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show 'Previous turn ended' hijacks during long tool 
+1776849914	exp_1776849624_0076	359b180	06bdca8d44	4.165	20	0	0	0	288.1	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) correlate with lower struggle_threshold (20) compare
+1776850240	exp_1776849944_0077	359b180	06bdca8d44	4.196	20	0	0	0	286.0	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) compared to the 
+1776850565	exp_1776850270_0078	359b180	06bdca8d44	4.094	20	0	0	0	293.1	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show the 'Previous turn ended' hijack occurs during 
+1776850929	exp_1776850595_0079	359b180	06bdca8d44	0.000	5	5	0	0	331.9	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show the 'Previous turn ended' hijack occurs during 
+1776851282	exp_1776850959_0080	359b180	06bdca8d44	4.105	20	0	0	0	292.3	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the '
+1776851608	exp_1776851313_0081	359b180	25c2f4229c	4.500	22	0	0	0	293.4	opus knob:struggle_threshold -> 25 (Traces show a recurring 'Previous turn ended' hijack during long tool sequences (40+
+1776851925	exp_1776851638_0082	359b180	06bdca8d44	4.197	20	0	0	0	285.9	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the '
+1776852250	exp_1776851956_0083	359b180	06bdca8d44	4.513	22	0	0	0	292.5	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show 'Previous turn ended' hijacks occurring after l
+1776852572	exp_1776852280_0084	359b180	06bdca8d44	4.139	20	0	0	0	289.9	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) suggest that increasing struggle_threshold to 20 pre
+1776852890	exp_1776852602_0085	359b180	06bdca8d44	4.614	22	0	0	0	286.1	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold to prevent the 'Previ
+1776853220	exp_1776852920_0086	359b180	06bdca8d44	4.130	20	0	0	0	290.6	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold to mitigate the 'Prev
+1776853546	exp_1776853250_0087	359b180	06bdca8d44	4.287	21	0	0	0	293.9	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use lower struggle_threshold (20) to prevent early a
+1776853874	exp_1776853576_0088	359b180	06bdca8d44	4.154	20	0	0	0	288.9	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use lower struggle_threshold (20) to prevent the 'Pr
+1776854199	exp_1776853904_0089	359b180	06bdca8d44	4.299	21	0	0	0	293.1	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use lower struggle_threshold (20) than current-best 
+1776854563	exp_1776854229_0090	359b180	06bdca8d44	0.000	5	5	0	0	332.2	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use lower struggle_thresholds (20) to prevent the 'P
+1776854916	exp_1776854593_0091	359b180	06bdca8d44	4.151	20	0	0	0	289.1	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use lower struggle_thresholds to prevent the 'Previo
+1776855234	exp_1776854946_0092	359b180	06bdca8d44	4.609	22	0	0	0	286.4	opus knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs during long tool chains. Top per
+1776855567	exp_1776855264_0093	359b180	06bdca8d44	4.290	21	0	0	0	293.7	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the '
+1776855975	exp_1776855674_0001	23c6e75	06bdca8d44	4.105	20	0	0	0	292.3	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold of 20 to prevent the '
+1776856294	exp_1776856005_0002	23c6e75	06bdca8d44	4.170	20	0	0	0	287.8	llm knob:struggle_threshold -> 20 (Top performers (0004, 0062) use a lower struggle_threshold (20) to prevent the 'Previ
+1776856625	exp_1776856324_0003	23c6e75	06bdca8d44	4.535	22	0	0	0	291.1	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use 20 to prevent the 'Previous turn ended' hijack th
+1776856947	exp_1776856655_0004	23c6e75	06bdca8d44	4.544	22	0	0	0	290.5	llm knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs during long tool-use chains. Redu
+1776857269	exp_1776856978_0005	23c6e75	06bdca8d44	4.558	22	0	0	0	289.6	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776857596	exp_1776857299_0006	23c6e75	06bdca8d44	4.263	21	0	0	0	295.5	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous tu
+1776858423	exp_1776858128_0001	e81b007	badc3a0146	4.399	21	0	0	0	286.4	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 4
+1776858758	exp_1776858453_0002	e81b007	f7fa814d44	4.251	21	0	0	0	296.4	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 3
+1776859088	exp_1776858788_0003	e81b007	339fa2ce22	3.502	17	0	0	0	291.3	llm prompt:gemma4 -> [225 chars] (Traces show the 'Previous turn ended' hijack occurs when Gemma 4 gets stuck in repetit
+1776859437	exp_1776859118_0004	e81b007	31d75084e6	4.280	21	0	0	0	294.4	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 6
+1776859775	exp_1776859467_0005	e81b007	4a1daa0cbc	3.890	19	0	0	0	293.1	llm prompt:gemma4 -> [1466 chars] (Trace analysis shows Gemma 4 frequently interrupts productive tool-use chains with 'P
+1776860102	exp_1776859805_0006	e81b007	06bdca8d44	0.000	1	5	0	0	288.8	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776860465	exp_1776860132_0007	e81b007	06bdca8d44	4.322	21	0	0	0	291.6	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776860798	exp_1776860495_0008	e81b007	25c2f4229c	4.478	22	0	0	0	294.8	llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) used lower struggle_threshold (20) to prevent 'Previo
+1776861117	exp_1776860828_0009	e81b007	25c2f4229c	3.966	19	0	0	0	287.5	llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) use lower struggle_thresholds (20-25) to interrupt 'P
+1776861442	exp_1776861147_0010	e81b007	25c2f4229c	3.893	19	0	0	0	292.8	llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) use lower struggle_threshold (20-25) to prevent 'Prev
+1776861767	exp_1776861472_0011	e81b007	06bdca8d44	4.306	21	0	0	0	292.6	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold of 20 to prevent the '
+1776862088	exp_1776861797_0012	e81b007	25c2f4229c	4.359	21	0	0	0	289.0	llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) use lower struggle_threshold (20-40) to prevent the '
+1776862415	exp_1776862118_0013	e81b007	06bdca8d44	3.865	19	0	0	0	294.9	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold of 20 to prevent the '
+1776862743	exp_1776862445_0014	e81b007	06bdca8d44	3.864	19	0	0	0	295.0	llm knob:struggle_threshold -> 20 (Traces show a 'Previous turn ended' hijack occurs after ~40 tool calls. Top performer
+1776863069	exp_1776862773_0015	e81b007	06bdca8d44	4.276	21	0	0	0	294.7	llm knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs during long tool-use chains (~40 
+1776863404	exp_1776863099_0016	e81b007	06bdca8d44	3.875	19	0	0	0	294.2	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous tu
+1776863731	exp_1776863434_0017	e81b007	5b7880ae3c	4.160	20	0	0	0	288.5	llm prompt:gemma4 -> [35 chars] (Traces show Gemma 4 frequently hijacks the loop with 'Previous turn ended; awaiting you
+1776864068	exp_1776863761_0018	e81b007	809e28b1b0	4.250	21	0	0	0	296.4	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 6
+1776864393	exp_1776864098_0019	e81b007	2fbc6b79fe	3.757	18	0	0	0	287.4	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 10
+1776864742	exp_1776864423_0020	e81b007	9bd983e849	3.494	17	0	0	0	291.9	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 5
+1776865077	exp_1776864772_0021	e81b007	93d8c5ffc8	3.843	19	0	0	0	296.6	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 1
+1776865403	exp_1776865107_0022	e81b007	06bdca8d44	4.382	21	0	0	0	287.5	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) consistently use a lower struggle_threshold (20) to p
+1776865721	exp_1776865433_0023	e81b007	06bdca8d44	4.406	21	0	0	0	286.0	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous tu
+1776866046	exp_1776865751_0024	e81b007	06bdca8d44	3.888	19	0	0	0	293.2	llm knob:struggle_threshold -> 20 (Traces show 'Previous turn ended' hijack occurs after ~40 tool calls. Top performers 
+1776866371	exp_1776866076_0025	e81b007	06bdca8d44	3.895	19	0	0	0	292.7	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous tu
+1776866698	exp_1776866401_0026	e81b007	06bdca8d44	3.867	19	0	0	0	294.8	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower threshold of 20 to prevent the 'Previous 
+1776867026	exp_1776866728_0027	e81b007	25c2f4229c	4.367	21	0	0	0	288.5	llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) use lower struggle_thresholds (20-25) to mitigate the
+1776867348	exp_1776867056_0028	e81b007	06bdca8d44	3.942	19	0	0	0	289.2	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776867669	exp_1776867378_0029	e81b007	06bdca8d44	3.939	19	0	0	0	289.4	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776867992	exp_1776867700_0030	e81b007	06bdca8d44	3.922	19	0	0	0	290.7	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold of 20 to prevent the '
+1776868318	exp_1776868022_0031	e81b007	06bdca8d44	4.285	21	0	0	0	294.0	llm knob:struggle_threshold -> 20 (Traces show a 'Previous turn ended' hijack occurs during long tool-use chains. Top pe
+1776868651	exp_1776868348_0032	e81b007	06bdca8d44	4.307	21	0	0	0	292.5	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous tu
+1776868980	exp_1776868681_0033	e81b007	986aab8875	3.754	18	0	0	0	287.7	llm prompt:gemma4 -> [416 chars] (Traces show a recurring 'Previous turn ended' hijack in long tool-use chains (e.g., ex
+1776869312	exp_1776869010_0034	e81b007	3d1ee2ecac	4.299	21	0	0	0	293.1	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 6
+1776869641	exp_1776869342_0035	e81b007	3425970428	4.333	21	0	0	0	290.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 9
+1776869987	exp_1776869671_0036	e81b007	f6eab076bd	3.927	19	0	0	0	290.3	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 8
+1776870318	exp_1776870018_0037	e81b007	7560fbe041	4.314	21	0	0	0	292.0	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 3
+1776870651	exp_1776870349_0038	e81b007	06bdca8d44	4.281	21	0	0	0	294.3	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776870983	exp_1776870681_0039	e81b007	06bdca8d44	4.326	21	0	0	0	291.2	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776871311	exp_1776871013_0040	e81b007	06bdca8d44	4.256	21	0	0	0	296.0	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) used 20 to prevent the 'Previous turn ended' hijack a
+1776871637	exp_1776871341_0041	e81b007	25c2f4229c	4.489	22	0	0	0	294.0	llm knob:struggle_threshold -> 25 (Top performers (0004, 0062) show that reducing struggle_threshold prevents the 'Previ
+1776871964	exp_1776871667_0042	e81b007	06bdca8d44	4.271	21	0	0	0	295.0	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776872287	exp_1776871995_0043	e81b007	25c2f4229c	4.343	21	0	0	0	290.1	llm knob:struggle_threshold -> 25 (Top performers (exp_0004, 0062) maintain higher effective_rate by reducing struggle_t
+1776872610	exp_1776872317_0044	e81b007	06bdca8d44	4.333	21	0	0	0	290.8	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776872930	exp_1776872640_0045	e81b007	06bdca8d44	4.367	21	0	0	0	288.6	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous tu
+1776873257	exp_1776872960_0046	e81b007	06bdca8d44	3.862	19	0	0	0	295.2	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776873581	exp_1776873288_0047	e81b007	06bdca8d44	3.709	18	0	0	0	291.2	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776873915	exp_1776873611_0048	e81b007	06bdca8d44	4.288	21	0	0	0	293.9	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use struggle_threshold=20 to prevent the 'Previous tu
+1776874250	exp_1776873945_0049	e81b007	44e1fe30f2	3.863	19	0	0	0	295.1	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 2
+1776874583	exp_1776874280_0050	e81b007	d3e3038796	4.283	21	0	0	0	294.2	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 89
+1776874909	exp_1776874613_0051	e81b007	761a7024a0	4.381	21	0	0	0	287.6	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 4
+1776875244	exp_1776874939_0052	e81b007	67530af707	3.840	19	0	0	0	296.9	random harness_threshold:SESSION_RESET_EVERY: 15 -> 12
+1776875572	exp_1776875274_0053	e81b007	ef8d47b61e	4.337	21	0	0	0	290.5	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 60
+1776875906	exp_1776875603_0054	e81b007	06bdca8d44	3.862	19	0	0	0	295.2	llm knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs during long tool-use chains (~40 
+1776876234	exp_1776875936_0055	e81b007	06bdca8d44	3.844	19	0	0	0	296.6	llm knob:struggle_threshold -> 20 (Traces show 'Previous turn ended' hijacks occurring after ~40 tool calls in long inve
+1776876562	exp_1776876265_0056	e81b007	06bdca8d44	4.364	21	0	0	0	288.7	llm knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the 'P
+1776876886	exp_1776876592_0057	e81b007	06bdca8d44	4.311	21	0	0	0	292.3	llm knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs when the model enters long invest

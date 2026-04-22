@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776849624_0076",
+  "ts": 1776849914,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.1649,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 288.12,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) correlate with lower struggle_threshold (20) compared to baseline (40), which prevents premature Admiral intervention during long, productive tool-use chains.)"
+}

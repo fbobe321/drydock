@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776848978_0074",
+  "ts": 1776849273,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.1333,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 290.33,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) both lowered struggle_threshold to 20, preventing early admiral intervention during long, productive tool-use sequences where the model is making progress without write)"
+}
