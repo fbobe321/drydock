@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776837271_0038",
+  "ts": 1776837564,
+  "git_commit": "359b180",
+  "config_sha": "b8de17fe55",
+  "metric": 4.5387,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 290.83,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Trace analysis shows the 'Previous turn ended' hijack occurs during long tool-use sequences around tool call 40. Increasing wrap_up_warn_at to 100 prevents the early nudge from interrupting the flow.)"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776846030_0065",
+  "ts": 1776846324,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.514,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 292.43,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show that the 'Previous turn ended' hijack occurs when the model has high tool-call density. Lowering struggle_threshold from 40 to 20 prevents premature intervention.)"
+}

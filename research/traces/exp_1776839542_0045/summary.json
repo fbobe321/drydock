@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776839542_0045",
+  "ts": 1776839840,
+  "git_commit": "359b180",
+  "config_sha": "b8de17fe55",
+  "metric": 4.5866,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 287.8,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) increase wrap_up_warn_at to 100 to delay the 'Previous turn ended' hijack, which interrupts long tool-use sequences (around 40 calls) in simple Q&A tasks.)"
+}

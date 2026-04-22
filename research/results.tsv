@@ -43,3 +43,47 @@ ts	exp_id	git_commit	config_sha	metric	done	skip	timeout	recycle	elapsed_s	note
 1776833298	exp_1776833002_0025	7f5e6d8	b8de17fe55	4.542	22	0	0	0	290.6	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0005) both increased wrap_up_warn_at to 100 to delay the 'Pr
 1776833622	exp_1776833328_0026	7f5e6d8	b8de17fe55	4.567	22	0	0	0	289.0	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0005) delay the 'Previous turn ended' hijack by increasing w
 1776833946	exp_1776833652_0027	7f5e6d8	b8de17fe55	4.146	20	0	0	0	289.4	opus knob:wrap_up_warn_at -> 100 (Trace analysis shows 'Previous turn ended' hijacking occurs at ~40 tool calls. Increas
+1776834268	exp_1776833976_0028	359b180	b8de17fe55	0.000	1	5	0	0	286.8	opus knob:wrap_up_warn_at -> 100 (Traces show a 'Previous turn ended' hijack occurs around 40 tool calls. Top performers
+1776834639	exp_1776834299_0029	359b180	b8de17fe55	4.271	21	0	0	0	295.0	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0005) delay the 'Previous turn ended' hijack by increasing w
+1776834959	exp_1776834669_0030	359b180	b8de17fe55	4.586	22	0	0	0	287.9	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0005) delay the 'Previous turn ended' hijack by increasing w
+1776835284	exp_1776834990_0031	359b180	b8de17fe55	4.562	22	0	0	0	289.3	opus knob:wrap_up_warn_at -> 100 (Traces show the 'Previous turn ended' hijack occurs at ~40 tool calls. Top performers 
+1776835619	exp_1776835314_0032	359b180	b8de17fe55	4.675	23	0	0	0	295.2	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776835949	exp_1776835649_0033	359b180	b8de17fe55	4.544	22	0	0	0	290.5	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776836273	exp_1776835979_0034	359b180	b8de17fe55	4.590	22	0	0	0	287.6	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) increase wrap_up_warn_at to 100 to delay the 'Previous
+1776836598	exp_1776836303_0035	359b180	b8de17fe55	4.549	22	0	0	0	290.2	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776836922	exp_1776836628_0036	359b180	b8de17fe55	4.145	20	0	0	0	289.5	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776837241	exp_1776836953_0037	359b180	b8de17fe55	4.397	21	0	0	0	286.6	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776837564	exp_1776837271_0038	359b180	b8de17fe55	4.539	22	0	0	0	290.8	opus knob:wrap_up_warn_at -> 100 (Trace analysis shows the 'Previous turn ended' hijack occurs during long tool-use sequ
+1776837888	exp_1776837594_0039	359b180	223217cc10	4.562	22	0	0	0	289.4	random stop_now_warn_at: 60.0 -> 27
+1776838217	exp_1776837918_0040	359b180	b8de17fe55	4.146	20	0	0	0	289.4	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776838539	exp_1776838247_0041	359b180	b8de17fe55	4.179	20	0	0	0	287.2	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776838860	exp_1776838570_0042	359b180	b8de17fe55	4.153	20	0	0	0	289.0	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776839183	exp_1776838891_0043	359b180	b8de17fe55	4.549	22	0	0	0	290.2	opus knob:wrap_up_warn_at -> 100 (Traces show top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by 
+1776839512	exp_1776839213_0044	359b180	1521a6d5df	4.076	20	0	0	0	294.4	opus knob:struggle_threshold -> 30 (Top performers (0004, 0013) succeed by delaying the 'Previous turn ended' hijack. Cu
+1776839840	exp_1776839542_0045	359b180	b8de17fe55	4.587	22	0	0	0	287.8	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) increase wrap_up_warn_at to 100 to delay the 'Previous
+1776840163	exp_1776839870_0046	359b180	b8de17fe55	4.578	22	0	0	0	288.3	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776840486	exp_1776840193_0047	359b180	c8a775a416	4.588	22	0	0	0	287.7	random loop_detector_window: 3.0 -> 3
+1776840817	exp_1776840516_0048	359b180	06bdca8d44	4.056	20	0	0	0	295.9	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0013) maintain high effective rates by delaying the 'Previ
+1776841139	exp_1776840847_0049	359b180	4885d356ac	4.175	20	0	0	0	287.4	opus knob:struggle_threshold -> 40 (Top performers (exp_0004, 0013) avoid the 'Previous turn ended' hijack by increasing
+1776841458	exp_1776841169_0050	359b180	06bdca8d44	4.602	22	0	0	0	286.9	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0013) show the model hitting a 'Previous turn ended' hijac
+1776841784	exp_1776841488_0051	359b180	b8de17fe55	4.118	20	0	0	0	291.4	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) suppress the 'Previous turn ended' hijack by delaying 
+1776842104	exp_1776841815_0052	359b180	b8de17fe55	4.179	20	0	0	0	287.2	opus knob:wrap_up_warn_at -> 100 (Traces show 'Previous turn ended' hijacks occur mid-session (around tool-call 40). Top
+1776842428	exp_1776842134_0053	359b180	b8de17fe55	4.570	22	0	0	0	288.9	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) use 100 to prevent the 'Previous turn ended' hijack fr
+1776842750	exp_1776842458_0054	359b180	b8de17fe55	4.176	20	0	0	0	287.3	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) use 100 to delay the 'Previous turn ended' hijack that
+1776843073	exp_1776842781_0055	359b180	b8de17fe55	4.170	20	0	0	0	287.8	opus knob:wrap_up_warn_at -> 100 (Traces show a hijack where the model outputs 'Previous turn ended; awaiting your next 
+1776843397	exp_1776843103_0056	359b180	b8de17fe55	4.105	20	0	0	0	292.3	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776843717	exp_1776843428_0057	359b180	b8de17fe55	4.174	20	0	0	0	287.5	opus knob:wrap_up_warn_at -> 100 (Traces show the 'Previous turn ended' hijack occurs around 40 tool calls. Top performe
+1776844038	exp_1776843747_0058	359b180	b8de17fe55	4.145	20	0	0	0	289.5	opus knob:wrap_up_warn_at -> 100 (Trace contrast shows a 'Previous turn ended' hijack occurring at ~40 tool calls. Incre
+1776844361	exp_1776844069_0059	359b180	b8de17fe55	4.547	22	0	0	0	290.3	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) delay the 'Previous turn ended' hijack by increasing w
+1776844687	exp_1776844391_0060	359b180	84081de125	4.088	20	0	0	0	293.5	random wrap_up_warn_at: 40.0 -> 32
+1776845011	exp_1776844717_0061	359b180	b8de17fe55	4.514	22	0	0	0	292.4	opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) suppress the 'Previous turn ended' hijack by increasin
+1776845337	exp_1776845041_0062	359b180	06bdca8d44	4.691	23	0	0	0	294.2	opus knob:struggle_threshold -> 20 (Traces show the 'Previous turn ended' hijack occurs during long tool-use chains (40+
+1776845668	exp_1776845367_0063	359b180	06bdca8d44	4.520	22	0	0	0	292.1	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show that increasing struggle_threshold prevents ear
+1776845999	exp_1776845698_0064	359b180	06bdca8d44	4.528	22	0	0	0	291.5	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) used lower struggle_threshold (20) to prevent the 'P
+1776846324	exp_1776846030_0065	359b180	06bdca8d44	4.514	22	0	0	0	292.4	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show that the 'Previous turn ended' hijack occurs wh
+1776846644	exp_1776846354_0066	359b180	06bdca8d44	4.578	22	0	0	0	288.4	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use lower struggle_threshold (20) to prevent the 'Pr
+1776846973	exp_1776846674_0067	359b180	06bdca8d44	4.572	22	0	0	0	288.7	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent the '
+1776847302	exp_1776847003_0068	359b180	06bdca8d44	4.067	20	0	0	0	295.1	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower threshold to prevent the 'Previous turn 
+1776847628	exp_1776847333_0069	359b180	06bdca8d44	4.128	20	0	0	0	290.7	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower struggle_threshold (20) to prevent early
+1776847947	exp_1776847658_0070	359b180	06bdca8d44	0.000	1	5	0	0	287.0	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show 'Previous turn ended' hijacks after long tool c
+1776848308	exp_1776847977_0071	359b180	06bdca8d44	4.124	20	0	0	0	291.0	opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) reduced struggle_threshold to 20, whereas bottom per

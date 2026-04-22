@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776839213_0044",
+  "ts": 1776839512,
+  "git_commit": "359b180",
+  "config_sha": "1521a6d5df",
+  "metric": 4.076,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 294.4,
+  "note": "opus knob:struggle_threshold -> 30 (Top performers (0004, 0013) succeed by delaying the 'Previous turn ended' hijack. Current best uses 40; reducing it to 30 provides a buffer against the 40-call drift cliff seen in bottom runs.)"
+}

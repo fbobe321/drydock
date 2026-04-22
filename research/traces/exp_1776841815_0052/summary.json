@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776841815_0052",
+  "ts": 1776842104,
+  "git_commit": "359b180",
+  "config_sha": "b8de17fe55",
+  "metric": 4.1789,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 287.16,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Traces show 'Previous turn ended' hijacks occur mid-session (around tool-call 40). Top performers (exp_0004, 0013) successfully suppress these early nudges by pushing wrap_up_warn_at to 100.)"
+}

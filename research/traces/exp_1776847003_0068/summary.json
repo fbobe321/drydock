@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776847003_0068",
+  "ts": 1776847302,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.0669,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 295.06,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) use a lower threshold to prevent the 'Previous turn ended' hijack/drift that occurs after long tool-use chains (~40 calls) when the model lacks progress.)"
+}

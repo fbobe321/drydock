@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776841488_0051",
+  "ts": 1776841784,
+  "git_commit": "359b180",
+  "config_sha": "b8de17fe55",
+  "metric": 4.1179,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 291.41,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0013) suppress the 'Previous turn ended' hijack by delaying the nudge to 100, preventing the admiral from interrupting long tool-use sequences mid-task.)"
+}

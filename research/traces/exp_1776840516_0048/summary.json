@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776840516_0048",
+  "ts": 1776840817,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.0558,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 295.87,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0013) maintain high effective rates by delaying the 'Previous turn ended' hijack via higher wrap_up_warn_at, but traces show the hijack occurs during long sequences of tool c)"
+}

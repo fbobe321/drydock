@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776845367_0063",
+  "ts": 1776845668,
+  "git_commit": "359b180",
+  "config_sha": "06bdca8d44",
+  "metric": 4.5197,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 292.05,
+  "note": "opus knob:struggle_threshold -> 20 (Top performers (exp_0004, 0062) show that increasing struggle_threshold prevents early admiral intervention during long tool-use chains, specifically addressing the 'Previous turn ended' hijack.)"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776840847_0049",
+  "ts": 1776841139,
+  "git_commit": "359b180",
+  "config_sha": "4885d356ac",
+  "metric": 4.1746,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 287.45,
+  "note": "opus knob:struggle_threshold -> 40 (Top performers (exp_0004, 0013) avoid the 'Previous turn ended' hijack by increasing struggle_threshold. In the traces, the model drifts into text-only loops after ~40 tool calls; higher threshold pre)"
+}
