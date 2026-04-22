@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776830402_0017",
+  "ts": 1776830696,
+  "git_commit": "7f5e6d8",
+  "config_sha": "b8de17fe55",
+  "metric": 4.141,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 289.79,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0005) delay the 'Previous turn ended' hijack by increasing wrap_up_warn_at. High scores correlate with pushing the nudge past the ~40 tool-call drift cliff.)"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776827455_0008",
+  "ts": 1776827746,
+  "git_commit": "7f5e6d8",
+  "config_sha": "31699d8902",
+  "metric": 4.6154,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 286.0,
+  "note": "opus admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH -> 10 (Top performers (exp_0009) used BASH=10 to prevent 'Previous turn ended' hijacks caused by admiral forcing stops after ~5 consecutive bash calls in Q&A stress tasks.)"
+}

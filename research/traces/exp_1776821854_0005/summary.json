@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776821854_0005",
+  "ts": 1776822239,
+  "git_commit": "940ce5c",
+  "config_sha": "b8de17fe55",
+  "metric": 4.6534,
+  "done": 23,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 23,
+  "elapsed_s": 296.56,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Traces show 'Previous turn ended' hijack fires at ~40 tool calls across all runs. exp_0001 hit 4.51 with wrap_up=100 alone; stacking on current-best (struggle=40, temp=0.1) should further delay the hi)"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776825164_0001",
+  "ts": 1776825463,
+  "git_commit": "7f5e6d8",
+  "config_sha": "b8de17fe55",
+  "metric": 4.5579,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 289.61,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Traces show a 'Previous turn ended' hijack mid-session after ~40 tool calls. Top performers (exp_0005) suppressed this by increasing wrap_up_warn_at to 100, preventing premature loop termination.)"
+}

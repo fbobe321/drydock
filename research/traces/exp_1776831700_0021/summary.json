@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776831700_0021",
+  "ts": 1776832006,
+  "git_commit": "7f5e6d8",
+  "config_sha": "b8de17fe55",
+  "metric": 4.0504,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 296.27,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0005) show 'Previous turn ended' hijacks after ~40 tool calls. Increasing wrap_up_warn_at to 100 delays this nudge past the drift cliff seen in bottom runs.)"
+}

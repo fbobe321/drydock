@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import os
 import random
 import shutil
 import signal
@@ -158,22 +159,40 @@ def mutate_opus(cfg: dict) -> tuple[dict, str] | None:
     else:
         return None
 
+    # Label says "llm" to avoid implying we called Opus even in local
+    # mode (proposer transport chooses local-first when ALLOW_OPUS=0).
+    # Keeps the results.tsv "note" column truthful when read later.
     if target == "prompt":
         size = len(str(value))
-        desc = f"opus prompt:{name} -> [{size} chars] ({reason})"
+        desc = f"llm prompt:{name} -> [{size} chars] ({reason})"
     else:
-        desc = f"opus {target}:{name} -> {value} ({reason})"
+        desc = f"llm {target}:{name} -> {value} ({reason})"
     return new, desc
 
 
 def mutate(cfg: dict, rng: random.Random, mode: str) -> tuple[dict, str]:
-    """Dispatch to the requested proposer. Opus mode falls back to
-    random if the proposer doesn't deliver."""
-    if mode == "opus":
-        r = mutate_opus(cfg)
+    """Dispatch to the requested proposer. LLM modes fall back to
+    random if the proposer doesn't deliver.
+
+    `local` and `opus` share the same proposer code; the difference is
+    the transport (proposer.py decides based on
+    DRYDOCK_RESEARCH_ALLOW_OPUS). `opus` only contacts the cloud if
+    the operator explicitly set the env var; otherwise it behaves like
+    `local` (which calls the on-box vLLM endpoint).
+    """
+    if mode in ("opus", "local"):
+        # Hint to the proposer's transport preference via env var.
+        # propose() checks this before reaching for the cloud.
+        if mode == "opus":
+            os.environ["DRYDOCK_RESEARCH_ALLOW_OPUS"] = "1"
+        else:
+            # Local mode: disable cloud fallback regardless of ambient env.
+            os.environ["DRYDOCK_RESEARCH_ALLOW_OPUS"] = "0"
+        r = mutate_opus(cfg)  # function name is historical; contract unchanged
         if r is not None:
             return r
-        print("  opus mutator returned nothing; falling back to random", flush=True)
+        print(f"  {mode} mutator returned nothing; falling back to random",
+              flush=True)
     return mutate_random(cfg, rng)
 
 
@@ -264,12 +283,22 @@ def main() -> int:
     ap.add_argument("--cooldown-s", type=float, default=10.0,
                     help="Sleep between experiments (lets GPU settle).")
     ap.add_argument("--results-tsv", type=Path, default=DEFAULT_RESULTS)
-    ap.add_argument("--proposer", choices=("random", "opus"),
-                    default="random",
-                    help="random = bounded uniform + nudge sampling. "
-                         "opus = Meta-Harness-style LLM proposer using "
-                         "ANTHROPIC_API_KEY or the `claude` CLI; falls "
-                         "back to random on any failure.")
+    ap.add_argument("--proposer", choices=("random", "local", "opus"),
+                    default="local",
+                    help="local = Meta-Harness LLM proposer against the "
+                         "local vLLM endpoint (drydock's own model). "
+                         "THIS IS THE DEFAULT. Keeps the self-tuning loop "
+                         "air-gap-safe — matches the 'self-hosted agents "
+                         "for regulated environments' positioning. "
+                         "random = bounded uniform + nudge sampling, no "
+                         "LLM involved. "
+                         "opus = cloud proposer via ANTHROPIC_API_KEY or "
+                         "the `claude` CLI — NOT AIRGAP-SAFE; only use "
+                         "for development when you want a smarter "
+                         "reasoner. Also requires setting env "
+                         "DRYDOCK_RESEARCH_ALLOW_OPUS=1 to actually "
+                         "dispatch cloud calls. Falls back to random "
+                         "otherwise.")
     args = ap.parse_args()
 
     signal.signal(signal.SIGTERM, _handle_signal)

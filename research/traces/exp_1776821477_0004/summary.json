@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776821477_0004",
+  "ts": 1776821824,
+  "git_commit": "940ce5c",
+  "config_sha": "4885d356ac",
+  "metric": 4.7251,
+  "done": 23,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 23,
+  "elapsed_s": 292.06,
+  "note": "opus knob:struggle_threshold -> 40 (Every trace tail shows 'Previous turn ended; awaiting your next instruction.' hijack at ~prompt 13-15 in both top (4.53) and bottom (4.12) runs, after ~20 bash/read calls with zero writes. Q&A stress )"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776826467_0005",
+  "ts": 1776826766,
+  "git_commit": "7f5e6d8",
+  "config_sha": "31699d8902",
+  "metric": 4.2824,
+  "done": 21,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 21,
+  "elapsed_s": 294.23,
+  "note": "opus admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH -> 10 (Trace contrast shows BASH=10 (exp_0009) outperforms BASH=5 (exp_0010) by preventing 'Previous turn ended' hijacks during legitimate chained bash calls in simple Q&A tasks.)"
+}

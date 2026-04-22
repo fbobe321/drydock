@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776823944_0010",
+  "ts": 1776824309,
+  "git_commit": "940ce5c",
+  "config_sha": "31699d8902",
+  "metric": 4.1099,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 291.97,
+  "note": "opus admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH -> 10 (exp_0009 (4.61) proved BASH=10 fixes 'Previous turn ended' hijack after ~5 legitimate bash chains in Q&A stress; not yet baked into current-best (struggle=40, temp=0.1) \u2014 stack for gain.)"
+}

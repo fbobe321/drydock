@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776807750_0003",
+  "ts": 1776808088,
+  "git_commit": "ec58651",
+  "config_sha": "368e85f341",
+  "metric": 4.5282,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 291.51,
+  "note": "opus knob:temperature -> 0.1 (Both top runs (4.486, 4.167) finished 20-22 prompts with 0 skips and hit 288-294s on the 300s cap \u2014 bounded by elapsed time, not failures. Tighter sampling cuts per-turn thinking jitter on trivial Q&A)"
+}

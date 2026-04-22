@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776823585_0009",
+  "ts": 1776823914,
+  "git_commit": "940ce5c",
+  "config_sha": "31699d8902",
+  "metric": 4.6066,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 286.55,
+  "note": "opus admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH -> 10 (Stress prompts are simple Q&A (sha1sum, rot13, rev, wc, etc.) that legitimately chain bash calls. 'Previous turn ended' hijack fires after ~5 consecutive bash calls across prompts, then user msgs pile)"
+}

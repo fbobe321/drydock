@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776833652_0027",
+  "ts": 1776833946,
+  "git_commit": "7f5e6d8",
+  "config_sha": "b8de17fe55",
+  "metric": 4.1462,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 289.42,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Trace analysis shows 'Previous turn ended' hijacking occurs at ~40 tool calls. Increasing wrap_up_warn_at from 40 to 100 prevents the early nudge from prematurely ending productive turns.)"
+}

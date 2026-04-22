@@ -49,9 +49,56 @@ RESEARCH_DIR = Path(__file__).resolve().parent
 DRYDOCK_ROOT = RESEARCH_DIR.parent  # /data3/drydock — repo root
 OPUS_MODEL = "claude-opus-4-7"
 OPUS_TIMEOUT_SEC = 120
+# Local proposer endpoint. Defaults to the same balancer drydock uses
+# so the proposer is air-gap-compatible — the whole pitch collapses
+# if the self-tuning loop phones home.
+LOCAL_ENDPOINT = os.environ.get("DRYDOCK_RESEARCH_PROPOSER_URL",
+                                "http://localhost:8001/v1")
+LOCAL_MODEL = os.environ.get("DRYDOCK_RESEARCH_PROPOSER_MODEL", "gemma4")
+LOCAL_TIMEOUT_SEC = 180            # Gemma 4 thinks longer than Opus
 MAX_TRACES_EACH_SIDE = 3          # top-N + bottom-N contrastive
 MAX_TRACE_MESSAGES_CHARS = 4000   # truncate each trace's messages to this
 MAX_SOURCE_EXCERPT_CHARS = 8000   # truncate agent_loop.py to this
+
+
+def _try_local_llm(prompt: str) -> str | None:
+    """Call the local vLLM endpoint. OpenAI-compatible chat completions.
+
+    Default proposer transport for air-gap-safe operation. A defense/gov
+    prospect cannot use a self-tuning loop that phones home to Anthropic;
+    the whole self-tuning pitch collapses the moment a remote API shows
+    up in the loop.
+
+    Uses `httpx` directly (already a drydock transitive dep) rather than
+    pulling in the `openai` SDK. Endpoint from
+    DRYDOCK_RESEARCH_PROPOSER_URL; model from
+    DRYDOCK_RESEARCH_PROPOSER_MODEL (default 'gemma4').
+    """
+    try:
+        import httpx
+    except ImportError:
+        print("  proposer: httpx not available — cannot call local LLM",
+              file=sys.stderr)
+        return None
+    url = LOCAL_ENDPOINT.rstrip("/") + "/chat/completions"
+    payload = {
+        "model": LOCAL_MODEL,
+        "max_tokens": 1200,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    try:
+        r = httpx.post(url, json=payload, timeout=LOCAL_TIMEOUT_SEC)
+        r.raise_for_status()
+        data = r.json()
+        choices = data.get("choices") or []
+        if not choices:
+            return None
+        msg = choices[0].get("message") or {}
+        content = (msg.get("content") or "").strip()
+        return content or None
+    except Exception as e:
+        print(f"  proposer: local LLM call failed: {e}", file=sys.stderr)
+    return None
 
 
 def _try_anthropic_sdk(prompt: str) -> str | None:
@@ -307,7 +354,17 @@ def propose(config_base_path: Path, config_best_path: Path | None,
 
     prompt = _build_prompt(config_base, config_best, ranked)
 
-    response = _try_anthropic_sdk(prompt) or _try_claude_cli(prompt)
+    # Local-first is non-negotiable: the defense/gov pitch (air-gapped
+    # self-tuning agents) collapses the moment the proposer phones home.
+    # Only fall back to Opus / Claude CLI if DRYDOCK_RESEARCH_ALLOW_OPUS=1
+    # is explicitly set AND the local endpoint returned nothing useful.
+    # The experimenter's default (--proposer local) skips opus entirely.
+    response = _try_local_llm(prompt)
+    if not response and os.environ.get("DRYDOCK_RESEARCH_ALLOW_OPUS") == "1":
+        print("  proposer: local returned nothing, falling back to cloud "
+              "(DRYDOCK_RESEARCH_ALLOW_OPUS=1). This is NOT airgap-safe.",
+              file=sys.stderr)
+        response = _try_anthropic_sdk(prompt) or _try_claude_cli(prompt)
     if not response:
         print("  proposer: no response from Opus", file=sys.stderr)
         return None

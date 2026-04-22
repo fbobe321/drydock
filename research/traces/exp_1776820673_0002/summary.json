@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776820673_0002",
+  "ts": 1776821009,
+  "git_commit": "940ce5c",
+  "config_sha": "936650dbd3",
+  "metric": 4.492,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 293.85,
+  "note": "opus knob:stop_now_warn_at -> 150 (Every trace tail (top AND bottom) shows 'Previous turn ended; awaiting your next instruction.' hijacking a turn ~prompt 13-15, leaving 6+ user msgs unanswered before 300s cap. wrap_up=100 in best run )"
+}

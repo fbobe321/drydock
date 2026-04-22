@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776807445_0002",
+  "ts": 1776807740,
+  "git_commit": "ec58651",
+  "config_sha": "1124958468",
+  "metric": 4.1671,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 287.97,
+  "note": "opus knob:stop_now_warn_at -> 50 (Top run (22 done, 0 skips, 294s) stayed well under hard_stop=100. Tighten second-nudge from 60->50 to curb tail-turn drift without risking premature wrap-up; wrap_up stays 40.)"
+}

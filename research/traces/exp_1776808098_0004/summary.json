@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776808098_0004",
+  "ts": 1776808481,
+  "git_commit": "ec58651",
+  "config_sha": "6523365e69",
+  "metric": 4.1425,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 289.68,
+  "note": "opus harness_threshold:SESSION_RESET_EVERY -> 25 (Top runs finish 20-22 prompts in 287-294s bounded by elapsed cap, not failures. With reset=15, one /clear fires mid-run and eats seconds; pushing to 25 skips that reset entirely and should net +1-2 pr)"
+}

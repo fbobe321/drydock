@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776807135_0001",
+  "ts": 1776807435,
+  "git_commit": "ec58651",
+  "config_sha": "4c88fdcfdf",
+  "metric": 4.4855,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 294.28,
+  "note": "opus knob:per_prompt_budget_sec -> 900 (Only seed run used 600s and got 0 done / 6 skipped in 329s \u2014 prompts skipping before completion. Raise per-turn budget to 900s to let slow multi-tool turns actually finish before skip.)"
+}

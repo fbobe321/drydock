@@ -4,6 +4,25 @@ Produced per stanford-iris-lab/meta-harness ONBOARDING.md template.
 First-cut spec; refine as the proposer exposes failure modes the
 current evaluation set doesn't distinguish.
 
+## Non-Negotiable: Air-Gap-Safe Proposer
+
+Drydock's positioning is **self-hosted AI coding agents for air-gapped
+and regulated environments** (defense/gov vertical, 90-day pilot plan).
+That pitch collapses the moment any component — including the
+self-tuning loop — phones home to a cloud LLM.
+
+**The Meta-Harness proposer MUST use the local vLLM endpoint** (the
+same one drydock's TUI uses). The `local` proposer mode is the
+default in `experimenter.py` and `research_babysitter.sh`. The `opus`
+mode exists for development when a stronger reasoner is convenient,
+but it requires `DRYDOCK_RESEARCH_ALLOW_OPUS=1` to actually dispatch
+cloud calls — otherwise it silently falls back to local.
+
+Any future change that makes cloud the default (or silently enables
+cloud without the explicit env var) is a regression. See
+`research/proposer.py::propose` — the local-first dispatch is the
+load-bearing guarantee.
+
 ## Domain Summary
 
 **What the user is trying to improve:** drydock's acceptance rate,

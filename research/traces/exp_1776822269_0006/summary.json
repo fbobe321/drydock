@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776822269_0006",
+  "ts": 1776822665,
+  "git_commit": "940ce5c",
+  "config_sha": "cd348b52aa",
+  "metric": 3.9351,
+  "done": 19,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 289.7,
+  "note": "opus knob:stop_now_warn_at -> 150 (Every top+bottom trace tail shows admiral's 'Previous turn ended; awaiting your next instruction.' hijack mid-session. wrap_up=100 (exp_0005, 4.65) only delays first nudge; stop_now=150 suppresses the)"
+}

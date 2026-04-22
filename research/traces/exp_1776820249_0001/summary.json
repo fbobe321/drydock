@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776820249_0001",
+  "ts": 1776820643,
+  "git_commit": "940ce5c",
+  "config_sha": "4fdd88a7ef",
+  "metric": 4.5118,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 292.56,
+  "note": "opus knob:wrap_up_warn_at -> 100 (Every trace tail shows 'Previous turn ended; awaiting your next instruction.' after ~40 tool calls \u2014 the wrap-up nudge hijacks the final 1-2 turns instead of answering. Tightening stop_now_warn_at 60\u2192)"
+}

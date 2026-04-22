@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776828760_0012",
+  "ts": 1776829054,
+  "git_commit": "7f5e6d8",
+  "config_sha": "4885d356ac",
+  "metric": 4.1493,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 289.2,
+  "note": "opus knob:struggle_threshold -> 40 (Top performers (exp_0004, 0005) use struggle_threshold=40 to prevent 'Previous turn ended' hijacks seen in traces when lower values trigger premature admiral interference.)"
+}

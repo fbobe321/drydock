@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776808492_0005",
+  "ts": 1776808822,
+  "git_commit": "ec58651",
+  "config_sha": "f06cf95f58",
+  "metric": 4.1233,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 291.03,
+  "note": "opus knob:temperature -> 0.0 (All 3 top runs bounded by 5min elapsed cap (287-294s), 0 skips. 0.3\u21920.1 mutation already improved metric; further lowering to 0.0 cuts thinking-token jitter on Q&A prompts, raising done-per-minute.)"
+}
