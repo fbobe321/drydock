@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776922982_0046",
+  "ts": 1776923287,
+  "git_commit": "5804d70",
+  "config_sha": "969b998c1d",
+  "metric": 3.9183,
+  "done": 19,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 290.95,
+  "note": "llm prompt:gemma4 -> [1148 chars] (Top performers (exp_0004, 0030) avoid the 'Previous turn ended' hijack that causes model stagnation by delaying Admiral intervention. Explicitly instructing Gemma to treat this as a continuation targe)"
+}

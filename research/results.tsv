@@ -304,3 +304,44 @@ ts	exp_id	git_commit	config_sha	metric	done	skip	timeout	recycle	elapsed_s	note
 1776919594	exp_1776919303_0035	765248d	b8de17fe55	4.143	20	0	0	0	289.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
 1776919914	exp_1776919624_0036	765248d	b8de17fe55	4.164	20	0	0	0	288.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
 1776920248	exp_1776919944_0037	765248d	b8de17fe55	4.263	21	0	0	0	295.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776920617	exp_1776920278_0038	5804d70	945997e178	0.000	5	5	0	0	331.0	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776920977	exp_1776920647_0039	5804d70	f7fa814d44	4.581	22	0	0	0	288.1	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 3
+1776921301	exp_1776921007_0040	5804d70	b8de17fe55	4.618	22	0	0	0	285.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) increase wrap_up_warn_at to 100 to delay the 'Previous 
+1776921629	exp_1776921331_0041	5804d70	8cb36a127d	4.559	22	0	0	0	289.5	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 4
+1776921962	exp_1776921659_0042	5804d70	b8de17fe55	4.480	22	0	0	0	294.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776922286	exp_1776921992_0043	5804d70	b8de17fe55	4.190	20	0	0	0	286.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay Admiral's 'Previous tu
+1776922617	exp_1776922317_0044	5804d70	97cc6e5c74	4.512	22	0	0	0	292.6	random harness_threshold:SESSION_RESET_EVERY: 15 -> 23
+1776922952	exp_1776922647_0045	5804d70	b8de17fe55	4.252	21	0	0	0	296.3	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent premature Admiral in
+1776923287	exp_1776922982_0046	5804d70	969b998c1d	3.918	19	0	0	0	290.9	llm prompt:gemma4 -> [1148 chars] (Top performers (exp_0004, 0030) avoid the 'Previous turn ended' hijack that causes mo
+1776923613	exp_1776923317_0047	5804d70	b8de17fe55	4.601	22	0	0	0	286.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) increase wrap_up_warn_at to 100 to delay the 'Previous 
+1776923940	exp_1776923643_0048	5804d70	b8de17fe55	4.558	22	0	0	0	289.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776924264	exp_1776923970_0049	5804d70	b8de17fe55	3.321	16	1	0	0	289.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776924592	exp_1776924295_0050	5804d70	b8de17fe55	4.581	22	0	0	0	288.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) increase wrap_up_warn_at to 100 to delay the 'Previous 
+1776924918	exp_1776924623_0051	5804d70	b8de17fe55	4.092	20	0	0	0	293.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776925240	exp_1776924948_0052	5804d70	945997e178	4.553	22	0	0	0	289.9	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776925566	exp_1776925270_0053	5804d70	b8de17fe55	4.182	20	0	0	0	286.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776925892	exp_1776925597_0054	5804d70	b8de17fe55	4.180	20	0	0	0	287.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776926227	exp_1776925922_0055	5804d70	2ca0ca5a3e	4.267	21	0	0	0	295.3	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 4
+1776926552	exp_1776926257_0056	5804d70	b8de17fe55	4.179	20	0	0	0	287.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776926886	exp_1776926583_0057	5804d70	18f921481c	4.261	21	0	0	0	295.7	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 5
+1776927214	exp_1776926916_0058	5804d70	b8de17fe55	4.144	20	0	0	0	289.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776927584	exp_1776927244_0059	5804d70	b8de17fe55	0.000	1	6	0	0	331.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776927936	exp_1776927614_0060	5804d70	65305371c6	3.335	16	1	0	0	287.8	llm admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH -> 8 (Top performers (exp_0004, 0030) maintain throughput despite 
+1776928271	exp_1776927966_0061	5804d70	b8de17fe55	3.851	19	0	0	0	296.0	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent premature Admiral 'P
+1776928597	exp_1776928301_0062	5804d70	8d65221e92	4.577	22	0	0	0	288.4	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 6
+1776928931	exp_1776928627_0063	5804d70	b8de17fe55	4.696	23	0	0	0	293.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776929260	exp_1776928961_0064	5804d70	b8de17fe55	4.124	20	0	0	0	291.0	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776929581	exp_1776929290_0065	5804d70	b8de17fe55	3.944	19	0	0	0	289.0	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031, 0063) all use wrap_up_warn_at=100 to prevent the 'Previ
+1776929945	exp_1776929611_0066	5804d70	b8de17fe55	0.000	1	6	0	0	331.5	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776930487	exp_1776929975_0067	5804d70	244257d336	0.000	1	6	0	0	331.4	random knob:wrap_up_warn_at: 40 -> 36
+1776930926	exp_1776930517_0068	5804d70	ce1e8cc197	4.292	21	0	0	0	293.6	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 3
+1776931255	exp_1776930956_0069	5804d70	dc386b5e1f	4.129	20	0	0	0	290.6	random knob:loop_detector_window: 3 -> 5
+1776931624	exp_1776931285_0070	5804d70	b8de17fe55	0.000	1	6	0	0	331.7	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use 100 to prevent the 'Previous turn ended' hijack tha
+1776932105	exp_1776931655_0071	5804d70	2f65538e65	4.583	22	0	0	0	288.0	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 2
+1776932433	exp_1776932135_0072	5804d70	b8de17fe55	4.560	22	0	0	0	289.5	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776932761	exp_1776932463_0073	5804d70	8c29b6a6fb	4.549	22	0	0	0	290.2	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 4
+1776933086	exp_1776932791_0074	5804d70	b8de17fe55	4.183	20	0	0	0	286.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031, 0063) all use wrap_up_warn_at=100 to prevent the 'Previ
+1776933410	exp_1776933116_0075	5804d70	b8de17fe55	0.000	1	5	0	0	285.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776933952	exp_1776933440_0076	5804d70	945997e178	0.000	1	6	0	0	331.4	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776934455	exp_1776933982_0077	5804d70	3a2228afa0	3.688	18	0	0	0	292.9	random knob:per_prompt_budget_sec: 900 -> 3103
+1776934782	exp_1776934485_0078	5804d70	95a07896aa	4.158	20	0	0	0	288.6	random harness_threshold:SESSION_RESET_EVERY: 15 -> 18
