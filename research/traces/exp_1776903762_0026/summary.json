@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776903762_0026",
+  "ts": 1776904056,
+  "git_commit": "093ae41",
+  "config_sha": "b8de17fe55",
+  "metric": 4.5298,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 291.4,
+  "note": "llm knob:wrap_up_warn_at -> 100 (Traces (exp_0004, 0062, 0013) show that increasing wrap_up_warn_at to 100 prevents the 'Previous turn ended' hijack that occurs when Gemma 4 hits the nudge during long, productive tool-use chains.)"
+}

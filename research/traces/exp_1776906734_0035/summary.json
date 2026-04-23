@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776906734_0035",
+  "ts": 1776907036,
+  "git_commit": "093ae41",
+  "config_sha": "8c29b6a6fb",
+  "metric": 4.5222,
+  "done": 22,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 291.89,
+  "note": "random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 4"
+}

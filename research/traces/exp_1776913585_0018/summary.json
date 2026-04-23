@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776913585_0018",
+  "ts": 1776913887,
+  "git_commit": "765248d",
+  "config_sha": "b8de17fe55",
+  "metric": 4.2956,
+  "done": 21,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 21,
+  "elapsed_s": 293.32,
+  "note": "llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn ended' hijack that interrupts long tool-use sequences, preventing premature Admiral intervention.)"
+}

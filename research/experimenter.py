@@ -94,24 +94,41 @@ def mutate_random(cfg: dict, rng: random.Random,
     """
     new = copy.deepcopy(cfg)
     # Build (target_class, entry) candidates. Entries marked banned=true
-    # in config_base.toml are excluded from the surface — used to retire
-    # knobs that dominate search without finding gains (see
-    # research/config_base.toml for the list of currently banned names).
-    def _usable(entry: dict) -> bool:
-        return entry.get("mutable", True) and not entry.get("banned", False)
+    # in config_base.toml are excluded from the surface. The ban list
+    # lives ONLY in config_base.toml — config_best.toml (which is what
+    # `cfg` typically is) is rewritten on each improvement and does not
+    # carry the banned field. So we read base on every call to get the
+    # authoritative ban set, and short-circuit if the entry's name is
+    # banned regardless of what `cfg` says.
+    try:
+        base = load_toml(CONFIG_BASE)
+    except OSError:
+        base = {}
+    banned: set[tuple[str, str]] = set()
+    for cls in ("knob", "harness_threshold", "admiral_detector"):
+        for entry in base.get(cls, []):
+            if entry.get("banned", False):
+                banned.add((cls, entry.get("name", "")))
+
+    def _usable(cls: str, entry: dict) -> bool:
+        if not entry.get("mutable", True):
+            return False
+        if (cls, entry.get("name", "")) in banned:
+            return False
+        return True
 
     candidates: list[tuple[str, object]] = []
     if exclude_target != "knob":
         for k in new.get("knob", []):
-            if _usable(k):
+            if _usable("knob", k):
                 candidates.append(("knob", k))
     if exclude_target != "harness_threshold":
         for h in new.get("harness_threshold", []):
-            if _usable(h):
+            if _usable("harness_threshold", h):
                 candidates.append(("harness_threshold", h))
     if exclude_target != "admiral_detector":
         for d in new.get("admiral_detector", []):
-            if _usable(d):
+            if _usable("admiral_detector", d):
                 candidates.append(("admiral_detector", d))
     if exclude_target != "env_flag":
         for name in (new.get("env_flags") or {}):
