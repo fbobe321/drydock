@@ -5,6 +5,15 @@
 
 export PATH="/home/bobef/miniconda3/bin:$PATH"
 
+# Pause guard — respect a user-visible sentinel so manual GPU work
+# (e.g., Deep Noir steering discovery) isn't clobbered by auto-restart.
+# To pause:  touch /data3/drydock/.pause_vllm_failover
+# To resume: rm  /data3/drydock/.pause_vllm_failover
+if [ -f /data3/drydock/.pause_vllm_failover ]; then
+    echo "[$(date)] pause sentinel present — skipping"
+    exit 0
+fi
+
 LOCAL="http://localhost:8000"
 REMOTE="http://192.168.50.21:8000"
 STATE_FILE="/tmp/vllm_failover_state"

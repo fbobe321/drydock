@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776951454_0016",
+  "ts": 1776951742,
+  "git_commit": "5804d70",
+  "config_sha": "b8de17fe55",
+  "metric": 4.4057,
+  "done": 21,
+  "skipped": 1,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 22,
+  "elapsed_s": 285.99,
+  "note": "llm knob:wrap_up_warn_at -> 100 (Trace analysis shows 'Previous turn ended' hijacks occur after long tool sequences. Increasing wrap_up_warn_at from 40 to 100 delays premature Admiral intervention, improving effective_rate.)"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776952610_0027",
+  "ts": 1776952914,
+  "git_commit": "5804d70",
+  "config_sha": "761a7024a0",
+  "metric": 3.6468,
+  "done": 18,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 18,
+  "elapsed_s": 296.15,
+  "note": "random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 4"
+}

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776950789_0014",
+  "ts": 1776951091,
+  "git_commit": "5804d70",
+  "config_sha": "b9399429f8",
+  "metric": 3.8793,
+  "done": 19,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 293.87,
+  "note": "llm admiral_detector:REPEAT_WARNING_THRESHOLD -> 3 (Top performers (exp_0004, 0030) show that delaying the 'Previous turn ended' hijack is key. Increasing the threshold for tool repetition warnings allows the agent more headroom for complex tasks.)"
+}

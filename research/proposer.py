@@ -289,6 +289,84 @@ def _coverage_directive(coverage: dict[str, int]) -> str:
     )
 
 
+def _normalize_value_str(s: str) -> str:
+    """Normalize a scalar value's string repr so '100' / '100.0' / "'100'"
+    all compare equal. Used when diffing a fresh LLM proposal against the
+    last N notes in results.tsv."""
+    s = s.strip().strip("'\"")
+    try:
+        return str(float(s))
+    except ValueError:
+        return s
+
+
+def _parse_proposal_note(note: str) -> tuple | None:
+    """Extract (target, name, value_str) from a results.tsv note.
+
+    LLM notes:    'llm <target>:<name> -> <value> (reason...)'
+    Random notes: 'random <target>:<name>: <old> -> <new>'
+
+    Returns None if the note doesn't match either shape.
+    """
+    if note.startswith("llm "):
+        body = note[4:]
+    elif note.startswith("random "):
+        body = note[7:]
+    else:
+        return None
+    for token in ("knob:", "harness_threshold:", "admiral_detector:",
+                  "env_flag:", "prompt:"):
+        if not body.startswith(token):
+            continue
+        target = token.rstrip(":")
+        rest = body[len(token):]
+        if " -> " not in rest:
+            return None
+        before, _, after = rest.rpartition(" -> ")
+        name = before.split(": ", 1)[0] if ": " in before else before.strip()
+        value_str = after.split(" (", 1)[0].strip()
+        return (target, name.strip(), _normalize_value_str(value_str))
+    return None
+
+
+def _recent_proposal_tuples(results_tsv: Path,
+                            n: int = 10) -> set[tuple]:
+    """Return (target, name, value_str) tuples for the last N experiments.
+
+    The class-level rotation and no-op checks each miss one class of
+    fixation: the proposer repeatedly suggesting the exact same
+    (target, name, value) that was already run (but isn't the *current*
+    best value, so _is_noop_mutation misses it). Adding a tuple-level
+    recency filter catches this cheaply.
+
+    Observed case: 24/40 recent experiments were 'llm knob:wrap_up_warn_at
+    -> 100', the same target+value repeated because the current best had
+    wrap_up_warn_at=40 so the no-op filter didn't trigger. Every one of
+    those 24 was a pure replay of an already-run experiment.
+    """
+    if not results_tsv.exists():
+        return set()
+    out: set[tuple] = set()
+    try:
+        lines = results_tsv.read_text().splitlines()
+        if len(lines) < 2:
+            return set()
+        header = lines[0].split("\t")
+        if "note" not in header:
+            return set()
+        note_idx = header.index("note")
+        for line in lines[-n:]:
+            cols = line.split("\t")
+            if len(cols) <= note_idx:
+                continue
+            parsed = _parse_proposal_note(cols[note_idx])
+            if parsed:
+                out.add(parsed)
+    except Exception:
+        return set()
+    return out
+
+
 def _recent_mutation_coverage(results_tsv: Path,
                               n: int = 15) -> dict[str, int]:
     """Return {target_class: count} for the last N experiments' notes.
@@ -570,6 +648,20 @@ def propose(config_base_path: Path, config_best_path: Path | None,
         print(f"  proposer: no-op mutation (value already set): "
               f"{mutation.get('target')}:{mutation.get('name')}="
               f"{mutation.get('value')}", file=sys.stderr)
+        return None
+    # Tuple-level recency filter — reject proposals whose exact
+    # (target, name, value) was already run in the last 10 experiments.
+    # Catches the narrow-exploration failure where Gemma 4 proposes the
+    # same tuple 24+ times because the no-op filter only compares against
+    # config_best, not the tried-and-discarded history.
+    recent_tuples = _recent_proposal_tuples(results_tsv, n=10)
+    key = (mutation.get("target"),
+           str(mutation.get("name", "")).strip(),
+           _normalize_value_str(str(mutation.get("value"))))
+    if key in recent_tuples:
+        print(f"  proposer: duplicate-proposal rejection — {key} was "
+              f"already run in the last 10 experiments; falling through "
+              f"to random", file=sys.stderr)
         return None
     # Mandatory rotation enforcement. If one class dominates recent
     # coverage, reject proposals in that class so caller falls back to

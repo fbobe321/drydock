@@ -345,3 +345,320 @@ ts	exp_id	git_commit	config_sha	metric	done	skip	timeout	recycle	elapsed_s	note
 1776933952	exp_1776933440_0076	5804d70	945997e178	0.000	1	6	0	0	331.4	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
 1776934455	exp_1776933982_0077	5804d70	3a2228afa0	3.688	18	0	0	0	292.9	random knob:per_prompt_budget_sec: 900 -> 3103
 1776934782	exp_1776934485_0078	5804d70	95a07896aa	4.158	20	0	0	0	288.6	random harness_threshold:SESSION_RESET_EVERY: 15 -> 18
+1776935113	exp_1776934812_0079	5804d70	b8de17fe55	4.102	20	0	0	0	292.5	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031, 0063) use wrap_up_warn_at=100 to prevent the 'Previous 
+1776935433	exp_1776935143_0080	5804d70	b8de17fe55	4.582	22	0	0	0	288.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use higher wrap_up_warn_at to delay the 'Previous turn 
+1776935759	exp_1776935463_0081	5804d70	b8de17fe55	4.573	22	0	0	0	288.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776936086	exp_1776935790_0082	5804d70	b8de17fe55	4.285	21	0	0	0	294.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031, 0063) use wrap_up_warn_at=100 to prevent the 'Previous 
+1776936417	exp_1776936116_0083	5804d70	b8de17fe55	4.098	20	0	0	0	292.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031, 0063) use wrap_up_warn_at=100 to prevent the 'Previous 
+1776936747	exp_1776936447_0084	5804d70	18f921481c	4.104	20	0	0	0	292.4	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 5
+1776937070	exp_1776936777_0085	5804d70	b8de17fe55	4.121	20	0	0	0	291.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776937392	exp_1776937101_0086	5804d70	b8de17fe55	4.141	20	0	0	0	289.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776937715	exp_1776937422_0087	5804d70	d020baed2c	4.123	20	0	0	0	291.1	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 11
+1776938038	exp_1776937745_0088	5804d70	b8de17fe55	4.546	22	0	0	0	290.3	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776938365	exp_1776938068_0089	5804d70	d405c6e61c	4.558	22	0	0	0	289.6	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 8
+1776938697	exp_1776938395_0090	5804d70	b8de17fe55	4.182	20	0	0	0	286.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776939023	exp_1776938727_0091	5804d70	b8de17fe55	4.170	20	0	0	0	287.7	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776939349	exp_1776939053_0092	5804d70	945997e178	4.163	20	0	0	0	288.2	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776939681	exp_1776939379_0093	5804d70	b8de17fe55	4.084	20	0	0	0	293.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031, 0063) use wrap_up_warn_at=100 to prevent the 'Previous 
+1776940008	exp_1776939711_0094	5804d70	d405c6e61c	4.166	20	0	0	0	288.0	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 8
+1776940339	exp_1776940038_0095	5804d70	b8de17fe55	4.495	22	0	0	0	293.7	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776940672	exp_1776940370_0096	5804d70	b8de17fe55	4.077	20	0	0	0	294.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030, 0063) use wrap_up_warn_at=100 to prevent the 'Previous 
+1776940995	exp_1776940702_0097	5804d70	b8de17fe55	4.538	22	0	0	0	290.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0031, 0063) consistently use wrap_up_warn_at=100 to prevent t
+1776941315	exp_1776941025_0098	5804d70	b8de17fe55	4.170	20	0	0	0	287.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use wrap_up_warn_at=100 to prevent the 'Previous turn e
+1776941648	exp_1776941345_0099	5804d70	b8de17fe55	4.266	21	0	0	0	295.3	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0063) use 100 to prevent the 'Previous turn ended' hijack tha
+1776941980	exp_1776941679_0100	5804d70	f9ca42a3cc	4.698	23	0	0	0	293.7	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 7
+1776942313	exp_1776942010_0101	5804d70	b8de17fe55	4.488	22	0	0	0	294.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack durin
+1776942638	exp_1776942343_0102	5804d70	b8de17fe55	4.601	22	0	0	0	286.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776942971	exp_1776942668_0103	5804d70	47519f0d2d	3.876	19	0	0	0	294.1	random harness_threshold:SESSION_RESET_EVERY: 15 -> 9
+1776943297	exp_1776943001_0104	5804d70	b8de17fe55	4.579	22	0	0	0	288.3	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776943647	exp_1776943328_0105	5804d70	945997e178	4.078	20	0	0	0	294.3	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776943980	exp_1776943677_0106	5804d70	b8de17fe55	4.068	20	0	0	0	295.0	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack that 
+1776944361	exp_1776944058_0001	5804d70	e3ac429823	4.281	21	0	0	0	294.3	random knob:hard_stop_tool_calls: 100 -> 61
+1776944690	exp_1776944391_0002	5804d70	8d65221e92	4.123	20	0	0	0	291.0	llm admiral_detector:REPEAT_WARNING_THRESHOLD -> 6 (Top performers (exp_0004, 0030) show higher threshold vs bottom perf
+1776945022	exp_1776944720_0003	5804d70	b5c93b7704	4.092	20	0	0	0	293.2	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 5
+1776945347	exp_1776945052_0004	5804d70	f8d7100da3	4.185	20	0	0	0	286.7	random knob:wrap_up_warn_at: 40 -> 24
+1776945677	exp_1776945377_0005	5804d70	a1e476c282	4.309	21	0	0	0	292.4	random knob:per_prompt_budget_sec: 900 -> 659
+1776945997	exp_1776945707_0006	5804d70	93d8c5ffc8	3.753	18	0	0	0	287.7	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 1
+1776946328	exp_1776946027_0007	5804d70	de54dc0416	4.501	22	0	0	0	293.3	random harness_threshold:SESSION_RESET_EVERY: 15 -> 21
+1776946653	exp_1776946359_0008	5804d70	a656c95273	4.185	20	0	0	0	286.7	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 81
+1776946805	exp_1776946501_0001	5804d70	2658c82518	3.453	17	0	0	0	295.4	random knob:stop_now_warn_at: 60 -> 66
+1776946985	exp_1776946683_0009	5804d70	0ba523ffa2	3.471	17	1	0	0	293.8	random knob:per_prompt_budget_sec: 900 -> 410
+1776947139	exp_1776946835_0002	5804d70	2589cd2f57	3.646	18	0	0	0	296.2	random knob:wrap_up_warn_at: 40 -> 56
+1776947313	exp_1776947015_0010	5804d70	b8de17fe55	4.060	20	1	0	0	295.6	llm knob:wrap_up_warn_at -> 100 (Top performers (0004, 0030) use higher wrap_up_warn_at to delay the 'Previous turn ende
+1776947465	exp_1776947169_0003	5804d70	b8de17fe55	3.340	16	0	0	0	287.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack durin
+1776947647	exp_1776947343_0011	5804d70	0ef36d06be	4.056	20	0	0	0	295.8	random harness_threshold:SESSION_RESET_EVERY: 15 -> 11
+1776947795	exp_1776947495_0004	5804d70	18f921481c	3.292	16	0	0	0	291.6	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 5
+1776947977	exp_1776947677_0012	5804d70	1ee7b7091f	3.512	17	0	0	0	290.4	random harness_threshold:SESSION_RESET_EVERY: 15 -> 24
+1776948119	exp_1776947825_0005	5804d70	badc3a0146	4.189	20	1	0	0	286.5	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 4
+1776948312	exp_1776948007_0013	5804d70	d6da77973f	4.450	22	0	0	0	296.6	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 2
+1776948454	exp_1776948149_0006	5804d70	53cd6264a2	3.643	18	0	0	0	296.4	random knob:temperature: 0.1 -> 0.269
+1776948647	exp_1776948342_0014	5804d70	e9ce292081	4.442	22	0	0	0	297.1	random knob:temperature: 0.1 -> 0.29
+1776948781	exp_1776948484_0007	5804d70	922dbfede2	3.460	17	0	0	0	294.8	random knob:loop_detector_window: 3 -> 4
+1776948980	exp_1776948677_0015	5804d70	c455a9c7fc	4.483	22	0	0	0	294.4	random knob:wrap_up_warn_at: 40 -> 52
+1776949111	exp_1776948811_0008	5804d70	f67d2e6cf8	3.703	18	0	0	0	291.7	random knob:hard_stop_tool_calls: 100 -> 126
+1776949307	exp_1776949010_0016	5804d70	c034003680	4.359	21	0	0	0	289.0	random knob:per_prompt_budget_sec: 900 -> 618
+1776949446	exp_1776949141_0009	5804d70	b8de17fe55	3.444	17	0	0	0	296.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay 'Previous turn ended' hijacks during l
+1776949638	exp_1776949337_0017	5804d70	b8de17fe55	3.925	19	0	0	0	290.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack durin
+1776949773	exp_1776949476_0010	5804d70	ecede38ef3	4.063	20	0	0	0	295.3	random knob:per_prompt_budget_sec: 900 -> 1368
+1776949956	exp_1776949668_0018	5804d70	8d8ed64167	3.563	17	0	0	0	286.3	random knob:temperature: 0.1 -> 0.265
+1776950098	exp_1776949803_0011	5804d70	dc386b5e1f	3.478	17	0	0	0	293.3	random knob:loop_detector_window: 3 -> 5
+1776950289	exp_1776949986_0019	5804d70	809e28b1b0	4.279	21	0	0	0	294.5	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 6
+1776950432	exp_1776950128_0012	5804d70	e5d481487d	4.055	20	1	0	0	296.0	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 233
+1776950617	exp_1776950319_0020	5804d70	8d65221e92	4.341	21	0	0	0	290.2	llm admiral_detector:REPEAT_WARNING_THRESHOLD -> 6 (Top performers (exp_0004, 0030) show that increasing REPEAT_WARNING_
+1776950759	exp_1776950462_0013	5804d70	2f65538e65	3.738	18	0	0	0	288.9	llm admiral_detector:EMPTY_RESULT_THRESHOLD -> 2 (Trace analysis shows models getting stuck in empty-result loops (e.g.,
+1776950944	exp_1776950647_0021	5804d70	34e6e95291	4.357	21	0	0	0	289.2	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 5
+1776951091	exp_1776950789_0014	5804d70	b9399429f8	3.879	19	0	0	0	293.9	llm admiral_detector:REPEAT_WARNING_THRESHOLD -> 3 (Top performers (exp_0004, 0030) show that delaying the 'Previous tur
+1776951279	exp_1776950975_0022	5804d70	c341cd61e3	4.451	22	0	0	0	296.6	random knob:temperature: 0.1 -> 0.72
+1776951424	exp_1776951121_0015	5804d70	d929a7bf70	4.262	21	1	0	0	295.6	random knob:hard_stop_tool_calls: 100 -> 108
+1776951605	exp_1776951310_0023	5804d70	b8de17fe55	3.961	19	0	0	0	287.8	llm knob:wrap_up_warn_at -> 100 (Bottom performers (exp_0102, 0047) used wrap_up_warn_at=100 to delay the 'Previous turn
+1776951742	exp_1776951454_0016	5804d70	b8de17fe55	4.406	21	1	0	0	286.0	llm knob:wrap_up_warn_at -> 100 (Trace analysis shows 'Previous turn ended' hijacks occur after long tool sequences. Inc
+1776951927	exp_1776951636_0024	5804d70	f2edf06350	4.560	22	0	0	0	289.4	random knob:wrap_up_warn_at: 40 -> 89
+1776952066	exp_1776951772_0017	5804d70	b9399429f8	3.701	18	0	0	0	291.8	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 3
+1776952246	exp_1776951957_0025	5804d70	2f65538e65	3.549	17	0	0	0	287.4	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 2
+1776952395	exp_1776952096_0018	5804d70	0087f4b379	4.120	20	1	0	0	291.3	random knob:per_prompt_budget_sec: 900 -> 1309
+1776952580	exp_1776952276_0026	5804d70	badc3a0146	4.259	21	1	0	0	295.9	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 4
+1776952724	exp_1776952425_0019	5804d70	6e273caedc	3.737	18	0	0	0	289.0	random knob:wrap_up_warn_at: 40 -> 55
+1776952914	exp_1776952610_0027	5804d70	761a7024a0	3.647	18	0	0	0	296.1	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 4
+1776953049	exp_1776952754_0020	5804d70	47cc8bf231	4.177	20	1	0	0	287.3	random harness_threshold:SESSION_RESET_EVERY: 15 -> 17
+1776953238	exp_1776952945_0028	5804d70	6324653b67	3.779	18	0	0	0	285.8	random knob:temperature: 0.1 -> 0.703
+1776953383	exp_1776953080_0021	5804d70	ce1e8cc197	4.260	21	1	0	0	295.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 3
+1776953572	exp_1776953269_0029	5804d70	6abfeb95c4	3.650	18	0	0	0	295.9	random knob:stop_now_warn_at: 60 -> 109
+1776953709	exp_1776953413_0022	5804d70	b8de17fe55	3.754	18	0	0	0	287.7	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776953905	exp_1776953603_0030	5804d70	b8de17fe55	3.873	19	0	0	0	294.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack durin
+1776954030	exp_1776953739_0023	5804d70	945997e178	4.153	20	0	0	0	288.9	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776954237	exp_1776953935_0031	5804d70	0c9e34616b	3.477	17	0	0	0	293.3	random knob:stop_now_warn_at: 60 -> 63
+1776954362	exp_1776954060_0024	5804d70	202a5352c1	3.471	17	0	0	0	293.8	random knob:wrap_up_warn_at: 40 -> 35
+1776954569	exp_1776954267_0032	5804d70	3d1ee2ecac	3.676	18	0	0	0	293.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 6
+1776954689	exp_1776954392_0025	5804d70	dc386b5e1f	3.740	18	0	0	0	288.8	random knob:loop_detector_window: 3 -> 5
+1776954909	exp_1776954599_0033	5804d70	e78400592f	3.886	19	1	0	0	293.4	random knob:hard_stop_tool_calls: 100 -> 125
+1776955024	exp_1776954719_0026	5804d70	7a84b98ed1	3.437	17	1	0	0	296.8	random knob:per_prompt_budget_sec: 900 -> 1423
+1776955243	exp_1776954939_0034	5804d70	2736a33559	3.851	19	0	0	0	296.1	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 147
+1776955359	exp_1776955054_0027	5804d70	42b662409c	3.841	19	0	0	0	296.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 7
+1776955575	exp_1776955274_0035	5804d70	badc3a0146	3.473	17	0	0	0	293.7	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 4
+1776955692	exp_1776955389_0028	5804d70	60beb9d636	4.265	21	0	0	0	295.4	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 17
+1776955908	exp_1776955605_0036	5804d70	b8de17fe55	4.477	22	0	0	0	294.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776956026	exp_1776955722_0029	5804d70	b8de17fe55	4.263	21	0	0	0	295.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack that 
+1776956239	exp_1776955938_0037	5804d70	2fb5b08349	3.709	18	1	0	0	291.2	random knob:hard_stop_tool_calls: 100 -> 152
+1776956351	exp_1776956056_0030	5804d70	dd49c1f9af	4.301	21	0	0	0	293.0	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 2
+1776956567	exp_1776956269_0038	5804d70	2fbc6b79fe	4.461	22	0	0	0	295.9	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 10
+1776956685	exp_1776956381_0031	5804d70	b9399429f8	4.262	21	0	0	0	295.6	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 3
+1776956901	exp_1776956597_0039	5804d70	7afdaaa642	4.465	22	0	0	0	295.7	random knob:stop_now_warn_at: 60 -> 47
+1776957018	exp_1776956715_0032	5804d70	51c4d0a77e	3.867	19	0	0	0	294.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 12
+1776957229	exp_1776956931_0040	5804d70	fd26d7b4be	3.930	19	1	0	0	290.1	random knob:temperature: 0.1 -> 0.117
+1776957352	exp_1776957048_0033	5804d70	3d1ee2ecac	3.448	17	1	0	0	295.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 6
+1776957547	exp_1776957259_0041	5804d70	6cb50a63c4	4.405	21	0	0	0	286.1	random knob:wrap_up_warn_at: 40 -> 26
+1776957678	exp_1776957382_0034	5804d70	31699d8902	3.751	18	0	0	0	288.0	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 10
+1776957879	exp_1776957578_0042	5804d70	945997e178	3.884	19	0	0	0	293.5	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776958002	exp_1776957708_0035	5804d70	b8de17fe55	3.778	18	0	0	0	285.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776958205	exp_1776957909_0043	5804d70	b8de17fe55	4.380	21	0	0	0	287.7	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776958330	exp_1776958032_0036	5804d70	17054fd0ce	4.343	21	1	0	0	290.1	random knob:temperature: 0.1 -> 0.125
+1776958531	exp_1776958235_0044	5804d70	2fbc6b79fe	4.383	21	0	0	0	287.5	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 10
+1776958658	exp_1776958360_0037	5804d70	922dbfede2	3.733	18	0	0	0	289.3	random knob:loop_detector_window: 3 -> 4
+1776958863	exp_1776958561_0045	5804d70	0ab1db1cee	3.874	19	0	0	0	294.3	random knob:temperature: 0.1 -> 0.403
+1776958981	exp_1776958688_0038	5804d70	ef07712b2a	4.118	20	0	0	0	291.4	random knob:temperature: 0.1 -> 0.376
+1776959195	exp_1776958893_0046	5804d70	922dbfede2	4.289	21	0	0	0	293.8	random knob:loop_detector_window: 3 -> 4
+1776959310	exp_1776959011_0039	5804d70	e6107e7bca	4.124	20	0	0	0	291.0	random harness_threshold:SESSION_RESET_EVERY: 15 -> 22
+1776959525	exp_1776959225_0047	5804d70	f7fa814d44	3.501	17	0	0	0	291.3	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 3
+1776959641	exp_1776959340_0040	5804d70	a8ec87ad93	3.885	19	0	0	0	293.4	random knob:temperature: 0.1 -> 0.502
+1776959850	exp_1776959555_0048	5804d70	b5c93b7704	3.765	18	0	0	0	286.9	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 5
+1776959970	exp_1776959671_0041	5804d70	5d20f26551	3.719	18	0	0	0	290.4	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 6
+1776960177	exp_1776959880_0049	5804d70	b8de17fe55	3.449	17	1	0	0	295.7	llm knob:wrap_up_warn_at -> 100 (Bottom performers (exp_0102, 0047) show that increasing wrap_up_warn_at to 100 delays t
+1776960313	exp_1776960000_0042	5804d70	b8de17fe55	4.248	21	0	0	0	296.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776960505	exp_1776960208_0050	5804d70	34e6e95291	3.734	18	0	0	0	289.2	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 5
+1776960639	exp_1776960343_0043	5804d70	3d1ee2ecac	3.754	18	0	0	0	287.7	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 6
+1776960836	exp_1776960535_0051	5804d70	aac8f36e0f	3.689	18	0	0	0	292.8	random knob:loop_detector_window: 3 -> 2
+1776960970	exp_1776960669_0044	5804d70	dc386b5e1f	4.298	21	0	0	0	293.2	random knob:loop_detector_window: 3 -> 5
+1776961161	exp_1776960866_0052	5804d70	3c2ae157c5	4.387	21	0	0	0	287.2	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 117
+1776961304	exp_1776961000_0045	5804d70	8f0b48b718	4.265	21	0	0	0	295.4	random knob:stop_now_warn_at: 60 -> 137
+1776961492	exp_1776961191_0053	5804d70	22dca891a5	3.892	19	0	0	0	292.9	random knob:stop_now_warn_at: 60 -> 37
+1776961623	exp_1776961334_0046	5804d70	959c73a3bb	3.755	18	0	0	0	287.6	random knob:hard_stop_tool_calls: 100 -> 80
+1776961825	exp_1776961522_0054	5804d70	841e176777	3.862	19	0	0	0	295.2	random knob:hard_stop_tool_calls: 100 -> 208
+1776961955	exp_1776961654_0047	5804d70	223217cc10	3.886	19	0	0	0	293.4	random knob:stop_now_warn_at: 60 -> 27
+1776962152	exp_1776961856_0055	5804d70	8c29b6a6fb	4.577	22	0	0	0	288.4	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 4
+1776962280	exp_1776961985_0048	5804d70	b8de17fe55	4.182	20	1	0	0	287.0	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776962476	exp_1776962182_0056	5804d70	b8de17fe55	4.402	21	0	0	0	286.2	llm knob:wrap_up_warn_at -> 100 (Traces show 'Previous turn ended' hijacks occur during long tool sequences. Increasing 
+1776962606	exp_1776962310_0049	5804d70	b96d458ea4	4.372	21	0	0	0	288.2	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 5
+1776962811	exp_1776962507_0057	5804d70	18f921481c	3.851	19	0	0	0	296.0	llm admiral_detector:REPEAT_WARNING_THRESHOLD -> 5 (Top performers (exp_0004, 0030) use higher thresholds to delay the '
+1776962941	exp_1776962637_0050	5804d70	65305371c6	4.246	21	1	0	0	296.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 8
+1776963141	exp_1776962841_0058	5804d70	aac8f36e0f	4.315	21	0	0	0	292.0	random knob:loop_detector_window: 3 -> 2
+1776963266	exp_1776962972_0051	5804d70	e876890c80	4.189	20	0	0	0	286.5	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 73
+1776963468	exp_1776963171_0059	5804d70	badc3a0146	3.728	18	0	0	0	289.7	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 4
+1776963591	exp_1776963296_0052	5804d70	3ee5da5ee8	4.188	20	0	0	0	286.5	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 16
+1776963795	exp_1776963499_0060	5804d70	e78bb1781d	3.756	18	1	0	0	287.5	random harness_threshold:SESSION_RESET_EVERY: 15 -> 35
+1776963918	exp_1776963621_0053	5804d70	922dbfede2	3.737	18	0	0	0	289.0	random knob:loop_detector_window: 3 -> 4
+1776964120	exp_1776963825_0061	5804d70	d6da77973f	4.381	21	0	0	0	287.6	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 2
+1776964250	exp_1776963948_0054	5804d70	d020baed2c	3.692	18	0	0	0	292.5	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 11
+1776964445	exp_1776964150_0062	5804d70	b8de17fe55	4.399	21	0	0	0	286.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack that 
+1776964581	exp_1776964280_0055	5804d70	b8de17fe55	3.692	18	0	0	0	292.5	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776964774	exp_1776964475_0063	5804d70	18cf22f00a	4.335	21	0	0	0	290.6	random knob:stop_now_warn_at: 60 -> 82
+1776964906	exp_1776964611_0056	5804d70	e27939bc10	3.685	18	0	0	0	293.1	random knob:wrap_up_warn_at: 40 -> 39
+1776965099	exp_1776964804_0064	5804d70	aac8f36e0f	3.765	18	0	0	0	286.8	random knob:loop_detector_window: 3 -> 2
+1776965237	exp_1776964936_0057	5804d70	51c4d0a77e	3.478	17	0	0	0	293.3	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 12
+1776965433	exp_1776965129_0065	5804d70	922dbfede2	4.450	22	0	0	0	296.7	random knob:loop_detector_window: 3 -> 4
+1776965567	exp_1776965267_0058	5804d70	5295f53521	4.322	21	1	0	0	291.5	random knob:wrap_up_warn_at: 40 -> 54
+1776965760	exp_1776965463_0066	5804d70	2ca0ca5a3e	3.741	18	0	0	0	288.7	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 4
+1776965896	exp_1776965597_0059	5804d70	93d8c5ffc8	3.507	17	0	0	0	290.9	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 1
+1776966093	exp_1776965790_0067	5804d70	d405c6e61c	4.480	22	0	0	0	294.6	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 8
+1776966228	exp_1776965926_0060	5804d70	945997e178	4.291	21	0	0	0	293.6	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776966422	exp_1776966123_0068	5804d70	d405c6e61c	3.720	18	0	0	0	290.3	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 8
+1776966552	exp_1776966258_0061	5804d70	b8de17fe55	3.565	17	0	0	0	286.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776966747	exp_1776966452_0069	5804d70	b8de17fe55	4.383	21	0	0	0	287.5	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776966881	exp_1776966582_0062	5804d70	945997e178	3.716	18	0	0	0	290.6	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776967074	exp_1776966777_0070	5804d70	945997e178	3.740	18	0	0	0	288.8	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776967213	exp_1776966911_0063	5804d70	a4ef5f696b	2.866	14	1	0	0	293.1	random knob:loop_detector_window: 3 -> 6
+1776967399	exp_1776967104_0071	5804d70	31d75084e6	0.000	1	5	0	0	287.1	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 6
+1776967716	exp_1776967243_0064	5804d70	b26304abc6	3.689	18	0	0	0	292.8	random knob:hard_stop_tool_calls: 100 -> 140
+1776967784	exp_1776967430_0072	5804d70	97cc6e5c74	3.883	19	0	0	0	293.6	random harness_threshold:SESSION_RESET_EVERY: 15 -> 23
+1776968046	exp_1776967746_0065	5804d70	9f723146ed	4.125	20	0	0	0	290.9	random knob:wrap_up_warn_at: 40 -> 79
+1776968109	exp_1776967814_0073	5804d70	5b3c24c62b	4.186	20	0	0	0	286.6	random knob:hard_stop_tool_calls: 100 -> 92
+1776968374	exp_1776968076_0066	5804d70	2f65538e65	4.452	22	0	0	0	296.5	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 2
+1776968445	exp_1776968140_0074	5804d70	aded29a3f0	4.456	22	0	0	0	296.3	random knob:stop_now_warn_at: 60 -> 23
+1776968707	exp_1776968404_0067	5804d70	08541a6347	3.864	19	1	0	0	295.0	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 114
+1776968770	exp_1776968475_0075	5804d70	b8de17fe55	4.401	21	0	0	0	286.3	llm knob:wrap_up_warn_at -> 100 (Trace analysis shows top performers (exp_0004, 0030) delay the 'Previous turn ended' hi
+1776969033	exp_1776968737_0068	5804d70	b8de17fe55	4.381	21	0	0	0	287.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776969096	exp_1776968800_0076	5804d70	31699d8902	3.767	18	0	0	0	286.7	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 10
+1776969364	exp_1776969063_0069	5804d70	922dbfede2	4.297	21	0	0	0	293.2	random knob:loop_detector_window: 3 -> 4
+1776969429	exp_1776969127_0077	5804d70	b96d458ea4	4.486	22	0	0	0	294.2	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 5
+1776969695	exp_1776969394_0070	5804d70	36591c49be	4.501	22	0	0	0	293.3	random knob:stop_now_warn_at: 60 -> 33
+1776969757	exp_1776969460_0078	5804d70	d36aec6a25	3.549	17	0	0	0	287.4	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 111
+1776970024	exp_1776969726_0071	5804d70	5a098d5752	3.922	19	0	0	0	290.7	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 9
+1776970084	exp_1776969787_0079	5804d70	d405c6e61c	4.386	21	0	0	0	287.3	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 8
+1776970359	exp_1776970055_0072	5804d70	dc386b5e1f	4.044	20	0	0	0	296.7	random knob:loop_detector_window: 3 -> 5
+1776970420	exp_1776970114_0080	5804d70	93d8c5ffc8	4.068	20	0	0	0	295.0	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 1
+1776970693	exp_1776970389_0073	5804d70	83ee82f4ec	3.851	19	0	0	0	296.0	random knob:temperature: 0.1 -> 0.0
+1776970747	exp_1776970450_0081	5804d70	b9399429f8	3.961	19	0	0	0	287.8	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 3
+1776971021	exp_1776970724_0074	5804d70	b8de17fe55	3.109	15	1	0	0	289.5	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) delay Admiral intervention by increasing wrap_up_warn_a
+1776971081	exp_1776970778_0082	5804d70	b8de17fe55	3.869	19	0	0	0	294.7	llm knob:wrap_up_warn_at -> 100 (Bottom performers (exp_0102, 0047) show 'Previous turn ended' hijacks caused by prematu
+1776971350	exp_1776971051_0075	5804d70	673ca6ad7d	4.343	21	0	0	0	290.1	random knob:hard_stop_tool_calls: 100 -> 98
+1776971411	exp_1776971111_0083	5804d70	b9399429f8	3.711	18	0	0	0	291.0	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 3
+1776971681	exp_1776971380_0076	5804d70	97f21f792a	3.912	19	0	0	0	291.4	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 156
+1776971746	exp_1776971441_0084	5804d70	48df27198b	4.508	22	0	0	0	292.8	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 172
+1776972015	exp_1776971711_0077	5804d70	4be6505519	3.852	19	0	0	0	295.9	random knob:wrap_up_warn_at: 40 -> 78
+1776972075	exp_1776971776_0085	5804d70	ee5fee7158	3.918	19	0	0	0	290.9	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 165
+1776972339	exp_1776972045_0078	5804d70	18f921481c	3.770	18	0	0	0	286.5	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 5
+1776972406	exp_1776972105_0086	5804d70	2f49a519d9	3.516	17	0	0	0	290.1	random harness_threshold:SESSION_RESET_EVERY: 15 -> 6
+1776972664	exp_1776972369_0079	5804d70	65305371c6	3.974	19	0	0	0	286.9	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 8
+1776972733	exp_1776972436_0087	5804d70	f1a2d545cf	3.943	19	0	0	0	289.1	random knob:temperature: 0.1 -> 0.251
+1776972995	exp_1776972694_0080	5804d70	83ee82f4ec	3.896	19	0	0	0	292.6	random knob:temperature: 0.1 -> 0.0
+1776973067	exp_1776972764_0088	5804d70	b8de17fe55	4.071	20	0	0	0	294.7	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776973321	exp_1776973025_0081	5804d70	b8de17fe55	3.956	19	1	0	0	288.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack durin
+1776973395	exp_1776973097_0089	5804d70	aa53242505	3.943	19	0	0	0	289.1	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 7
+1776973649	exp_1776973351_0082	5804d70	2ca0ca5a3e	4.346	21	0	0	0	289.9	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 4
+1776973725	exp_1776973425_0090	5804d70	680d3141f0	4.320	21	0	0	0	291.6	random harness_threshold:SESSION_RESET_EVERY: 15 -> 7
+1776973974	exp_1776973679_0083	5804d70	cef667f3c5	3.766	18	1	0	0	286.8	random knob:per_prompt_budget_sec: 900 -> 409
+1776974055	exp_1776973755_0091	5804d70	fd607aed18	4.121	20	0	0	0	291.2	random knob:wrap_up_warn_at: 40 -> 27
+1776974303	exp_1776974004_0084	5804d70	c825d44c3e	3.927	19	0	0	0	290.3	random knob:per_prompt_budget_sec: 900 -> 3288
+1776974387	exp_1776974085_0092	5804d70	945997e178	4.081	20	0	0	0	294.0	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776974633	exp_1776974333_0085	5804d70	65305371c6	3.905	19	1	0	0	291.9	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 8
+1776974720	exp_1776974417_0093	5804d70	a7fe89b5cb	4.066	20	0	0	0	295.1	random knob:temperature: 0.1 -> 0.872
+1776974967	exp_1776974663_0086	5804d70	d405c6e61c	3.845	19	1	0	0	296.5	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 8
+1776975049	exp_1776974751_0094	5804d70	f7fa814d44	3.930	19	0	0	0	290.1	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 3
+1776975298	exp_1776974997_0087	5804d70	b8de17fe55	3.892	19	1	0	0	292.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use a higher wrap_up_warn_at to delay the 'Previous tur
+1776975375	exp_1776975079_0095	5804d70	b8de17fe55	4.589	22	0	0	0	287.7	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776975625	exp_1776975329_0088	5804d70	3ddcf98bfd	3.865	19	1	0	0	294.9	random knob:wrap_up_warn_at: 40 -> 45
+1776975705	exp_1776975405_0096	5804d70	761a7024a0	4.525	22	0	0	0	291.7	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 4
+1776975952	exp_1776975655_0089	5804d70	dc2c4b10d2	3.873	19	1	0	0	294.4	random knob:per_prompt_budget_sec: 900 -> 1357
+1776976032	exp_1776975735_0097	5804d70	3d1ee2ecac	3.947	19	0	0	0	288.8	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 6
+1776976279	exp_1776975982_0090	5804d70	ac28877a87	3.938	19	1	0	0	289.5	random knob:wrap_up_warn_at: 40 -> 53
+1776976364	exp_1776976063_0098	5804d70	d6da77973f	3.887	19	0	0	0	293.3	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 2
+1776976608	exp_1776976309_0091	5804d70	cb852cb496	4.541	22	0	0	0	290.7	random harness_threshold:SESSION_RESET_EVERY: 15 -> 44
+1776976690	exp_1776976395_0099	5804d70	dabac69371	4.386	21	0	0	0	287.3	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 11
+1776976939	exp_1776976638_0092	5804d70	57834b07d9	3.890	19	1	0	0	293.0	random knob:wrap_up_warn_at: 40 -> 28
+1776977014	exp_1776976720_0100	5804d70	945997e178	3.979	19	0	0	0	286.5	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776977266	exp_1776976969_0093	5804d70	0d271f6c4a	3.942	19	0	0	0	289.2	random knob:temperature: 0.1 -> 0.151
+1776977341	exp_1776977044_0101	5804d70	b8de17fe55	4.365	21	0	0	0	288.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use a higher wrap_up_warn_at to delay the 'Previous tur
+1776977595	exp_1776977297_0094	5804d70	b8de17fe55	4.357	21	0	0	0	289.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack that 
+1776977673	exp_1776977371_0102	5804d70	2fbc6b79fe	4.297	21	0	0	0	293.2	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 10
+1776977925	exp_1776977625_0095	5804d70	41c4a0dd26	3.898	19	0	0	0	292.5	random knob:temperature: 0.1 -> 0.234
+1776978003	exp_1776977703_0103	5804d70	8c29b6a6fb	3.515	17	1	0	0	290.2	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 4
+1776978259	exp_1776977955_0096	5804d70	31d75084e6	4.301	21	0	0	0	293.0	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 6
+1776978333	exp_1776978033_0104	5804d70	b96d458ea4	4.321	21	0	0	0	291.6	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 5
+1776978591	exp_1776978289_0097	5804d70	922dbfede2	3.871	19	0	0	0	294.5	random knob:loop_detector_window: 3 -> 4
+1776978664	exp_1776978363_0105	5804d70	8c29b6a6fb	4.319	21	0	0	0	291.7	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 4
+1776978920	exp_1776978621_0098	5804d70	ebbdc1cd04	3.515	17	1	0	0	290.2	random knob:per_prompt_budget_sec: 900 -> 705
+1776978994	exp_1776978694_0106	5804d70	5d20f26551	4.359	21	0	0	0	289.1	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 6
+1776979244	exp_1776978950_0099	5804d70	1384c5968b	3.561	17	1	0	0	286.5	random knob:per_prompt_budget_sec: 900 -> 739
+1776979329	exp_1776979024_0107	5804d70	badc3a0146	3.899	19	0	0	0	292.4	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 4
+1776979574	exp_1776979274_0100	5804d70	b8de17fe55	3.912	19	1	0	0	291.4	llm knob:wrap_up_warn_at -> 100 (Bottom performers (exp_0102, 0047) show that increasing wrap_up_warn_at to 100 prevents
+1776979660	exp_1776979360_0108	5804d70	b8de17fe55	4.109	20	0	0	0	292.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776979907	exp_1776979604_0101	5804d70	b96d458ea4	3.871	19	1	0	0	294.5	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 5
+1776979983	exp_1776979691_0109	5804d70	6a0c09386a	3.929	19	0	0	0	290.1	random knob:per_prompt_budget_sec: 900 -> 2163
+1776980244	exp_1776979937_0102	5804d70	9a9a788d40	4.454	22	0	0	0	296.4	random knob:wrap_up_warn_at: 40 -> 22
+1776980318	exp_1776980013_0110	5804d70	d405c6e61c	4.065	20	0	0	0	295.2	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 8
+1776980572	exp_1776980274_0103	5804d70	b40490b9e9	4.349	21	0	0	0	289.7	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 55
+1776980642	exp_1776980348_0111	5804d70	18f921481c	4.513	22	0	0	0	292.5	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 5
+1776980902	exp_1776980602_0104	5804d70	a656c95273	3.289	16	1	0	0	291.9	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 81
+1776980975	exp_1776980673_0112	5804d70	a7ba9525f8	3.904	19	0	0	0	292.0	random knob:per_prompt_budget_sec: 900 -> 926
+1776981237	exp_1776980932_0105	5804d70	2add2c248d	4.462	22	0	0	0	295.8	random knob:per_prompt_budget_sec: 900 -> 1432
+1776981301	exp_1776981005_0113	5804d70	922dbfede2	3.970	19	0	0	0	287.1	random knob:loop_detector_window: 3 -> 4
+1776981571	exp_1776981267_0106	5804d70	945997e178	4.255	21	0	0	0	296.2	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776981631	exp_1776981331_0114	5804d70	b8de17fe55	3.909	19	0	0	0	291.6	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776981902	exp_1776981602_0107	5804d70	b8de17fe55	3.899	19	0	0	0	292.4	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776981968	exp_1776981661_0115	5804d70	a4ef5f696b	4.080	20	0	0	0	294.1	random knob:loop_detector_window: 3 -> 6
+1776982233	exp_1776981932_0108	5804d70	945997e178	4.302	21	0	0	0	292.9	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776982297	exp_1776981998_0116	5804d70	31d75084e6	4.254	21	0	0	0	296.2	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 6
+1776982563	exp_1776982263_0109	5804d70	e48de520ae	4.153	20	0	0	0	288.9	random harness_threshold:SESSION_RESET_EVERY: 15 -> 10
+1776982631	exp_1776982327_0117	5804d70	0ac8887d03	3.905	19	0	0	0	292.0	random knob:hard_stop_tool_calls: 100 -> 93
+1776982888	exp_1776982593_0110	5804d70	f9ca42a3cc	4.178	20	0	0	0	287.2	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 7
+1776982962	exp_1776982661_0118	5804d70	9bd983e849	4.325	21	0	0	0	291.4	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 5
+1776983220	exp_1776982918_0111	5804d70	2f65538e65	3.673	18	1	0	0	294.1	random admiral_detector:EMPTY_RESULT_THRESHOLD: 3 -> 2
+1776983292	exp_1776982992_0119	5804d70	3d1ee2ecac	3.945	19	0	0	0	288.9	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 6
+1776983552	exp_1776983251_0112	5804d70	761a7024a0	4.293	21	0	0	0	293.5	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 4
+1776983625	exp_1776983322_0120	5804d70	d6da77973f	3.869	19	0	0	0	294.6	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 2
+1776983883	exp_1776983583_0113	5804d70	b8de17fe55	4.303	21	0	0	0	292.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776983957	exp_1776983656_0121	5804d70	b8de17fe55	4.303	21	0	0	0	292.8	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use 100 to delay the 'Previous turn ended' hijack durin
+1776984214	exp_1776983914_0114	5804d70	31d75084e6	3.728	18	0	0	0	289.7	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 6
+1776984283	exp_1776983987_0122	5804d70	93d8c5ffc8	4.389	21	0	0	0	287.1	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 1
+1776984617	exp_1776984313_0123	5804d70	761a7024a0	4.089	20	0	0	0	293.5	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 4
+1776984944	exp_1776984647_0124	5804d70	2fbc6b79fe	4.359	21	0	0	0	289.1	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 10
+1776985272	exp_1776984975_0125	5804d70	02d31bde56	3.967	19	0	0	0	287.4	random knob:wrap_up_warn_at: 40 -> 80
+1776985598	exp_1776985302_0126	5804d70	6de1a67b69	3.976	19	0	0	0	286.7	random knob:temperature: 0.1 -> 0.019
+1776985935	exp_1776985628_0127	5804d70	a656c95273	4.450	22	0	0	0	296.6	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 81
+1776986266	exp_1776985965_0128	5804d70	8acec22a66	4.108	20	0	0	0	292.1	random knob:temperature: 0.1 -> 0.144
+1776986403	exp_1776986101_0001	5804d70	6275f7fc12	3.903	19	1	0	0	292.1	random knob:per_prompt_budget_sec: 900 -> 508
+1776986595	exp_1776986296_0129	5804d70	5a098d5752	4.133	20	0	0	0	290.4	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 9
+1776986733	exp_1776986433_0002	5804d70	d358b18c45	3.321	16	0	0	0	289.1	random knob:temperature: 0.1 -> 0.535
+1776986929	exp_1776986625_0130	5804d70	b8de17fe55	3.459	17	0	0	0	294.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776987066	exp_1776986763_0003	5804d70	b8de17fe55	3.685	18	0	0	0	293.1	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776987264	exp_1776986959_0131	5804d70	1dfaa3839a	4.244	21	0	0	0	296.9	random knob:stop_now_warn_at: 60 -> 59
+1776987394	exp_1776987096_0004	5804d70	0ddd523521	3.949	19	1	0	0	288.7	random knob:wrap_up_warn_at: 40 -> 38
+1776987585	exp_1776987294_0132	5804d70	31699d8902	4.157	20	0	0	0	288.7	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_BASH: 5 -> 10
+1776987728	exp_1776987424_0005	5804d70	ac28877a87	3.448	17	0	0	0	295.8	random knob:wrap_up_warn_at: 40 -> 53
+1776987911	exp_1776987615_0133	5804d70	f06fa884c6	2.937	14	1	0	0	286.0	random knob:per_prompt_budget_sec: 900 -> 490
+1776988059	exp_1776987758_0006	5804d70	18f921481c	4.111	20	1	0	0	291.9	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 5
+1776988239	exp_1776987942_0134	5804d70	2f65538e65	3.524	17	0	0	0	289.5	llm admiral_detector:EMPTY_RESULT_THRESHOLD -> 2 (Traces show the model looping on tool calls that return empty/zero res
+1776988386	exp_1776988089_0007	5804d70	8d65221e92	3.529	17	0	0	0	289.0	llm admiral_detector:REPEAT_WARNING_THRESHOLD -> 6 (Top performers (exp_0004, 0030) suggest delaying Admiral interventio
+1776988569	exp_1776988270_0135	5804d70	31d75084e6	4.149	20	0	0	0	289.2	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 6
+1776988712	exp_1776988417_0008	5804d70	2ca0ca5a3e	3.344	16	0	0	0	287.1	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 4
+1776988894	exp_1776988600_0136	5804d70	3b3fe46491	4.195	20	0	0	0	286.1	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 85
+1776989047	exp_1776988742_0009	5804d70	b8de17fe55	3.241	16	0	0	0	296.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) use wrap_up_warn_at=100 to delay the 'Previous turn end
+1776989220	exp_1776988924_0137	5804d70	b8de17fe55	3.354	16	0	0	0	286.3	llm knob:wrap_up_warn_at -> 100 (Trace analysis shows 'Previous turn ended' hijacks occur during long tool-use sequences
+1776989381	exp_1776989077_0010	5804d70	9009393913	3.254	16	0	0	0	295.0	random knob:hard_stop_tool_calls: 100 -> 145
+1776989550	exp_1776989251_0138	5804d70	0f8b97d5d0	3.715	18	0	0	0	290.7	random knob:temperature: 0.1 -> 0.007
+1776989703	exp_1776989411_0011	5804d70	dabac69371	3.520	17	0	0	0	289.8	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 11
+1776989878	exp_1776989580_0139	5804d70	ff10cfd51b	3.446	17	0	0	0	296.0	random knob:hard_stop_tool_calls: 100 -> 159
+1776990031	exp_1776989733_0012	5804d70	b96d458ea4	3.543	17	0	0	0	287.9	random admiral_detector:SAME_TOOL_NAME_REPEAT_LIMIT_READ: 7 -> 5
+1776990210	exp_1776989908_0140	5804d70	c22f703010	4.110	20	0	0	0	291.9	random knob:per_prompt_budget_sec: 900 -> 303
+1776990358	exp_1776990061_0013	5804d70	f7fa814d44	3.328	16	0	0	0	288.5	random harness_threshold:MAX_CONSECUTIVE_SKIPS_BEFORE_RESET: 2 -> 3
+1776990529	exp_1776990240_0141	5804d70	47519f0d2d	3.351	16	0	0	0	286.5	random harness_threshold:SESSION_RESET_EVERY: 15 -> 9
+1776990686	exp_1776990388_0014	5804d70	ac19ed5ae4	3.327	16	0	0	0	288.6	random harness_threshold:SESSION_RESET_EVERY: 15 -> 20
+1776990866	exp_1776990559_0142	5804d70	641ad9d70b	4.247	21	0	0	0	296.7	random knob:wrap_up_warn_at: 40 -> 62
+1776991012	exp_1776990716_0015	5804d70	182f0671c0	3.338	16	0	0	0	287.6	random knob:wrap_up_warn_at: 40 -> 96
+1776991201	exp_1776990896_0143	5804d70	b8de17fe55	4.258	21	0	0	0	295.9	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) and the current best (exp_0031) leverage higher wrap_up
+1776991345	exp_1776991042_0016	5804d70	b8de17fe55	4.078	20	1	0	0	294.3	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) delay the 'Previous turn ended' hijack by setting wrap_
+1776991527	exp_1776991231_0144	5804d70	aa53242505	3.332	16	0	0	0	288.1	random admiral_detector:REPEAT_FORCE_STOP_THRESHOLD: 8 -> 7
+1776991680	exp_1776991375_0017	5804d70	0de0923ff8	3.237	16	0	0	0	296.5	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 112
+1776991858	exp_1776991558_0145	5804d70	75544824b8	3.902	19	1	0	0	292.2	random knob:hard_stop_tool_calls: 100 -> 62
+1776992008	exp_1776991710_0018	5804d70	d6da77973f	2.921	14	1	0	0	287.6	random harness_threshold:SEND_PROMPT_RETRY_COUNT: 3 -> 2
+1776992187	exp_1776991888_0146	5804d70	1dfaa3839a	4.128	20	0	0	0	290.7	random knob:stop_now_warn_at: 60 -> 59
+1776992346	exp_1776992038_0019	5804d70	75102dbd98	4.049	20	1	0	0	296.4	random knob:hard_stop_tool_calls: 100 -> 120
+1776992530	exp_1776992217_0147	5804d70	b9399429f8	1.980	10	2	0	0	303.0	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 3
+1776992672	exp_1776992376_0020	5804d70	a710707ae4	0.000	1	5	0	0	288.0	random harness_threshold:SEND_PROMPT_WAIT_PER_RETRY_SEC: 120 -> 155
+1776993036	exp_1776992561_0148	5804d70	945997e178	4.268	21	0	0	0	295.2	random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'
+1776993063	exp_1776992702_0021	5804d70	ac19ed5ae4	4.313	21	0	0	0	292.1	random harness_threshold:SESSION_RESET_EVERY: 15 -> 20
+1776993365	exp_1776993066_0149	5804d70	b8de17fe55	3.928	19	0	0	0	290.2	llm knob:wrap_up_warn_at -> 100 (Top performers (exp_0004, 0030) increase wrap_up_warn_at to 100 to delay the 'Previous 
+1776993399	exp_1776993094_0022	5804d70	b8de17fe55	4.063	20	0	0	0	295.4	llm knob:wrap_up_warn_at -> 100 (Trace contrast shows top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent
+1776993693	exp_1776993395_0150	5804d70	c3600ca44e	4.359	21	0	0	0	289.1	random knob:stop_now_warn_at: 60 -> 80
+1776993735	exp_1776993429_0023	5804d70	95a07896aa	4.278	21	0	0	0	294.5	random harness_threshold:SESSION_RESET_EVERY: 15 -> 18
+1776994015	exp_1776993723_0151	5804d70	a4ef5f696b	3.521	17	0	0	0	289.7	random knob:loop_detector_window: 3 -> 6
+1776994071	exp_1776993765_0024	5804d70	f9ca42a3cc	3.850	19	1	1	0	296.1	random admiral_detector:REPEAT_WARNING_THRESHOLD: 4 -> 7

@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776979274_0100",
+  "ts": 1776979574,
+  "git_commit": "5804d70",
+  "config_sha": "b8de17fe55",
+  "metric": 3.9122,
+  "done": 19,
+  "skipped": 1,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 291.4,
+  "note": "llm knob:wrap_up_warn_at -> 100 (Bottom performers (exp_0102, 0047) show that increasing wrap_up_warn_at to 100 prevents premature Admiral intervention and the 'Previous turn ended' hijack during long tool-use sequences.)"
+}

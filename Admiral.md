@@ -651,3 +651,271 @@ past 24h. **No new code without observed evidence it's needed.**
 
 ***
 
+## 11. Deep Noir integration pilot (2026-04-23, IN FLIGHT)
+
+Goal stated by user: "I want Deep Noir framework to work with Admiral
+and meta-harness to improve drydock and Gemma 4." Not a paper — a
+shippable tool.
+
+### 11.1 Intended architecture
+
+DN plugs in as a **new intervention class** for Admiral, alongside the
+existing prompt/tool-config interventions:
+
+  Admiral detector → classifies failure mode →
+      (a) prompt-level fix (current)
+      (b) activation-space steering hook (new, via DN)
+
+  Meta-harness (`research/experimenter.py`) already mutates scalar knobs
+  (e.g., `wrap_up_warn_at`, `REPEAT_FORCE_STOP_THRESHOLD`); DN extends
+  the search space to `(layer, head_subset, magnitude)` tuples per
+  failure mode. The experimenter scores configs the same way — by
+  medium-hard PRD success rate.
+
+The asset DN needs is a **labeled probe set**: real decision-point
+contexts from drydock sessions, each tagged with the "correct"
+next-token class. Discovery then finds the (L, K, M) that maximizes
+labeled accuracy.
+
+### 11.2 What was built this session
+
+* **Probe extractor** (`/data3/Deep_Noir_1/drydock_probes/build_probes.py`
+  + focused variants): mines `~/.drydock/logs/session/**/messages.jsonl`
+  for every assistant decision point, renders the chat-history context,
+  and labels by whether the turn emitted a tool_call or text. Output:
+  - `drydock_act_ask.jsonl` — 5979 probes, 296 sessions
+  - `drydock_wrap_vs_act.jsonl` — 360 balanced probes (act vs text)
+  - `drydock_1b_compat.jsonl` — 240 probes portable to non-Gemma-4
+    tokenizers
+
+* **Discovery driver** (`discover_steering.py`) — model-agnostic wrapper
+  around DN's `SteeringDiscoveryEngine`. Loads any HF Gemma, runs the
+  5-phase pipeline, emits a `SteeringConfig` JSON.
+
+* **Sanity check on Gemma-3-1B-IT**: Phase-1 layer ranking reproduced
+  the paper's "Gemma uses deep layers" finding on drydock-domain data.
+  Top layers 18–24 match the sentiment results in Figure 1. Pipeline
+  works end-to-end.
+
+* **vLLM logprob eval harness** (`evaluate_wrapup_detector.py`) — was
+  built to ship a logprob-based pre-generation detector without
+  activation hooks. Abandoned; see §11.4.
+
+* **Dependencies** added to `miniconda3` base env (harmless):
+  `transformers @ git+main`, `compressed-tensors`, `peft`,
+  `bitsandbytes`, `accelerate`.
+
+* **Pause sentinel added to `scripts/vllm_failover.sh`**
+  (`/data3/drydock/.pause_vllm_failover`) — the cron was auto-respawning
+  the container and kept clobbering the GPU. Sentinel is user-visible
+  and reversible; remove the file to resume normal failover.
+
+### 11.3 Three blockers hit (honest)
+
+1. **`Gemma-4-26B-A4B-it-AWQ-4bit` checkpoint cannot be loaded in
+   transformers.** The directory is mis-named — the format is
+   `compressed-tensors` with MoE `_packed`/`_scale` expert weights.
+   Transformers (5.6.2 AND git-main 5.7.0.dev0) does not decompose
+   those into `gate_up_proj` / `down_proj` at load time. Result:
+   `lm_head.weight` and all MoE expert projections are meta-initialized
+   (random). vLLM loads this fine because it has its own
+   compressed-tensors path; HF transformers does not. This is an
+   upstream gap, not something we can patch quickly.
+
+2. **Driver/torch mismatch in the drydock env.** `miniforge3/envs/drydock`
+   has `torch 2.11.0+cu130`; driver is 575 (CUDA 12.9). Incompatible.
+   `miniconda3` base has `torch 2.7.1+cu126` which works. All DN work
+   now uses `/home/bobef/miniconda3/bin/python3`, not the drydock env.
+
+3. **The wrap-up-hijack detector I tried to ship is based on
+   mis-labeled data.** "Previous turn ended; awaiting your next
+   instruction." — the phrase I treated as a Gemma 4 pathology for a
+   day — is actually drydock's OWN filler injected at
+   `drydock/core/agent_loop.py:3006` via `_ensure_assistant_after_tools`.
+   Every match in every session has `prev_role: tool` and
+   `next_role: user`. An Admiral detector that strips this would be
+   stripping drydock's own checkpoint marker. Killed that path.
+   The 5344 tool-call probes (label=1) are still real Gemma 4 behavior;
+   the 69 "I have …" / "The …" text probes are real completion
+   summaries; only the 182 "Previous turn ended" probes were mis-
+   attributed.
+
+### 11.4 Decision point — user's call
+
+Unquantized Gemma 4 bf16 **download complete** at
+`/data3/Deep_Noir_1/models/gemma-4-26b-a4b-it/` (51.6 GB, both
+safetensors shards present, cache cleaned). Option 1 is immediately
+actionable. Three forward paths:
+
+* **Option 1 — Wait for bf16, run DN on it.** transformers loads
+  vanilla bf16 without the compressed-tensors MoE gap. 26 B bf16 is
+  too big for a single 16 GB GPU, so load with `bitsandbytes` 4-bit +
+  `device_map="auto"` across both 4060 Ti's. Hooks then need per-
+  device direction/mask tensors — 1 small DN patch, not days of work.
+  Probe contrast `<|tool_call>` vs `" Previous"` is still useful:
+  steers toward "emit tool_call" vs "end turn silently so drydock has
+  to fill." Highest-value path that actually gets us a tool for the
+  deployment model. ~30–60 min after download finishes.
+
+* **Option 2 — Stop and catalog.** Probes + drivers + GPU plumbing are
+  reusable. Park the pilot until transformers grows MoE+compressed-
+  tensors support for the existing AWQ-4bit checkpoint. Zero further
+  GPU burn; clean resume later.
+
+* **Option 3 — Re-label probes, try a different contrast.** Manually
+  split the 453 non-filler text responses into "legitimate task-
+  complete" vs "premature-stop". Needs 1–2 hr of labeling before any
+  model work. Only justifies itself if Option 1 fails.
+
+**Recommendation**: 1, with 2 as the fallback if bf16 + bnb 4-bit + DN
+still hits some third bug we can't solve today.
+
+### 11.5 Staged infrastructure (what survives a session loss)
+
+* Pause sentinels active: `/data3/drydock/research/STOP`,
+  `/data3/drydock/.pause_auto_release`,
+  `/data3/drydock/.pause_vllm_failover`. **Remove all three** to
+  restore normal automation.
+* vLLM was restarted with `--gpu-memory-utilization 0.90 --max-model-len 32768`
+  (down from 0.95 / 131072) because TP1 was OOMing during CUDA graph
+  capture. Container name unchanged (`gemma4`); to restore the
+  original config, `docker rm gemma4 && /data3/Models/start_gemma4.sh`.
+* Research experimenter is stopped (STOP sentinel). Best-metric
+  snapshot at pause: 4.725. Post-ban-list trend was negative (random
+  fallback was underperforming the banned `wrap_up_warn_at=100` LLM
+  proposal, which suggests the LLM proposer was earning its keep even
+  when it looked narrow).
+* DN source-of-truth: `/data3/Deep_Noir_1/` (separate repo, MIT). All
+  pilot code under `drydock_probes/` subdirectory; no changes to the
+  published paper or experiments.
+
+### 11.6 When resuming
+
+1. Verify bf16 download completed: `du -sh /data3/Deep_Noir_1/models/gemma-4-26b-a4b-it`
+   should be ~49 GB, with both `model-00001-of-00002.safetensors` and
+   `model-00002-of-00002.safetensors` present and `.cache/` empty.
+2. Test bf16 load in transformers (single process, 2-GPU device_map,
+   bnb 4-bit). Confirm LOAD REPORT shows **no MISSING keys**.
+3. If clean: `python3 discover_steering.py --model_path …/gemma-4-26b-a4b-it
+   --probes probes/drydock_wrap_vs_act.jsonl --meta probes/…meta.json
+   --probe_limit 100 --max_layers 5 --max_K 4 --model_kwargs '{"load_in_4bit":true,"device_map":"auto"}'`.
+4. If accuracy gain > 0 on labeled probes, that's the direction to
+   wire into Admiral as a new intervention. The hook itself needs a
+   separate serving path since vLLM doesn't expose activation hooks —
+   likely a sidecar HF-transformers process that Admiral queries only
+   when a detector fires. Design TBD after we see the gain number.
+
+### 11.7 Overnight (2026-04-24) autonomous session — results
+
+User directive: "try them all, if needed, keep going, heading to bed
+now." Executed Option 1 first, then pivoted to a data-driven version of
+Option 3 when Option 1 hit hard blockers.
+
+**Option 1 (DN on Gemma 4 26B) — BLOCKED by loader plumbing.**
+Six load-attempt variants all failed on different axes:
+  - AWQ-4bit (compressed-tensors MoE): `lm_head.weight` + expert
+    projections meta-initialized. Upstream transformers gap, confirmed
+    on both 5.6.2 and 5.7.0.dev0.
+  - bf16 + fp16 dtype + device_map=auto: last layer on `meta`, forward
+    crashed. 26.5B × 2 B = 53 GB doesn't fit 2×16 GB.
+  - bf16 + bnb-4bit + transformers-dev: `Params4bit.__new__()`
+    TypeError on `_is_hf_initialized` kwarg. bnb 0.49.2 missing it.
+  - bf16 + bnb-4bit + transformers 5.6.2 stable: same TypeError
+    (transformers 5.6.2 also passes the kwarg, not just dev).
+  - Same with monkey-patched Params4bit to swallow the kwarg:
+    `Tensor.item() cannot be called on meta tensors` in bnb's
+    state_dict save-path when CPU offload is enabled.
+  - Same with explicit device_map (17 layers GPU0, embeds+13 layers
+    GPU1) and CPU offload disabled: CUDA OOM on GPU 0 at 15 GiB during
+    load-time fp16 intermediate (bnb reads fp16 shard, quantizes on
+    GPU, moves on).
+
+Bottom line: transformers + bnb + Gemma 4 26B MoE is not a working
+combination today on 2×16 GB hardware. Would need either a newer bnb
+release that accepts `_is_hf_initialized` (trivial) AND a loader that
+streams-and-quantizes without a full fp16 intermediate per shard
+(non-trivial), or an alternate serving path (vLLM already loads it
+cleanly, but doesn't expose activation hooks; forking vLLM to add hooks
+is the real DN-on-Gemma-4 path and is a ~week-long project).
+
+**Pivot — session log behavioral mining (this IS the tool, no DN needed).**
+Ran `mine_behavior_patterns.py` across 400 real drydock sessions (14,822
+messages) to count actual model pathologies directly from traces:
+
+```
+IDENTICAL_TOOL_REPEAT        481 fires  (1.20 per session)
+EMPTY_ASSISTANT_AFTER_TOOL   254 fires  (0.64 per session; 61% of sessions hit)
+TOOL_ARGS_IGNORE_RESULT       45 fires  (0.11 per session)
+```
+
+The existing `detect_tool_call_loop(window=3)` already catches
+IDENTICAL_TOOL_REPEAT but fires advisory-only; the model ignores the
+nudge (CLAUDE.md learning #2: "Gemma 4 ignores advisory nudges"). The
+other two patterns have no current detector.
+
+**Two new proposed detectors, code written + validated end-to-end:**
+
+  `drydock/admiral/detectors_proposed.py` (NEW, NOT wired into
+  `run_all` — observation mode from §10 still binding).
+
+  1. `detect_empty_after_tool` — fires when the last assistant turn
+     had no content and no tool_calls, or when drydock's filler
+     `Previous turn ended; awaiting your next instruction.` sits where
+     the assistant response should be (retrospective equivalent).
+     Replay validation: **254 fires in 244 of 400 sessions (61%)**.
+     Intervention: directive telling the model its next turn MUST
+     produce a tool call or a text summary — no silent hand-back.
+
+  2. `detect_retry_after_error` — fires when an identical tool call
+     follows a tool result that looks like an error. Fires at
+     window=2 (earlier than the existing detector's window=3).
+     Replay validation: **32 fires in 23 of 400 sessions (5.8%)**.
+     Intervention: directive embedding the error snippet and naming
+     the repeated tool.
+
+**Data + artifacts written:**
+  - `/data3/Deep_Noir_1/drydock_probes/mine_behavior_patterns.py`
+  - `/data3/Deep_Noir_1/drydock_probes/validate_proposed_detectors.py`
+  - `/data3/Deep_Noir_1/drydock_probes/results/session_behavior_stats.json`
+  - `/data3/Deep_Noir_1/drydock_probes/results/session_behavior_report.md`
+  - `/data3/Deep_Noir_1/drydock_probes/results/proposed_detector_validation.json`
+  - `drydock/admiral/detectors_proposed.py` — in drydock tree, not
+    wired; audit before enabling.
+  - `tests/test_admiral_proposed.py` — **9/9 tests pass**.
+    Cover empty-assistant + drydock-filler cases, healthy-sequence
+    negative, retry-with-different-args negative, retry-after-success
+    negative, both-detectors-with-run_proposed positive/negative.
+
+### 11.8 What to do when you wake up
+
+1. Read `session_behavior_report.md` — the one-page summary of what
+   the 400-session mine found.
+2. Review `drydock/admiral/detectors_proposed.py`. If you like the two
+   detectors, wire them in by adding both functions to the tuple in
+   `drydock/admiral/detectors.py::run_all`. Nothing else needs to
+   change — existing `interventions.py` machinery handles any Finding.
+3. Decide whether to escalate `EMPTY_ASSISTANT_AFTER_TOOL` from
+   advisory to state-mutating. Given the 61%-of-sessions fire rate,
+   dropping the empty+filler pair from context and re-rolling the
+   turn (with the directive injected) is the aggressive move. But
+   this breaks the "never stop, only guide" rule — your call.
+4. Pause sentinels still active:
+   - `/data3/drydock/research/STOP` — stops `research_babysitter.sh`
+     respawn of the experimenter. Remove to resume the research loop.
+   - `/data3/drydock/.pause_auto_release` — stops the 6-hour PyPI
+     auto-release cron. Remove when you want to publish again.
+   - `/data3/drydock/.pause_vllm_failover` — stops the 5-min
+     respawn-if-down cron. **I added this sentinel tonight; the guard
+     itself is a 3-line patch in `scripts/vllm_failover.sh`. Keep
+     both or revert both together.** Remove sentinel to resume.
+5. vLLM container is back up on the original start config (0.95
+   util, 131072 ctx). Drydock TUI usable immediately.
+6. For the DN path itself: park it until either (a) transformers
+   lands proper MoE+compressed-tensors decompression for the
+   existing AWQ-4bit checkpoint, or (b) we commit to forking vLLM
+   to expose activation hooks. Neither is a this-week task; the
+   probe dataset + drivers are cold-storage-ready under
+   `/data3/Deep_Noir_1/drydock_probes/`.
+
+***
+

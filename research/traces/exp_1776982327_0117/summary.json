@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776982327_0117",
+  "ts": 1776982631,
+  "git_commit": "5804d70",
+  "config_sha": "0ac8887d03",
+  "metric": 3.9046,
+  "done": 19,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 19,
+  "elapsed_s": 291.96,
+  "note": "random knob:hard_stop_tool_calls: 100 -> 93"
+}

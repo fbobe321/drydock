@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776987942_0134",
+  "ts": 1776988239,
+  "git_commit": "5804d70",
+  "config_sha": "2f65538e65",
+  "metric": 3.5236,
+  "done": 17,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 17,
+  "elapsed_s": 289.47,
+  "note": "llm admiral_detector:EMPTY_RESULT_THRESHOLD -> 2 (Traces show the model looping on tool calls that return empty/zero results (e.g., 'retrieved 0 todos'). Lowering the threshold from 3 to 2 enables earlier FORCE_STOP to prevent these low-value loops.)"
+}

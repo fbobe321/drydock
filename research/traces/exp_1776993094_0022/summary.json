@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776993094_0022",
+  "ts": 1776993399,
+  "git_commit": "5804d70",
+  "config_sha": "b8de17fe55",
+  "metric": 4.0627,
+  "done": 20,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 20,
+  "elapsed_s": 295.37,
+  "note": "llm knob:wrap_up_warn_at -> 100 (Trace contrast shows top performers (exp_0004, 0030) use wrap_up_warn_at=100 to prevent the 'Previous turn ended' hijack from interrupting long tool-use sequences, which occurs at lower values.)"
+}

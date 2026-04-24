@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776954392_0025",
+  "ts": 1776954689,
+  "git_commit": "5804d70",
+  "config_sha": "dc386b5e1f",
+  "metric": 3.7396,
+  "done": 18,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 18,
+  "elapsed_s": 288.8,
+  "note": "random knob:loop_detector_window: 3 -> 5"
+}

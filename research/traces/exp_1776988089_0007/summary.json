@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776988089_0007",
+  "ts": 1776988386,
+  "git_commit": "5804d70",
+  "config_sha": "8d65221e92",
+  "metric": 3.5294,
+  "done": 17,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 17,
+  "elapsed_s": 289.0,
+  "note": "llm admiral_detector:REPEAT_WARNING_THRESHOLD -> 6 (Top performers (exp_0004, 0030) suggest delaying Admiral intervention to prevent the 'Previous turn ended' hijack during long tool sequences. Increasing from 4 to 6 reduces premature warnings.)"
+}

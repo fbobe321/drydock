@@ -1,0 +1,14 @@
+{
+  "exp_id": "exp_1776966582_0062",
+  "ts": 1776966881,
+  "git_commit": "5804d70",
+  "config_sha": "945997e178",
+  "metric": 3.716,
+  "done": 18,
+  "skipped": 0,
+  "timed_out": 0,
+  "recycles": 0,
+  "prompts_attempted": 18,
+  "elapsed_s": 290.64,
+  "note": "random env_flag:DRYDOCK_AUTO_CONTINUE_DISABLE: '1' -> '0'"
+}

@@ -1,0 +1,148 @@
+[target]
+model = "mistral-vibe-cli-latest"
+task = "unknown"
+
+[[knob]]
+name = "per_prompt_budget_sec"
+default = 300
+min = 300
+max = 3600
+mutable = true
+why = "Hard ceiling on a single user turn. Too low wastes work; too high lets loops run wild."
+value = 900
+
+[[knob]]
+name = "hard_stop_tool_calls"
+default = 100
+min = 30
+max = 250
+mutable = true
+why = "HARD_STOP_CALLS in agent_loop. Cap on tool-call depth per user turn."
+
+[[knob]]
+name = "wrap_up_warn_at"
+default = 40
+min = 10
+max = 100
+mutable = true
+why = "First progressive nudge. Earlier = tighter turns, may lose quality."
+
+[[knob]]
+name = "stop_now_warn_at"
+default = 60
+min = 20
+max = 150
+mutable = true
+why = "Second progressive nudge. Gemma often ignores the wrap-up; this is the harder prod."
+value = 82
+
+[[knob]]
+name = "temperature"
+default = 0.3
+min = 0.0
+max = 0.9
+mutable = true
+why = "Sampling temperature. Lower = more deterministic; higher = more exploration."
+value = 0.1
+
+[[knob]]
+name = "loop_detector_window"
+default = 3
+min = 2
+max = 6
+mutable = true
+why = "How many consecutive identical tool calls trigger the loop advisor."
+
+[[knob]]
+name = "struggle_threshold"
+default = 20
+min = 10
+max = 40
+mutable = true
+why = "Reads-without-a-write before admiral fires the struggle directive."
+value = 40
+
+[env_flags]
+DRYDOCK_AUTO_CONTINUE_DISABLE = "1"
+
+[prompts.gemma4]
+source_path = ""
+mutable = true
+why = "Single highest-leverage mutable target. Governs how Gemma 4 interprets every turn."
+
+[prompts.cli]
+source_path = ""
+mutable = true
+why = "Alternate non-Gemma system prompt. Rarely the right target but available for cross-model experiments."
+
+[[harness_threshold]]
+name = "MAX_CONSECUTIVE_SKIPS_BEFORE_RESET"
+default = 2
+min = 1
+max = 5
+mutable = true
+why = "Force ESC+/clear after N consecutive SKIPs. Lower = aggressive recycling; higher = tolerant of transient wedges."
+
+[[harness_threshold]]
+name = "SESSION_RESET_EVERY"
+default = 15
+min = 5
+max = 50
+mutable = true
+why = "Periodic /clear cadence in prompts. Tight cadence bounds context but costs reset overhead every N prompts."
+
+[[harness_threshold]]
+name = "SEND_PROMPT_RETRY_COUNT"
+default = 3
+min = 1
+max = 6
+mutable = true
+why = "How many times send_prompt_and_confirm re-types before marking SKIP. Each retry is ~120s."
+
+[[harness_threshold]]
+name = "SEND_PROMPT_WAIT_PER_RETRY_SEC"
+default = 120
+min = 30
+max = 300
+mutable = true
+why = "Seconds to wait for user-msg confirmation before retyping. Tighter = faster SKIP, may miss slow prompts."
+
+[[admiral_detector]]
+name = "REPEAT_WARNING_THRESHOLD"
+default = 4
+min = 2
+max = 8
+mutable = true
+why = "Consecutive identical tool calls before a WARNING. Lower = early nudge; higher = tolerant of legit repetition."
+
+[[admiral_detector]]
+name = "REPEAT_FORCE_STOP_THRESHOLD"
+default = 8
+min = 4
+max = 20
+mutable = true
+why = "Consecutive identical tool calls before FORCE_STOP. Must be >= REPEAT_WARNING_THRESHOLD."
+
+[[admiral_detector]]
+name = "EMPTY_RESULT_THRESHOLD"
+default = 3
+min = 2
+max = 6
+mutable = true
+why = "Check 0 (empty-result loop). Fire FORCE_STOP after N identical-call + empty-result in a row."
+
+[[admiral_detector]]
+name = "SAME_TOOL_NAME_REPEAT_LIMIT_BASH"
+default = 5
+min = 3
+max = 10
+mutable = true
+why = "Same-tool repetition limit for bash. Different from read/grep which need more headroom."
+
+[[admiral_detector]]
+name = "SAME_TOOL_NAME_REPEAT_LIMIT_READ"
+default = 7
+min = 4
+max = 12
+mutable = true
+why = "Same-tool repetition limit for read_file + grep. Investigation tools legitimately repeat more."
