@@ -1741,7 +1741,14 @@ class AgentLoop:
         # Claude Code's microCompact targets BOTH tool results AND
         # tool_use blocks; our old code only shrunk results.
         # Keep the last KEEP_RECENT assistant-with-tools messages full;
-        # truncate older ones' arguments to just {tool_name, path}.
+        # truncate older ones' arguments to a small VALID JSON stub.
+        # CRITICAL: arguments must remain valid JSON because vLLM's
+        # tool-call parser re-parses them as JSON. The old code that
+        # appended "\n[…truncated N bytes…]" injected raw newlines into
+        # the JSON string and made vLLM 400 every request that hit the
+        # truncated message — see issue #13 stress recurrence on
+        # 2026-04-25 (each stress run accumulated dozens of 400s after
+        # ~30 prompts as old write_file args got truncated this way).
         assistant_tc_idxs = [
             i for i, m in enumerate(self.messages)
             if m.role == Role.assistant and m.tool_calls
@@ -1757,13 +1764,29 @@ class AgentLoop:
                     args = tc.function.arguments
                     if len(args) <= SOFT_CAP_BYTES:
                         continue
-                    if "[…truncated" in args:
+                    if '"_truncated"' in args:
                         continue
-                    # Keep just enough to identify what was called
-                    tc.function.arguments = (
-                        args[:HEAD_BYTES]
-                        + f"\n[…truncated {len(args) - HEAD_BYTES} bytes…]"
-                    )
+                    # Try to keep the most-useful field (path / file_path /
+                    # command / cmd) plus a marker, rebuild as valid JSON.
+                    stub: dict[str, Any] = {
+                        "_truncated": True,
+                        "_original_bytes": len(args),
+                    }
+                    try:
+                        import json as _json
+                        parsed = _json.loads(args)
+                        if isinstance(parsed, dict):
+                            for k in ("path", "file_path", "command",
+                                      "cmd", "url", "file"):
+                                if k in parsed and isinstance(parsed[k], str):
+                                    v = parsed[k]
+                                    stub[k] = (
+                                        v if len(v) <= 200 else v[:200] + "…"
+                                    )
+                                    break
+                    except Exception:
+                        pass
+                    tc.function.arguments = json.dumps(stub, ensure_ascii=True)
 
     def _sanitize_message_ordering(self) -> None:
         """Fix any role ordering violations before sending to vLLM/Mistral.

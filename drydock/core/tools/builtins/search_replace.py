@@ -141,27 +141,62 @@ class SearchReplace(
                     if target.exists():
                         import logging as _log
                         existing_size = target.stat().st_size
-                        # SAFETY CHECK: refuse to shrink a file by >50% via the
-                        # raw-code fallback. The model almost certainly intended
-                        # a partial patch, not a full replace, if the new content
-                        # is dramatically shorter.
+                        # SAFETY CHECK: a raw-code overwrite that would shrink
+                        # the file by >50% is almost certainly a partial patch
+                        # the model intended to APPEND, not a full rewrite.
+                        # Old behavior REFUSED — model retried the same broken
+                        # call in a loop. Try APPEND first when the combined
+                        # file still parses cleanly (Python only); fall back
+                        # to the directive REFUSED only if append would break
+                        # the syntax.
                         if existing_size > 500 and len(raw_content) < existing_size * 0.5:
                             _log.getLogger(__name__).warning(
-                                "search_replace: REFUSING destructive overwrite of %s "
-                                "(existing=%d chars, new=%d chars, would shrink by %d%%)",
-                                target, existing_size, len(raw_content),
+                                "search_replace: shrink-overwrite would lose %d%% "
+                                "of %s (existing=%d, new=%d) — trying APPEND instead",
                                 100 - int(len(raw_content) * 100 / existing_size),
+                                target, existing_size, len(raw_content),
                             )
+                            existing_text = target.read_text(errors="replace")
+                            sep = "\n\n" if not existing_text.endswith("\n") else "\n"
+                            combined = existing_text + sep + raw_content + (
+                                "" if raw_content.endswith("\n") else "\n"
+                            )
+                            append_safe = True
+                            if target.suffix == ".py":
+                                try:
+                                    import ast as _ast
+                                    _ast.parse(combined)
+                                except SyntaxError:
+                                    append_safe = False
+                            if append_safe:
+                                _log.getLogger(__name__).info(
+                                    "search_replace: APPEND %d chars to %s (parsed clean)",
+                                    len(raw_content), target,
+                                )
+                                await self._write_file(target, combined)
+                                yield SearchReplaceResult(
+                                    file=str(target),
+                                    blocks_applied=1,
+                                    lines_changed=raw_content.count("\n") + 1,
+                                    warnings=[
+                                        "Appended raw content to end of file (no "
+                                        "SEARCH/REPLACE blocks sent). Use proper "
+                                        "SEARCH/REPLACE blocks for non-append edits."
+                                    ],
+                                    content=raw_content[:100] + "...",
+                                )
+                                return
                             raise ToolError(
                                 f"REFUSED: the raw content you sent ({len(raw_content)} "
                                 f"chars) is much shorter than the existing {target.name} "
-                                f"({existing_size} chars). This would destroy most of "
-                                f"the file. If you intended a small patch, use proper "
-                                f"SEARCH/REPLACE blocks:\n"
+                                f"({existing_size} chars), and appending it would break "
+                                f"the file's syntax. To add new code, use a SEARCH/REPLACE "
+                                f"block anchored on the last line of the file:\n"
                                 f"<<<<<<< SEARCH\n"
-                                f"[exact existing text to replace]\n"
+                                f"[the file's actual final line, copied exactly]\n"
                                 f"=======\n"
-                                f"[new text]\n"
+                                f"[the same final line]\n\n"
+                                f"[your new code]\n"
                                 f">>>>>>> REPLACE\n"
                                 f"If you intended a full rewrite, use write_file instead."
                             )
