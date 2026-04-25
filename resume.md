@@ -25,14 +25,16 @@
    - `feedback_local_proposer_only.md` — proposer must default to local vLLM,
      never silently phone home
 
-## Where things stand (snapshot at 2026-04-25 ~13:00 UTC)
+## Where things stand (snapshot at 2026-04-25 ~20:30 UTC)
 
 ### Wins this session
 | What | Result |
 |------|--------|
 | v2.7.5 shipped | yesterday's 4 GitHub issue fixes (#10/11/12/13) + PRD refresh |
 | v2.7.6 shipped | search_replace APPEND fallback + **truncation JSON-validity fix** (the actual root cause of the recurring vLLM 400 spiral) |
-| Stress write rate | 10% pre-fix → ~44% sustained post-fix (4.4× improvement) |
+| **v2.7.7 shipped** (commit 540c0e2) | **search_replace REFUSED-raw loop-breaker**: on 2nd+ consecutive REFUSED to same file, embed file head/tail in error + escalate directive (write_file overwrite=True OR proper SEARCH/REPLACE). 4 regression tests in `tests/tools/test_search_replace_refused_loop_breaker.py`. |
+| Stress write rate | 10% pre-fix → ~44% (post v2.7.6) → **54% sustained** (post v2.7.7) |
+| `retry_after_error:search_replace` | 14/6h pre-fix → **0** REFUSED-raw fires post-v2.7.7 |
 | vLLM 400s | 315 per 30 min pre-fix → 0 per hour post-fix |
 
 ### Active processes (do NOT kill these)
@@ -49,7 +51,7 @@
 - `/data3/drydock/.pause_vllm_failover` — vllm_failover script is paused
 - `/data3/drydock/research/STOP` — meta-harness experimenter paused
 - `/data3/drydock/.pause_auto_release` — **NOT SET** (auto-release is live;
-  next cron tick at 0/6/12/18 UTC will ship a v2.7.7 if you commit anything)
+  next cron tick at 0/6/12/18 UTC will ship a v2.7.8 if you commit anything)
 
 ## STATUS COMMANDS — run these first
 
