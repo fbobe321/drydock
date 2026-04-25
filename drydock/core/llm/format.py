@@ -245,6 +245,21 @@ class APIToolFormatHandler:
             elif _re.match(r"^(call:\w+\{|\w+\{content:)", stripped):
                 content = None
             elif (not message.tool_calls
+                  and _re.match(
+                      r"^[a-z_][a-z0-9_]*\s*\(\s*[a-zA-Z_]\w*\s*=.*\)\s*$",
+                      peeled, flags=_re.DOTALL,
+                  )):
+                # Issue #11: Gemma 4 sometimes emits Python-syntax tool
+                # calls as plain text instead of using the OpenAI
+                # tool_calls protocol, e.g.
+                #   `task(task="Explore project", agent="explore")`
+                # Nothing runs and the user sees a dead-looking response.
+                # Match `name(arg=...)` shape covering the entire content
+                # (DOTALL for multi-line strings inside args) and only
+                # when there are no real tool_calls. Suppress so the
+                # agent loop's empty-content recovery nudge fires.
+                content = None
+            elif (not message.tool_calls
                   and (_re.match(r"^thought\s*/", stripped)
                        or _re.match(r"^thought\s*\n", stripped))):
                 # Narrow Gemma-4 thinking-channel leak: content begins

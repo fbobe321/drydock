@@ -890,10 +890,12 @@ other two patterns have no current detector.
 
 1. Read `session_behavior_report.md` — the one-page summary of what
    the 400-session mine found.
-2. Review `drydock/admiral/detectors_proposed.py`. If you like the two
+2. ~~Review `drydock/admiral/detectors_proposed.py`. If you like the two
    detectors, wire them in by adding both functions to the tuple in
-   `drydock/admiral/detectors.py::run_all`. Nothing else needs to
-   change — existing `interventions.py` machinery handles any Finding.
+   `drydock/admiral/detectors.py::run_all`.~~ **Wired in 2026-04-24.**
+   Both functions are now called from `run_all`; advisory-only; existing
+   `interventions.py` handles the Findings. Watch for `empty_after_tool:*`
+   and `retry_after_error:*` codes in the intervention log.
 3. Decide whether to escalate `EMPTY_ASSISTANT_AFTER_TOOL` from
    advisory to state-mutating. Given the 61%-of-sessions fire rate,
    dropping the empty+filler pair from context and re-rolling the

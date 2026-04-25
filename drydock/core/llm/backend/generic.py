@@ -84,6 +84,26 @@ def _lenient_json_loads(s: str) -> dict[str, Any]:
 class OpenAIAdapter(APIAdapter):
     endpoint: ClassVar[str] = "/chat/completions"
 
+    @staticmethod
+    def _strip_control_chars(value: Any) -> Any:
+        """Recursively strip C0 control chars (except \\t \\n \\r) from strings.
+
+        vLLM's tool-call parser re-parses ``tool_calls.function.arguments``
+        as JSON; an embedded NUL or ESC byte from a bash result that rode
+        through the conversation history makes the second-level
+        ``json.loads`` fail with "Invalid control character at line 1 col N"
+        and the whole request 400s. Sanitize here so no path through the
+        OpenAI adapter can emit raw control bytes — covers ``content``,
+        ``arguments``, tool descriptions, and anything else recursively.
+        """
+        if isinstance(value, str):
+            return "".join(c for c in value if c >= " " or c in "\n\r\t")
+        if isinstance(value, dict):
+            return {k: OpenAIAdapter._strip_control_chars(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [OpenAIAdapter._strip_control_chars(v) for v in value]
+        return value
+
     def build_payload(
         self,
         model_name: str,
@@ -182,7 +202,12 @@ class OpenAIAdapter(APIAdapter):
             payload["stream_options"] = stream_options
 
         headers = self.build_headers(api_key)
-        # Use ensure_ascii=True to prevent encoding issues with vLLM's JSON parser
+        # Strip C0 control bytes from strings anywhere in the payload before
+        # serialization. ensure_ascii=True escapes them in the OUTER JSON,
+        # but vLLM re-parses tool_calls.function.arguments as JSON and a
+        # raw \x00/\x1b ridden through from a bash result blows up the
+        # second-level parse with the 400 the user hits in issue #13.
+        payload = self._strip_control_chars(payload)
         body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
 
         return PreparedRequest(self.endpoint, headers, body)

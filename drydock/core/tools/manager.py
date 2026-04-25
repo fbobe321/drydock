@@ -204,9 +204,21 @@ class ToolManager:
             # break) keeps it going without needing an explicit list.
             "todo",
         }
+        # Gemma-derived models served under different names (navygpt etc.)
+        # need the same scaffolding — the loop-prone tools aren't a Gemma
+        # naming issue, they're an "active params under ~5B" issue. Keep
+        # the list explicit until ModelConfig grows a `model_family` field.
+        # Issue #10 was filed on `navygpt` which slipped through because
+        # the original check matched only "gemma" in the name.
+        _GEMMA4_DERIVED_HINTS = ("gemma", "navygpt")
         try:
             active = self._config.get_active_model()
-            if "gemma" in active.name.lower():
+            name_lc = active.name.lower()
+            alias_lc = (active.alias or "").lower()
+            if any(
+                hint in name_lc or hint in alias_lc
+                for hint in _GEMMA4_DERIVED_HINTS
+            ):
                 runtime_available = {
                     name: cls for name, cls in runtime_available.items()
                     if name not in _GEMMA4_AUTO_DISABLE

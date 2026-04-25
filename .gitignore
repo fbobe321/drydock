@@ -202,3 +202,10 @@ tests/playground/*
 logs/
 test_bank_results/
 .pause_auto_release
+.pause_vllm_failover
+
+# Research loop: per-experiment outputs are high-churn and regenerate
+# from results.tsv + config_best.toml. Stop sentinel is intentional state.
+research/staged/
+research/traces/
+research/STOP

@@ -254,6 +254,29 @@ class AssistantMessage(StreamingMessageBase):
             prepared = "\n" + prepared
         await super().append_content(prepared)
 
+    async def stop_stream(self) -> None:
+        # Issue #12: when a Gemma 4 response streams in chunks too small
+        # to trip _break_walls_of_text's >200-char per-chunk threshold,
+        # the final accumulated content can be a long no-newline blob —
+        # paragraph breaks, inline headings, and numbered list items all
+        # rolled into one wall. Apply wall-rescue once at stream end on
+        # the full content; if it injected paragraph structure, replay
+        # the rescued text into the markdown widget.
+        if (
+            self._stream is not None
+            and self._markdown is not None
+            and self._content
+        ):
+            rescued = _break_walls_of_text(self._content)
+            if rescued != self._content:
+                await self._stream.stop()
+                self._stream = None
+                self._content = rescued
+                await self._markdown.update("")
+                stream = self._ensure_stream()
+                await stream.write(rescued)
+        await super().stop_stream()
+
     def compose(self) -> ComposeResult:
         if self._content:
             self._content_initialized = True

@@ -1,7 +1,7 @@
 # DryDock — Local CLI Coding Agent
 
 **Repository:** https://github.com/fbobe321/drydock
-**PyPI:** https://pypi.org/project/drydock-cli/ (v2.6.107)
+**PyPI:** https://pypi.org/project/drydock-cli/ (v2.7.4)
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
 
 ## Vision
@@ -10,11 +10,19 @@ Best-in-class local coding agent. Build, debug, and ship software using local
 LLMs on consumer hardware — and **prove it actually works** with a test
 harness that drives the real TUI like a real user, not a tool-call counter.
 
+Drydock is a **living harness that adapts to tasks and models**. Admiral
+(in-process supervisor) watches each session and applies detector-driven
+interventions; the Meta-Harness experimenter drives an overnight auto-tuning
+loop against the stress test and proposes configuration or prompt mutations
+from trace data. Both run with a local-LLM-first, air-gapped posture —
+proposers and analyzers default to the operator's own vLLM instance, and
+cloud escalation is gated behind an explicit env flag.
+
 ## Current Status
 
 - **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (MoE, 4B active params per
   token, ~70 tok/s) via vLLM Docker on 2x RTX 4060 Ti 16GB
-- **Version:** 2.6.107 on PyPI. The v2.6.79–v2.6.107 wave shipped 28+
+- **Version:** 2.7.4 on PyPI. The v2.6.79–v2.6.107 wave shipped 28+
   loop-prevention iterations: Read-before-Write contract, read dedup,
   terse results, token sanitization, system-reminder framing, JSON
   sanitizer, field-aware path cleaner, fake-tool-call text detection,
@@ -25,6 +33,11 @@ harness that drives the real TUI like a real user, not a tool-call counter.
   80K compact threshold, and finally the **session-reset-every-10-
   prompts pattern** (v2.6.107) borrowed from
   [Adversarial Code Review](https://asdlc.io/patterns/adversarial-code-review/).
+  The v2.6.108–v2.7.4 wave added **Admiral** (in-process supervisor,
+  Phase 1→3b + empty-after-tool and retry-after-error detectors), the
+  **Meta-Harness experimenter** (Karpathy-style overnight auto-tuning
+  with airgap-locked proposer), and a batch of rendering + tool-call
+  serialization fixes from user-reported GitHub issues #8–#13.
 - **Users can:** build projects from PRDs, fix bugs, review code, refactor
   — through the TUI only (headless mode is gone)
 
@@ -64,9 +77,15 @@ Rules of engagement:
 **Best run so far:** v2.6.102 reached 96/201 prompts before tool calls
 started returning `<user_cancellation>` infinite loop.
 
-**Current run:** v2.6.107 with session-reset-every-10 pattern. Cron
-job sends hourly status to Telegram (`scripts/stress_telegram_status.py`).
-If a run completes 201 prompts, the goal extends to 2000 prompts.
+**Current focus:** The stress test is the historical benchmark, but
+active development has shifted to Admiral (in-process supervisor that
+actuates on detectors without touching the harness) and the Meta-Harness
+experimenter (overnight config-mutation loop that optimises drydock's
+own knobs against the suite). Both feed the same goal — drydock that
+holds up under unattended multi-hour workloads — but they exercise
+different axes. Hourly Telegram status cron
+(`scripts/stress_telegram_status.py`) is still wired; bring it online
+with a fresh run when a 2.7.x release should be pressure-tested.
 
 The pattern of failure modes hit (and shipped fixes for):
 - Tight identical-call loops (v2.6.79–v2.6.95)
@@ -232,6 +251,87 @@ is codified in memory as
 - `auto_release.sh` and `watchdog.sh` cron jobs respect pause flags
   at `.pause_auto_release` and `.pause_watchdog` for manual debugging
 
+### Admiral — in-process supervisor
+Admiral is a Textual asyncio task attached to the running `AgentLoop`.
+It polls message history every 5 s, runs a battery of detectors over
+the recent window, and when a finding qualifies it injects a
+`<system-reminder>` via the existing `_inject_system_note` channel.
+Never stops the session — interventions are advisory, matching the
+project rule in `feedback_no_tool_errors_for_loop_detection.md`.
+
+Shipped (v2.6.137 → v2.7.4):
+
+- **Phase 1 — heuristic detectors.** `detect_tool_call_loop` (3+
+  identical calls in a row) and `detect_struggle` (20+ non-write calls
+  since the last write). Append-only audit log at
+  `~/.drydock/logs/admiral_history.log`; 60 s dedup window so the same
+  directive doesn't fire repeatedly.
+- **Phase 2 — local-LLM meta-analysis.** When a heuristic finding has
+  no canned directive, `llm_analyzer.analyze` asks the local model
+  (via the session's own backend, temp=0.1) for a DIRECTIVE or a
+  STUMPED response given the last 12 turns plus the detector code.
+  If STUMPED, `opus_escalator` escalates to Claude Opus (Anthropic SDK
+  if key present, `claude -p` subprocess as fallback) — **only when
+  `ADMIRAL_ALLOW_CLOUD_ESCALATION=1`**; default posture is local-only
+  to preserve the air-gap pitch.
+- **Phase 3a — hyperparameter adaptation.** `task_classifier` labels
+  each session (build / bugfix / explore / refactor); `metrics.py`
+  writes one JSONL line per finished session; `tuning.py` maintains
+  per-(model, task) knob overrides at `~/.drydock/admiral_tuning.json`.
+  `apply_to_agent_loop` writes private `_admiral_*` attributes the
+  main loop reads — wall-clock budget, hard-stop, warn thresholds,
+  temperature, detector windows. Safe no-op until a tuning file exists.
+- **Phase 3b — gated code proposals.** Admiral can propose a code-level
+  change (not just a directive); proposals are written to
+  `~/.drydock/admiral_proposals/` and surface in `admiral_probe`. No
+  auto-merge — user reviews and applies.
+- **Phase 4+ detectors (v2.7.4 / 2026-04-24).** `detect_empty_after_tool`
+  fires when an assistant message after a tool result is empty or pure
+  filler; `detect_retry_after_error` fires when the model retries the
+  exact failing call after the previous attempt errored. Both wired
+  into `run_all`; retroactive validation on 50 sessions from
+  `~/.vibe/logs/session/` shows empty 68% / retry 2%, matching the
+  mine baseline (61% / 5.8%).
+- **Directives rubric** (`Admiral.md`) — the contract Admiral holds
+  drydock to. Used in Phase 2 analyzer prompts so directive quality
+  stays stable across runs.
+- **Observability — `admiral_probe.py`.** Read-only HTTP probe on
+  `0.0.0.0:8878` that exposes telemetry as JSON (`history_tail`, PID
+  list, drydock version). Pure log-tailer — no drydock imports, so
+  restarts are unnecessary on detector code changes.
+
+### Meta-Harness — overnight auto-tuning
+Karpathy-style autoresearch scaffold at `research/`. The experimenter
+runs a shakedown batch, scores it, and evolves drydock's configuration
+between rounds. Proposals come from either a blind random mutator or
+an LLM-backed `proposer.py` that reads source + recent traces +
+`results.tsv` and suggests ONE contrastive mutation per round.
+
+- **Mutation surface.** `research/config_base.toml` exposes ~16 knobs
+  spanning Admiral detector thresholds, harness timings, session-reset
+  cadence, and Gemma-4-specific prompts. Target rotation is mandatory
+  when one knob class dominates ≥70% of the recent 15 rounds.
+- **Airgap-locked proposer.** Default transport is local vLLM via
+  `DRYDOCK_RESEARCH_PROPOSER_URL` (the same balancer the TUI uses) and
+  `DRYDOCK_RESEARCH_PROPOSER_MODEL=gemma4`. Opus is gated behind
+  `--proposer opus` AND an explicit `ADMIRAL_ALLOW_CLOUD_ESCALATION=1`,
+  so a self-tuning loop can't silently phone home in an air-gapped
+  deployment. Rule recorded in memory as
+  `feedback_local_proposer_only.md`.
+- **Experimenter safeguards.** Duplicate `(target, name, value)`
+  proposals are rejected up front; `mutate_random` reads ban-lists from
+  `config_base` (retired knobs don't resurface); no-op integer samples
+  are rejected; each promising round gets median-of-3 replication to
+  separate signal from variance.
+- **Self-heal.** `research_babysitter.sh` hourly cron restarts a stuck
+  experimenter. `DRYDOCK_FORCE_VERSION` env var lets the experimenter
+  request minor/major bumps without waiting for the normal auto-release
+  cadence.
+- **Kernel overlay.** Per-round configs are applied as a TOML
+  parse+rewrite on the operator's real `~/.drydock/config.toml` (not an
+  append), so the test config always sits on top of the user's actual
+  providers/credentials and can be rolled back cleanly.
+
 ### Read-only bash auto-accept
 The bash tool's default allowlist now covers most read-only commands
 without requiring per-user configuration:
@@ -297,6 +397,120 @@ order:
 
 Auto-created if none exist. AGENTS.md is essential for devstral
 (it loops without one) but Gemma 4 works without it.
+
+## Recent fixes (April 16–24, 2026)
+
+### v2.7.4 + unreleased (April 24) — GitHub issue triage batch
+Four user-reported bugs from live TUI usage, each with regression
+tests that fail without the fix:
+
+- **Issue #13 — JSONDecodeError on `/v1/chat/completions`,
+  `/compact` won't clear it.** A bash tool result containing a raw
+  `\x00` or `\x1b` ridden into the conversation history survived
+  compaction. `ensure_ascii=True` escaped control chars in the OUTER
+  body, but vLLM's tool-call parser re-parses
+  `tool_calls.function.arguments` as JSON and choked on the literal
+  control byte in the unescaped string. Fix: recursive
+  `_strip_control_chars` over the whole payload in `OpenAIAdapter`.
+  Mirrors `ReasoningAdapter._sanitize_content` but covers `content`,
+  `arguments`, and tool descriptions in one pass.
+- **Issue #12 — missing whitespace/newlines after hidden
+  reasoning/tool-call blocks.** `_break_walls_of_text` only fires
+  when called per-chunk with >200 chars, so streaming chunks never
+  trip it. The final accumulated content could still be a long
+  no-newline blob. Fix: override `AssistantMessage.stop_stream` to
+  run wall-rescue once on the full content at stream end and replay
+  the rescued text into the markdown widget.
+- **Issue #11 — `task(task=..., agent=...)` printed as plain text.**
+  Gemma 4 sometimes emits a real tool call as Python-syntax text
+  instead of using the `tool_calls` protocol; nothing ran and the
+  TUI sat idle. The v2.6.91 fake-tool-call nuker handled
+  `call:name{...}` but not `name(arg=...)`. Added a regex branch that
+  matches when the entire content (after peeling optional `thought`
+  prefix) is a function-call shape with no real tool_calls, so the
+  agent loop's recovery nudge fires.
+- **Issue #10 — `todo` loop on `navygpt` (Gemma-derived model).** The
+  auto-disable set for loop-prone tools gated on `"gemma" in name`;
+  navygpt slipped through under its own alias. Broadened the
+  substring hint list to cover known Gemma-derived names and checked
+  both `name` and `alias`. Until ModelConfig grows a
+  `model_family` field, the list stays explicit.
+
+### v2.7.4 (April 24) — Admiral Phase-4 detectors wired
+`detect_empty_after_tool` and `detect_retry_after_error` (shipped as
+proposals earlier) are now invoked by `admiral.detectors.run_all` so
+they actually fire in live sessions. 9 new unit tests +
+retroactive validation on 50 real sessions (empty 68%, retry 2%,
+matches 400-session mine baseline).
+
+### v2.7.x research improvements (April 19–22)
+- **Meta-Harness integration** — Karpathy-style overnight auto-tuning
+  loop shipped in v2.6.146. Experimenter mutates config, runs a
+  shakedown batch, logs trace, scores, iterates.
+- **Airgap-locked proposer** — local vLLM by default, Opus gated
+  behind an explicit env flag. Three layers of protection so a
+  self-tuning loop can't silently phone home. See
+  `feedback_local_proposer_only.md`.
+- **Prompt mutation surface** wired through proposer → experimenter
+  → kernel → drydock, so the experimenter can evolve prompt text in
+  addition to numeric knobs.
+- **Proposer deduplication** — duplicate `(target, name, value)`
+  proposals rejected; `mutate_random` respects ban-lists in
+  `config_base` (retired knobs don't resurface); no-op integer
+  samples rejected; mandatory target rotation when one knob class
+  dominates ≥70% of recent 15 rounds.
+- **Median-of-3 replication** — each promising round replicated
+  twice more to separate signal from variance before it's promoted
+  to `config_best`.
+- **research_babysitter.sh** hourly cron restarts a stuck
+  experimenter; `DRYDOCK_FORCE_VERSION` env var lets the experimenter
+  request out-of-band version bumps.
+
+### v2.6.145+ (April 20) — admiral watcher sees raw-markdown leakage
+`scripts/stress_watcher.py` tails the stress log for
+`[rec-check] ... raw_md=N`, fires a `stress-alert` when ≥3 of the
+last ≥10 rec-checks leak raw markdown. Part of the "others on
+different machines" observability lift.
+
+### v2.6.144 (April 19) — auto-"Continue." wedge fix + stress hardening
+- `DRYDOCK_AUTO_CONTINUE_DISABLE` env gate — the agent-loop
+  auto-"Continue." injection was wedging stress runs on text-only
+  prompts. Env gate lets the stress harness disable it without a code
+  change. See `project_drydock_auto_continue_loop.md`.
+- `break user turn on text-only assistant response` — when the model
+  emits a text-only turn with no tool calls, the user-turn ends cleanly
+  instead of being re-prompted into another tool-call attempt.
+- **stress_watcher** catches orphan/retry/skip patterns and actuates
+  via SIGUSR1 — the harness respawns the TUI on signal so a wedged
+  session doesn't require a babysitter.
+
+### v2.6.141–v2.6.143 (April 17–18) — Admiral Phase 1 through 3b
+Three-week arc (in a week): in-process supervisor → local-LLM
+meta-analysis → hyperparameter adaptation + gated code proposals.
+Details in the Admiral section above. v2.6.142/143 fixed
+stress-harness memory leaks that were masquerading as drydock leaks;
+v2.6.141 shipped the observation-mode audit after the user's
+"let's slow down" directive.
+
+### v2.6.137–v2.6.140 (April 17) — Admiral.md + observability
+- `Admiral.md` Directives rubric — the contract Admiral holds drydock
+  to, referenced by Phase 2 analyzer prompts.
+- `admiral_probe.py` read-only HTTP probe on `0.0.0.0:8878` for the
+  dashboard tab (192.168.50.21 box pulls `/api/admiral`).
+- `.vibe` → `drydock` refactor across the repo. Log paths moved to
+  `~/.drydock/logs/`; `~/.vibe/logs/` still tailed for
+  back-compatibility.
+
+### v2.6.134–v2.6.136 (April 17) — user-reported rendering/stop fixes
+- **Issue #8** — walls of text in TUI assistant responses. First pass:
+  `_break_walls_of_text` promotes inline bold headings and numbered
+  lists to real blocks. Reopen fix landed in v2.6.137 with a more
+  aggressive pass for the long-prose-no-newlines case.
+- **Issue #9** — per-prompt limits too aggressive on hard tasks.
+  Budget raised.
+- **"when to stop vs continue"** — Gemma 4 was treating mid-turn
+  planning as a stop signal. Prompt + nudge adjustments so the model
+  only declares done when a real tool call chain has completed.
 
 ## Recent fixes (April 13–15, 2026)
 
@@ -535,13 +749,25 @@ Second claude-code pass produced two more wins:
 
 ## Roadmap
 
-### Currently in flight (April 15, 2026)
-- **200-prompt stress test** running against v2.6.107 (PID
-  1614232 as of writing). Hourly Telegram status via cron. If the
-  current run completes 201 prompts cleanly, goal extends to 2000.
+### Currently in flight (April 24, 2026)
+- **GitHub issue triage** — 4 user-reported bugs (#10–#13) fixed this
+  week, all with regression tests. Remaining open issues should be
+  picked up on sight; `feedback_proactive_github_issues.md` codifies
+  the rule.
+- **Admiral observation mode** — after the "let's slow down" directive
+  (v2.6.141), Admiral is wired but the policy cadence is deliberate.
+  New detectors (`detect_empty_after_tool`, `detect_retry_after_error`)
+  landed in v2.7.4 but won't fire in operator-running TUIs until the
+  `.pause_auto_release` flag is lifted or they `pip install -e` the
+  source tree.
+- **Meta-Harness experimenter** — overnight auto-tuning loop runs
+  against the shakedown suite. Active work: proposer rigor
+  (dedup, rotation, no-op rejection, median-of-3 replication),
+  airgap lock verification. The `research/STOP` sentinel holds the
+  loop during manual debugging.
 - **Telegram notifications**: `scripts/stress_telegram_status.py`
-  fires every hour via crontab; reports prompt progress, session
-  health, dup-ratio, max-consecutive, error count.
+  still wired; currently idle. Reattach when a long stress run
+  should be pressure-tested against a 2.7.x release.
 
 ### Likely to retire after v2.6.107 proves out
 With session-reset every 10 prompts, several earlier safety nets

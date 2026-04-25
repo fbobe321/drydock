@@ -96,8 +96,17 @@ def detect_struggle(messages: Sequence[LLMMessage], threshold: int = 20) -> Find
 
 def run_all(messages: Sequence[LLMMessage]) -> list[Finding]:
     """Run every detector and return all findings that fire."""
+    from drydock.admiral.detectors_proposed import (
+        detect_empty_after_tool,
+        detect_retry_after_error,
+    )
     results: list[Finding] = []
-    for fn in (detect_tool_call_loop, detect_struggle):
+    for fn in (
+        detect_tool_call_loop,
+        detect_struggle,
+        detect_empty_after_tool,
+        detect_retry_after_error,
+    ):
         f = fn(messages)
         if f is not None:
             results.append(f)
