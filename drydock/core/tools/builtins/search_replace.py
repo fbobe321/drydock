@@ -174,6 +174,9 @@ class SearchReplace(
                                     len(raw_content), target,
                                 )
                                 await self._write_file(target, combined)
+                                self.state.__dict__.setdefault(
+                                    "_sr_refused_raw_history", {}
+                                ).pop(str(target), None)
                                 yield SearchReplaceResult(
                                     file=str(target),
                                     blocks_applied=1,
@@ -186,11 +189,50 @@ class SearchReplace(
                                     content=raw_content[:100] + "...",
                                 )
                                 return
-                            raise ToolError(
+                            # Track consecutive REFUSED-raw failures per file
+                            # so we can escalate when the model retries the same
+                            # broken raw-content call. Pattern observed in
+                            # admiral logs: 14 retry_after_error:search_replace
+                            # fires per 6h, all with "REFUSED: the raw content".
+                            refused_state = self.state.__dict__.setdefault(
+                                "_sr_refused_raw_history", {}
+                            )
+                            refused_key = str(target)
+                            refused_entry = refused_state.get(
+                                refused_key, {"count": 0, "last_len": 0}
+                            )
+                            refused_entry["count"] += 1
+                            refused_entry["last_len"] = len(raw_content)
+                            refused_state[refused_key] = refused_entry
+                            base_msg = (
                                 f"REFUSED: the raw content you sent ({len(raw_content)} "
                                 f"chars) is much shorter than the existing {target.name} "
                                 f"({existing_size} chars), and appending it would break "
-                                f"the file's syntax. To add new code, use a SEARCH/REPLACE "
+                                f"the file's syntax."
+                            )
+                            if refused_entry["count"] >= 2:
+                                head = existing_text[:1500] if "existing_text" in locals() else target.read_text(errors="replace")[:1500]
+                                tail_src = existing_text if "existing_text" in locals() else target.read_text(errors="replace")
+                                tail = tail_src[-800:] if len(tail_src) > 2300 else ""
+                                tail_block = (
+                                    f"\n-----FILE TAIL (last 800 chars)-----\n{tail}\n"
+                                    if tail else ""
+                                )
+                                raise ToolError(
+                                    f"{base_msg}\n\n[LOOP-BREAKER: this is the "
+                                    f"#{refused_entry['count']} consecutive REFUSED on "
+                                    f"{target.name}. Stop sending the same raw content. "
+                                    f"Actual file content (first 1500 chars of "
+                                    f"{existing_size} bytes):\n"
+                                    f"-----FILE HEAD-----\n{head}\n-----FILE END HEAD-----"
+                                    f"{tail_block}\n"
+                                    f"Choose ONE: (a) call write_file with overwrite=True "
+                                    f"to replace the whole file with your raw content, OR "
+                                    f"(b) send a proper SEARCH/REPLACE block anchored on "
+                                    f"text from the file head/tail above.]"
+                                )
+                            raise ToolError(
+                                f"{base_msg} To add new code, use a SEARCH/REPLACE "
                                 f"block anchored on the last line of the file:\n"
                                 f"<<<<<<< SEARCH\n"
                                 f"[the file's actual final line, copied exactly]\n"
@@ -204,6 +246,9 @@ class SearchReplace(
                             "search_replace: no blocks — overwriting %s", target,
                         )
                         await self._write_file(target, raw_content)
+                        self.state.__dict__.setdefault(
+                            "_sr_refused_raw_history", {}
+                        ).pop(str(target), None)
                         yield SearchReplaceResult(
                             file=str(target),
                             blocks_applied=1,
@@ -340,6 +385,10 @@ class SearchReplace(
             # Success → reset the fail counter for this file
             state = self.state.__dict__.setdefault("_sr_fail_history", {})
             state.pop(str(file_path), None)
+            refused_state = self.state.__dict__.setdefault(
+                "_sr_refused_raw_history", {}
+            )
+            refused_state.pop(str(file_path), None)
 
         modified_content = block_result.content
 

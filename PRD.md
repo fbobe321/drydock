@@ -1,7 +1,7 @@
 # DryDock — Local CLI Coding Agent
 
 **Repository:** https://github.com/fbobe321/drydock
-**PyPI:** https://pypi.org/project/drydock-cli/ (v2.7.4)
+**PyPI:** https://pypi.org/project/drydock-cli/ (v2.7.6)
 **License:** Apache 2.0 (fork of [mistralai/mistral-vibe](https://github.com/mistralai/mistral-vibe))
 
 ## Vision
@@ -398,6 +398,54 @@ order:
 Auto-created if none exist. AGENTS.md is essential for devstral
 (it loops without one) but Gemma 4 works without it.
 
+## Recent fixes (April 25, 2026)
+
+### v2.7.6 (April 25, 09:18 CDT) — truncation JSON-validity fix
+**Root cause of the recurring vLLM 400 spiral.** Live capture from a
+2000-prompt stress run pinpointed it: `_truncate_old_tool_results` was
+shrinking old assistant `tool_calls.function.arguments` by appending
+`"\n[…truncated N bytes…]"` directly into the JSON-string field. vLLM's
+tool-call parser re-parses arguments as JSON; raw `\n` (0x0A) inside a
+JSON string is invalid → `JSONDecodeError: Invalid control character
+at: line 1 column 401` → HTTP 400 → drydock's "6 consecutive errors"
+banner → harness `/clear` → prompt lost. The pattern repeated every
+~30 prompts as truncation kicked in, costing dozens of prompts per
+batch.
+
+Fix in `agent_loop.py::_truncate_old_tool_results`: rebuild the
+truncated arguments as a small VALID JSON stub (`{"_truncated": true,
+"_original_bytes": N, "<id_field>": ...}`) preserving the most-useful
+identifying field (path / file_path / command / cmd / url / file)
+from the parsed original. 5 regression tests in
+`tests/test_truncate_args_valid_json.py`; 2 of them fail with the
+exact "char 400" error without the fix.
+
+**Stress measurement:** before fix, write rate 10% / vLLM 400s
+315 per 30 min. After fix, write rate sustained at ~44% / vLLM 400s
+0 per hour. **4.4× correctness improvement** on the same workload.
+
+### v2.7.6 (April 25) — search_replace APPEND fallback
+The 2026-04-25 stress run also exposed a search_replace REFUSED loop:
+Gemma 4 sent a single new function with no SEARCH/REPLACE markers,
+the safety check refused as "would shrink the file by 90%", model
+retried the same broken call, prompts dropped. Model intent in this
+shape is APPEND, not rewrite.
+
+Fix in `search_replace.py`: try appending the raw content first; for
+.py files only commit if the combined text still parses cleanly; if
+syntax breaks, return a directive REFUSED that explains the
+EOF-anchored SEARCH/REPLACE pattern. Tests in
+`tests/tools/test_search_replace_append_fallback.py`.
+
+### v2.7.5 (April 25, 07:25 CDT) — yesterday's GitHub issue batch
+Auto-release shipped the four fixes from 2026-04-24 plus the PRD
+refresh:
+- #13 control-char JSON sanitization in OpenAIAdapter
+- #11 fake `task(...)` text nuker in format.py
+- #12 wall-rescue at stream end in messages.py
+- #10 navygpt auto-disable in tool manager
+- PRD.md refresh for v2.7.4 (Admiral, Meta-Harness sections)
+
 ## Recent fixes (April 16–24, 2026)
 
 ### v2.7.4 + unreleased (April 24) — GitHub issue triage batch
@@ -749,7 +797,16 @@ Second claude-code pass produced two more wins:
 
 ## Roadmap
 
-### Currently in flight (April 24, 2026)
+### Currently in flight (April 25, 2026)
+- **2000-prompt stress test** running against v2.7.6 on
+  `/data3/drydock_test_projects/403_tool_agent` (PID 3713698, log
+  `/tmp/stress_2000_1777119799.log`). At 5+ hours in: 189/1658 prompts
+  done, write rate ~44% sustained, vLLM 400s eliminated, SKIPs 8%.
+  Babysitter cron will auto-restart on death.
+- **Resume sentinel** at `/data3/drydock/resume.md` — point a fresh
+  Claude session at it via `review the resume.md file and continue`.
+
+### Carried over from April 24, 2026
 - **GitHub issue triage** — 4 user-reported bugs (#10–#13) fixed this
   week, all with regression tests. Remaining open issues should be
   picked up on sight; `feedback_proactive_github_issues.md` codifies
