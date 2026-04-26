@@ -33,9 +33,10 @@
 | v2.7.5 shipped | yesterday's 4 GitHub issue fixes (#10/11/12/13) + PRD refresh |
 | v2.7.6 shipped | search_replace APPEND fallback + **truncation JSON-validity fix** (the actual root cause of the recurring vLLM 400 spiral) |
 | **v2.7.7 shipped** (commit 540c0e2) | **search_replace REFUSED-raw loop-breaker**: on 2nd+ consecutive REFUSED to same file, embed file head/tail in error + escalate directive (write_file overwrite=True OR proper SEARCH/REPLACE). 4 regression tests in `tests/tools/test_search_replace_refused_loop_breaker.py`. |
-| Stress write rate | 10% pre-fix → ~44% (post v2.7.6) → **54% sustained** (post v2.7.7) |
+| Stress write rate | 10% pre-fix → ~44% (post v2.7.6) → 54% (post v2.7.7) → **74% sustained** as of 04:23 UTC |
 | `retry_after_error:search_replace` | 14/6h pre-fix → **0** REFUSED-raw fires post-v2.7.7 |
 | vLLM 400s | 315 per 30 min pre-fix → 0 per hour post-fix |
+| Stress progress | 443/1658 (27% complete, 16h elapsed) |
 
 ### Active processes (do NOT kill these)
 - **Stress harness:** PID 3713698, log `/tmp/stress_2000_1777119799.log`
