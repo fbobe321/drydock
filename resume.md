@@ -25,7 +25,17 @@
    - `feedback_local_proposer_only.md` — proposer must default to local vLLM,
      never silently phone home
 
-## Where things stand (snapshot at 2026-04-25 ~20:30 UTC)
+## Where things stand (snapshot at 2026-04-27 ~02:10 UTC)
+
+**USER IS ON A TRIP 2026-04-26 → 2026-05-01.**
+The autonomous review loop (`/data3/drydock/scripts/autonomous_review.sh`)
+runs every 30 min via cron and continues this work without human input.
+Pause via `touch /data3/drydock/.pause_autonomous_loop`.
+Disable via `crontab -l | grep -v autonomous_review | crontab -`.
+Trip log: `/data3/drydock/trip_log.md`.
+Autonomous run log: `/data3/drydock/logs/autonomous_review.log`.
+
+
 
 ### Wins this session
 | What | Result |

@@ -71,9 +71,13 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress logs
 
+class ThreadedHTTPServer(http.server.ThreadingHTTPServer):
+    """Each request handled in its own thread so long LLM calls don't block."""
+    pass
+
 if __name__ == "__main__":
     port = 8001
-    server = http.server.HTTPServer(("0.0.0.0", port), ProxyHandler)
+    server = ThreadedHTTPServer(("0.0.0.0", port), ProxyHandler)
     server.socket.settimeout(None)
     print(f"Load balancer on :{port} → {BACKENDS}")
     server.serve_forever()
