@@ -367,6 +367,30 @@ class APIToolFormatHandler:
                 continue
 
             args_model, _ = tool_class._get_tool_args_results()
+
+            # Detect when model copied truncated-history args (our truncation
+            # code replaces large tool-call args with {_truncated, _original_bytes,
+            # path}).  Return a clear advisory instead of a pydantic traceback so
+            # the model re-does the call with real arguments rather than retrying
+            # the truncated form.
+            if (isinstance(parsed_call.raw_args, dict)
+                    and parsed_call.raw_args.get("_truncated")):
+                path_hint = parsed_call.raw_args.get("path", "")
+                hint = f" Re-read `{path_hint}` with read_file first." if path_hint else ""
+                failed_calls.append(
+                    FailedToolCall(
+                        tool_name=parsed_call.tool_name,
+                        call_id=parsed_call.call_id,
+                        error=(
+                            f"{parsed_call.tool_name}: your call used a "
+                            f"truncated history entry as a template (it contained "
+                            f"'_truncated'/'_original_bytes' instead of real "
+                            f"arguments).{hint} Provide the full required arguments."
+                        ),
+                    )
+                )
+                continue
+
             try:
                 validated_args = args_model.model_validate(parsed_call.raw_args)
                 resolved_calls.append(

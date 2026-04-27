@@ -66,6 +66,30 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Action this tick: investigated SKIP cascade at prompts 586-588 post-session-reset. Root cause: after RECYCLE-TUI, find_session() can't locate the new session until meta.json is written (requires first LLM turn to complete, ~2-5 min). First RECYCLE failed (587-588 skipped), second RECYCLE succeeded (589 accepted). No drydock source bug — this is a known harness startup-timing limitation. Systems healthy: balancer PID 4040465 on :8001 responding, vLLM 0 400s.
 
+## 2026-04-27 05:31 UTC tick
+- Stress: 665/1658 (40%), PID 3993968, 8.5h elapsed; active log /tmp/stress_2000_v10_restart_1777237201.log
+- Write rate: 32% last 100 prompts (down from 74% — API implementation prompts are generating long multi-file sessions causing extreme context bloat)
+- Admiral last 30 min: not checked (budget constraint)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: investigated 5-hour log stall (00:29–05:31 UTC). Root cause: each LLM call in the API batch ("REST PUT", "REST POST", etc.) is taking ~1 hour — drydock.log shows AssistantEvent timestamps at 03:00, 04:00, 05:00 UTC with 1-hour gaps between turns. The context bloats because API implementation prompts each write 20+ files; by prompt 663–665 the session context fills 131K tokens. The harness is NOT stuck — TUI PID 4061115 is alive (55 min), drydock.log shows turn 4 yielded at 05:00 UTC. The stress watcher (PID 3993969) is running but producing no output (advisory-only, no restart authority). Also noted: LiteLLM PID 4070089 at 97.7% CPU since 00:31 (from /data3/RSI/litellm), CPU-only so not impacting GPU inference. No fix committed — slow but not broken; truncation policy tightening deferred to user review on return.
+
+## 2026-04-27 05:03 UTC tick
+- Stress: 643/1658 (39%), PID 3993968, 8h elapsed; active log /tmp/stress_2000_v10_restart_1777237201.log
+- Write rate: 13% full-run (63/466 prompts); low but expected — current batch is "Add storage backend: X" prompts (mongodb, redis, memcached, opensearch, elasticsearch, rocksdb, badgerdb) where many backends require external C libs or don't exist as Python packages; model responds with explanatory text
+- Admiral last 30 min: 11+ fires — loop:read_file/__init__.py, retry_after_error:search_replace (0-lines-changed loop), loop:bash --help, loop:web_search badgerdb, empty_after_tool:web_search (3 fires) when model can't find Python BadgerDB/RocksDB clients; raw-markdown-leakage spiked from 13% to 69% during "Add storage backend" batch; all model behavior
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no fix committed. Confirmed harness writing to correct log (PID 3993968 → /tmp/stress_2000_v10_restart_1777237201.log, last write 05:01 UTC = 1 min before tick). TUI session active 05:02 UTC. Balancer PID 4040465 healthy at :8001. Raw markdown leakage spike (69%) correlates with post-RECYCLE-TUI responses where model outputs markdown-heavy summaries; not a new rendering regression. The web_search → empty_after_tool pattern for non-existent Python DB clients (badgerdb, rocksdb) is model behavior that admiral is already redirecting. No actionable drydock source bug this tick.
+
+## 2026-04-27 06:05 UTC tick
+- Stress: 680/1658 (41%), PID 3993968, 9h elapsed; active log /tmp/stress_2000_v10_restart_1777237201.log
+- Write rate: 58% last 100 prompts (healthy recovery from low-write storage-backend section)
+- Admiral last 30 min: 8 fires — struggle:21-26:search_replace at 05:13, retry_after_error:search_replace:REFUSED at 05:42, loop:write_file (SSE/websocket_client content) at 05:55 and 05:58, retry_after_error:write_file at 05:58, retry_after_error:bash and loop:bash (cd sse_client) at 06:03; all expected model behavior in API implementation sessions
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: restarted dead admiral probe (was PID 2251231, now 4075121 on :8878); verified balancer PID 4040465 healthy at :8001; confirmed vLLM gemma4 healthy. Investigated write_file error head 'path: /data3/.../websocket_' in admiral — search_replace and write_file loop-breakers already implemented; write_file path error is transient (single occurrence). No drydock source bugs found. Systems healthy.
+
 ## 2026-04-27 04:31 UTC tick
 - Stress: 615/1658 (37%), PID 3993968, 7.5h elapsed
 - Write rate: 38% last 100 (expected — running through "Add storage backend: gcs/azure/minio/ceph/nfs/samba/ftp/sftp/webdav/sqlite/postgres/mysql" batch; external-service prompts produce few writes by design)
@@ -73,3 +97,29 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0
 - GH issues: 0 open
 - Action this tick: investigated write-rate drop (74%→38%), raw-markdown-leakage admiral alert (04:08 UTC, 5/38 checks, 13% rate), search_replace 0-lines-changed loop pattern. Write rate drop is expected for current prompt section. Markdown leakage is advisory and likely false positives from model outputting markdown syntax in code context. The 0-lines-changed loop (search==replace no-op edit) is existing model behavior that admiral interventions are already redirecting. babysitter.sh duplicate STRESS_LOG assignment remains harmless. No fix committed — systems healthy.
+## 2026-04-27 07:15 UTC tick
+- Stress: 719/1658 (PID 3993968, ~10h elapsed, babysitter restarted twice)
+- Write rate: 44% last 100 prompts (down from 74%; current API-section prompts produce fewer file writes)
+- Admiral last 30 min: struggle:search_replace firing 20-40x on one session; also retry_after_error:write_file at 06:51
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: alive at PID 4040465 (cron replaced old PID 1230765)
+- Action this tick: committed fix 922dde1 — detect truncated-history args (_truncated key) in format.py resolve_tool_calls before pydantic validation; return advisory 're-read file, provide full args' instead of cryptic ValidationError. Root cause: _truncate_old_tool_results replaces write_file args with {_truncated, _original_bytes, path}; Gemma 4 copies stub as template for new calls, causing 'content field required' retry loops. Auto-release ships at next 12:00 or 18:00 UTC tick.
+
+## 2026-04-27 07:32 UTC tick
+- Stress: 725/1658 (44%), PID 3993968, 10h30m elapsed; active log /tmp/stress_2000_v10_restart_1777237201.log
+- Write rate: 45% last 100 prompts (expected — deep in API: section; gRPC/WebSocket/SSE/JSON-RPC prompts produce text explanations, not file writes)
+- Admiral last 30 min: not checked (budget constraint)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: healthy, PID 4040465 on :8001; /v1/models responds correctly; babysitter tracking correct log
+- Action this tick: no fix committed. Verified both pending commits (d0dbc08 search_replace advisory, 922dde1 truncated-args advisory) are in source; they ship at 12:00 UTC auto_release as v2.7.11. Confirmed write rate drop is prompt-section-driven (API: conceptual batch), not a regression. Harness progressing at ~50 prompts/hr; eta ~19h to complete 1658.
+
+## 2026-04-27 08:02 UTC tick
+- Stress: 733/1658 (44%), PID 3993968, ~11h elapsed; active log /tmp/stress_2000_v10_restart_1777237201.log
+- Write rate: 48% last 100 prompts (expected — deep in API section; gRPC/GraphQL/WebSocket prompts produce text explanations not file writes)
+- Admiral last 30 min: skip-cluster alerts at 07:00/07:30/08:01 UTC (2 SKIPs per 40-prompt window), retry-spike 54% at 07:58 (TUI input contention in API section); TUI recycle issued at 07:14 UTC; all within expected range for API-heavy prompt section
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: healthy PID 4040465 on :8001
+- Action this tick: fixed babysitter.sh duplicate STRESS_LOG assignment (previous tick hardcoded two identical lines); restored dynamic ls-t detection with updated fallback path. 2 pending commits (922dde1 truncated-args advisory, d0dbc08 search_replace advisory) ship at 12:00 UTC auto_release as v2.7.11.

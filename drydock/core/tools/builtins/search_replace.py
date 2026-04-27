@@ -97,6 +97,12 @@ class SearchReplace(
     @classmethod
     def get_result_display(cls, event: ToolResultEvent) -> ToolResultDisplay:
         if isinstance(event.result, SearchReplaceResult):
+            if event.result.blocks_applied == 0:
+                return ToolResultDisplay(
+                    success=False,
+                    message=event.result.content[:120].split("\n")[0],
+                    warnings=event.result.warnings,
+                )
             return ToolResultDisplay(
                 success=True,
                 message=f"Applied {event.result.blocks_applied} block{'' if event.result.blocks_applied == 1 else 's'}",
@@ -218,30 +224,42 @@ class SearchReplace(
                                     f"\n-----FILE TAIL (last 800 chars)-----\n{tail}\n"
                                     if tail else ""
                                 )
-                                raise ToolError(
-                                    f"{base_msg}\n\n[LOOP-BREAKER: this is the "
-                                    f"#{refused_entry['count']} consecutive REFUSED on "
-                                    f"{target.name}. Stop sending the same raw content. "
-                                    f"Actual file content (first 1500 chars of "
-                                    f"{existing_size} bytes):\n"
-                                    f"-----FILE HEAD-----\n{head}\n-----FILE END HEAD-----"
-                                    f"{tail_block}\n"
-                                    f"Choose ONE: (a) call write_file with overwrite=True "
-                                    f"to replace the whole file with your raw content, OR "
-                                    f"(b) send a proper SEARCH/REPLACE block anchored on "
-                                    f"text from the file head/tail above.]"
+                                yield SearchReplaceResult(
+                                    file=str(target),
+                                    blocks_applied=0,
+                                    lines_changed=0,
+                                    content=(
+                                        f"{base_msg}\n\n[LOOP-BREAKER: this is the "
+                                        f"#{refused_entry['count']} consecutive REFUSED on "
+                                        f"{target.name}. Stop sending the same raw content. "
+                                        f"Actual file content (first 1500 chars of "
+                                        f"{existing_size} bytes):\n"
+                                        f"-----FILE HEAD-----\n{head}\n-----FILE END HEAD-----"
+                                        f"{tail_block}\n"
+                                        f"Choose ONE: (a) call write_file with overwrite=True "
+                                        f"to replace the whole file with your raw content, OR "
+                                        f"(b) send a proper SEARCH/REPLACE block anchored on "
+                                        f"text from the file head/tail above.]"
+                                    ),
                                 )
-                            raise ToolError(
-                                f"{base_msg} To add new code, use a SEARCH/REPLACE "
-                                f"block anchored on the last line of the file:\n"
-                                f"<<<<<<< SEARCH\n"
-                                f"[the file's actual final line, copied exactly]\n"
-                                f"=======\n"
-                                f"[the same final line]\n\n"
-                                f"[your new code]\n"
-                                f">>>>>>> REPLACE\n"
-                                f"If you intended a full rewrite, use write_file instead."
+                                return
+                            yield SearchReplaceResult(
+                                file=str(target),
+                                blocks_applied=0,
+                                lines_changed=0,
+                                content=(
+                                    f"{base_msg} To add new code, use a SEARCH/REPLACE "
+                                    f"block anchored on the last line of the file:\n"
+                                    f"<<<<<<< SEARCH\n"
+                                    f"[the file's actual final line, copied exactly]\n"
+                                    f"=======\n"
+                                    f"[the same final line]\n\n"
+                                    f"[your new code]\n"
+                                    f">>>>>>> REPLACE\n"
+                                    f"If you intended a full rewrite, use write_file instead."
+                                ),
                             )
+                            return
                         _log.getLogger(__name__).info(
                             "search_replace: no blocks — overwriting %s", target,
                         )
@@ -380,15 +398,25 @@ class SearchReplace(
                 except Exception:
                     pass
 
-            raise ToolError(error_message)
-        else:
-            # Success → reset the fail counter for this file
-            state = self.state.__dict__.setdefault("_sr_fail_history", {})
-            state.pop(str(file_path), None)
-            refused_state = self.state.__dict__.setdefault(
-                "_sr_refused_raw_history", {}
+            # Return advisory result instead of raising ToolError.
+            # Hard ToolError blocks cause their own retry loops on longer tasks
+            # (model panics and re-calls the same failing search_replace). The
+            # advisory result delivers the same guidance message + file head
+            # without triggering the panic-retry pattern.
+            yield SearchReplaceResult(
+                file=str(file_path),
+                blocks_applied=0,
+                lines_changed=0,
+                content=error_message,
             )
-            refused_state.pop(str(file_path), None)
+            return
+        # Success → reset the fail counter for this file
+        state = self.state.__dict__.setdefault("_sr_fail_history", {})
+        state.pop(str(file_path), None)
+        refused_state = self.state.__dict__.setdefault(
+            "_sr_refused_raw_history", {}
+        )
+        refused_state.pop(str(file_path), None)
 
         modified_content = block_result.content
 

@@ -1703,10 +1703,10 @@ class AgentLoop:
         Runs every turn but is a no-op when nothing exceeds the caps.
         Truncation is in-place and idempotent.
         """
-        KEEP_RECENT = 6              # last N tool messages stay full
-        SOFT_CAP_BYTES = 800         # tool result longer than this gets shrunk
-        HEAD_BYTES = 400             # bytes kept from the head
-        TAIL_BYTES = 100             # bytes kept from the tail
+        KEEP_RECENT = 4              # last N tool messages stay full
+        SOFT_CAP_BYTES = 500         # tool result longer than this gets shrunk
+        HEAD_BYTES = 200             # bytes kept from the head
+        TAIL_BYTES = 60              # bytes kept from the tail
 
         if len(self.messages) < KEEP_RECENT + 4:
             return

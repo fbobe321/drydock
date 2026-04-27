@@ -60,39 +60,39 @@ async def _run_to_result(tool, args, ctx):
 
 
 @pytest.mark.asyncio
-async def test_first_refused_is_short(tool, big_broken_py, ctx):
-    """First REFUSED uses the original short message — no head dump yet."""
+async def test_first_refused_returns_advisory(tool, big_broken_py, ctx):
+    """First REFUSED returns advisory SearchReplaceResult (not ToolError)."""
     raw = "def is_prime(n):\n    return True\n"
     args = SearchReplaceArgs(file_path=str(big_broken_py), content=raw)
 
-    with pytest.raises(ToolError) as excinfo:
-        await _run_to_result(tool, args, ctx)
+    result = await _run_to_result(tool, args, ctx)
 
-    msg = str(excinfo.value)
-    assert "REFUSED" in msg
-    assert "LOOP-BREAKER" not in msg
-    assert "FILE HEAD" not in msg
+    assert isinstance(result, SearchReplaceResult)
+    assert result.blocks_applied == 0
+    assert "REFUSED" in result.content
+    assert "LOOP-BREAKER" not in result.content
+    assert "FILE HEAD" not in result.content
 
 
 @pytest.mark.asyncio
 async def test_second_refused_embeds_file_head(tool, big_broken_py, ctx):
-    """Second consecutive REFUSED on same file → embeds actual file head
-    plus an escalated directive so the model sees fresh context."""
+    """Second consecutive REFUSED on same file → advisory with file head embedded."""
     raw = "def is_prime(n):\n    return True\n"
     args = SearchReplaceArgs(file_path=str(big_broken_py), content=raw)
 
-    with pytest.raises(ToolError):
-        await _run_to_result(tool, args, ctx)
-    with pytest.raises(ToolError) as excinfo:
-        await _run_to_result(tool, args, ctx)
+    r1 = await _run_to_result(tool, args, ctx)
+    assert isinstance(r1, SearchReplaceResult)
+    assert r1.blocks_applied == 0
 
-    msg = str(excinfo.value)
-    assert "LOOP-BREAKER" in msg
-    assert "#2 consecutive REFUSED" in msg
-    assert "FILE HEAD" in msg
-    assert "def existing_0(x)" in msg  # actual file content embedded
-    assert "write_file" in msg
-    assert "overwrite=True" in msg
+    r2 = await _run_to_result(tool, args, ctx)
+    assert isinstance(r2, SearchReplaceResult)
+    assert r2.blocks_applied == 0
+    assert "LOOP-BREAKER" in r2.content
+    assert "#2 consecutive REFUSED" in r2.content
+    assert "FILE HEAD" in r2.content
+    assert "def existing_0(x)" in r2.content  # actual file content embedded
+    assert "write_file" in r2.content
+    assert "overwrite=True" in r2.content
 
 
 @pytest.mark.asyncio
@@ -102,13 +102,13 @@ async def test_third_refused_keeps_loop_breaker(tool, big_broken_py, ctx):
     args = SearchReplaceArgs(file_path=str(big_broken_py), content=raw)
 
     for _ in range(3):
-        with pytest.raises(ToolError):
-            await _run_to_result(tool, args, ctx)
+        r = await _run_to_result(tool, args, ctx)
+        assert isinstance(r, SearchReplaceResult)
+        assert r.blocks_applied == 0
 
-    with pytest.raises(ToolError) as excinfo:
-        await _run_to_result(tool, args, ctx)
-    msg = str(excinfo.value)
-    assert "#4 consecutive REFUSED" in msg
+    r4 = await _run_to_result(tool, args, ctx)
+    assert isinstance(r4, SearchReplaceResult)
+    assert "#4 consecutive REFUSED" in r4.content
 
 
 @pytest.mark.asyncio
@@ -128,7 +128,7 @@ async def test_refused_count_resets_after_successful_append(
     assert isinstance(result, SearchReplaceResult)
 
     # Now switch to a .py file and trigger one REFUSED — should be the
-    # first-time short message because counter was reset by the success.
+    # first-time short advisory (no LOOP-BREAKER) because counter was reset.
     py_target = tmp_path / "tools.py"
     py_src = "# header\n"
     for i in range(60):
@@ -136,8 +136,9 @@ async def test_refused_count_resets_after_successful_append(
     py_src += "\n\nclass C:\n    def m(self):\n        return (\n"
     py_target.write_text(py_src)
 
-    with pytest.raises(ToolError) as excinfo:
-        await _run_to_result(
-            tool, SearchReplaceArgs(file_path=str(py_target), content="def x(): return 1\n"), ctx
-        )
-    assert "LOOP-BREAKER" not in str(excinfo.value)
+    r = await _run_to_result(
+        tool, SearchReplaceArgs(file_path=str(py_target), content="def short_func_stub(): return 1\n"), ctx
+    )
+    assert isinstance(r, SearchReplaceResult)
+    assert r.blocks_applied == 0
+    assert "LOOP-BREAKER" not in r.content
