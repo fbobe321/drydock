@@ -237,12 +237,45 @@ class ReadFile(
                 f"Security error: Cannot read path '{file_path}' outside of the project directory '{Path.cwd()}'."
             )
         except FileNotFoundError:
-            raise ToolError(f"File not found at: {file_path}")
+            raise ToolError(self._not_found_msg(file_path))
 
         if not resolved_path.exists():
-            raise ToolError(f"File not found at: {file_path}")
+            raise ToolError(self._not_found_msg(file_path))
         if resolved_path.is_dir():
-            raise ToolError(f"Path is a directory, not a file: {file_path}")
+            raise ToolError(self._is_dir_msg(file_path, resolved_path))
+
+    @staticmethod
+    def _not_found_msg(file_path: Path) -> str:
+        """Return 'File not found' error with parent directory listing for context."""
+        parent = file_path.parent if file_path.parent != file_path else Path(".")
+        try:
+            entries = sorted(p.name for p in parent.iterdir())
+            if entries:
+                listing = "\n".join(f"  {e}" for e in entries[:30])
+                suffix = f"\n  ... ({len(entries) - 30} more)" if len(entries) > 30 else ""
+                return (
+                    f"File not found at: {file_path}\n"
+                    f"Contents of {parent}/:\n{listing}{suffix}"
+                )
+        except (PermissionError, OSError):
+            pass
+        return f"File not found at: {file_path}"
+
+    @staticmethod
+    def _is_dir_msg(file_path: Path, resolved_path: Path) -> str:
+        """Return 'is a directory' error with directory listing so model can pick a file."""
+        try:
+            entries = sorted(p.name for p in resolved_path.iterdir())
+            if entries:
+                listing = "\n".join(f"  {e}" for e in entries[:30])
+                suffix = f"\n  ... ({len(entries) - 30} more)" if len(entries) > 30 else ""
+                return (
+                    f"Path is a directory, not a file: {file_path}\n"
+                    f"Contents of {file_path}/:\n{listing}{suffix}"
+                )
+        except (PermissionError, OSError):
+            pass
+        return f"Path is a directory, not a file: {file_path}"
 
     @classmethod
     def format_call_display(cls, args: ReadFileArgs) -> ToolCallDisplay:

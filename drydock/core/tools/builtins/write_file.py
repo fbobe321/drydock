@@ -483,6 +483,23 @@ class WriteFile(
                                 f"from your plan, or run `bash` with `python3 -m "
                                 f"{file_path.parent.name} --help` to verify."
                             )
+                            # Also surface missing imports so the model knows
+                            # which file to write next instead of re-looping.
+                            if file_path.suffix == ".py":
+                                try:
+                                    import ast as _ast
+                                    _tree = _ast.parse(args.content)
+                                    missing = _check_missing_sibling_imports(
+                                        _tree, file_path
+                                    )
+                                    if missing:
+                                        body += (
+                                            f" This file imports modules that don't "
+                                            f"exist yet: {sorted(missing)}. "
+                                            f"Write those files next."
+                                        )
+                                except Exception:
+                                    pass
                         except Exception:
                             body += "Move to the NEXT file in your plan."
                     else:

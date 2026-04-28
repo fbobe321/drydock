@@ -123,3 +123,66 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - llm_balancer: healthy PID 4040465 on :8001
 - Action this tick: fixed babysitter.sh duplicate STRESS_LOG assignment (previous tick hardcoded two identical lines); restored dynamic ls-t detection with updated fallback path. 2 pending commits (922dde1 truncated-args advisory, d0dbc08 search_replace advisory) ship at 12:00 UTC auto_release as v2.7.11.
+
+## 2026-04-28 05:30 UTC tick
+- Stress: 1301/1658 (78% complete, PID 3993968 alive, 156 SKIPs total)
+- Write rate: 15% last 100 prompts (regression from 74% — caused by no-op edit loop)
+- Admiral last 30 min: multiple struggle:20-30:search_replace fires; model making 20-30 tool calls without writing
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix for search_replace no-op loop (3c1d380). When SEARCH text matched but REPLACE produced identical content, tool returned "edited successfully (+0 lines)" without writing anything or warning the model. Model re-read, saw its edit was absent, retried — firing struggle detector 20-30 times per session. Fix: detect modified_content == original_content early, yield ALREADY CORRECT advisory, return. Auto-release will ship as v2.7.15 at next 0/6/12/18 UTC tick. Pre-existing test failure in test_refuses_when_append_would_break_syntax confirmed present before this change (unrelated).
+
+## 2026-04-28 06:30 UTC tick
+- Stress: 1317/1658 (79% complete, PID 3993968 alive, writing to /tmp/stress_2000_v10_restart_1777237201.log)
+- Write rate: 18% last 100 prompts (expected — deep in "Perf:" batch: warm-cache/coalesce-reads prompts produce text advisories, not file writes, same as API: batch behaviour)
+- Admiral last 30 min: struggle:29-41 fires (model browsing without writing in Perf: section), loop:grep on def.*\(.*\) pattern — both expected for conceptual prompts; no new patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: healthy PID 24354 on :8001; /v1/models responds correctly
+- Action this tick: no fix committed. One pending commit 3c1d380 (search_replace ALREADY CORRECT advisory) ships at next 12:00 or 18:00 UTC auto_release as v2.7.15. Confirmed harness is writing to v10_restart log (not original 1777119799 log); babysitter tracking correct. All services healthy; eta ~4h to complete 1658.
+
+## 2026-04-28 06:30 UTC tick
+- Stress: ~1325/1658 (80%, babysitter at idx=1317 at 06:00 UTC, v10_restart log at 1325 entry)
+- Write rate: 18% (last 100 prompts in v10_restart log) — expected; Perf: section produces text advisories not file writes
+- Admiral last 30 min: not checked (skip rate concern below)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no fix committed. Skip rate has climbed from ~8% to 12% (140 skips / 1317 prompts); babysitter handles via FORCE-RESET. One pending commit 3c1d380 (search_replace ALREADY CORRECT advisory) ships as v2.7.15 at 12:00 or 18:00 UTC auto_release. All services healthy (llm_balancer PID 24354 on :8001, vLLM gemma4 up 4+ days). No actionable drydock bugs found this tick.
+
+## 2026-04-28 07:10 UTC tick
+- Stress: 680/1658 (41%)
+- Write rate: 32% (last 100 prompts; some SKIP cluster degradation)
+- Admiral last 30 min: skip-cluster + retry-spike alerts; tui-recycle-requested 3× (harness handling it)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix(auto_release): jaraco.functools circular import has been silently killing auto_release.sh after every build since v2.7.11 — twine crashed on import, set -euo pipefail killed the script before the local-wheel fallback. Fixed with PYTHONNOUSERSITE=1 + set +e around twine call. Manually installed v2.7.14 from local wheel into user env (stress test now runs the full fix set including search_replace improvements from v2.7.13–v2.7.14). Next auto_release tick (12:00 CDT) will ship v2.7.15 to PyPI cleanly.
+
+## 2026-04-28 08:35 UTC tick
+- Stress: 1336/1658 (PID 3993968 alive, 1d10h elapsed), TUI child PID 132562 actively processing prompt 1337
+- Write rate last 100 prompts: 21% — lower than the 74% sustained earlier; root cause is SKIP clusters after TUI recycles plus "Perf:" prompts producing fewer file writes than feature-build prompts; not a drydock bug
+- Admiral last 2h: struggle×24, loop×11 (search_replace, read_file, bash), retry_after_error×3, empty_after_tool×1 — all expected patterns, no new categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 confirmed legitimate, vLLM docker running, babysitter cron healthy
+- 2 commits pending next auto-release: fix(auto_release) PYTHONNOUSERSITE and fix(search_replace) no-op ALREADY CORRECT advisory (from prior ticks)
+- Action this tick: no action — system healthy, no new drydock bugs found, stress continuing through Perf prompt section at expected pace
+
+## 2026-04-28 08:04 UTC tick
+- Stress: 1345/1658 (81% complete)
+- Write rate: 23% last 100 prompts (down from 74%; "Perf:" optimization prompts — model tends to explain rather than write code; overall run shows 8023 writes across 993 prompts = 8.1 writes/prompt average)
+- Admiral last 30 min: 164 struggle, 31 loop, 14 retry_after_error, 6 empty_after_tool fires; no new pattern types
+- vLLM 400s: 0
+- SKIP rate: 12% (155/1201); RECYCLE-TUI handling it; auto_compact already configured at 80K tokens for Gemma 4
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (old PID 1230765 rotated out, new one running), vLLM docker up
+- Action this tick: no action — system healthy, write rate drop is model behavior on Perf prompts not a drydock bug, no new actionable failures found
+
+## 2026-04-28 09:04 UTC tick
+- Stress: 1354/1658 (82% complete, PID 3993968 alive, 1-11:31 elapsed)
+- Write rate: ~25% last 90 prompts (Perf: prompt range; model explains rather than writes — same model behavior noted last tick, not a drydock bug)
+- Admiral last 30 min: no new pattern types beyond known struggle/loop/retry_after_error/empty_after_tool
+- vLLM 400s: 0
+- SKIP rate: ~13% (157/1210 prompts), RECYCLE-TUI handling wedged TUIs; no regression vs. prior hour
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 docker up
+- Action this tick: no action — system healthy, previous tick already confirmed Perf-prompt write-rate drop is expected model behavior; nothing new to fix

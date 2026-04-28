@@ -24,14 +24,29 @@ async def test_runs_echo_successfully(bash):
 
 
 @pytest.mark.asyncio
-async def test_fails_cat_command_with_missing_file(bash):
-    with pytest.raises(ToolError) as err:
-        await collect_result(bash.run(BashArgs(command="cat missing_file.txt")))
+async def test_nonzero_exit_returns_result_not_error(bash):
+    # Non-zero exit must return BashResult (advisory), not raise ToolError.
+    # Raising blocks the model: it sees <tool_error> with no useful output
+    # and retries identically — the exact pattern that causes grep retry storms.
+    from drydock.core.tools.builtins.bash import BashResult
+    result = await collect_result(bash.run(BashArgs(command="cat missing_file.txt")))
+    assert isinstance(result, BashResult)
+    assert result.returncode == 1
+    assert "No such file or directory" in result.stderr or "No such file" in result.stdout
+    assert "[Exit code 1]" in result.stdout
 
-    message = str(err.value)
-    assert "Command failed" in message
-    assert "Return code: 1" in message
-    assert "No such file or directory" in message
+
+@pytest.mark.asyncio
+async def test_grep_no_matches_returns_advisory_result(bash, tmp_path):
+    # grep exits 1 when no matches — that's NOT a failure, it's information.
+    # The model must see this as a normal result with a hint, not a ToolError.
+    from drydock.core.tools.builtins.bash import BashResult
+    result = await collect_result(
+        bash.run(BashArgs(command="grep -rn 'THIS_DOES_NOT_EXIST' ."))
+    )
+    assert isinstance(result, BashResult)
+    assert result.returncode == 1
+    assert "no matches found" in result.stdout.lower()
 
 
 @pytest.mark.asyncio
@@ -47,10 +62,27 @@ async def test_uses_effective_workdir(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_handles_timeout(bash):
-    with pytest.raises(ToolError) as err:
-        await collect_result(bash.run(BashArgs(command="sleep 2", timeout=1)))
+    # Timeout returns advisory BashResult (not ToolError) so the model
+    # can learn from it rather than blindly retrying the same command.
+    from drydock.core.tools.builtins.bash import BashResult
+    result = await collect_result(bash.run(BashArgs(command="sleep 2", timeout=1)))
+    assert isinstance(result, BashResult)
+    assert "timed out after 1s" in result.stdout
+    assert result.returncode == 124
 
-    assert "Command timed out after 1s" in str(err.value)
+
+@pytest.mark.asyncio
+async def test_timeout_escalates_on_repeat(bash):
+    """Second+ timeout on same command includes escalated stop-retrying hint."""
+    from drydock.core.tools.builtins.bash import BashResult
+    r1 = await collect_result(bash.run(BashArgs(command="sleep 2", timeout=1)))
+    assert isinstance(r1, BashResult)
+    assert "TIMEOUT #" not in r1.stdout
+    assert "background" in r1.stdout.lower()
+    r2 = await collect_result(bash.run(BashArgs(command="sleep 2", timeout=1)))
+    assert isinstance(r2, BashResult)
+    assert "TIMEOUT #2" in r2.stdout
+    assert "STOP" in r2.stdout
 
 
 @pytest.mark.asyncio

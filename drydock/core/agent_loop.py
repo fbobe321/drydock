@@ -2334,7 +2334,16 @@ class AgentLoop:
                 if replace_last_tool:
                     msg.content = f"[SYSTEM: {text}]"
                 else:
-                    msg.content = (msg.content or "") + f"\n\n[SYSTEM: {text}]"
+                    content = msg.content or ""
+                    # Cap at 2 accumulated system notes per message; replace the
+                    # last one when the limit is exceeded so repeated admiral
+                    # interventions don't unboundedly bloat the context.
+                    _SYS_PREFIX = "\n\n[SYSTEM: "
+                    if content.count(_SYS_PREFIX) >= 2:
+                        last_idx = content.rfind(_SYS_PREFIX)
+                        msg.content = content[:last_idx] + _SYS_PREFIX + text + "]"
+                    else:
+                        msg.content = content + _SYS_PREFIX + text + "]"
                 return
 
         # Second try: append to last user message

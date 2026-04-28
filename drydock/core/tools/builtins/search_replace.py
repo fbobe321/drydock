@@ -423,6 +423,21 @@ class SearchReplace(
         # Calculate line changes
         if modified_content == original_content:
             lines_changed = 0
+            # The SEARCH text was found and the REPLACE was identical — nothing
+            # actually changed. Tell the model clearly so it doesn't retry.
+            yield SearchReplaceResult(
+                file=str(file_path),
+                blocks_applied=block_result.applied,
+                lines_changed=0,
+                warnings=block_result.warnings,
+                content=(
+                    f"{file_path.name}: ALREADY CORRECT — the search text was found "
+                    f"but the replacement is identical to the current content. "
+                    f"No change was written. The file already has the desired state. "
+                    f"Move on to the next task."
+                ),
+            )
+            return
         else:
             original_lines = len(original_content.splitlines())
             new_lines = len(modified_content.splitlines())
@@ -539,7 +554,16 @@ class SearchReplace(
             )
 
         if not content:
-            raise ToolError("Empty content provided")
+            raise ToolError(
+                "Empty content provided. You must include SEARCH/REPLACE blocks.\n"
+                "Format:\n"
+                "<<<<<<< SEARCH\n"
+                "exact text to find\n"
+                "=======\n"
+                "replacement text\n"
+                ">>>>>>> REPLACE\n"
+                "If you want to create a new file instead, use write_file."
+            )
 
         project_root = Path.cwd()
         file_path = Path(file_path_str).expanduser()

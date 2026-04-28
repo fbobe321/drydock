@@ -119,6 +119,25 @@ def test_retry_after_error_does_not_fire_when_previous_succeeded() -> None:
     assert detect_retry_after_error(msgs) is None
 
 
+def test_retry_after_error_does_not_fire_on_grep_matches_with_error_word() -> None:
+    # grep returns a successful match whose content contains the word "error"
+    # (e.g. matched a line with "error handling"). This must NOT be treated
+    # as an errored result — false positive was observed in stress runs where
+    # tool_agent_memory.json lines contained "content": "error ...".
+    grep_args = '{"pattern": "def .*read.*\\\\(.*\\\\)"}'
+    grep_result = (
+        'matches: ./.tool_agent_memory/default.json:20:    "content": '
+        '"error handling for missing keys"'
+    )
+    msgs = [
+        _user("go"),
+        _tool("grep", grep_args),
+        _tool_result("grep", grep_result),
+        _tool("grep", grep_args),
+    ]
+    assert detect_retry_after_error(msgs) is None
+
+
 # --- run_proposed_detectors ---------------------------------------------
 
 

@@ -404,13 +404,27 @@ class Bash(
         self, *, command: str, stdout: str, stderr: str, returncode: int
     ) -> BashResult:
         if returncode != 0:
-            error_msg = f"Command failed: {command!r}\n"
-            error_msg += f"Return code: {returncode}"
-            if stderr:
-                error_msg += f"\nStderr: {stderr}"
-            if stdout:
-                error_msg += f"\nStdout: {stdout}"
-            raise ToolError(error_msg.strip())
+            # ADVISORY ONLY — never raise ToolError for non-zero exit codes.
+            # Raising blocks the model: it gets <tool_error> with no useful
+            # output, doesn't know if exit 1 means "no matches" (grep) or a
+            # real failure, and retries identically.  Same pattern as the
+            # timeout handler above.  Include a clear exit-code annotation so
+            # the model can reason about what happened.
+            # See feedback_no_tool_errors_for_loop_detection.md.
+            annotation = f"[Exit code {returncode}]"
+            if not stdout and not stderr:
+                annotation += " (no output)"
+                if returncode == 1:
+                    annotation += (
+                        " — for grep/find, exit code 1 means no matches found"
+                    )
+            annotated_stdout = (stdout + "\n" + annotation).strip() if stdout else annotation
+            return BashResult(
+                command=command,
+                stdout=annotated_stdout,
+                stderr=stderr,
+                returncode=returncode,
+            )
 
         return BashResult(
             command=command, stdout=stdout, stderr=stderr, returncode=returncode
@@ -445,7 +459,39 @@ class Bash(
                 )
             except TimeoutError:
                 await _kill_process_tree(proc)
-                raise self._build_timeout_error(args.command, timeout)
+                # ADVISORY ONLY — never raise ToolError on timeout; raising
+                # causes the model to retry the exact same command (loop).
+                # Track repeat timeouts per command and escalate the hint.
+                # See feedback_no_tool_errors_for_loop_detection.md.
+                timeout_state = self.state.__dict__.setdefault(
+                    "_bash_timeout_history", {}
+                )
+                count = timeout_state.get(args.command, 0) + 1
+                timeout_state[args.command] = count
+                if count == 1:
+                    hint = (
+                        "The command was killed. If it starts a server or "
+                        "long-running process, background it with `command &` "
+                        "instead of running it in the foreground."
+                    )
+                else:
+                    hint = (
+                        f"[TIMEOUT #{count}] You have timed out {count}x on "
+                        f"this exact command. Running it again will produce the "
+                        f"same result. STOP retrying. Background servers with "
+                        f"`&`, check existing listeners with `ss -tlnp`, or fix "
+                        f"the underlying cause before re-running."
+                    )
+                yield BashResult(
+                    command=args.command,
+                    stdout=(
+                        f"Command timed out after {timeout}s: {args.command!r}\n"
+                        f"{hint}"
+                    ),
+                    stderr="",
+                    returncode=124,
+                )
+                return
 
             encoding = _get_subprocess_encoding()
             stdout = (

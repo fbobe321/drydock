@@ -43,11 +43,18 @@ def _tool_result_errored(m: LLMMessage) -> bool:
     """Heuristic: does this tool-role message look like a failure?
 
     Conservative — we only want high-precision firing on actual errors.
-    Scanned the first 800 chars of the result content.
+    Scanned the first 200 chars of the result content (tightened from 800
+    to avoid false positives when matched file content contains words like
+    "error" or "failed" — grep results starting with "matches:" are always
+    successful).
     """
     if m.role is not Role.tool:
         return False
-    content = str(getattr(m, "content", "") or "")[:800].lower()
+    raw = str(getattr(m, "content", "") or "")
+    # Successful grep results start with "matches:" — never treat as error.
+    if raw.lstrip().startswith("matches:"):
+        return False
+    content = raw[:200].lower()
     return any(marker in content for marker in _TOOL_ERROR_MARKERS)
 
 

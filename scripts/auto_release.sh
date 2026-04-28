@@ -85,8 +85,16 @@ rm -rf dist/
 $PYTHON -m build 2>/dev/null
 
 # Publish to PyPI
+# PYTHONNOUSERSITE=1 avoids a jaraco.functools circular-import that occurs
+# when ~/.local/lib/python3.12/site-packages/setuptools conflicts with the
+# miniconda3 vendored copy; set +e so a twine failure doesn't kill the
+# script before the local-wheel fallback can run.
 PYPI_TOKEN=$(cat ~/.config/drydock/pypi_token)
-$PYTHON -m twine upload dist/drydock_cli-${NEW_VERSION}* -u __token__ -p "$PYPI_TOKEN" 2>/dev/null
+set +e
+TWINE_OUT=$(PYTHONNOUSERSITE=1 $PYTHON -m twine upload dist/drydock_cli-${NEW_VERSION}* -u __token__ -p "$PYPI_TOKEN" 2>&1)
+TWINE_EXIT=$?
+set -e
+echo "[$(date)] twine exit=$TWINE_EXIT: $TWINE_OUT" >> "$DRYDOCK/logs/auto_release.log"
 
 # Deploy to GitHub — NOT silent. If the token is invalid this should scream.
 TMPDIR=$(mktemp -d)
@@ -126,11 +134,23 @@ else
 fi
 cd "$DRYDOCK"
 
-# Install on user's env (retry PyPI propagation)
-for i in 1 2 3; do
-    sleep 60
-    /home/bobef/miniforge3/envs/drydock/bin/pip install --force-reinstall --no-deps --no-cache-dir "drydock-cli==$NEW_VERSION" 2>/dev/null && break
-done
+# Install on user's env — try PyPI first, fall back to local wheel
+INSTALLED=0
+if [ $TWINE_EXIT -eq 0 ]; then
+    for i in 1 2 3; do
+        sleep 60
+        /home/bobef/miniforge3/envs/drydock/bin/pip install --force-reinstall --no-deps --no-cache-dir "drydock-cli==$NEW_VERSION" 2>/dev/null && INSTALLED=1 && break
+    done
+fi
+if [ $INSTALLED -eq 0 ]; then
+    # PyPI upload failed or propagation timed out — install from local wheel
+    LOCAL_WHEEL="$DRYDOCK/dist/drydock_cli-${NEW_VERSION}-py3-none-any.whl"
+    if [ -f "$LOCAL_WHEEL" ]; then
+        /home/bobef/miniforge3/envs/drydock/bin/pip install --force-reinstall --no-deps "$LOCAL_WHEEL" 2>/dev/null \
+            && echo "[$(date)] Installed v$NEW_VERSION from local wheel (PyPI upload failed)" >> "$DRYDOCK/logs/auto_release.log" \
+            || echo "[$(date)] ERROR: local wheel install also failed for v$NEW_VERSION" >> "$DRYDOCK/logs/auto_release.log"
+    fi
+fi
 
 # Tag
 git tag "v$NEW_VERSION" 2>/dev/null || true
