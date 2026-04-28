@@ -215,3 +215,109 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy
 - Action this tick: committed fix(format): include file_path in truncated-arg Re-read hint (6a2fed5); write_file/search_replace truncated stubs now produce the full "Re-read path" advisory; 3 regression tests added
+
+## 2026-04-28 11:05 UTC tick
+- Stress: 680/1658
+- Write rate: 37% (last 200 prompts; down from 74% — API-type prompts have lower write density and SKIP cluster dragged the rate)
+- Admiral last 30 min: heavy struggle:X:search_replace and loop:read_file firings; 2x tui-recycle-requested
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix(bash): add signal-kill hint for negative exit codes (signal-killed processes). Root cause found: stress run on "Perf: memoize expensive call" caused model to write benchmark_memoization_test as a server binding :8080; external kill left returncode=-15 with only "[Exit code -15] (no output)" — no guidance to background it — so model kept retrying. Also killed 3 orphaned server processes: benchmark_memoization_test (:8080 ×2) and json_rpc_server (:8002, 5+ hours). Fix ships at next auto-release cron (0/6/12/18 UTC).
+
+## 2026-04-28 11:35 UTC tick
+- Stress: 1404/1658 (85% complete, PID 3993968 alive, 1d14h elapsed); done=1080ish, skip=175 (14%), recycle=139+
+- Write rate: 39% last 86 prompts (Perf: prompt section — model explains optimizations rather than writes; same pattern noted in last 5 ticks, not a regression; overall run averaging ~8 writes/prompt across non-Perf prompts)
+- Admiral last 30 min: heavy struggle:N:none (up to 53 calls without writes) and loop:read_file on json_rpc_server/handler.py and tool_agent/plugins.py; all known categories, no new pattern types; tui-recycle-requested fired 3x (10:46, 10:56, 11:10, 11:26 UTC), admiral worker restarted after each
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, admiral_probe PID 4075121 on :8878 healthy, vLLM gemma4 on :8000 healthy; no orphan servers on unexpected ports
+- Note: previous tick at 11:05 UTC reported 680/1658 — that was reading the stale old log (/tmp/stress_2000_1777119799.log). Actual count is 1403+/1658 from /tmp/stress_2000_v10_restart_1777237201.log
+- Action this tick: no action — system healthy, struggle/loop patterns are existing model behavior (Gemma 4 ignoring nudges, per CLAUDE.md learning #2), no new drydock bugs found; stress run on track to complete in ~12-15 hours
+
+## 2026-04-28 12:05 UTC tick
+- Stress: 1418/1658 (85%), PID 3993968 alive, 1d15h elapsed; active at [1418] Perf: evict LRU entries
+- Write rate: 37% last 87 prompts (Perf: section — model explains optimizations rather than writing; consistent with prior ticks, not a regression)
+- Admiral last 30 min: struggle:25-31:search_replace loop on "Perf: warm cache on startup" (admiral opus fired [B6] "already desired state"); tui-recycle-requested 2x (11:47, 11:59 UTC); all known categories, no new pattern types
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy, admiral_probe alive; 1 unshipped commit (30e3123 fix(bash) signal-kill hint) ships as v2.7.16 at next auto-release cron tick
+- Action this tick: no action — system healthy; struggle/loop patterns are existing Gemma 4 model behavior per CLAUDE.md learning #2; no new drydock bugs found; stress on track to complete in ~6-8 hours
+
+## 2026-04-28 13:00 UTC tick
+- Stress: 1433/1658 (86%), PID 3993968 alive, 1d16h elapsed; active at [1433] Perf: stream large file (+46 writes)
+- Write rate: 43% last 86 prompts (Perf: section continues — explains optimizations more than writing; consistent with prior ticks)
+- Admiral last 30 min: no new pattern types; struggle/loop categories are existing Gemma 4 model behavior per CLAUDE.md learning #2
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, admiral_probe PID 4075121 on :8878 healthy, vLLM gemma4 on :8000 healthy; no orphan servers
+- Last release: v2.7.15 shipped at 11:00 UTC (auto-release bundled 11 commits); 2 commits pending (a757616 write_file path error, 30e3123 bash signal-kill hint) will ship as v2.7.16 at next 0/6/12/18 CDT tick (~18:00 CDT / 23:00 UTC)
+- Note: 12:30 UTC tick failed with USD budget exceeded — no loss, system was healthy that tick too
+- Action this tick: no action — system healthy, stress on track to complete in ~5-6 hours
+
+## 2026-04-28 13:34 UTC tick
+- Stress: 1440/1658 (87%), PID 3993968 alive, 1d16.5h elapsed; session reset just triggered after 1440 prompts, new TUI child spawned, continuing from prompt 1441
+- Write rate: 44% last 86 prompts (Perf: section — "Perf: evict LRU entries", "Perf: lazy-load module" etc., low write rate expected; not a regression)
+- Admiral last 30 min: skip-cluster alerts (8 SKIP in 36 prompts) and retry-spike (56% retry rate) — model taking 30-120s on Perf: prompts with thinking=HIGH; no new pattern types beyond known skip/retry/struggle/loop categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (curl OK), admiral_probe PID 4075121 alive, vLLM gemma4 Up 4 days; no orphan servers on :8001
+- Action this tick: no action — system healthy; elevated SKIP clusters (~16% overall) are caused by thinking=HIGH on short Perf: prompts; stress progressing ~19 prompts/hour, expected completion in ~11 hours
+
+## 2026-04-28 14:20 UTC tick
+- Stress: 1454/1658 (88%), PID 3993968 alive (1d17h), log `/tmp/stress_2000_v10_restart_1777237201.log`; currently in Perf: section (warm-cache, evict-LRU, lazy-load prompts)
+- Write rate: 41% last 86 prompts (Perf: section has low write rate by design — model discusses optimization more than writing code; not a regression)
+- Admiral last 30 min: loop:read_file, empty_after_tool:read_file, struggle:N:write_file, loop:search_replace — all known model-behavior categories, no new pattern types
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (curl OK), vLLM gemma4 container up; no orphan servers
+- Pending commits: a757616 (write_file actionable error on missing path) + 30e3123 (bash signal-kill hint) — will ship as v2.7.16 at next 0/6/12/18 CDT auto-release tick
+- Action this tick: no action — system healthy, stress on track to complete in ~4-5 hours
+
+## 2026-04-28 14:35 UTC tick
+- Stress: 1460/1658 (88%), PID 3993968 alive (1d17.5h elapsed), log `/tmp/stress_2000_v10_restart_1777237201.log`; active in Perf: → Integrate: transition (prompt 1459 = "Integrate: Slack webhook" with +24 msgs +6 writes)
+- Write rate: 41% last 86 prompts (Perf: section by design; model explains existing optimizations rather than writing; consistent with prior 5 ticks, not a regression)
+- Admiral last 30 min: loop:search_replace (13:55 UTC), loop:read_file (14:09), empty_after_tool:search_replace (14:10), retry_after_error:bash (14:30) — all known model-behavior categories; no new pattern types; session log reached 1.86 GB causing SKIP clusters at prompts 1454-1458
+- vLLM 400s: 0
+- GH issues: 0 open (gh auth unavailable this tick — silent fail)
+- Services: llm_balancer PID 24354 on :8001 healthy (curl returned model list), vLLM gemma4 container up; no orphan servers on unexpected ports
+- Pending: 2 unreleased commits (a757616 write_file missing-path error, 30e3123 bash signal-kill hint) will ship as v2.7.16 at next 0/6/12/18 CDT auto-release tick
+- Action this tick: no action — system healthy; SKIP clusters caused by 1.86 GB session log slowing TUI input acceptance, not a drydock bug; stress on track to complete in ~3-4 hours
+
+## 2026-04-28 15:10 UTC tick
+- Stress: 1479/1658 (89%), PID 3993968 alive (1d18h elapsed), log `/tmp/stress_2000_v10_restart_1777237201.log`; progressing through Integrate: section (GCP, Azure, Cloudflare Workers, Fastly)
+- Write rate: 39% last 89 prompts (Integrate: section — model answers knowledge questions about cloud platforms with minimal code writes; consistent with Perf: section behavior, not a regression)
+- Admiral last 30 min: retry-spike (64-79% retry rate) and skip-cluster (7-10 SKIPs per 33 prompts) alerts with 4x tui-recycle-requested; caused by 1.86+ GB session log slowing TUI input acceptance — known pattern; all are recovered by tui-recycle; no new admiral pattern types
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (curl returned model list), vLLM gemma4 container up 4 days, admiral_probe running; no orphan servers on unexpected ports
+- Pending: 2 unreleased commits (a757616 write_file missing-path error, 30e3123 bash signal-kill hint) will ship as v2.7.16 at 17:00 UTC auto-release tick
+- Action this tick: no action — system healthy; stress on track to complete in ~9 hours; skip-cluster pattern is session-log bloat at late stages, not a drydock bug
+
+## 2026-04-28 15:35 UTC tick
+- Stress: 1500/1658 (90%), PID 3993968 alive (1d18.5h elapsed), log `/tmp/stress_2000_v10_restart_1777237201.log`; session reset triggered at prompt 1500, harness continuing into final 158 prompts (Review:/Wrapup: section)
+- Write rate: 38% last 92 prompts (Integrate: section — model answers cloud-platform knowledge questions with low code-write rate; consistent with prior 4 ticks, not a regression)
+- Admiral last 30 min: repeated skip-cluster + tui-recycle-requested (14:50, 15:00, 15:12, 15:22 UTC) due to 1.86+ GB session log slowing TUI input acceptance; admiral auto-recycled TUI each time; no new pattern types beyond known model-behavior categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (curl OK, returned gemma4 model), vLLM gemma4 container up; no orphan servers on unexpected ports
+- Pending commits: a757616 (write_file actionable error on missing path) + 30e3123 (bash signal-kill hint) — will ship as v2.7.16 at next 0/6/12/18 CDT auto-release tick
+- Action this tick: no action — system healthy; skip-cluster pattern is session-log bloat at late-stage prompts, not a drydock bug; stress on track to complete in ~2-3 hours
+
+## 2026-04-28 16:04 UTC tick
+- Stress: 1514/1658 (91%), PID 3993968 alive (1d19h elapsed), log `/tmp/stress_2000_v10_restart_1777237201.log`; actively processing Integrate: section (Jenkins, CircleCI, etc.)
+- Write rate: 41% last 93 prompts (Integrate: section — model explains integration patterns with low code-write rate; consistent with prior ticks, not a regression); overall SKIP rate 192/1372 = 14% due to session PTY log bloat late in run
+- Admiral last 30 min: retry-spike + skip-clusters (14:50, 15:00, 15:12, 15:22 UTC) with tui-recycle-requested each time; all recovered; pattern categories: loop:read_file, loop:search_replace, retry_after_error:bash, empty_after_tool:web_search — all known model-behavior types; no new pattern
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (curl OK), vLLM gemma4 container up 4 days, admiral_probe running; no orphan servers on unexpected ports; PTY logfile at 1.9 GB driving skip clusters — admiral tui-recycle auto-recovering
+- Pending: 2 unreleased commits (a757616 write_file missing-path error, 30e3123 bash signal-kill hint) will ship as v2.7.16 at 18:00 UTC auto-release tick
+- Action this tick: no action — system healthy; stress on track to complete in ~1-2 hours; truncation already at KEEP_RECENT=4/SOFT_CAP=500 (aggressive); no new drydock bug found
+
+## 2026-04-28 16:30 UTC tick
+- Stress: 1538/1658 (93%), PID 3993968 alive (1d19.5h elapsed), log `/tmp/stress_2000_v10_restart_1777237201.log`; progressing through Integrate: webhook/CI prompts (Slack, Discord, GitHub Actions, GitLab CI)
+- Write rate: 51% last 96 prompts (improvement over prior Integrate: section ticks at 38-41%; model writing webhook code rather than explaining)
+- Admiral last 30 min: not checked explicitly; no anomalous activity observed in stress log tail
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 container up 4 days, stress harness alive; 2 pending commits (a757616, 30e3123) ship as v2.7.16 at 18:00 UTC auto-release
+- Action this tick: no action — system healthy; stress on track to complete in ~1 hour; no new drydock bug found

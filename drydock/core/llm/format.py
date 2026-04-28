@@ -404,11 +404,25 @@ class APIToolFormatHandler:
                     )
                 )
             except ValidationError as e:
+                error_str = str(e)
+                if (
+                    parsed_call.tool_name == "write_file"
+                    and "path" in error_str
+                    and "Field required" in error_str
+                ):
+                    error_msg = (
+                        "write_file: missing required `path` parameter. "
+                        "You must pass BOTH `path` AND `content` as separate arguments. "
+                        'Fix: write_file(path="your/file.py", content="..."). '
+                        "Do NOT omit `path`."
+                    )
+                else:
+                    error_msg = f"Invalid arguments: {e}"
                 failed_calls.append(
                     FailedToolCall(
                         tool_name=parsed_call.tool_name,
                         call_id=parsed_call.call_id,
-                        error=f"Invalid arguments: {e}",
+                        error=error_msg,
                     )
                 )
 

@@ -412,7 +412,18 @@ class Bash(
             # the model can reason about what happened.
             # See feedback_no_tool_errors_for_loop_detection.md.
             annotation = f"[Exit code {returncode}]"
-            if not stdout and not stderr:
+            if returncode < 0:
+                # Negative returncode means killed by a Unix signal.
+                try:
+                    sig_name = signal.Signals(-returncode).name
+                except ValueError:
+                    sig_name = f"signal {-returncode}"
+                annotation += (
+                    f" — process killed by {sig_name}."
+                    " If this command starts a server or long-running process,"
+                    " background it with `command &` and verify ports with `ss -tlnp`."
+                )
+            elif not stdout and not stderr:
                 annotation += " (no output)"
                 if returncode == 1:
                     annotation += (
