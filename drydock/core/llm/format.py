@@ -375,7 +375,9 @@ class APIToolFormatHandler:
             # the truncated form.
             if (isinstance(parsed_call.raw_args, dict)
                     and parsed_call.raw_args.get("_truncated")):
-                path_hint = parsed_call.raw_args.get("path", "")
+                path_hint = (parsed_call.raw_args.get("path")
+                             or parsed_call.raw_args.get("file_path")
+                             or "")
                 hint = f" Re-read `{path_hint}` with read_file first." if path_hint else ""
                 failed_calls.append(
                     FailedToolCall(

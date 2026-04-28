@@ -186,3 +186,32 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 docker up
 - Action this tick: no action — system healthy, previous tick already confirmed Perf-prompt write-rate drop is expected model behavior; nothing new to fix
+
+## 2026-04-28 09:30 UTC tick
+- Stress: 1358/1658 (82%, PID 3993968 alive, 1d12h elapsed); done=1053, skip=161 (13%), recycle=128
+- Write rate: 25% last 90 prompts (Perf: prompt section — model explains optimizations rather than writing code; same pattern noted last two ticks, not a regression)
+- Admiral last 30 min: struggle×N, loop:read_file×4, retry_after_error:search_replace×2 (truncated-arg-as-template pattern, already caught by format.py:385 with re-read advisory); no new categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, admiral_probe PID 4075121 on :8878, vLLM gemma4 on :8000 healthy
+- Action this tick: no action — system healthy, retry_after_error pattern is existing/handled truncated-arg behavior, no new drydock bugs found
+
+## 2026-04-28 09:31 UTC tick
+- Stress: 1366/1658 (82%), PID 3993968, running for 1d 12h; active in last 60s
+- Write rate: 28% (last 100 prompts) — lower than 74% baseline; prompt mix includes many "Add storage backend" and API-type prompts that tend toward explanatory text
+- SKIP rate: 12% overall (165/1366), episodic clusters up to 53% (16 skips in 30 prompts) triggered by TUI-recycle startup lag — pre-existing pattern, admiral firing tui-recycle-requested
+- Admiral last 30 min: 10 interventions; loop:read_file, retry_after_error:search_replace, struggle:N:none (up to 65 non-write calls); all existing-pattern categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (resume.md had stale PID 1230765), vLLM gemma4 on :8000 healthy
+- Action this tick: no action — investigated search_replace truncated-arg FailedToolCall (7 hits, already handled correctly in format.py), skip-cluster pattern is systemic/pre-existing; no new drydock bugs found
+
+## 2026-04-28 10:31 UTC tick
+- Stress: 1379/1658 (83%), PID 3993968, running 1d13h; TUI actively processing (patching json_rpc_client/client.py observed in tui.log)
+- Write rate: 31% last 100 prompts — Perf: prompt section continues (model often explains optimizations rather than writing code)
+- Skip rate: severe episodic cluster 09:27–10:30 UTC (14-17 skips/30 prompts, admiral fired tui-recycle-requested repeatedly); TUI recycling appears to have stabilized
+- Admiral last 30 min: loop:read_file, struggle:N:search_replace/write_file, retry-spike 110%; all existing categories, no new patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy
+- Action this tick: committed fix(format): include file_path in truncated-arg Re-read hint (6a2fed5); write_file/search_replace truncated stubs now produce the full "Re-read path" advisory; 3 regression tests added
