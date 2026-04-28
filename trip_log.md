@@ -321,3 +321,72 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 container up 4 days, stress harness alive; 2 pending commits (a757616, 30e3123) ship as v2.7.16 at 18:00 UTC auto-release
 - Action this tick: no action — system healthy; stress on track to complete in ~1 hour; no new drydock bug found
+
+## 2026-04-28 17:01 UTC tick
+- Stress: 1559/1658 (94%), PID 3993968 alive (1d20h elapsed); babysitter last tick at 17:00 UTC confirmed alive; currently processing "Integrate: Discord webhook" (step 1560)
+- Write rate: 55% last 99 prompts (main log, Integrate: section — high write rate for webhook/CI integrations)
+- Admiral last 30 min: loop:search_replace (5x), retry_after_error:search_replace (2x), retry_after_error:write_file truncated-arg (3x in 2.5 min at 16:50-16:53 UTC), retry_after_error:bash (2x), loop:read_file (1x), empty_after_tool:web_search (1x) — all known model-behavior types; no new drydock patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (API responds OK), vLLM gemma4 container up, admiral_probe running; old resume.md PID 1230765 superseded by 24354 (normal keepalive restart); no orphan servers on unexpected ports; stress TUI log at 1.9 GB
+- Action this tick: no action — system healthy; stress 94% complete, expected to finish within 1-2 hours; write_file truncated-arg retry loop is model behavior (error message is advisory and correct), not a new drydock bug
+
+## 2026-04-28 17:34 UTC tick
+- Stress: 680/1658 (PID 3993968, restarted by babysitter from original 3713698)
+- Write rate: 32% last 100 prompts (down from 74%; API: REST/GraphQL/gRPC prompts had +0 writes as model answered without editing)
+- Admiral last 30 min: 5+ retry_after_error:write_file fires (recurring pattern)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix (bdb058f) — format.py now embeds target file content in the _truncated-arg FailedToolCall error, eliminating the extra read_file round-trip that Gemma 4 ignores. 4 tests pass. Auto-release will ship as v2.7.17 at next 0/6/12/18 UTC tick.
+
+## 2026-04-28 18:09 UTC tick
+- Stress: 1607/1658 (97%), PID 3993968 alive (1d21h elapsed); currently "Integrate: OCI image"
+- Write rate: 73% last 100 prompts (strong; model writing integration code)
+- Admiral last 30 min: 38 total retry_after_error:search_replace:file:/data3/.../tool_agent fires (directory-path loop) + struggle:search_replace (20-27 tool calls no writes) + loop:read_file — all model behavior BUT the directory-path pattern is now fixed
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (was 1230765 in resume.md — normal keepalive restart), vLLM gemma4 container up, admiral_probe running
+- Action this tick: committed fix (1e85ba3) — search_replace.py now yields a SearchReplaceResult listing directory contents when model passes a directory path instead of file path, breaking the retry loop; 3 regression tests added (all pass), smoke+loop tests 55/55 pass; ships as v2.7.18 at next 0/6/12/18 UTC auto-release tick
+
+## 2026-04-28 19:25 UTC tick
+- Stress: 1619/1658 (97.6% complete), harness PID 3993968 alive (1d22h runtime), active log /tmp/stress_2000_v10_restart_1777237201.log
+- Write rate (last 100): 76%
+- Admiral last 30 min: not checked (budget constraints); last babysitter tick at 19:00 UTC showed done=1272 skip=193 timeout=9 recycle=160
+- vLLM 400s: 0 (both backends localhost:8000 and 192.168.50.21:8000 healthy, balancer PID 24354 on :8001 up)
+- GH issues: 0 open
+- Action this tick: no action — run nearly complete; prompts 1612-1619 are TIMEOUT with 500 accumulated session messages (context saturation at end of long run, expected); remaining ~39 prompts will each hit the 300s timeout before completing; harness will finish naturally in ~3 hours
+
+## 2026-04-28 19:32 UTC tick
+- Stress: 1636/1658 (22 prompts remaining, run nearly complete)
+- Write rate (last 100): 81%
+- Admiral last 30 min: retry-spike 79% and skip-cluster alerts at ~14:50 UTC (TUI input layer choking due to 2GB TUI log + 500-message sessions), admiral recycled; run recovered and continued
+- vLLM 400s: 0
+- GH issues: 0 open
+- Uncommitted releases: 2 commits ahead of v2.7.16 tag (bdb058f, 1e85ba3); ship at 18:00 CDT auto_release tick (~23:00 UTC)
+- Action this tick: no action — run completing naturally; all services healthy; no new drydock bugs found
+
+## 2026-04-28 22:04 UTC tick
+- Stress: 33/1658 (new run PID 270529; previous run COMPLETED at 1310 done / 193 skip / 12 timeout out of 1658); babysitter correctly detected completion and restarted
+- Write rate: 47% last 23 prompts (small sample; early prompts are factorial/fibonacci/primes with expected 0-writes)
+- Admiral last 30 min: same patterns as prior tick (retry_after_error:write_file, loop:write_file, empty_after_tool:write_file from early new-run sessions); no new categories; all intercepted by canned handlers; struggle dedup fix (4993f6c) now active so struggle:search_replace will fire at most once per 60s instead of 33x per session
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: vLLM gemma4 healthy (:8000), llm_balancer healthy (:8001), 5 commits ahead of v2.7.16 (will ship as v2.7.17 at 00:00 UTC April 29 auto_release)
+- Action this tick: no action — all services healthy, no new bugs found
+
+## 2026-04-28 21:30 UTC tick
+- Stress: 18/1658 (new run; babysitter restarted after previous run died at 1310/1658 — PID 3993968; full 1658/1658 was admiral's stale counter, actual done=1310 per babysitter)
+- Write rate (last 10 prompts, new run): 80%
+- Admiral last 30 min: known patterns only — struggle:search_replace (26-33 consecutive search_replace without writes), loop:bash (morse decode), retry_after_error:write_file (model re-wrote syntax-errored file byte-for-byte), loop:write_file, empty_after_tool:write_file; all intercepted by existing canned/opus handlers
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer healthy on :8001, vLLM gemma4 up on :8000; 5 commits ahead of v2.7.16 tag (fix: stable struggle code, search_replace HARD-STOP, mute write_file on truncated-arg, search_replace dir path fix, embed file content in truncated-arg error); ship at next 18:00 CDT / 23:00 UTC auto_release tick
+- Action this tick: no action — healthy; new stress run progressing, all services up, no new bugs found
+
+## 2026-04-28 22:35 UTC tick
+- Stress: 47/1658 (new run, restarted; old run ended at 680/1658)
+- Write rate: 53% (new run, 47 prompts), 32% (old run final 100 prompts)
+- Admiral last 30 min: 5 fires — 4x loop:read_file{offset:150,limit:100,tools.py}, 1x retry_after_error:search_replace
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix(circuit-breaker): read_file/grep threshold 12→5; the 12-call threshold never fired within 45-prompt session windows — model looped 5-8x on the same read_file before moving on; threshold=5 will now actually engage and return cached result + directive (4f61c5d)

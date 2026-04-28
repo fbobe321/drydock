@@ -131,6 +131,34 @@ class SearchReplace(
             file_path, search_replace_blocks = self._prepare_and_validate_args(args)
         except ToolError as e:
             err_msg = str(e)
+            if err_msg.startswith("Path is not a file:"):
+                # Model passed a directory instead of a file path.
+                # Return a result (not raise) so the model corrects the call
+                # rather than retrying the same directory path in a loop.
+                dir_path_str = args.file_path.strip()
+                dir_path = Path(dir_path_str).expanduser()
+                if not dir_path.is_absolute():
+                    dir_path = Path.cwd() / dir_path
+                dir_path = dir_path.resolve()
+                if dir_path.is_dir():
+                    try:
+                        files = sorted(p.name for p in dir_path.iterdir() if p.is_file())
+                    except OSError:
+                        files = []
+                    files_list = "\n".join(f"  {f}" for f in files[:20]) or "  (empty directory)"
+                    yield SearchReplaceResult(
+                        file=str(dir_path),
+                        blocks_applied=0,
+                        lines_changed=0,
+                        content=(
+                            f"PATH ERROR: '{dir_path}' is a directory, not a file. "
+                            f"search_replace requires a path to a specific file.\n"
+                            f"Files in that directory:\n{files_list}\n"
+                            f"Specify the full path including the filename, e.g. "
+                            f"'{dir_path}/<filename.py>'"
+                        ),
+                    )
+                    return
             if err_msg.startswith("NO_BLOCKS:"):
                 # Gemma 4 sent raw code without SEARCH/REPLACE markers.
                 # CAREFULLY fall back to full file overwrite — but refuse if
@@ -383,18 +411,38 @@ class SearchReplace(
             state[fail_key] = entry
             if entry["count"] >= 2:
                 try:
-                    head = original_content[:2000]
                     line_count = original_content.count("\n")
-                    error_message += (
-                        f"\n\n[LOOP-BREAKER: this is the #{entry['count']} "
-                        f"consecutive search_replace failure on "
-                        f"{file_path.name}. Stop retrying the same search. "
-                        f"Actual file content (first 2000 chars of "
-                        f"{line_count} lines):\n"
-                        f"-----FILE START-----\n{head}\n-----FILE END-----\n"
-                        f"Use THIS exact text as your search target, OR "
-                        f"abandon this edit and try write_file.]"
-                    )
+                    count = entry["count"]
+                    if count >= 3:
+                        # Show full file (up to 4000 chars) and prohibit retry.
+                        body = original_content[:4000]
+                        tail = (
+                            f"\n...[truncated, {line_count} lines total]"
+                            if len(original_content) > 4000 else ""
+                        )
+                        error_message += (
+                            f"\n\n[HARD-STOP: this is the #{count} consecutive "
+                            f"search_replace failure on {file_path.name}. "
+                            f"Your search text was NOT found in the file. "
+                            f"DO NOT retry search_replace with the same or similar text. "
+                            f"REQUIRED action: call write_file with overwrite=True "
+                            f"and provide the complete new file content. "
+                            f"Full file content below — use this as the basis "
+                            f"for your write_file call:\n"
+                            f"-----FILE START-----\n{body}{tail}\n-----FILE END-----]"
+                        )
+                    else:
+                        head = original_content[:2000]
+                        error_message += (
+                            f"\n\n[LOOP-BREAKER: this is the #{count} "
+                            f"consecutive search_replace failure on "
+                            f"{file_path.name}. Stop retrying the same search. "
+                            f"Actual file content (first 2000 chars of "
+                            f"{line_count} lines):\n"
+                            f"-----FILE START-----\n{head}\n-----FILE END-----\n"
+                            f"Use THIS exact text as your search target, OR "
+                            f"abandon this edit and try write_file.]"
+                        )
                 except Exception:
                     pass
 

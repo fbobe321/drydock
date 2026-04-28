@@ -1131,10 +1131,12 @@ class AgentLoop:
         token-level sampling bumps don't help when the model picks
         the SAME serialized args every time.
 
-        Conservative thresholds — only fires on truly pathological
-        repeat counts that would never be a "valid retry":
+        Thresholds tuned for 45-prompt session windows (stress sessions
+        reset every 45 prompts — a threshold of 12 never fires in practice
+        because the model loops 4-8 times then moves on; admiral advisories
+        fire at 3 but the model ignores them):
           search_replace, write_file, bash: after 8 identical calls
-          read_file, grep, glob, ls: after 12 identical calls
+          read_file, grep, glob, ls: after 5 identical calls
         """
         args_str = json.dumps(tool_call.args_dict, sort_keys=True, default=str)
         sig = hashlib.sha256(
@@ -1143,7 +1145,7 @@ class AgentLoop:
         count, last_result = self._tool_call_history.get(sig, (0, ""))
         tool_name = tool_call.tool_name
         is_readonly = tool_name in ("grep", "read_file", "glob", "ls")
-        threshold = 12 if is_readonly else 8
+        threshold = 5 if is_readonly else 8
         if count < threshold:
             return None
         return (
@@ -2378,6 +2380,30 @@ class AgentLoop:
                     break
         if len(recent_sr) >= 2 and recent_sr[0] == recent_sr[1]:
             return "WARNING|search_replace"
+
+        # Early check: write_file with _truncated args twice in a row for the
+        # same path.  format.py already embeds the file content in the error,
+        # but Gemma 4 ignores the advisory and retries identically.  Mute
+        # write_file for 1 turn so the model must use read_file or
+        # search_replace instead — same pattern as the search_replace check.
+        recent_wf_truncated: list[str] = []
+        for msg in reversed(self.messages[-20:]):
+            if msg.role == Role.assistant and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc.function and tc.function.name == "write_file":
+                        try:
+                            args = json.loads(tc.function.arguments or "{}")
+                            if args.get("_truncated"):
+                                p = (args.get("file_path") or args.get("path") or "")
+                                recent_wf_truncated.append(p)
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
+                if len(recent_wf_truncated) >= 2:
+                    break
+        if (len(recent_wf_truncated) >= 2
+                and recent_wf_truncated[0] == recent_wf_truncated[1]):
+            self._hot_tool_path = ("write_file", recent_wf_truncated[0])
+            return "FORCE_STOP"
 
         sigs: list[str] = []
         tool_names: list[str] = []

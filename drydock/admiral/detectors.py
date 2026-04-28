@@ -80,18 +80,28 @@ def detect_struggle(messages: Sequence[LLMMessage], threshold: int = 20) -> Find
                 calls_since_write += 1
     if calls_since_write < threshold:
         return None
-    hint = (
-        "Either (a) you already have enough context — commit to a plan and "
-        "start writing code now, or (b) you're genuinely stuck — stop and "
-        "report what's blocking you to the user."
-    )
-    return Finding(
-        code=f"struggle:{calls_since_write}:{last_write_tool or 'none'}",
-        directive=(
+    # Stable code (no count) so DEDUP_WINDOW_SEC suppresses repeated firings.
+    # Previously included the count, which caused 33 identical interventions
+    # in a single session (each with a unique key that bypassed dedup).
+    code = f"struggle:{last_write_tool or 'none'}"
+    if calls_since_write >= 30:
+        directive = (
+            f"Admiral: you have made {calls_since_write} tool calls without "
+            f"writing any file — search_replace is clearly not finding the text. "
+            f"STOP retrying. Call `write_file` with `overwrite=True` to rewrite "
+            f"the target file from scratch right now."
+        )
+    else:
+        hint = (
+            "Either (a) you already have enough context — commit to a plan and "
+            "start writing code now, or (b) you're genuinely stuck — stop and "
+            "report what's blocking you to the user."
+        )
+        directive = (
             f"Admiral: you have made {calls_since_write} tool calls without "
             f"writing or editing any file. {hint}"
-        ),
-    )
+        )
+    return Finding(code=code, directive=directive)
 
 
 def run_all(messages: Sequence[LLMMessage]) -> list[Finding]:

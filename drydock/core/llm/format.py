@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re as _re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -378,7 +379,34 @@ class APIToolFormatHandler:
                 path_hint = (parsed_call.raw_args.get("path")
                              or parsed_call.raw_args.get("file_path")
                              or "")
-                hint = f" Re-read `{path_hint}` with read_file first." if path_hint else ""
+                # Auto-embed the current file content so the model can
+                # rewrite immediately without an extra read_file round-trip.
+                file_embed = ""
+                if path_hint:
+                    try:
+                        p = Path(path_hint)
+                        if p.exists() and p.is_file():
+                            raw = p.read_text(errors="replace")
+                            lines = raw.splitlines()
+                            max_lines = 120
+                            if len(lines) <= max_lines:
+                                file_embed = (
+                                    f"\n\nCurrent file content of `{path_hint}`:\n"
+                                    f"```\n{raw}\n```\n"
+                                    f"Rewrite it now using write_file with the correct content."
+                                )
+                            else:
+                                snippet = "\n".join(lines[:max_lines])
+                                file_embed = (
+                                    f"\n\nCurrent file content of `{path_hint}` "
+                                    f"(first {max_lines} of {len(lines)} lines):\n"
+                                    f"```\n{snippet}\n```\n"
+                                    f"Use read_file to see the rest, then rewrite with write_file."
+                                )
+                    except Exception:
+                        pass
+                if not file_embed and path_hint:
+                    file_embed = f" Re-read `{path_hint}` with read_file first."
                 failed_calls.append(
                     FailedToolCall(
                         tool_name=parsed_call.tool_name,
@@ -387,7 +415,7 @@ class APIToolFormatHandler:
                             f"{parsed_call.tool_name}: your call used a "
                             f"truncated history entry as a template (it contained "
                             f"'_truncated'/'_original_bytes' instead of real "
-                            f"arguments).{hint} Provide the full required arguments."
+                            f"arguments).{file_embed} Provide the full required arguments."
                         ),
                     )
                 )

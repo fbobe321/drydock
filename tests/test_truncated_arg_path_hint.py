@@ -92,3 +92,33 @@ class TestTruncatedArgPathHint:
         assert len(result.failed_calls) == 1
         assert "Re-read" not in result.failed_calls[0].error
         assert "_truncated" in result.failed_calls[0].error or "truncated" in result.failed_calls[0].error
+
+    def test_existing_file_content_embedded(self, tmp_path):
+        """When the target file exists, its content is embedded in the error
+        so the model can rewrite without an extra read_file round-trip."""
+        target = tmp_path / "utils.py"
+        target.write_text("def hello():\n    return 42\n")
+
+        handler = APIToolFormatHandler()
+        parsed = ParsedMessage(
+            tool_calls=[
+                ParsedToolCall(
+                    tool_name="write_file",
+                    call_id="tc4",
+                    raw_args={
+                        "_truncated": True,
+                        "_original_bytes": 4096,
+                        "file_path": str(target),
+                    },
+                )
+            ]
+        )
+        tm = _make_tool_manager_with("write_file", _make_write_file_class())
+        result = handler.resolve_tool_calls(parsed, tm)
+        assert len(result.failed_calls) == 1
+        err = result.failed_calls[0].error
+        # Content should be embedded, not just a Re-read directive
+        assert "def hello():" in err
+        assert "return 42" in err
+        # Re-read advisory should NOT appear when content is embedded
+        assert "Re-read" not in err
