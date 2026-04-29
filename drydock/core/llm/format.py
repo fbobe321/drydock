@@ -447,14 +447,25 @@ class APIToolFormatHandler:
                         dir_listing = "\n".join(f"  {f}" for f in py_files)
                     except Exception:
                         dir_listing = "  (could not list files)"
+                    tool_name_hint = parsed_call.tool_name
+                    if tool_name_hint == "search_replace":
+                        recovery_hint = (
+                            f"Use read_file on '{path_hint}' to see its current content, "
+                            f"then call search_replace with fresh <<<<<<< SEARCH / ======= / "
+                            f">>>>>>> REPLACE markers copied from the actual file text."
+                        )
+                    else:
+                        recovery_hint = (
+                            f"Use read_file on the target file, then call write_file "
+                            f"with fully typed content, OR use search_replace to make "
+                            f"targeted edits without rewriting the whole file."
+                        )
                     escalation_suffix = (
-                        f"\n\n[REPEATED FAILURE #{hit_count}: your write_file call "
+                        f"\n\n[REPEATED FAILURE #{hit_count}: your {tool_name_hint} call "
                         f"keeps using a stale truncated template for '{path_hint}'. "
-                        f"You MUST type fresh content — do NOT copy from history. "
+                        f"You MUST NOT copy args from history. "
                         f"Current .py files in project:\n{dir_listing}\n"
-                        f"Use read_file on the target file, then call write_file "
-                        f"with fully typed content, OR use search_replace to make "
-                        f"targeted edits without rewriting the whole file.]"
+                        f"{recovery_hint}]"
                     )
                 else:
                     escalation_suffix = ""

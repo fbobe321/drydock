@@ -1148,6 +1148,10 @@ class AgentLoop:
         threshold = 5 if is_readonly else 8
         if count < threshold:
             return None
+        # Increment so the count escalates on every repeated fire, giving the
+        # model a growing signal that nothing has changed.  Preserve last_result
+        # so the message always shows the real bash/tool output, not a prior NOTE.
+        self._tool_call_history[sig] = (count + 1, last_result)
         return (
             f"NOTE: this exact call to `{tool_name}` has been made "
             f"{count} times this session with identical arguments. "

@@ -85,12 +85,20 @@ def detect_struggle(messages: Sequence[LLMMessage], threshold: int = 20) -> Find
     # in a single session (each with a unique key that bypassed dedup).
     code = f"struggle:{last_write_tool or 'none'}"
     if calls_since_write >= 30:
-        directive = (
-            f"Admiral: you have made {calls_since_write} tool calls without "
-            f"writing any file — search_replace is clearly not finding the text. "
-            f"STOP retrying. Call `write_file` with `overwrite=True` to rewrite "
-            f"the target file from scratch right now."
-        )
+        if last_write_tool is None:
+            directive = (
+                f"Admiral: you have made {calls_since_write} tool calls without "
+                f"writing a single file. You have enough context. STOP exploring "
+                f"and start writing code NOW. Call `write_file` to create your "
+                f"first file immediately."
+            )
+        else:
+            directive = (
+                f"Admiral: you have made {calls_since_write} tool calls without "
+                f"writing any file — search_replace is clearly not finding the text. "
+                f"STOP retrying. Call `write_file` with `overwrite=True` to rewrite "
+                f"the target file from scratch right now."
+            )
     else:
         hint = (
             "Either (a) you already have enough context — commit to a plan and "

@@ -674,3 +674,99 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0
 - GH issues: 0 open (gh returned empty output)
 - Action this tick: killed stuck harness (387049) and its TUI child (457206); ran babysitter to restart from step 216 (done=216, idx=422). Root cause of the 7.5h stall: harness pexpect connection was frozen waiting for step 233 to complete; `--max-per-prompt 300` timeout did not fire (likely pexpect select() blocked on TUI output at 500+ messages). Babysitter only checks liveness (PID in /proc), not progress staleness — this is a known gap, not actionable per rules. New harness confirmed alive and producing log output within 10s of restart. No drydock source fix this tick.
+
+## 2026-04-29 17:05 UTC tick
+- Stress: 233/1658 (PID 459183, elapsed ~25m, resuming from step 216, currently at qr_encode)
+- Write rate: 25% overall for this run; 19% last 99 prompts (steps 200-233 are mostly query-type — function_count, class_count, weather, stock, bitcoin, ip_geolocation — with 0 writes expected; not a regression)
+- Admiral last 30 min: 2 fires (loop:read_file at 16:54 UTC; both normal Gemma 4 behavior)
+- vLLM 400s: 0
+- GH issues: 0 open
+- v2.7.21 auto-released at 17:02 UTC today (hallucinated-tools fix: suppressed tool calls now get proper tool result messages instead of silent drop); installed in drydock env; running harness will pick it up on next TUI spawn
+- Action this tick: no drydock source fix needed; all systems nominal; stress running normally
+
+## 2026-04-29 18:02 UTC tick
+- Stress: 228/1658 (PID 459183 alive, ~56 min elapsed, resuming from step 216 after babysitter restart at ~17:00 UTC)
+- Write rate: 100% last 5 prompts (small sample; steps 216-228 are early query-type prompts)
+- Admiral last 60 min: 1 fire (loop:bash at 17:31 UTC — model re-running language_detect plugin test; normal advisory pattern, no drydock bug)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 OK (balancer OK: gemma4), admiral_probe PID 4075121 OK, vLLM Docker healthy
+- Action this tick: no fix committed — all services nominal, no new drydock source bugs; stress progressing normally
+
+## 2026-04-29 18:01 UTC tick
+- Stress: 242/1658 (PID 459183 alive, 1h25m elapsed; babysitter restarted at 16:34 UTC from step 216 after prior PID 387049 died at idx 422)
+- Write rate: 87% last 16 prompts (14/16)
+- Admiral last 60 min: 4 fires (loop:read_file x2, loop:search_replace, loop:bash — all canned/opus patterns, no new drydock source bugs)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 OK, vLLM Docker healthy, admiral_probe PID 4075121 OK
+- Action this tick: no fix committed — stress healthy, write rate strong, no actionable new failure patterns
+
+## 2026-04-29 18:50 UTC tick
+- Stress: 680/1658 (PID 459183; harness was restarted earlier by babysitter from 422/1658)
+- Write rate: 32% last 100 prompts (variable across run: 16-80%; current batch is API: gRPC/WebSocket/SSE/JSON-RPC prompts which yield fewer file writes)
+- Admiral last 30 min: struggle:search_replace x2, loop:bash x2, retry_after_error:bash x2, loop:read_file x2, loop:search_replace x1 — all known patterns; retry-spike alert at 53% (16 retries in 30 prompts) from TUI input contention; harness handling with FORCE-RESET
+- vLLM 400s: 0; balancer healthy on :8001 (PID 24354); vLLM healthy on :8000; admiral on :8878 (PID 4075121)
+- GH issues: 0 open
+- Action this tick: committed fix for circuit-breaker NOTE count not escalating (d8a6885). _circuit_breaker_check returned "8 times" forever because it never incremented the count; now increments on each fire while preserving last_result. Regression test added. Auto-release will ship at next 0/6/12/18 UTC tick.
+
+## 2026-04-29 19:03 UTC tick
+- Stress: 254/1658 (PID 459183 alive, 2h25m elapsed; resumed from step 216 after babysitter restart at 16:34 UTC)
+- Write rate: 90% last 21 prompts
+- Admiral last 30 min: retry_after_error:search_replace x3, loop:bash x1, struggle:write_file x2, retry_after_error:bash x2, skip-cluster alert (2 SKIPs in 33 prompts); all known patterns, 60 retry_after_error:search_replace today (empty content + circuit-breaker NOTE variants)
+- vLLM 400s: 0; balancer healthy (PID 24354 on :8001, forwarding to vLLM :8000); vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — circuit-breaker fix (d8a6885) not yet shipped (waiting for 0:00 UTC auto-release); all admiral patterns are known model-behavior, no new drydock source bugs found
+
+## 2026-04-29 19:30 UTC tick
+- Stress: 271/1658 (PID 459183, restarted by babysitter at 16:34 UTC from step 216; babysitter previously restarted at 09:04 UTC too — two restarts today, both healthy)
+- Write rate: 92% (35/38 last prompts in current run)
+- Admiral last 30 min: struggle:none x8 at ~19:20-19:27 UTC (model stuck in pure exploration loop, fired every 60s per DEDUP_WINDOW); retry_after_error:bash x1, loop:bash x1 — all known model-behavior patterns
+- vLLM 400s: 0; balancer healthy (PID 24354 on :8001); vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: committed fix(struggle-detector) 0ad93df — corrected the >=30-call escalated directive for struggle:none case; the old message said "search_replace is clearly not finding the text" even when model never called search_replace; now correctly says "STOP exploring and start writing code NOW"; 2 regression tests added
+
+## 2026-04-29 20:03 UTC tick
+- Stress: 680/1658 (PID 459183 alive; ~82k seconds elapsed; 58 total SKIPs / 8.5%)
+- Write rate: 32% last 100 prompts (down from 74% peak) — prompt difficulty, not regression: range 480-680 is exotic storage backends (elasticsearch, rocksdb, lmdb) and API server/client prompts
+- Admiral last 30 min: struggle:none x7+ on one session (model stuck reading/ls-ing without writing); all known patterns; no new types
+- vLLM 400s: 0; balancer healthy (PID 24354 on :8001, original PID 1230765 died, restarted by keepalive cron); vLLM Docker healthy on :8000
+- GH issues: 0 open
+- Action this tick: no fix committed — 2 unreleased commits ahead of tag (d8a6885 circuit-breaker fix, 0ad93df struggle-detector fix) deploy at 00:00 UTC auto-release; all admiral patterns are known model-behavior; no new drydock source bugs found
+
+## 2026-04-29 20:33 UTC tick
+- Stress: 322/1658 in current run (PID 459183, restarted from step 216; total ~680 across runs); write rate 48% last 83 prompts — down from 74%, partly because prompts 301-311 (ini/env format conversions) all 0 writes (features already built, model correctly skips); one bad session: prompt 318 (--raw CLI flag) got 120 msgs 0 writes (stuck struggle), then FORCE-RESET unstuck it
+- Admiral last 30 min: struggle:none x10+ (60s dedup, model ignored all), loop:read_file:cli.py x1, retry_after_error:search_replace:directory x1 — all known model-behavior patterns
+- vLLM 400s: 0; balancer and vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — fixes from d8a6885 and 0ad93df are already live via editable source path (/data3/drydock loads directly); confirmed via python3 -c import test that struggle directive now correctly says "STOP exploring and start writing code NOW" for last_write_tool=None; auto-release ships v2.7.22 at 00:00 UTC
+
+## 2026-04-29 21:01 UTC tick
+- Stress: 329/1658 in current restart (PID 459183 alive, log: v10_restart_1777480477; main v10 completed 972 entries); total ~1085 across all run logs; write rate 42% last 100 prompts (v10 main) — expected low for CLI flag prompts (--profile, --env, --dry-run etc) where features often already exist
+- Admiral last 30 min: struggle:none x2 (64 and 70 calls no write), empty_after_tool:read_file x1, loop:read_file:cli.py x1, loop:bash:cat cli.py x1, retry_after_error:search_replace x1, retry_after_error:bash x1, struggle:write_file x2 — all known model-behavior patterns; no new types
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — harness alive and progressing; all admiral patterns are known model-behavior; no new drydock source bugs identified; auto-release will ship v2.7.22 (d8a6885 + 0ad93df) at 00:00 UTC
+
+## 2026-04-29 21:30 UTC tick
+- Stress: 349/1658 in current restart (PID 459183, alive 4h55m; babysitter restarted previous run at 16:34 UTC after it died at step 422); write rate 50% last 100 prompts (CLI flag prompts in 216-349 range, lower-complexity tasks)
+- Admiral last 30 min: struggle:none x7 (model stuck in exploration, not writing), loop:read_file:cli.py x3, retry_after_error:search_replace:directory x3, empty_after_tool:ralph_repo_index x2, retry_after_error:bash x3, struggle:write_file x1 — all known model-behavior patterns; no new intervention types; stress-alert fired once at 21:07 UTC for raw-markdown-leakage (7% of rec-checks, transient — current window shows raw_md=0, likely model output in tool args)
+- vLLM 400s: 0; balancer on :8001 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — 2 commits (0ad93df struggle-detector fix, d8a6885 circuit-breaker fix) pending auto-release at 00:00 UTC tonight as v2.7.22; all admiral patterns are known model-behavior; write rate drop from 74% to 50% is prompt-difficulty-dependent (previous run at same range was 61%), not a regression
+
+## 2026-04-29 22:02 UTC tick
+- Stress: 364/1658 (PID 459183 alive, 5h25m elapsed; restarted from step 216 at 16:34 UTC)
+- Write rate: 46% last 100 prompts (expected low for CLI flag prompts 216-364, features already present in context)
+- Admiral last 30 min: all known patterns (struggle:none, loop:read_file:cli.py, retry_after_error:search_replace, empty_after_tool); no new types; SKIPs/FORCE-RESETs are transient TUI-busy events, unstick correctly
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker up 5 days
+- GH issues: 0 open
+- Action this tick: no fix committed — system healthy; 2 unreleased commits (d8a6885 circuit-breaker escalation fix, 0ad93df struggle-detector directive fix) ship as v2.7.22 at 23:00 UTC auto-release; all admiral patterns are known model-behavior
+
+## 2026-04-29 23:07 UTC tick
+- Stress: 374/1658 (PID 459183 alive, currently on plugin-system prompts ~374)
+- Write rate: 44% last 100 prompts
+- Admiral last 30 min: active retry_after_error:search_replace + loop:search_replace fires with _truncated args pattern — model copies truncated history args for search_replace, error fires, model retries identically; escalation message was misdirecting model to "write_file call" instead of "search_replace call"
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix (39515a1) — tool-aware escalation message for truncated args; search_replace now gets SEARCH/REPLACE recovery guidance instead of write_file advice; 3 new regression tests all pass; ships as v2.7.22 at next 0/6/12/18 auto-release tick
