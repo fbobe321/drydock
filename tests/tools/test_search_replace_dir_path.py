@@ -89,3 +89,26 @@ async def test_directory_path_repeated_call_still_returns_result(tool, ctx, tmp_
         assert isinstance(result, SearchReplaceResult)
         assert result.blocks_applied == 0
         assert "PATH ERROR" in result.content
+
+
+@pytest.mark.asyncio
+async def test_directory_path_escalates_on_second_call(tool, ctx, tmp_path):
+    """Second call with the same directory path includes REPEATED ERROR escalation."""
+    (tmp_path / "cli.py").write_text("x = 1\n")
+    args = SearchReplaceArgs(
+        file_path=str(tmp_path),
+        content="<<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE",
+    )
+    # First call — no escalation
+    results1 = await _collect(tool.run(args, ctx))
+    assert "REPEATED ERROR" not in results1[-1].content
+
+    # Second call — escalation fires
+    results2 = await _collect(tool.run(args, ctx))
+    assert "REPEATED ERROR" in results2[-1].content
+    assert "#2" in results2[-1].content
+
+    # Third call — escalation still present with updated count
+    results3 = await _collect(tool.run(args, ctx))
+    assert "REPEATED ERROR" in results3[-1].content
+    assert "#3" in results3[-1].content

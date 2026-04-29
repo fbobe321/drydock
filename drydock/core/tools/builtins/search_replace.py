@@ -175,17 +175,46 @@ class SearchReplace(
                 # Model passed a directory instead of a file path.
                 # Return a result (not raise) so the model corrects the call
                 # rather than retrying the same directory path in a loop.
+                # Track consecutive calls to escalate guidance on 2nd+ offense.
                 dir_path_str = args.file_path.strip()
                 dir_path = Path(dir_path_str).expanduser()
                 if not dir_path.is_absolute():
                     dir_path = Path.cwd() / dir_path
                 dir_path = dir_path.resolve()
                 if dir_path.is_dir():
+                    dir_state = self.state.__dict__.setdefault("_sr_dir_history", {})
+                    dir_key = str(dir_path)
+                    dir_entry = dir_state.get(dir_key, {"count": 0})
+                    dir_entry["count"] += 1
+                    dir_state[dir_key] = dir_entry
+                    dir_count = dir_entry["count"]
                     try:
                         files = sorted(p.name for p in dir_path.iterdir() if p.is_file())
                     except OSError:
                         files = []
                     files_list = "\n".join(f"  {f}" for f in files[:20]) or "  (empty directory)"
+                    if dir_count >= 2:
+                        # Escalate: model retried the same directory path — add project listing
+                        try:
+                            py_files = sorted(
+                                str(p.relative_to(Path.cwd()))
+                                for p in Path.cwd().rglob("*.py")
+                                if "__pycache__" not in str(p) and ".git" not in str(p)
+                            )[:20]
+                            project_listing = (
+                                f"\n[REPEATED ERROR #{dir_count}: you have called search_replace on "
+                                f"this directory {dir_count} times. You MUST specify a filename. "
+                                f"Project .py files:\n"
+                                + "\n".join(f"  {f}" for f in py_files)
+                                + "\nUse the exact path from this list.]"
+                            )
+                        except Exception:
+                            project_listing = (
+                                f"\n[REPEATED ERROR #{dir_count}: stop passing the directory. "
+                                "Use a full file path like 'tool_agent/cli.py'.]"
+                            )
+                    else:
+                        project_listing = ""
                     yield SearchReplaceResult(
                         file=str(dir_path),
                         blocks_applied=0,
@@ -195,7 +224,8 @@ class SearchReplace(
                             f"search_replace requires a path to a specific file.\n"
                             f"Files in that directory:\n{files_list}\n"
                             f"Specify the full path including the filename, e.g. "
-                            f"'{dir_path}/<filename.py>'"
+                            f"'{dir_path}/{files[0] if files else '<filename.py>'}'"
+                            + project_listing
                         ),
                     )
                     return

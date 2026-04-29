@@ -169,6 +169,11 @@ class ResolvedMessage(BaseModel):
 
 
 class APIToolFormatHandler:
+    def __init__(self) -> None:
+        # Track per-path truncated-history write_file retries so we can
+        # escalate on 2nd+ identical failures (model ignores advisory-only msgs).
+        self._truncated_hit_count: dict[str, int] = {}
+
     @property
     def name(self) -> str:
         return "api"
@@ -379,6 +384,12 @@ class APIToolFormatHandler:
                 path_hint = (parsed_call.raw_args.get("path")
                              or parsed_call.raw_args.get("file_path")
                              or "")
+                # Track retry count per path to escalate on 2nd+ offense.
+                hit_key = path_hint or "<unknown>"
+                hit_count = self._truncated_hit_count.get(hit_key, 0) + 1
+                self._truncated_hit_count[hit_key] = hit_count
+                escalate = hit_count >= 2
+
                 # Auto-embed the current file content so the model can
                 # rewrite immediately without an extra read_file round-trip.
                 file_embed = ""
@@ -407,6 +418,31 @@ class APIToolFormatHandler:
                         pass
                 if not file_embed and path_hint:
                     file_embed = f" Re-read `{path_hint}` with read_file first."
+
+                if escalate:
+                    # Model is stuck in a truncated-template retry loop.
+                    # Show project files and give a concrete directive.
+                    try:
+                        py_files = sorted(
+                            str(p2.relative_to(Path.cwd()))
+                            for p2 in Path.cwd().rglob("*.py")
+                            if "__pycache__" not in str(p2) and ".git" not in str(p2)
+                        )[:20]
+                        dir_listing = "\n".join(f"  {f}" for f in py_files)
+                    except Exception:
+                        dir_listing = "  (could not list files)"
+                    escalation_suffix = (
+                        f"\n\n[REPEATED FAILURE #{hit_count}: your write_file call "
+                        f"keeps using a stale truncated template for '{path_hint}'. "
+                        f"You MUST type fresh content — do NOT copy from history. "
+                        f"Current .py files in project:\n{dir_listing}\n"
+                        f"Use read_file on the target file, then call write_file "
+                        f"with fully typed content, OR use search_replace to make "
+                        f"targeted edits without rewriting the whole file.]"
+                    )
+                else:
+                    escalation_suffix = ""
+
                 failed_calls.append(
                     FailedToolCall(
                         tool_name=parsed_call.tool_name,
@@ -415,7 +451,8 @@ class APIToolFormatHandler:
                             f"your call used a "
                             f"truncated history entry as a template (it contained "
                             f"'_truncated'/'_original_bytes' instead of real "
-                            f"arguments).{file_embed} Provide the full required arguments."
+                            f"arguments).{file_embed} Provide the full required "
+                            f"arguments.{escalation_suffix}"
                         ),
                     )
                 )

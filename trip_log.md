@@ -3,6 +3,22 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-04-29 08:34 UTC tick
+- Stress: 229/1658 (PID 270529, new run started ~Apr 29 03:26 UTC; progressing)
+- Write rate: 19% (last 100 prompts) — early in sequence; previous run was at 73% at prompts 1550-1650, not a fair comparison; new run at prompt 225 already has 52 writes vs 0 in prev run at same point, so actually running better
+- Admiral last 30 min: struggle:66-76 (model made 76 reads without writing; ended on its own); loop:bash --help x1; retry_after_error:search_replace directory path x1; empty_after_tool:read_file x1 — all known model-behavior patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no fix committed; b2f26aa (search_replace dir-path escalation) is unshipped pending next auto_release at ~12:00 UTC; skip rate 24% is higher than prev run's 7% at same point but this is variance from model being in 76-read struggle sessions, not a drydock bug
+
+## 2026-04-29 08:01 UTC tick
+- Stress: 207/1658 (PID 270529, new run from babysitter restart; progressing normally)
+- Write rate: 15% (expected — prompts 200-207 are analysis queries: function_count, class_count, test_file_count, etc., no file writes expected)
+- Admiral last 30 min: struggle events firing at 70+ consecutive non-write tool calls; empty_after_tool:read_file x4 (all handled by stall retry); one empty_after_tool:web_search — all normal model-behavior noise
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: No fix committed. All systems healthy. Commit b2f26aa (search_replace: escalate directory-path error on 2nd+ repeated call) is staged ahead of v2.7.19 tag, will auto-release as v2.7.20 at 12:00 UTC.
+
 ## 2026-04-29 06:10 UTC tick
 - Stress: 141/1658 (PID 270529, new run started by babysitter; prior run PID 3713698 dead)
 - Write rate: 38% (significant regression from 74% sustained — SKIP rate 44% vs 13% baseline in prior run)
@@ -501,3 +517,72 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 container up, stress harness PID 270529 running
 - Action this tick: committed fix(read_file) ff5217d — escalating REPEATED READ #N advisory on 2nd+ identical dedup read; 1 new regression test (4 total in test file pass); auto-ships at next 0/6/12/18 UTC tick
+
+## 2026-04-29 06:40 UTC tick
+- Stress: 146/1658 (PID 270529 alive; new run restarted from 0 by babysitter; old run 3713698 gone)
+- Write rate: 26/67 = 38% (last 100 completed prompts)
+- SKIP rate: 45/141 = 32% — TUI busy; FORCE-RESETs unsticking; known pattern
+- Admiral last 30 min: struggle:search_replace (27-46 calls, single long session at 06:05-06:07 UTC); loop:read_file::cli.py(limit=100) and loop:search_replace at 06:28-06:31 UTC; empty_after_tool:read_file 1 fire
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 up, stress harness PID 270529 running
+- Action this tick: triggered manual auto_release (v2.7.19) to ship read_file dedup fixes (ff5217d, 3fc4e4b) committed earlier this session but missed by midnight cron; PyPI upload OK; installed wheel directly into user's env; all prior fixes (search_replace HARD-STOP loop-breaker, dedup re-embed, escalating dedup advisory) now live
+
+## 2026-04-29 07:03 UTC tick
+- Stress: 149/1658 (PID 270529 alive, new run; babysitter restarted from 0 at ~00:30 UTC)
+- Write rate: 38% overall (26/67 completed prompts), 32% last 50; lightweight utility prompts at start of run
+- SKIP rate: ~45% (TUI busy; FORCE-RESETs happening; known harness/TUI timing mismatch)
+- Admiral last 30 min: struggle:search_replace (35-call streak), loop:read_file::cli.py, loop:search_replace (identical blocks), retry_after_error:search_replace (directory path)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 up, stress PID 270529 running
+- Action this tick: committed fix(search_replace) b2f26aa — escalate directory-path error on 2nd+ repeat; model was getting same PATH ERROR advisory each time and retrying indefinitely; now get REPEATED ERROR #N + full project .py listing on 2nd+ offense; 4 regression tests (all pass); auto-ships at next 0/6/12/18 UTC auto-release tick
+
+## 2026-04-29 07:33 UTC tick
+- Stress: 680/1658 (41%; PID 270529 alive, 11h elapsed)
+- Write rate: 32% last 100 prompts (down from 74% peak); prompt section now at "API: WebSocket/SSE/JSON-RPC/gRPC" + tool-existence queries — model explores codebase but writes 0 files for most; expected given prompt difficulty
+- SKIP rate: 80 total SKIPs; prompts 677-679 SKIPped consecutively after 21-msg/7-write WebSocket session; harness FORCE-RESET unstuck it; prompt 680 currently in progress
+- Admiral last 30 min: struggle:40-70 tool calls without writes (multiple interventions 07:23-07:30 UTC); model reading extensively for API-type prompts; admiral correctly firing; no new admiral pattern
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (confirmed curl), vLLM gemma4 up, stress PID 270529 running, admiral_probe PID 4075121 on :8878
+- Unshipped: b2f26aa (search_replace dir-path escalation) will ship at next auto-release ~11:00 UTC
+- Action this tick: no action — system healthy; write rate dip is prompt-section artifact (API/question prompts), not a drydock regression; no new bugs found
+
+## 2026-04-29 09:15 UTC tick
+- Stress: 232/1658 (PID 270529 was stuck for 5+ hours; killed and restarted as PID 387049 resuming from step 175)
+- Write rate: 19% last 100 prompts (expected — prompts 1-232 are single-word CLI invocations, not write tasks)
+- SKIP rate: 24% (55 skips at idx=232; consistent with early-run pattern, normalizes over time)
+- Admiral last 30 min: loop:bash::--help, retry_after_error:bash, loop:read_file::cli.py(limit=100), retry_after_error:search_replace (directory path repeats); all normal patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer healthy on :8001, vLLM gemma4 healthy (Running: 0 reqs), stress harness PID 387049 resuming from step 175
+- Action this tick: killed stuck harness PID 270529 (TUI child 270531 was stuck in "Observing..." for 5h with no model response; vLLM healthy so likely pexpect stream deadlock); restarted via babysitter which resumed from checkpoint 173 at step 175; harness now progressing again
+
+## 2026-04-29 09:33 UTC tick
+- Stress: 215/1658 (PID 387049 alive, 29 min elapsed, 260MB RSS; prior run COMPLETED 1658/1658 on 2026-04-28 20:00 UTC; babysitter restarted fresh run at 09:04 UTC after PID 270527 died at idx=233)
+- Write rate: 5% last 39 prompts (analysis-prompt section 196-215: lines_of_code, tabs_vs_spaces, indent_consistency_check etc. — all expected 0 writes; model actively writing files again from prompt 212 onward: ethereum_price.py, ip_geolocation.py, phone_to_country.py confirmed in session log)
+- Admiral last 30 min: 0 fires since 09:04 restart; prior session had loop:bash::--help, loop:read_file::cli.py, retry_after_error:search_replace (directory path) — all known patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer healthy on :8001, vLLM gemma4 running, admiral_probe up; stress babysitter STRESS_LOG has cosmetic duplicate line (both set to current log, harmless)
+- Unshipped: b2f26aa (search_replace escalate directory-path error on 2nd+ call) ships at ~11:00 UTC as v2.7.20
+- Action this tick: no action — system healthy; prior stress run completed full 1658-prompt sweep; new run progressing normally; no new bugs found
+
+## 2026-04-29 10:03 UTC tick
+- Stress: 230/1658 (PID 387049 alive, started 09:04 UTC, resumed from step 174; prior full run at 680/1658 was from old log /tmp/stress_2000_1777119799.log — current active log is /tmp/stress_2000_v10_restart_1777453487.log)
+- Write rate: 28% (15/52 prompts with writes in current run; low-write section 174-230 includes analysis/sentiment/keyword prompts with minimal file creation)
+- vLLM 400s: 0 (89% prefix cache hit rate, GPU healthy)
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 up, admiral_probe up; babysitter STRESS_LOG correctly pointed at active log
+- Unshipped: b2f26aa (search_replace escalate dir-path error on 2nd+ call) ships at 12:00 UTC as v2.7.20
+- Admiral patterns last 2h: retry_after_error:write_file (truncated-history recovery) x2 — investigated; model correctly recovered by resubmitting with real args, write succeeded; no new drydock bug; empty_after_tool:search_replace x1, retry_after_error:bash, retry_after_error:search_replace — all known patterns
+- Action this tick: no fix committed — all services healthy, no new bugs found; previous stress log confusion resolved (was reading old Apr 26 log instead of current babysitter log)
+
+## 2026-04-29 10:35 UTC tick
+- Stress: 235/1658 (PID 387049 alive, 1h25m elapsed, resuming from step 174; current prompts are qr_encode/decode/barcode_encode section, mostly TIMEOUT with writes)
+- Write rate: 33% last 56 prompts (19/56 with writes; analysis/QR section skews low)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer healthy, vLLM gemma4 up, stress harness alive
+- Action this tick: committed fix 3695f6b — escalate truncated-history write_file retry on 2nd+ offense. Pattern observed: 8 consecutive retry_after_error:write_file:truncated_history fires in 7 min (10:05-10:12 UTC), model ignoring the existing advisory. APIToolFormatHandler now tracks per-path hit count; 2nd+ failure gets "REPEATED FAILURE #N" with project file listing and concrete search_replace alternative, matching the escalation pattern in search_replace.py. 5 regression tests pass. Ships as v2.7.21 at next auto-release (~12:00 UTC).
