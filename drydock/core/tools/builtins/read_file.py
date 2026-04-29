@@ -111,19 +111,29 @@ class ReadFile(
             and prior.get("offset") == args.offset
             and prior.get("limit") == args.limit
         ):
+            # Re-embed the cached content so the model has it even if the
+            # earlier tool_result was truncated by _truncate_old_tool_results.
+            # Pointing at a stale/truncated prior result causes re-read loops.
+            cached_content = prior.get("content", "")
+            prior_lines = prior.get("lines_read", 0)
+            dedup_count = prior.get("dedup_count", 0)
+            if dedup_count == 0:
+                header = "[Unchanged since last read — content re-embedded]\n"
+            else:
+                header = (
+                    f"[REPEATED READ #{dedup_count + 1}: file has not changed across your last "
+                    f"{dedup_count + 1} reads with these exact arguments. "
+                    f"Reading again will produce this same result. "
+                    f"To make progress: write or edit a file, use offset= to read a different section, "
+                    f"or move on to the next task.]\n"
+                )
+            if read_state is not None:
+                read_state[path_key] = {**prior, "dedup_count": dedup_count + 1}
             yield ReadFileResult(
                 path=path_key,
-                content=(
-                    "<system-reminder>\n"
-                    f"File unchanged since your earlier read this session "
-                    f"({file_path.name}, mtime unchanged, same offset/limit). "
-                    "Use the content from the earlier Read tool_result — "
-                    "do NOT re-read. If you need to take action, call "
-                    "search_replace or write_file on what you already have.\n"
-                    "</system-reminder>"
-                ),
-                lines_read=0,
-                was_truncated=True,
+                content=f"{header}{cached_content}",
+                lines_read=prior_lines,
+                was_truncated=prior.get("was_truncated", False),
             )
             return
 
@@ -151,6 +161,8 @@ class ReadFile(
                 "timestamp": current_mtime,
                 "offset": args.offset,
                 "limit": args.limit,
+                "lines_read": len(read_result.lines),
+                "was_truncated": read_result.was_truncated,
             }
 
         yield ReadFileResult(

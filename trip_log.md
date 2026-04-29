@@ -3,6 +3,22 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-04-29 06:10 UTC tick
+- Stress: 141/1658 (PID 270529, new run started by babysitter; prior run PID 3713698 dead)
+- Write rate: 38% (significant regression from 74% sustained — SKIP rate 44% vs 13% baseline in prior run)
+- Admiral last 30 min: loop:bash, loop:search_replace, loop:read_file, struggle:search_replace all firing — normal model-behavior noise
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: No fix committed. Investigated SKIP regression: 62/141 prompts skipped with "TUI did not accept after 3 retries". SKIPs began at prompt 10 in the very first session. Pattern suggests TUI is busy processing previous turn output when harness sends next prompt; watcher times out after 3×120s without seeing new user message in session log. v2.7.18 read_file escalation changes (2nd+ identical dedup escalates with full context) may be causing model to stay in extended tool-call loops after each turn "completes", keeping the session non-quiet. No actionable drydock source fix identified within budget — flagged for user to investigate on return (2026-05-01).
+
+## 2026-04-29 04:35 UTC tick
+- Stress: 128/1658 (new run restarted by babysitter; prior run PID 3713698 dead at 680/1658)
+- Write rate: 39% (was 74% sustained — SKIP rate elevated at ~30% vs 8% baseline)
+- Admiral last 30 min: active — loop:read_file(tool_agent/cli.py, limit=100) firing repeatedly; struggle:search_replace counts reaching 30-36 per prompt
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: triggered manual auto_release to ship v2.7.18 early (tagged, PyPI upload confirmed). The 4 unreleased commits (read_file pagination hint, search_replace empty-content soft advisory, write_file dir-path detection, write_file path inference) directly address the read_file loop pattern visible in admiral logs: model reads cli.py with limit=100, gets no truncation hint, retries identically 3+ times, then struggles with search_replace on text it couldn't see. v2.7.18 adds the pagination hint that breaks this cycle. Stress run is live at 128/1658 and will pick up v2.7.18 at next session reset.
+
 **Pause loop:** `touch /data3/drydock/.pause_autonomous_loop`
 **Resume loop:** `rm /data3/drydock/.pause_autonomous_loop`
 **Live log:** `/data3/drydock/logs/autonomous_review.log` (full Claude output + errors)
@@ -466,3 +482,22 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 up, balancer curl verified
 - Action this tick: committed fix (11f1752) — search_replace empty-content ToolError converted to soft advisory SearchReplaceResult; tracks consecutive empty-content calls per file and escalates with project file listing on 2nd+ offense; 3 regression tests added; auto-ships as v2.7.18 at next 06:00 UTC cron tick
+
+## 2026-04-29 05:10 UTC tick
+- Stress: 132/1658 (new run, PID 270529, log /tmp/stress_2000_1777408317.log, 8.5h elapsed)
+- Write rate: 40% (last 65 prompts)
+- SKIP rate: 55/132 (42%) — TUI queuing stress prompts while busy; harness detection mismatch, not a drydock bug
+- Admiral last 30 min: loop:read_file (cli.py, limit=100) ~6 fires, struggle:search_replace ~10 fires, empty_after_tool 2 fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix(read_file): re-embed cached content on dedup — when _truncate_old_tool_results pruned the earlier tool_result, the dedup stub pointed at absent content causing re-read loops; now embeds cached content directly. 3 regression tests added. Will ship at next 0/6/12/18 UTC auto-release tick.
+
+## 2026-04-29 05:50 UTC tick
+- Stress: 137/1658 (PID 270529 alive, new run restarted from 0 since previous tick; babysitter keeps it alive)
+- Write rate: 32% (last 50 completed prompts; low due to high SKIP rate and lightweight utility prompts)
+- SKIP rate: 66/137 = 48% (elevated; concentrated in timezone/date-util prompts where TUI is busy with prior session)
+- Admiral last 30 min: 25 fires — loop:read_file::cli.py(limit=100) dominant (30+ occurrences across session), struggle:search_replace, empty_after_tool all known patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 container up, stress harness PID 270529 running
+- Action this tick: committed fix(read_file) ff5217d — escalating REPEATED READ #N advisory on 2nd+ identical dedup read; 1 new regression test (4 total in test file pass); auto-ships at next 0/6/12/18 UTC tick
