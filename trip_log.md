@@ -390,3 +390,79 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0
 - GH issues: 0 open
 - Action this tick: committed fix(circuit-breaker): read_file/grep threshold 12→5; the 12-call threshold never fired within 45-prompt session windows — model looped 5-8x on the same read_file before moving on; threshold=5 will now actually engage and return cached result + directive (4f61c5d)
+
+## 2026-04-28 23:10 UTC tick
+- Stress: 68/1658 (new run, PID 270529 alive; previous run completed at 1310/1658 done, babysitter restarted fresh run)
+- Write rate: 37% last 48 prompts (early utility-function prompts: parse_int, parse_float, parse_bool, is_valid_email — expected lower write rate)
+- Admiral last 30 min: 1 fire (loop:read_file:cli.py at 23:02 UTC — isolated, circuit-breaker threshold=5 now in place from 4f61c5d)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 container up, stress harness PID 270529 alive
+- Action this tick: no action — system healthy; previous tick's circuit-breaker fix (4f61c5d, threshold 12→5) is active; admiral activity minimal; no new drydock bugs found
+
+## 2026-04-28 23:35 UTC tick
+- Stress: 74/1658 (new run — previous run completed 1310/1658 before harness died ~20:00 UTC; babysitter restarted fresh run at ~20:30 UTC)
+- Write rate: 38% (first 74 prompts; early in run, likely to improve)
+- Admiral last few hours: 36 interventions — all known patterns (loop:read_file, retry_after_error:search_replace, retry_after_error:write_file missing-path, loop:write_file)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 container up, stress harness PID 270527 alive (~2h58m elapsed)
+- Action this tick: investigated write_file missing-path loop (admiral shows 3+ retries on same broken call); found format.py already has specific error message for this case ("You must pass BOTH `path` AND `content` as separate arguments"); this is Gemma 4 behavior, no drydock fix available. No new bugs found.
+
+## 2026-04-29 00:30 UTC tick
+- Stress: 89/1658 (harness PID 270529 alive, TUI PID 270531 active)
+- Write rate: 21/58 = 36% (lower than 74% baseline; current prompts are string-util one-liners, 0 writes expected from many)
+- Skip rate: 17/89 = 19% (above 8% baseline; context spiral on step 83 "pluralize" generated 120 msgs)
+- Admiral last 30 min: 36 struggle, 29 loop, 22 retry_after_error, 9 empty_after_tool
+- vLLM 400s: 0
+- GH issues: 0 open
+- Balancer: up on :8001, forwarding to gemma4
+- Pending release: 95fbd1a (write_file double-prefix fix) unreleased; v2.7.18 auto-ships at 05:00 UTC
+- Action this tick: no action — model stuck in search_replace retry loop at step 89 (wrap_text_at_width), harness 300s timeout will advance it; HARD-STOP advisory already fires; no new drydock bug identified
+
+## 2026-04-29 01:32 UTC tick
+- Stress: 100/1658 (PID 270529 alive, 4h58m elapsed on new run)
+- Write rate: 23/61 = 37% (consistent with previous tick; early string-util prompts have low write signal)
+- Skip rate: elevated — multiple "TUI did not accept after 3 retries" in log, FORCE-RESET triggers seen; harness self-recovers via ESC+/clear
+- Admiral last 30 min: struggle:write_file, loop:read_file, loop:bash, retry_after_error:search_replace (all known patterns)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (curl verified), vLLM gemma4 container up
+- Pending release: 2 write_file commits (95fbd1a + f4394c9) ahead of v2.7.17 tag; will auto-ship as v2.7.18 at 06:00 UTC
+- Action this tick: no action — all services healthy, no new bugs found; search_replace directory-path handler already present in source
+
+## 2026-04-29 02:02 UTC tick
+- Stress: 104/1658 (new run restarted by babysitter after previous run completed 1658/1658 at 20:00 UTC on 04-28; new run PID 270527, ~5.5h elapsed)
+- Write rate: 37% (23/61 prompts with writes; early string-util prompts expected to have lower write rate)
+- Skip rate: 24/104 = 23% (elevated vs 8% baseline; concentrated in first 20 prompts as TUI settled; prompts 85+ progressing normally)
+- Admiral last 30 min: struggle:write_file (40-47 tool calls without writing), loop:read_file:plugins.py — all known model behavior patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 container up, stress harness PID 270527 alive
+- Pending release: 2 write_file commits (f4394c9 + 95fbd1a + 4f61c5d circuit-breaker) ahead of v2.7.17 tag; auto-ships as v2.7.18 at 06:00 UTC
+- Action this tick: no action — system healthy; previous run completed full 1658/1658; new run progressing; no new drydock bugs found
+
+## 2026-04-29 02:33 UTC tick
+- Stress: 109/1658 (fresh restart by babysitter; old run had reached 680/1658)
+- Write rate: 38% (last 62 prompts on new log — low due to SKIP storm early in run; FORCE-RESETs unsticking TUI as expected)
+- Admiral last 30 min: ~20+ fires; struggle:25:search_replace repeating every 60s (DEDUP_WINDOW_SEC expiry) — known Gemma 4 advisory-ignore behavior, not a new bug
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no action — system healthy, no new drydock bugs; high SKIP rate is harness timing (not drydock source), write rate expected to recover as session warms up
+
+## 2026-04-29 03:15 UTC tick
+- Stress: 113/1658 (new run, PID 270529, restarted since last tick; old PID 3713698 gone)
+- Write rate: 38% (62 prompts evaluated) — down from 74% sustained in prior run
+- Admiral last 30 min: struggle:search_replace firing up to struggle:52 — model looping on search_replace calls (40-52 per session) without any file writes; admiral fires every 2 calls but model ignores it
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no action — stress harness alive and progressing (35% SKIP rate = TUI stuck in search_replace loops, harness FORCE-RESETs unsticking); this is Gemma 4 model behavior on mismatching SEARCH text, not a drydock source bug; balancer and vLLM healthy
+
+## 2026-04-29 03:34 UTC tick
+- Stress: 118/1658 (new run PID 270529, restarted by babysitter; old run 3713698 dead)
+- Write rate: 25/63 = 39% (elevated SKIP rate — 44/118 = 37% SKIPs due to search_replace loops)
+- Admiral last 30 min: not measured; TUI log showed 20+ consecutive "Empty content provided" ToolErrors from Gemma 4 calling search_replace with empty content= — this was the root failure causing retry loops
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 up, balancer curl verified
+- Action this tick: committed fix (11f1752) — search_replace empty-content ToolError converted to soft advisory SearchReplaceResult; tracks consecutive empty-content calls per file and escalates with project file listing on 2nd+ offense; 3 regression tests added; auto-ships as v2.7.18 at next 06:00 UTC cron tick

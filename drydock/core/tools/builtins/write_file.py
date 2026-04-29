@@ -735,6 +735,19 @@ class WriteFile(
             file_path = Path.cwd() / file_path
         file_path = file_path.resolve()
 
+        if file_path.is_dir():
+            try:
+                children = sorted(p.name for p in file_path.iterdir())[:20]
+                listing = ", ".join(children) if children else "(empty)"
+            except OSError:
+                listing = "(unreadable)"
+            raise ToolError(
+                f"'{file_path}' is a directory, not a file. "
+                f"Specify the exact file path inside it.\n"
+                f"Files in that directory: {listing}\n"
+                f"Example: {file_path}/{children[0] if children else 'yourfile.py'}"
+            )
+
         file_existed = file_path.exists()
 
         if file_existed and not args.overwrite:

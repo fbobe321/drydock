@@ -412,7 +412,7 @@ class APIToolFormatHandler:
                         tool_name=parsed_call.tool_name,
                         call_id=parsed_call.call_id,
                         error=(
-                            f"{parsed_call.tool_name}: your call used a "
+                            f"your call used a "
                             f"truncated history entry as a template (it contained "
                             f"'_truncated'/'_original_bytes' instead of real "
                             f"arguments).{file_embed} Provide the full required arguments."
@@ -438,11 +438,56 @@ class APIToolFormatHandler:
                     and "path" in error_str
                     and "Field required" in error_str
                 ):
+                    # Try to infer path from the first comment line of content.
+                    # Gemma 4 frequently calls write_file(content="...") without path.
+                    content_val = parsed_call.raw_args.get("content", "")
+                    inferred_path: str | None = None
+                    if content_val:
+                        for _line in content_val.splitlines()[:5]:
+                            _line = _line.strip()
+                            _m = _re.match(
+                                r'^#\s+([\w./+-]+\.(?:py|js|ts|json|yaml|yml|toml|md|txt|sh|cfg|ini))\s*$',
+                                _line,
+                            )
+                            if _m:
+                                inferred_path = _m.group(1)
+                                break
+                    if inferred_path:
+                        try:
+                            _new_args = dict(parsed_call.raw_args)
+                            _new_args["path"] = inferred_path
+                            validated_args = args_model.model_validate(_new_args)
+                            resolved_calls.append(
+                                ResolvedToolCall(
+                                    tool_name=parsed_call.tool_name,
+                                    tool_class=tool_class,
+                                    validated_args=validated_args,
+                                    call_id=parsed_call.call_id,
+                                )
+                            )
+                            continue
+                        except ValidationError:
+                            pass
+                    # List project .py files as hints so the model can pick the right one
+                    _candidates: list[str] = []
+                    try:
+                        _candidates = [
+                            str(p.relative_to(Path.cwd()))
+                            for p in sorted(Path.cwd().rglob("*.py"))
+                            if "__pycache__" not in str(p) and ".git" not in str(p)
+                        ][:12]
+                    except Exception:
+                        pass
+                    _hint = (
+                        f"Project .py files: {', '.join(_candidates)}"
+                        if _candidates
+                        else "Use read_file or glob to list available files."
+                    )
                     error_msg = (
-                        "write_file: missing required `path` parameter. "
-                        "You must pass BOTH `path` AND `content` as separate arguments. "
-                        'Fix: write_file(path="your/file.py", content="..."). '
-                        "Do NOT omit `path`."
+                        "missing required `path` parameter. "
+                        "You must pass BOTH `path` AND `content` as separate arguments: "
+                        'write_file(path="pkg/file.py", content="..."). '
+                        f"Do NOT omit `path`. {_hint}"
                     )
                 else:
                     error_msg = f"Invalid arguments: {e}"

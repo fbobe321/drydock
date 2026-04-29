@@ -131,6 +131,46 @@ class SearchReplace(
             file_path, search_replace_blocks = self._prepare_and_validate_args(args)
         except ToolError as e:
             err_msg = str(e)
+            if err_msg.startswith("Empty content provided.") or err_msg.startswith("File path is required."):
+                # Model sent search_replace with missing content or file_path.
+                # Convert to a soft result so the model corrects — a ToolError
+                # causes panic-retry loops (feedback: never raise ToolError for
+                # loop detection). Track count to escalate on repeat offenses.
+                empty_state = self.state.__dict__.setdefault("_sr_empty_history", {})
+                key = args.file_path.strip() or "<no-path>"
+                entry = empty_state.get(key, {"count": 0})
+                entry["count"] += 1
+                empty_state[key] = entry
+                count = entry["count"]
+                escalate = count >= 2
+                extra = ""
+                if escalate:
+                    # Show project files so model can recover context
+                    try:
+                        py_files = sorted(
+                            str(p.relative_to(Path.cwd()))
+                            for p in Path.cwd().rglob("*.py")
+                            if "__pycache__" not in str(p) and ".git" not in str(p)
+                        )[:20]
+                        extra = (
+                            f"\n[This is the #{count} empty search_replace on '{key}'. "
+                            f"Stop retrying. Current .py files in project:\n"
+                            + "\n".join(f"  {f}" for f in py_files)
+                            + "\nUse write_file to create a file, or read_file to "
+                            f"see file contents before editing.]"
+                        )
+                    except Exception:
+                        extra = (
+                            f"\n[This is the #{count} empty search_replace on '{key}'. "
+                            "Stop retrying. Use write_file or read the file first.]"
+                        )
+                yield SearchReplaceResult(
+                    file=key,
+                    blocks_applied=0,
+                    lines_changed=0,
+                    content=err_msg + extra,
+                )
+                return
             if err_msg.startswith("Path is not a file:"):
                 # Model passed a directory instead of a file path.
                 # Return a result (not raise) so the model corrects the call
