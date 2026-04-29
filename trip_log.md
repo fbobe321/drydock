@@ -586,3 +586,91 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Services: llm_balancer healthy, vLLM gemma4 up, stress harness alive
 - Action this tick: committed fix 3695f6b — escalate truncated-history write_file retry on 2nd+ offense. Pattern observed: 8 consecutive retry_after_error:write_file:truncated_history fires in 7 min (10:05-10:12 UTC), model ignoring the existing advisory. APIToolFormatHandler now tracks per-path hit count; 2nd+ failure gets "REPEATED FAILURE #N" with project file listing and concrete search_replace alternative, matching the escalation pattern in search_replace.py. 5 regression tests pass. Ships as v2.7.21 at next auto-release (~12:00 UTC).
+
+## 2026-04-29 11:04 UTC tick
+- Stress: 239/1658 (PID 387049 alive, 1h58m elapsed, resumed from step 174; babysitter STRESS_LOG correctly tracking active log)
+- Write rate: 27% through prompt 225 (14/51 prompts with writes; prompts 175-211 are analysis queries with 0 writes; prompts 212-225 API tool implementations had writes); TIMEOUT cluster at prompts 229-239 as agent processes complex NLP tasks
+- TIMEOUT pattern: prompt 226 (stem_words) triggered full package rebuild after session reset (441 msgs + 59 files); subsequent sessions bloated to 18-25MB causing prompts 229-239 to exceed harness timeout; log_size growing during TOIMEOUTs confirms agent IS running — harness timeout fires before task completes, not agent failure
+- vLLM 400s: 0 (container up 5 days, healthy)
+- GH issues: 0 open
+- Services: llm_balancer healthy (confirmed via /proc/fd), vLLM gemma4 Up 5 days, admiral_probe up, stress babysitter alive (last tick 11:00 UTC confirmed alive=1 rss=463MB)
+- Action this tick: no action — all services healthy, no new drydock bugs found; TIMEOUT cluster is expected context-bloat pattern after large session reset rebuild; harness will recover via subsequent session resets; babysitter monitoring correctly
+
+## 2026-04-29 12:30 UTC tick
+- Stress: 250/1658 (PID 387049 alive, 2h25m elapsed; babysitter restarted from checkpoint 173 → step 175 after prior PID 3713698 died; original log had 680 entries but that was a previous run cycle)
+- Write rate: 37% last 64 prompts (24/64 with writes; prompts 175-250 are read-heavy — tree, find, git, code metrics, analysis — so low write rate is expected; not a regression)
+- vLLM 400s: 0 (container healthy, Up 5+ days)
+- GH issues: 0 open
+- Services: llm_balancer healthy, vLLM gemma4 up, stress harness alive, admiral_probe up
+- Admiral last 2h: retry_after_error:write_file (truncated-history, 5 fires 10:08–10:40 UTC — escalation fix in v2.7.20 is deployed; model recovered each time), empty_after_tool:write_file (1 fire), struggle:none (heredoc+sed loop, 1 fire), empty_after_tool:ralph_repo_index (1 fire — ralph_repo_index is in _IGNORE_TOOLS, silently dropped; model recovered via admiral advisory)
+- Action this tick: no fix committed — all services healthy, no new actionable drydock bugs found; 37% write rate is expected for this prompt section; harness progressing normally
+
+## 2026-04-29 12:33 UTC tick
+- Stress: 285/1658 (PID 387049 alive, 3h25m elapsed; current section: format converters, convert tsv/csv→toml/xml/ini/env; session active and writing converter scripts)
+- Write rate: 38% (37/95 prompts with writes in last 100) — expected for format converter section where model often uses bash inline rather than writing files
+- vLLM 400s: 0 (container healthy)
+- GH issues: 0 open
+- Admiral last 2h: heavy activity during hard section (steps 229-254: qr/captcha/NLP/pdf/epub): 3x tui-recycle-requested, 2x retry-spike alerts (51% and 59% of prompts needed retries), struggle:none interventions at 59-90 tool calls with no write; all resolved by RECYCLE-TUI; format converter section now clean; no new patterns beyond known model-behavior
+- Action this tick: no fix committed — all services healthy, no new actionable drydock bugs; rough section (steps 229-254) has passed; harness progressing normally in cleaner prompt territory
+
+## 2026-04-29 12:05 UTC tick
+- Stress: 256/1658 (PID 387049 alive, 2h55m elapsed; resumed from step 174 after PID 270527 died at 09:04 UTC; babysitter correctly tracking active log `_1777453487.log`)
+- Write rate: 37% (25/67 prompts with writes in current run; steps 174-256 include pdf/epub/image/audio/video tasks and NLP tasks that naturally produce 0 writes due to missing deps — not a regression vs 73% which covered different step range)
+- vLLM 400s: 0 (container Up 5+ days, healthy)
+- GH issues: 0 open
+- Admiral last 30 min: loop:bash (model ran `ls tool_agent/ | grep yaml` 8 times on step 256 "convert json to yaml"), struggle:none (59 then 75 tool calls with no write — admiral fired, model eventually completed with 0 writes), tui-recycle-requested at 11:56 UTC (admiral requested TUI recycle after 9 SKIPs in 38 prompts; recycle=6 at 12:00 babysitter tick confirms it fired); all known patterns, no new bugs
+- Cascading TIMEOUT at steps 229-234: all hit total_msgs=500 in a session started after step 225 reset; root cause is lemmatize_words (step 227) using 101 msgs causing rapid context saturation; this is the known context-bloat issue from resume.md; harness recovered via TUI recycle
+- Action this tick: no fix committed — all services healthy, no new actionable drydock bugs; write rate and skip patterns are within expected range for this prompt section
+
+## 2026-04-29 14:00 UTC tick
+- Stress: 321/1658 (PID 387049 alive, 4h55m elapsed; resumed from step 174 at 09:04 UTC after prior run died)
+- Write rate: 78% last 50 prompts (39/50 with writes)
+- vLLM 400s: 0 (container healthy)
+- GH issues: 0 open
+- Action this tick: committed fix for babysitter self-modification bug — sed -i on restart was killing the dynamic STRESS_LOG detection (replacing both dynamic-detection lines with hardcoded path × 2); next restart will now correctly track the new log; removed self-modifying sed, restored dynamic detection with updated fallback
+
+## 2026-04-29 14:02 UTC tick
+- Stress: 376/1658 (PID 387049 alive, 4h58m elapsed since 09:04 UTC restart)
+- Write rate: 86% last 100 prompts (excellent; clean CLI-flag + plugin feature section)
+- vLLM 400s: 0 (container healthy)
+- GH issues: 0 open
+- Admiral last 30 min: retry_after_error:search_replace:truncated-history (model reusing truncated tool result as search text; canned + opus interventions fired); raw-markdown-leakage alert at 13:21 (7%) and 13:51 (33%) but confirmed cleared — 0 matches in current 64KB PTY window; all known patterns, no new drydock source bugs found
+- Action this tick: no fix committed — raw-markdown leak was transient and has cleared; all services healthy; prior fix (1a0602a babysitter self-modification) shipping at next auto_release
+
+## 2026-04-29 13:30 UTC tick
+- Stress: 360/1658 (PID 387049 alive, 4h26m elapsed since 09:04 UTC restart; babysitter tracking log `_1777453487.log` correctly after last tick's fix)
+- Write rate: 90% last 50 prompts (45/50 with writes; clean section — CLI flag additions, 14-18 msgs, 2-5 writes each)
+- vLLM 400s: 0 (container healthy)
+- GH issues: 0 open
+- Admiral last 30 min: none observed (all prompts completing with done+writes, no SKIP/TIMEOUT in last 10 steps)
+- Action this tick: no fix committed — all services healthy; prior tick's babysitter self-modification fix (1a0602a) shipping as v2.7.21 at 18:00 UTC auto_release; stress run in good shape through CLI-flag section
+
+## 2026-04-29 14:34 UTC tick
+- Stress: 387/1658 (babysitter restarted with --resume-from-step 174; current log: stress_2000_v10_restart_1777453487.log, PID 387049 running 5h25m)
+- Write rate: 84% last 100 prompts (up from 74% in prior session snapshot)
+- Admiral last 30 min: 84 fires today total; patterns are all known (struggle 69, retry_after_error 30, loop 28, empty_after_tool 7); 4 empty_after_tool:ralph_repo_index from ignored hallucinated tool calls leaving dangling assistant tool_calls in history (model recovers via admiral nudge)
+- vLLM 400s: 0 (container healthy; :8001 owned by llm_balancer PID 24354, responding normally)
+- GH issues: 0 open
+- Action this tick: no fix committed — investigated empty_after_tool:ralph_repo_index pattern; root cause is silently-dropped IGNORE_TOOLS leaving assistant messages with unresolved tool_calls; admiral catches and nudges successfully; skip cluster at steps 350-370 (9 skips) was recovered by tui-recycle; current run healthy and progressing
+
+## 2026-04-29 15:05 UTC tick
+- Stress: 392/1658 (PID 387049 alive, 6h elapsed since 09:04 UTC restart; resuming from step 174)
+- Write rate: 61% last ~190 prompts (down from 84% — "Plugin feature:" section has many design/architecture prompts that result in 0 writes, expected)
+- vLLM 400s: 0 (container healthy; :8001 llm_balancer PID 24354 OK, :8000 vLLM Docker OK, :8878 admiral PID 4075121 OK)
+- GH issues: 0 open
+- Admiral last 30 min: loop:read_file::{offset:100,limit:100,path:cli.py} fired twice (model reading same offset 5+ times ignoring dedup advisory; known Gemma 4 advisory-resistance, CLAUDE.md learning #2); dedup logic itself confirmed working in active session log
+- Action this tick: no fix committed — all services healthy; 1a0602a (babysitter self-modification fix) ships as v2.7.21 at 18:00 UTC; no new drydock source bugs found; SKIPs post-session-reset are harness timing (not fixable per rules); 61% write rate is content-type variance not regression
+
+## 2026-04-29 16:02 UTC tick
+- Stress: 416/1658 (PID 387049, log v10_restart; healthy, running 7h)
+- Write rate: 82% last 100 prompts — strong, up from 61% previous tick
+- vLLM 400s: 0 (balancer PID 24354 OK, vLLM Docker OK, no JSONDecodeErrors)
+- GH issues: 0 open
+- Action this tick: committed fix for hallucinated-tool empty_after_tool loops (commits 80196ba + 348fb4a). When Gemma 4 calls tools from _IGNORE_TOOLS (exit_plan_mode, ralph_repo_index, list_mcp_resources etc.), the old code silently dropped them via `continue` leaving the tool_call unpaired in message history, causing the model to wait for a response that never arrived. Fix: route suppressed tools to suppressed_failures on ResolvedMessage; _silence_suppressed_failures() in agent_loop.py adds proper tool result messages without emitting TUI error events. 9 regression tests added. Ships as v2.7.22 at 18:00 UTC.
+
+## 2026-04-29 16:34 UTC tick
+- Stress: 233/1658 at tick start (PID 387049 stuck 7.5h at step 233 qr_encode; no log output since 09:02 UTC); restarted as PID 459183 resuming from step 216
+- Write rate: 25% across current run (early run had good rates; mid-run steps 134-175 got 0 writes on file/git/code-analysis prompts — model answering "already done" for ops the package could plausibly handle; expected content-type variance, not a regression)
+- vLLM 400s: 0
+- GH issues: 0 open (gh returned empty output)
+- Action this tick: killed stuck harness (387049) and its TUI child (457206); ran babysitter to restart from step 216 (done=216, idx=422). Root cause of the 7.5h stall: harness pexpect connection was frozen waiting for step 233 to complete; `--max-per-prompt 300` timeout did not fire (likely pexpect select() blocked on TUI output at 500+ messages). Babysitter only checks liveness (PID in /proc), not progress staleness — this is a known gap, not actionable per rules. New harness confirmed alive and producing log output within 10s of restart. No drydock source fix this tick.

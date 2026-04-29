@@ -28,8 +28,8 @@ PID_FILE=/tmp/stress_pid.txt
 # /tmp/stress_2000_*.log. Avoids the stale-log bug where babysitter reported
 # COMPLETE for hours while the real harness kept processing (2026-04-25).
 # Falls back to the prior hardcoded path if no match exists yet.
-STRESS_LOG=/tmp/stress_2000_v10_restart_1777453487.log
-STRESS_LOG=/tmp/stress_2000_v10_restart_1777453487.log
+STRESS_LOG=$(ls -t /tmp/stress_2000_*.log 2>/dev/null | head -1)
+STRESS_LOG=${STRESS_LOG:-/tmp/stress_2000_v10_restart_1777453487.log}
 NOTIFY=/data3/drydock/scripts/notify_release.py
 PY_CONDA=/home/bobef/miniconda3/bin/python3
 PY_DRYDOCK=/home/bobef/miniforge3/envs/drydock/bin/python3
@@ -146,7 +146,6 @@ disown 2>/dev/null || true
 
 # Point the monitor at the new log for subsequent ticks.
 ln -sf "$NEW_LOG" /tmp/stress_2000_v10.log.current
-sed -i "s|^STRESS_LOG=.*|STRESS_LOG=$NEW_LOG|" "$0" 2>/dev/null || true
 
 log "restart complete: new PID $NEW_PID log $NEW_LOG"
 notify_on_change "restart" \

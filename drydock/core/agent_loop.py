@@ -1507,9 +1507,23 @@ class AgentLoop:
                 self.stats.tool_calls_failed += 1
             self._handle_tool_response(tool_call, error_msg, "failure", decision)
 
+    def _silence_suppressed_failures(self, suppressed: list) -> None:
+        """Add tool result messages for hallucinated tools without TUI events.
+
+        Keeps message history well-formed (assistant tool_call → tool result)
+        while hiding the error from the TUI to avoid confusing the user.
+        """
+        for failed in suppressed:
+            error_msg = f"<{TOOL_ERROR_TAG}>{failed.tool_name}: {failed.error}</{TOOL_ERROR_TAG}>"
+            self.messages.append(
+                self.format_handler.create_failed_tool_response_message(failed, error_msg)
+            )
+            self.stats.tool_calls_failed += 1
+
     async def _handle_tool_calls(
         self, resolved: ResolvedMessage
     ) -> AsyncGenerator[ToolCallEvent | ToolResultEvent | ToolStreamEvent | AssistantEvent]:
+        self._silence_suppressed_failures(resolved.suppressed_failures)
         async for event in self._emit_failed_tool_events(resolved.failed_calls):
             yield event
         for tool_call in resolved.tool_calls:

@@ -166,6 +166,9 @@ class ResolvedMessage(BaseModel):
     model_config = ConfigDict(frozen=True)
     tool_calls: list[ResolvedToolCall]
     failed_calls: list[FailedToolCall] = Field(default_factory=list)
+    # Hallucinated tools: need a tool result in message history (to keep the
+    # conversation well-formed) but should NOT be shown as errors in the TUI.
+    suppressed_failures: list[FailedToolCall] = Field(default_factory=list)
 
 
 class APIToolFormatHandler:
@@ -352,12 +355,25 @@ class APIToolFormatHandler:
             "list_mcp_resources", "list_resources", "search_resources",
         }
 
+        suppressed_failures = []
         for parsed_call in parsed.tool_calls:
             tool_class = active_tools.get(parsed_call.tool_name)
             if not tool_class:
-                # Silently drop known hallucinated tools instead of
-                # showing an error in the TUI
+                # Hallucinated tools: add a tool result to keep the message
+                # history well-formed (prevents empty_after_tool loops) but
+                # route to suppressed_failures so the TUI doesn't show an error.
                 if parsed_call.tool_name in _IGNORE_TOOLS:
+                    suppressed_failures.append(
+                        FailedToolCall(
+                            tool_name=parsed_call.tool_name,
+                            call_id=parsed_call.call_id,
+                            error=(
+                                f"'{parsed_call.tool_name}' is not available. "
+                                f"Use only tools from your tool list: "
+                                f"{', '.join(sorted(active_tools.keys())[:8])}."
+                            ),
+                        )
+                    )
                     continue
                 failed_calls.append(
                     FailedToolCall(
@@ -536,7 +552,11 @@ class APIToolFormatHandler:
                     )
                 )
 
-        return ResolvedMessage(tool_calls=resolved_calls, failed_calls=failed_calls)
+        return ResolvedMessage(
+            tool_calls=resolved_calls,
+            failed_calls=failed_calls,
+            suppressed_failures=suppressed_failures,
+        )
 
     def create_tool_response_message(
         self, tool_call: ResolvedToolCall, result_text: str
