@@ -358,11 +358,15 @@ class AgentLoop:
     async def act(self, msg: str) -> AsyncGenerator[BaseEvent]:
         self._clean_message_history()
 
-        # New user turn — reset the circuit-breaker fire counter so a bad
-        # previous turn can never poison this one. The counter is supposed
-        # to track consecutive repetitions; a fresh user message is
-        # unambiguously the start of a new intent.
+        # New user turn — reset per-turn counters so a previous turn can
+        # never poison the current one.
         self._consecutive_circuit_breaker_fires = 0
+        # Reset bash-test counter so "STOP testing" nudge only fires within
+        # the current user prompt, not across the entire session. Without
+        # this, by the 2nd prompt in a long session every bash call gets
+        # the "project is WORKING, stop" note injected, causing model stalls
+        # (empty_after_tool:bash fires in admiral).
+        self._successful_test_runs = 0
 
         # Auto-create AGENTS.md if no project instructions exist.
         # devstral needs per-project AGENTS.md to anchor its behavior —
@@ -1338,6 +1342,13 @@ class AgentLoop:
 
             result_dict = result_model.model_dump()
             text = "\n".join(f"{k}: {v}" for k, v in result_dict.items())
+
+            # After task subagent completes, nudge the model to continue rather
+            # than stall (Gemma 4 sees "completed: True" and produces empty turn).
+            if tool_call.tool_name == "task" and result_dict.get("completed"):
+                self._inject_system_note(
+                    "Task complete. Continue with your next step — call the next tool now."
+                )
 
             # After a successful bash test of built code, nudge to wrap up
             if tool_call.tool_name in ("bash", "run_command"):

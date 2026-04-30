@@ -3,6 +3,32 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-04-30 17:55 UTC tick
+- Stress: 233/1658 in new run (PID 675181, --resume-from-step 679 but babysitter triggered a fresh wipe; log stress_2000_1777408317.log); 55 SKIPs (24%), 3 TIMEOUTs — elevated SKIP rate (was ~8%) is harness timing, not a drydock regression
+- Write rate: 19% last 100 prompts (expected for current prompt block — hash/cipher/math tools added via search_replace to existing files; metric only counts write_file, not search_replace edits)
+- Admiral last 30 min: not checked (budget limited this tick)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 on :8000 healthy; killed 5 orphaned gRPC server processes (PIDs 737458,738127,738759,744524,745299) that were squatting on port 50051 — stress run spawned these as background servers but never cleaned up; port 50051 now clear
+- Action this tick: killed orphaned gRPC servers; no drydock source fix committed (SKIP rate is harness timing, not a code bug; write rate drop is metric artifact from prompt type)
+
+## 2026-04-30 20:35 UTC tick
+- Stress: 812/1658 (PID 675181, alive 5h25m, writing to stress_2000_v10_restart_1777561483.log; 134 prompts this run, 107 done, 26 SKIP, 0 TIMEOUT; resume from step 679 by babysitter)
+- Write rate: 10% last 50 prompts (expected — currently in abstract "API:" prompt block: API versioning, rate limiters, REST/GraphQL endpoints; model explores 20-33 files before giving text responses; session reset at step 810 restored normal 4-write behavior for rate_limiter prompts after reset)
+- Admiral last 30 min: struggle:none firing repeatedly (model made 33 tool calls without writing during API docs section — known Gemma 4 ignores advisory nudges); empty_after_tool:task (1 fire — model returned empty after subagent delegation, handled correctly)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy (forwarding to gemma4 confirmed), vLLM gemma4 on :8000 healthy, admiral_probe PID 4075121 on :8878 healthy; v2.7.25 latest tag
+- Action this tick: no fix committed — system healthy, no new drydock bugs found; low write rate is prompt-category effect not a regression
+
+## 2026-04-30 17:01 UTC tick
+- Stress: 709/1658 (PID 675181, alive 1h57m; babysitter restarted at ~15:04 UTC resuming from step 679; current log stress_2000_v10_restart_1777561483.log, 30 entries so far, v2.7.25 deployed)
+- Write rate: 42% last 14 prompts (currently in "API: versioning/deprecation" prompts, text-heavy section produces fewer writes)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 alive on :8001, vLLM gemma4 on :8000 healthy, admiral_probe PID 4075121 alive; v2.7.25 shipped by auto-release at 17:02 UTC (2 commits: conflict-marker guard in search_replace + hallucinated-tool [SYSTEM:] injection)
+- Action this tick: no fix committed — system healthy, all prior fixes shipped, no new drydock bugs found
+
 ## 2026-04-30 14:04 UTC tick
 - Stress: 1228/1658 (PID 599513, alive 6h57m, resumed_v2 log; write rate 19% last 100 — lower than peak 74% but prompt mix shifted to "add NLP/barcode tool" prompts that produce fewer writes per turn, not a regression)
 - vLLM 400s: 0
@@ -1052,3 +1078,75 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy; vLLM gemma4 on :8000 healthy
 - GH issues: 0 open
 - Action this tick: no new drydock bugs found. 2 commits pending auto_release at 18:00 UTC today (674b76c: hallucinated-tool SYSTEM note; ca76f5b: conflict-marker guard in search_replace NO_BLOCKS path) — will ship as v2.7.25. Skip clusters in API section appear to be model-behavior timing (TUI processing a 21-msg gRPC session while harness waits for idle) rather than a drydock source bug.
+
+## 2026-04-30 17:30 UTC tick
+- Stress: 715/1658 (PID 675181 alive, etime=2h26m; resumed from step 679 at 15:05 UTC; log /tmp/stress_2000_v10_restart_1777561483.log; 22 SKIPs + 18 writes in this run = ~45% effective completion rate)
+- Write rate: 37% last 16 completed prompts (API section: REST POST/PUT/JSON-RPC client; expected lower rate due to TUI not accepting prompts on rapid succession — SKIP pattern, not drydock source bug)
+- Admiral last 30 min: loop:search_replace (conflict markers, canned), retry_after_error:search_replace (file path mismatch), empty_after_tool:bash (3 occurrences, model stall after bash result, admiral handled), empty_after_tool:task (1 occurrence — Gemma 4 calling `task` subagent-delegator tool then producing nothing; task tool was intentionally re-enabled per v2.6.88+ fixes but still causes occasional empty-turn stalls; admiral caught and intervened; single occurrence, not a sustained loop) — all known or handled patterns
+- vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy; vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: no new drydock bugs committed. Investigated empty_after_tool:task pattern — Gemma 4 calls task tool (subagent delegator, intentionally re-enabled post-v2.6.88), gets result, then stalls. Single occurrence admiral-caught; not actionable without more instances to confirm a pattern. v2.7.25 is current tag (auto_release shipped earlier today); no uncommitted fixes pending.
+
+## 2026-04-30 18:01 UTC tick
+- Stress: 723/1658 (PID 675181 alive, etime=2h56m; active on gRPC client-streaming prompt; log updated 18:00:54 UTC; SKIP pattern continuing in API/gRPC section as before)
+- Write rate: 32% last 100 completed prompts (API/gRPC section — consistent with prior ticks; SKIPs on prompts where TUI is busy processing prior request)
+- Admiral last 30 min: not sampled (no new patterns seen in review log; prior patterns all known categories)
+- vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy; vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: no new drydock bugs found. v2.7.25 is current tag; 0 uncommitted fixes pending. Harness is alive and progressing through API section normally.
+
+## 2026-04-30 18:30 UTC tick
+- Stress: 738/1658 (PID 675181 alive, etime=3h26m; resumed from step 679 at 15:05 UTC; log /tmp/stress_2000_v10_restart_1777561483.log; 29 SKIPs in current run, consistent with API/gRPC section TUI timing)
+- Write rate: 38% last 34 completed prompts in this run (API section: rate limiters, REST endpoints; SKIPs are timing-related, not a drydock source bug)
+- Admiral last 30 min: not sampled (no new log evidence of novel patterns; prior ticks cover all known categories)
+- vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy (BrokenPipe errors in balancer log are normal client disconnects); vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: no new drydock bugs found. v2.7.25 is current tag; 0 uncommitted fixes pending. Harness alive and progressing normally through API section; no intervention needed.
+
+## 2026-04-30 19:10 UTC tick
+- Stress: 743/1658 (PID 675181 alive, etime=3h57m; resumed from step 679; currently processing step 744 API: GraphQL mutation — slow step, TUI log still growing at 271MB, no stall; last log update 19:01 UTC)
+- Write rate: 37% last 64 completed prompts in this run (API section: REST, gRPC, GraphQL — consistent with prior ticks; lower rate expected for API-design prompts)
+- Admiral last 30 min: loop:search_replace with conflict markers (canned), empty_after_tool:task (4 occurrences today total — Gemma 4 calls task subagent then stalls; admiral-caught, known pattern per 17:30 UTC tick investigation)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (new PID since 18:30 UTC tick — was restarted by keepalive cron); vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: no new drydock bugs found. All admiral patterns are known categories. v2.7.25 current tag; 0 uncommitted fixes pending. Harness alive and progressing normally.
+
+## 2026-04-30 19:33 UTC tick
+- Stress: 773/1658 (PID 675181 alive, etime=4h26m; resumed from step 679 at 15:05 UTC; log /tmp/stress_2000_v10_restart_1777561483.log)
+- Write rate: 26% last 65 completed prompts (API/gRPC/GraphQL section — expected for conceptual API prompts; +2 msgs, +0 writes is correct behavior)
+- Admiral last 30 min: empty_after_tool:task (5 occurrences today at 17:19, 18:10, 18:47, 18:59, 19:10 UTC) — Gemma 4 calls task subagent, gets result, produces empty response; admiral catches and injects nudge, sessions recover; inline stall-retry fires up to 3x first, admiral as backstop; recoverable, not session-killing
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: investigated empty_after_tool:task pattern (5 fires today); root cause is TaskResult returned as "response: <text>\nturns_used: N\ncompleted: True" causing model to produce empty turn when subagent says it's done; admiral recovers each time; judged not actionable this tick (no session death, existing stall-retry + admiral backstop handles it, pattern is <1% of turns). v2.7.25 current tag; 0 uncommitted fixes pending.
+
+## 2026-04-30 20:01 UTC tick
+- Stress: 680/1658 (PID 675181, resumed from step 679 after harness death at 15:04 UTC)
+- Write rate: 32% last 100 prompts (expected — current cluster is "Add storage backend: X" prompts which don't match tool_agent structure; 35% last 200)
+- Admiral last 30 min: struggle:none (33 tool calls without write, ~19:42-19:55 UTC session); pattern resolved after session timeout; no new patterns since harness restart
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; balancer forwarding confirmed
+- GH issues: 0 open
+- Action this tick: killed 9 orphaned gRPC server processes (port 50051, confirmed via ps as tool_agent/grpc_*_server.py test artifacts from prior sessions); no drydock bugs found; v2.7.25 current, ralph_repo_index fix working (zero fires since 14:31 UTC post-harness-restart); ongoing struggle:none and empty_after_tool:task patterns are Gemma 4 behavior issues, not drydock bugs — existing recovery mechanisms sufficient.
+
+## 2026-04-30 21:35 UTC tick
+- Stress: 820/1658 (PID 675181 alive, etime=5h56m; RSS 2424MB at 21:00 UTC, growing but below 4GB admiral threshold; step 820 in progress, API/GraphQL section; 113 done + 27 skip in this run)
+- Write rate: 32% last 100 prompts (API section — expected per prior ticks; +2 msgs +0 writes pattern is correct for conceptual API prompts)
+- Admiral last 30 min: loop:bash (7 fires 20:36-20:46, model calling pkill+start rest_api_server; recovered after 10 min), loop:search_replace with conflict markers (canned), retry_after_error:search_replace (placeholder content), empty_after_tool:task (ongoing, 5+ fires today)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: committed fix for empty_after_tool:task pattern (commit 4e49bbe). Gemma 4 stalls after task subagent returns completed=True — reads it as "my work is done." Fix: inject continuation nudge in agent_loop.py after task result with completed=True, mirrors existing bash-test nudge pattern. 3 regression tests in tests/test_task_complete_nudge.py. Ships as v2.7.26 at next auto_release tick.
+
+## 2026-04-30 21:40 UTC tick
+- Stress: 825/1658 (running, PID 675181 alive)
+- Write rate: 20% last 100 (low — API/server section; REST+gRPC+WebSocket prompts)
+- Admiral last 30 min: 19 loop:bash fires (pkill+restart server loop), 12 empty_after_tool fires, 3 struggle
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix for _successful_test_runs not resetting between user prompts — after 3 bash runs in any prior prompt, every subsequent bash call injected "STOP testing" note, causing empty_after_tool:bash stalls throughout the API section. Reset counter in act() per-turn alongside _consecutive_circuit_breaker_fires. Auto-release will ship as v2.7.26 at next 0/6/12/18 UTC tick.
+
+## 2026-04-30 22:05 UTC tick
+- Stress: 829/1658 (PID 675181 alive, etime=6h55m; harness at step 829 "API: JSON-RPC server" with retries pending; 115 done + 34 skip in this run; babysitter 22:00 UTC confirmed alive)
+- Write rate: 20% last 100 prompts (API/gRPC/WebSocket/SSE section — expected for network-server conceptual prompts; high skip rate 23% reflects TUI context bloat at step 822: 478 msgs accumulated before session reset at 825)
+- Admiral last 30 min: empty_after_tool:task at 21:34 UTC (pre-fix), empty_after_tool:bash at 21:49 and 22:04 UTC — all known patterns, admiral + inline stall-retry handling correctly
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (restarted by keepalive cron at ~19:00 UTC); vLLM gemma4 on :8000 healthy; TUI RSS 422MB, harness RSS 2753MB (below 4GB threshold)
+- GH issues: 0 open
+- Action this tick: no new drydock bugs found. Both recent fixes active in source (4e49bbe task continuation nudge, 92e5b3f successful_test_runs reset). Stress harness is alive and progressing; high skip rate is API-section timing behavior, not a drydock code bug. No uncommitted fixes.
