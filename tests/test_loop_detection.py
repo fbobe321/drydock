@@ -95,13 +95,19 @@ class TestCircuitBreaker:
             al._circuit_breaker_record(tc, "output ok")
         assert al._circuit_breaker_check(tc) is None
 
-    def test_successful_readonly_never_blocked(self):
-        """Read-only successful tools are never blocked."""
+    def test_readonly_note_includes_full_result(self):
+        """Read-only tools that repeat 5+ times get a NOTE that includes the
+        full cached result so the model can act on it without retrying."""
         al = _make_agent()
         tc = SimpleNamespace(tool_name="grep", args_dict={"pattern":"foo"})
+        content = "match.py:10:foo"
         for _ in range(10):
-            al._circuit_breaker_record(tc, "match.py:10:foo")
-        assert al._circuit_breaker_check(tc) is None
+            al._circuit_breaker_record(tc, content)
+        result = al._circuit_breaker_check(tc)
+        assert result is not None
+        # The full cached content must appear in the NOTE (not just 200 chars)
+        assert content in result
+        assert "NOTE:" in result
 
     def test_disabled_returns_none_even_for_failed(self):
         """CB disabled — returns None even for commands that would have been blocked."""
@@ -147,6 +153,19 @@ class TestCircuitBreaker:
         al._circuit_breaker_record(tc, "FAILED: error")
         al._circuit_breaker_record(tc, "output ok")
         assert al._circuit_breaker_check(tc) is None
+
+    def test_read_file_note_stores_2000_chars(self):
+        """read_file NOTE stores up to 2000 chars of content so large files are
+        visible in the advisory — not truncated to 500 like bash results."""
+        al = _make_agent()
+        tc = SimpleNamespace(tool_name="read_file", args_dict={"path": "foo.py"})
+        long_content = "x" * 1800  # within 2000-char limit
+        for _ in range(6):
+            al._circuit_breaker_record(tc, long_content)
+        result = al._circuit_breaker_check(tc)
+        assert result is not None
+        # The full 1800-char content must be present in the NOTE
+        assert long_content in result
 
 
 # ============================================================================

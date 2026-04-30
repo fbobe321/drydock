@@ -1152,10 +1152,13 @@ class AgentLoop:
         # model a growing signal that nothing has changed.  Preserve last_result
         # so the message always shows the real bash/tool output, not a prior NOTE.
         self._tool_call_history[sig] = (count + 1, last_result)
+        # For read-only tools include the full cached content so the model
+        # has the data it needs and doesn't retry just to see more output.
+        result_preview = last_result if is_readonly else last_result[:200]
         return (
             f"NOTE: this exact call to `{tool_name}` has been made "
             f"{count} times this session with identical arguments. "
-            f"Last result: {last_result[:200]}\n\n"
+            f"Last result:\n{result_preview}\n\n"
             f"The result will not change on a {count + 1}th attempt. "
             f"Move on — call a DIFFERENT tool, use DIFFERENT arguments, "
             f"or end your turn with a text summary so the user can "
@@ -1227,7 +1230,12 @@ class AgentLoop:
             f"{tool_call.tool_name}:{args_str}".encode()
         ).hexdigest()
         count, _ = self._tool_call_history.get(sig, (0, ""))
-        self._tool_call_history[sig] = (count + 1, result_text[:500])
+        # Store more content for read-only tools so the NOTE advisory
+        # can include enough context for the model to act on it.
+        tool_name = tool_call.tool_name
+        is_readonly = tool_name in ("grep", "read_file", "glob", "ls")
+        store_limit = 2000 if is_readonly else 500
+        self._tool_call_history[sig] = (count + 1, result_text[:store_limit])
 
     async def _process_one_tool_call(
         self, tool_call: ResolvedToolCall

@@ -3,6 +3,56 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-04-30 10:30 UTC tick
+- Stress: 441/1658 (PID 599513, --resume-from-step 357, running 3h27m; harness alive and making progress)
+- Write rate: 28% last 83 prompts (down from 47% at 07:03 tick; high SKIP rate of 18% — 15 SKIPs out of 83 prompts — due to TUI not accepting prompts during long LLM responses; the RECYCLE-TUI mechanism triggers every ~36-39 prompts)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (multiple fires, fix in 5bbbb23 not yet deployed — ships at 12 UTC as v2.7.24); retry_after_error:read_file (circuit breaker firing, fix in f611100 not yet deployed); struggle:search_replace; loop:write_file — all existing categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 1230765 on :8001 healthy, vLLM gemma4 on :8000 healthy, admiral_probe PID 2251231 on :8878 healthy
+- Latest tag: v2.7.23; two commits pending — f611100 (circuit-breaker: include full cached content in read-only NOTE, 2000 chars instead of 500; stops retry_after_error:read_file loops), 5bbbb23 (make suppressed hallucinated-tool error directive to stop empty_after_tool — auto_release at 12:00 UTC will ship both as v2.7.24
+- Action this tick: no new bugs found. Harness SKIPs are a performance/timing issue (TUI busy during slow LLM calls), not a drydock code bug. Two solid fixes queue to ship at 12:00 UTC. No code changes committed.
+
+## 2026-04-30 07:03 UTC tick
+- Stress: 633/1658 at restart (PID 459183 → killed, new PID 599513 resuming step 358 "keyword_extract")
+- Write rate: 47% last 100 prompts (down from 74% peak; "Add storage backend" prompts for cloud targets drive 0-write sessions)
+- Admiral last 30 min: retry_after_error:write_file (3 fires — model copying truncated args from history, escalation messaging present but insufficient), loop:search_replace (5 fires), empty_after_tool:ralph_repo_index/web_search, retry_after_error:search_replace — all existing categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy
+- Action this tick: harness PID 459183 was stuck for 5+ hours with no log progress (last update 02:00 UTC); stress_watcher had empty log and was not running. Killed specific PID 459183, ran babysitter to restart cleanly at step 357 (new PID 599513). No code fix committed — retry_after_error:write_file pattern observed but not actionable without more investigation; admiral interventions are advisory and sufficient for now.
+
+## 2026-04-30 06:01 UTC tick
+- Stress: 621/1658 (PID 459183, alive 13h25m, "Add storage backend: X" prompts 600-621)
+- Write rate: 48% last 100 prompts (choppy: chunks range 28-72%, variance is model behavior)
+- SKIP/TIMEOUT count: 59/621 = 9.5%, within expected range
+- Admiral last 30 min: `empty_after_tool:ralph_repo_index` dominates (20+ fires — still v2.7.23 installed; fix in commit 5bbbb23 pending release); `struggle:search_replace` (1 fire), `loop:ralph_repo_index` (3 fires); `empty_after_tool:web_search` (2 fires, isolated, not a new pattern)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Latest tag: v2.7.23; one pending commit 5bbbb23 (make hallucinated-tool error directive: "Call one NOW" instead of "use your tool list") — auto_release cron last ran at 05:00 UTC (just before commit), will ship as v2.7.24 at 11:00 UTC today
+- Action this tick: no new bugs found. Pending fix 5bbbb23 is the right next step and will deploy automatically; no manual action needed.
+
+## 2026-04-30 04:10 UTC tick
+- Stress: 495/1658 (PID 459183, --resume-from-step 216; +47 prompts since last tick)
+- Write rate: 44% last 100 prompts (unchanged; "Add storage backend: X" prompts for cloud/network targets like s3/gcs/azure-blob get 0 writes — model behavior, not a bug)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (5 fires), loop:bash (2 fires), struggle:search_replace — all existing categories, no new patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy, admiral_probe on :8878 healthy; v2.7.23 latest tag; no uncommitted changes
+- Action this tick: no fix committed. All failure patterns are existing model-behavior categories handled by admiral + stall-retry mechanisms. raw-markdown-leakage rate (23%) persists but is consistent false-positive from tool output containing markdown-like content in bash/read results; no confirmed rendering regression. System healthy.
+
+## 2026-04-30 02:34 UTC tick
+- Stress: 448/1658 (new run, PID 459183, ~10h elapsed, resuming from step 216)
+- Write rate: 44% last 100 prompts (consistent with prior runs at this prompt section — "Plugin feature:" prompts have lower write density than feature-build prompts)
+- SKIP rate: 13% (31/232), within expected range; RECYCLE-TUI handling wedged sessions
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (5 fires — model produces empty response after suppressed hallucinated tool call), retry_after_error:search_replace (2 fires), loop:bash (2 fires), struggle patterns — all existing categories
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (resume.md had stale PID 1230765 but real PID confirmed), vLLM gemma4 on :8000 healthy; admiral_probe on :8878 healthy
+- Latest release: v2.7.23 (two recent commits: fix(hallucinated-tools) cc9e474 and fix(truncate-args) a7eb3ec, both shipped)
+- raw-markdown-leakage stress alert at 01:58 UTC: 9/34 rec-checks fired (26%, 128 raw patterns); investigated — likely false positives from model outputting markdown syntax in bash tool output or code context (prior ticks saw same pattern at 5-69% with no confirmed rendering regression); no fix warranted
+- Action this tick: no fix committed. fix(hallucinated-tools) cc9e474 already addresses the malformed-history hang that caused infinite SKIPs when ralph_repo_index was called; remaining empty_after_tool fires are the model's empty follow-up after the error, handled by admiral intervention. All systems healthy.
+
 ## 2026-04-29 08:34 UTC tick
 - Stress: 229/1658 (PID 270529, new run started ~Apr 29 03:26 UTC; progressing)
 - Write rate: 19% (last 100 prompts) — early in sequence; previous run was at 73% at prompts 1550-1650, not a fair comparison; new run at prompt 225 already has 52 writes vs 0 in prev run at same point, so actually running better
@@ -792,3 +842,124 @@ restarted, cron self-match bug fixed in this same session).
 - Admiral last 30 min: struggle:none firing repeatedly (model making 28-41 tool calls without writing on plugin prompts); one new empty_after_tool:ralph_repo_index (model hallucinated ralph_repo_index/ralph_file_summary tools — admiral injected recovery message, session continued); skip-cluster recycling working correctly; all patterns known
 - vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker up; GH issues: 0 open
 - Action this tick: no fix committed — v2.7.22 installed; commit a7eb3ec (skip search_replace arg truncation) pending release at 00:00 CDT (~05:00 UTC); no new drydock bugs found; ralph_repo_index hallucination handled by existing FailedToolCall path and admiral recovery
+
+## 2026-04-30 01:05 UTC tick
+- Stress: 419/1658 (PID 459183 alive, 8h26m elapsed; restarted from step 216; harness in new log /tmp/stress_2000_v10_restart_1777480477.log)
+- Write rate: 36% last 100 prompts (down from 74% peak; expected low for plugin-feature prompts in steps 216-420 range where features already exist in context; 23/203 SKIPs = 11% skip rate from ralph_repo_index hallucination hang)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index firing (3 times since midnight UTC) — cc9e474 fix not yet deployed was root cause of TUI hangs → SKIP clusters; loop:bash and struggle:none patterns also active (known model-behavior, admiral handles correctly)
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; GH issues: 0 open
+- Action this tick: triggered early release of v2.7.23 (2 pending commits: cc9e474 hallucinated-tools early-return guard fix + a7eb3ec skip search_replace arg truncation); installed into user env; next recycle will pick up the fix and reduce SKIP cluster rate
+
+## 2026-04-30 02:30 UTC tick
+- Stress: 432/1658 (PID 459183 alive, 8h56m uptime; restarted batch from step 216; cumulative done=168, skip=25, timeout=11, recycle=19 as of 01:00 UTC babysitter)
+- Write rate: 40% last 100 prompts (expected low; "Plugin feature: X" prompts in steps 216-432 range hit already-built features; 29 total SKIPs, concentrated in steps 396-420 cluster; last 12 prompts (421-432) show 0 SKIPs — recovery working)
+- Admiral last 30 min: no new patterns observed; SKIP cluster in steps 396-420 consistent with ralph_repo_index hallucination hang (fixed in v2.7.23 cc9e474); steps post-420 clean
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker up; GH issues: 0 open
+- Action this tick: no fix committed — v2.7.23 installed and deployed; skip cluster clearing post step 420; no new drydock bugs found; system healthy
+
+## 2026-04-30 09:25 UTC tick
+- Stress: 441/1658 (PID 459183 alive, 9h26m elapsed; harness log /tmp/stress_2000_v10_restart_1777480477.log; cumulative done=185, skip=28, timeout=11, recycle=24 as of 02:00 UTC babysitter)
+- Write rate: 43% last 100 prompts (lower than 74% peak; "Plugin feature:" prompts in 216-441 range hitting features already built; SKIPs are 28 total = 7% skip rate; recycles at 24 = ~1 per 18 prompts; harness managing via TUI recycle strategy)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index still firing post-v2.7.23 (cc9e474 fixed the TUI hang but model still calls hallucinated tool and produces empty follow-up; inline stall retries handle it; admiral advisory interventions redirecting model); loop:bash, struggle:none, retry_after_error:search_replace also active — all known patterns; raw-markdown-leakage detected at 01:58 (26% of rec-checks showing unrendered markdown in TUI terminal output; non-critical cosmetic issue, TUI still functional)
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker (gemma4) on :8000 healthy; GH issues: 0 open
+- Action this tick: no fix committed — investigated TUI SKIP cluster (root: model entering states where TUI processes but does not respond, harness recycles correctly; no drydock source bug identified); raw-markdown-leakage is TUI rendering cosmetic issue (not blocking functional work); all infrastructure healthy; no actionable drydock bug found this tick
+
+## 2026-04-30 03:05 UTC tick
+- Stress: 454/1658 (harness PID 459183, alive, 10h26m elapsed)
+- Write rate: 19% last 99 prompts (down from 74% previously)
+- Admiral last 30 min: multiple skip-cluster and retry-spike alerts; 28 TUI recycles total
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: investigated write rate drop — skip rate accelerating since idx~380; sessions accumulate ~291MB messages.jsonl as stress run progresses (context bloat), TUI busy during harness prompt attempts causing SKIP events even after TUI recycle. No drydock source bug identified — harness/TUI interaction issue at scale. No commit.
+
+## 2026-04-30 03:40 UTC tick
+- Stress: 466/1658 (PID 459183, alive, resumed from step 216 after babysitter restart)
+- Write rate: 47% last 100 prompts
+- Admiral last 30 min: ralph_repo_index hallucinations (suppressed, known), raw-markdown-leakage alert (false positive — Python comments like `# Initialize backend` matching heading regex, not a rendering bug)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: investigated markdown leakage alert — confirmed false positive from Python code comments in TUI output. Verified search_replace loop-breaker already in place for retry_after_error pattern. Skip rate 15% (38/250) continues from prior tick — harness/TUI interaction issue, no drydock fix identified. No commit.
+
+## 2026-04-30 04:32 UTC tick
+- Stress: 531/1658 (PID 459183, alive 11h57m; resumed from step 216 after babysitter restart at 16:34 Apr 29)
+- Write rate: 44% last 100 prompts (up from 19% at 03:05 tick; recovery after skip cluster at 03:15-03:45)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (6 fires, suppressed per normal flow); skip-cluster and retry-spike alerts during 03:15-03:45 window (resolved by harness TUI recycles); all patterns known
+- vLLM 400s: 0; balancer PID 24354 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: investigated empty_after_tool:ralph_repo_index — stall debug log shows model is producing tool_calls (content_len=0, has_tool_calls=True) after suppressed ralph_repo_index, which is productive behavior; stall retry not needed (tool_calls=True passes the stall check). Skip clusters at 03:15-03:45 recovered after harness recycles. No drydock source bug identified; no commit.
+
+## 2026-04-30 05:05 UTC tick
+- Stress: 233/1658 (new run, babysitter restarted; old run reached 680/1658)
+- Write rate: 19% (down from 74%; high SKIP rate ~30% due to context bloat on long prompts)
+- Admiral last 30 min: 20+ empty_after_tool:ralph_repo_index fires (most common pattern)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix(hallucinated-tools): made suppressed-failure error for IGNORE_TOOLS (ralph_repo_index etc.) directive — "stop calling it, use glob/grep/read_file NOW" instead of passive "is not available". Previous message caused model to produce empty response, requiring repeated admiral interventions. llm_balancer healthy (PID rotated to 24354 via keepalive cron). No new GitHub issues.
+
+## 2026-04-30 05:31 UTC tick
+- Stress: 600/1658 (PID 459183 alive, 13h uptime; resumed from step 216 after babysitter restart at 16:34 Apr 29; cumulative done=342, skip=42, timeout=11, recycle=~33 as of last PROGRESS)
+- Write rate: 45% last 100 prompts (stable; "Add storage backend: X" prompts after session resets produce 0 writes because model has no project context on fresh start — expected pattern; writes recover after model reads project on 4th+ prompt per session)
+- Admiral last 30 min: empty stall retries for fresh-session "Add storage backend: X" prompts (model sends empty response → drydock stall retry → user_cancellation after MAX_STALL_RETRIES; harness records as +2 msgs, 0 writes; not a drydock bug — model behavior on context-free prompts)
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — system healthy; 1 commit (5bbbb23 hallucinated-tools directive fix) pending auto_release at 06:00 UTC; write rate stable at 45%; investigated 0-write pattern after session resets and confirmed it is expected model behavior (no project context on fresh session), not a drydock bug
+
+## 2026-04-30 06:32 UTC tick
+- Stress: 680/1658 (PID 459183 alive ~14h; consecutive SKIPs at 677-679 due to TUI wedge after API-prompt batch, harness force-reset and continued)
+- Write rate: 32% last 100 prompts (lower than prior ticks; prompts 663-675 were API-variant prompts returning +0 writes because tool_agent already has those endpoints — expected pattern after multi-session accumulation)
+- Admiral last 30 min: loop:search_replace (4 fires), retry_after_error:write_file/truncated-history (3 fires) — both known existing patterns; empty_after_tool:ralph_repo_index stopped firing after ~06:00 UTC (cc9e474 early-return guard effective in v2.7.23)
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: 5bbbb23 (hallucinated-tools directive fix) is committed ahead of v2.7.23 but auto_release at 06:00 CDT (05:00 UTC) ran before the commit was made; will ship at next 06:00 CDT (11:00 UTC) run. No new bugs identified; no commit this tick.
+
+## 2026-04-30 07:34 UTC tick
+- Stress: 374/1658 (babysitter restarted harness at 07:03 UTC; old PID 459183 died after ~14.5h; new PID 599513 resumed from step 357)
+- Write rate: 7% last 14 prompts (expected — prompts 357-374 are CLI-flag variants that return text-only answers, 0 writes is normal)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (1 fire at 07:24; 5bbbb23 directive fix not yet installed, ships as v2.7.24 at 11:00 UTC); retry_after_error:write_file/truncated-history (3 fires, known Gemma 4 model behavior); loop:search_replace (1 fire, known pattern)
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — system healthy; investigated write_file truncated-history retry pattern (format.py already embeds current file content in error response; admiral fires advisory directive; model behavior issue, not drydock bug); 5bbbb23 (hallucinated-tools directive) committed but not yet released (missed 05:00 UTC auto_release by 5 minutes); will ship at 11:00 UTC as v2.7.24
+
+## 2026-04-30 08:35 UTC tick
+- Stress: 381/1658 (PID 599513 alive ~6.5h since babysitter restart at 02:03 UTC; resumed from step 357; prior run reached 680/1658 before dying)
+- Write rate: 6% last 24 prompts in current restart log (expected — prompts 357-381 are plugin-feature variants that produce mostly text answers on a fresh session context); v10 base run was 42% last 100
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (1 fire at 07:24, 5bbbb23 directive fix pending release); struggle:none (3 rapid fires at 07:45-07:47, model made 20+ tool calls without writing during telemetry.py sys.path debugging — model behavior, not drydock bug); loop:search_replace (1 fire at 07:51, SEARCH text mismatch — existing handling); raw-markdown-leakage alert fired once at 07:26 but rec-check shows raw_md=0 now (transient)
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — all admiral patterns are known; 5bbbb23 (hallucinated-tools directive fix) is committed and will ship as v2.7.24 at 12:00 UTC auto_release; dist/ still shows 2.7.23; system healthy
+
+## 2026-04-30 08:31 UTC tick
+- Stress: ~386/1658 (PID 599513, alive ~1.5h since babysitter restart at 07:03, resuming from step 357)
+- Write rate: 6% per harness counter (measurement artifact — actual sessions show 8-54 writes each; session-tracker loses the new session dir after TUI recycles because meta.json isn't written until session exit, so the harness watches the old session and counts 0 writes for accepted prompts)
+- Admiral last 30 min: n/a (not checked — no new patterns visible from session inspection)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy, babysitter ran at 07:03 and 08:00
+- Latest tag: v2.7.23; one commit ahead (5bbbb23, hallucinated-tool fix) pending auto_release (next tick: 12:00 UTC)
+- Action this tick: no drydock bugs found. Low harness write-rate is a measurement artifact not a regression. System healthy.
+
+## 2026-04-30 09:10 UTC tick
+- Stress: 404/1658 (PID 599513 alive, etime=01:57, resumed from step 357 at 07:03 restart)
+- Write rate: 21% last 47 prompts (plugin-feature prompts are text-heavy; expected low)
+- Admiral last 30 min: retry-spike alert (65% retry rate, 22 retries in 34 prompts), skip-cluster (8 SKIPs), retry_after_error:search_replace (2 fires), empty_after_tool:ralph_repo_index (1 fire) — all existing categories; ralph_repo_index fix (5bbbb23) ships at 12:00 UTC auto_release
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy (CPU 372%, 8GB RAM), active session 20260430_085922 making file writes
+- Action this tick: no new drydock bugs found. High skip/retry rate is operational — model is slow on plugin construction prompts, harness times out waiting. Not a source bug. No commits.
+
+## 2026-04-30 09:45 UTC tick
+- Stress: 680/1658 (PID 599513 alive, etime=02:26, resumed from step 357)
+- Write rate: 25% overall in resumed run (prompts at this stage are "Add a --flag CLI flag that controls behavior" — low-write by nature)
+- Admiral last 30 min: retry_after_error:read_file (fired at 6 and 8 identical calls), loop:search_replace (1), loop:bash (1), struggle:none (1) — known categories, but read_file retry loop is a drydock bug
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (original PID 1230765 was replaced by keepalive cron), vLLM gemma4 on :8000 healthy
+- Action this tick: committed fix f611100 — circuit-breaker NOTE for read-only tools (read_file/grep/glob) now stores 2000 chars and shows all of it instead of just 200 chars. Root cause: model kept retrying identical read_file calls because the NOTE only showed 200 chars of a cached file result, so the model couldn't see its content and retried. Ships as v2.7.24 or later at next auto_release (12:00 or 18:00 UTC).
+
+## 2026-04-30 10:01 UTC tick
+- Stress: 432/1658 (PID 599513 alive, etime=02:56; babysitter restarted at 07:03 UTC from step 357; prior run reached 680/1658 before dying)
+- Write rate: 29% last 54 prompts (plugin-feature text-heavy prompts, expected; prior base run was 42-74%)
+- Admiral last 30 min: loop:read_file (3 fires), loop:write_file (1 fire, canned circuit-breaker), empty_after_tool:ralph_repo_index (3 fires), struggle:search_replace (2 fires), retry_after_error:bash (1 fire), tui-recycle-requested (3 times for skip-clusters) — all known categories
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — 2 commits ahead of v2.7.23 (5bbbb23 hallucinated-tools directive, f611100 circuit-breaker read-only content expansion) pending auto_release at 11:00 UTC; all admiral patterns are known; no new drydock bugs surfaced

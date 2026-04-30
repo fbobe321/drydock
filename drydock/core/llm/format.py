@@ -368,9 +368,11 @@ class APIToolFormatHandler:
                             tool_name=parsed_call.tool_name,
                             call_id=parsed_call.call_id,
                             error=(
-                                f"'{parsed_call.tool_name}' is not available. "
-                                f"Use only tools from your tool list: "
-                                f"{', '.join(sorted(active_tools.keys())[:8])}."
+                                f"'{parsed_call.tool_name}' does not exist — stop calling it. "
+                                f"Use glob/grep/read_file to explore the project instead. "
+                                f"Available tools: "
+                                f"{', '.join(sorted(active_tools.keys())[:8])}. "
+                                f"Call one of these NOW."
                             ),
                         )
                     )
