@@ -770,3 +770,25 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0
 - GH issues: 0 open
 - Action this tick: committed fix (39515a1) — tool-aware escalation message for truncated args; search_replace now gets SEARCH/REPLACE recovery guidance instead of write_file advice; 3 new regression tests all pass; ships as v2.7.22 at next 0/6/12/18 auto-release tick
+
+## 2026-04-29 23:15 UTC tick
+- Stress: 384/1658 (current restart batch from step 216; harness alive, PID 459183, 6h25m uptime)
+- Write rate: 40% last 100 prompts (down from 74% peak — traced to new bug)
+- Admiral last 30 min: ~12 retry_after_error:search_replace fires + SKIP clusters
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix `a7eb3ec` — skip search_replace arg truncation in `_truncate_old_tool_results`. The 500-byte SOFT_CAP was hitting search_replace SEARCH/REPLACE blocks (600-800 bytes), replacing them with `{_truncated:true, file_path:...}` stubs. Model copied the stubs as new call args, triggering persistent retry_after_error loops. Only write_file (full file content) warrants truncation. Regression test added. Auto-release will ship at next 0/6/12/18 UTC tick.
+
+## 2026-04-29 23:33 UTC tick
+- Stress: 398/1658 (current restart batch from step 216, PID 459183 alive 6h58m; previous run died at step 422/1658 at 16:34 UTC and was restarted by babysitter)
+- Write rate: 35% last 100 prompts (expected low for API-tool plugin prompts in steps 216-400 range — many features already implemented; peak 74% was during initial build phase)
+- Admiral last 30 min: 2 interventions (struggle:none at 23:04 UTC source=opus, empty_after_tool:write_file at 23:28 UTC source=opus); skip-cluster stress-alert at 23:21; tui-recycle-requested at 23:28 — all known patterns, FORCE-RESET and recycle cycling correctly
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker up 5 days; GH issues: 0 open
+- Action this tick: no fix committed — system healthy; pending commit a7eb3ec (skip search_replace arg truncation) ships as v2.7.23 at 00:00 UTC auto-release (committed at 23:15 UTC, after the 18:00 UTC v2.7.22 release window)
+
+## 2026-04-30 00:05 UTC tick
+- Stress: 406/1658 (PID 459183 alive, 7h25m elapsed; cumulative done=160, skip=16, timeout=11, recycle=15)
+- Write rate: 46% last 30 prompts (35% last 100; low expected for plugin-feature prompts where features already present in context)
+- Admiral last 30 min: struggle:none firing repeatedly (model making 28-41 tool calls without writing on plugin prompts); one new empty_after_tool:ralph_repo_index (model hallucinated ralph_repo_index/ralph_file_summary tools — admiral injected recovery message, session continued); skip-cluster recycling working correctly; all patterns known
+- vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker up; GH issues: 0 open
+- Action this tick: no fix committed — v2.7.22 installed; commit a7eb3ec (skip search_replace arg truncation) pending release at 00:00 CDT (~05:00 UTC); no new drydock bugs found; ralph_repo_index hallucination handled by existing FailedToolCall path and admiral recovery

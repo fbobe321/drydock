@@ -85,3 +85,37 @@ def test_unknown_non_hallucinated_tool_goes_to_failed_calls():
     resolved = handler.resolve_tool_calls(parsed, tm)
     assert any(fc.tool_name == "nonexistent_random_tool" for fc in resolved.failed_calls)
     assert not resolved.suppressed_failures
+
+
+def test_suppressed_failures_not_bypassed_by_early_return():
+    """Regression for agent_loop early-return bug: when only suppressed_failures
+    exist (no real tool_calls, no failed_calls), the condition
+    `not tool_calls and not failed_calls` was True and _handle_tool_calls was
+    skipped, so _silence_suppressed_failures was never called. The tool result
+    message for the hallucinated tool was never added, leaving the conversation
+    malformed (assistant tool_call with no paired tool result).
+
+    Fix: early-return also checks `not suppressed_failures`.
+    This test verifies that a ResolvedMessage with only suppressed_failures
+    is NOT considered empty by the fixed condition.
+    """
+    handler = _make_handler()
+    tm = _make_tool_manager(["read_file"])
+    parsed = _parsed("ralph_repo_index")
+    resolved = handler.resolve_tool_calls(parsed, tm)
+
+    # Preconditions: only suppressed_failures, nothing else
+    assert not resolved.tool_calls
+    assert not resolved.failed_calls
+    assert resolved.suppressed_failures
+
+    # The fixed early-return condition must NOT consider this "no work to do"
+    should_skip_early = (
+        not resolved.tool_calls
+        and not resolved.failed_calls
+        and not resolved.suppressed_failures  # fixed: was missing this
+    )
+    assert not should_skip_early, (
+        "Bug regression: suppressed_failures were ignored by early-return, "
+        "leaving assistant tool_call with no paired tool result in history."
+    )

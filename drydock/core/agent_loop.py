@@ -1032,7 +1032,7 @@ class AgentLoop:
         parsed = self.format_handler.parse_message(last_message)
         resolved = self.format_handler.resolve_tool_calls(parsed, self.tool_manager)
 
-        if not resolved.tool_calls and not resolved.failed_calls:
+        if not resolved.tool_calls and not resolved.failed_calls and not resolved.suppressed_failures:
             return
 
         async for event in self._handle_tool_calls(resolved):
@@ -1780,6 +1780,11 @@ class AgentLoop:
                     continue
                 for tc in msg.tool_calls:
                     if not tc.function or not tc.function.arguments:
+                        continue
+                    # search_replace args contain SEARCH/REPLACE blocks the model
+                    # NEEDS to see in history (to know what edits it already applied).
+                    # Only write_file carries full file content worth truncating.
+                    if tc.function.name == "search_replace":
                         continue
                     args = tc.function.arguments
                     if len(args) <= SOFT_CAP_BYTES:
