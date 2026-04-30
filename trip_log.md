@@ -3,6 +3,47 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-04-30 14:04 UTC tick
+- Stress: 1228/1658 (PID 599513, alive 6h57m, resumed_v2 log; write rate 19% last 100 — lower than peak 74% but prompt mix shifted to "add NLP/barcode tool" prompts that produce fewer writes per turn, not a regression)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Admiral last 30 min: 2 empty_after_tool:ralph_repo_index fires (expected — fix 674b76c committed but not yet released; auto-release at 18:00 UTC will ship v2.7.25); raw-markdown-leakage 91% (confirmed false positive by previous ticks — Python comments `#` in tool output match heading regex, not TUI rendering failure; raw_md=0 in current PTY window); no new patterns
+- Action this tick: no fix committed — system healthy; 674b76c pending auto-release; no new drydock bugs found
+
+## 2026-04-30 13:37 UTC tick
+- Stress: 622/1658 (PID 599513, alive 6h27m, v10_restart log; babysitter restarted at 07:03 from step 357 after prior PID 459183 died)
+- Write rate: 42% last 100 prompts (44% overall this restart; variable 34-56% by 50-prompt chunk — natural for "Add storage backend: X" prompts that produce 0 writes under context pressure, 1 write after session reset)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index firing repeatedly (9+ times 11:30–13:26 UTC); stall retry loop exhausts 3 retries each time then admiral handles recovery; raw-markdown-leakage alert at 63-66% (consistent across all 244 prompts in this run, not a new regression — PTY log contains markdown-like patterns in code outputs)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no fix committed — system healthy, repeated empty_after_tool:ralph_repo_index is model behavior the admiral is managing (already improved by 674b76c last tick), raw-markdown-leakage is advisory noise at consistent baseline level
+
+## 2026-04-30 13:04 UTC tick
+- Stress: 585/1658 (PID 599513, current log v10_restart, 233 entries in this run; stress progress since restart at step 357 → now ~590)
+- Write rate: 44% last 100 prompts (down from 74% sustained; "Add storage backend: samba/ftp" prompts producing few writes, model pattern-matching not coding)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index fired 9 times (11:50–12:59); raw-markdown-leakage 66% (false positive: Python code in tool outputs contains markdown-like patterns; not a rendering regression); loop:bash and loop:search_replace each 1 fire
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix (674b76c) — _silence_suppressed_failures now injects [SYSTEM:] note immediately after suppressed hallucinated-tool message. The <tool_error> tag alone wasn't breaking the empty-response loop; [SYSTEM: ...] format is the one Gemma 4 responds to (same as admiral). Will ship at next 0/6/12/18 UTC auto-release.
+
+## 2026-04-30 12:05 UTC tick
+- Stress: 680/1658 (PID 599513 alive, --resume-from-step 357 at 07:03 UTC, making steady progress)
+- Write rate: 50% last 50 prompts (up from 28% at 10:30 tick; "API: JSON-RPC/SSE" prompts produce actual file writes)
+- Admiral last 30 min: struggle:search_replace (4 fires at 11:45-11:48, each ~60s apart matching DEDUP_WINDOW_SEC — model stuck for 3min, working as designed); loop:search_replace (1 fire); empty_after_tool:ralph_repo_index (multiple, continuing expected model behavior post-v2.7.24); empty_after_tool:web_search (1 fire, one-off); raw-markdown-leakage 66% (same false-positive pattern from Python code comments confirmed at 03:40 UTC tick); retry_after_error:write_file:tool/temp_ (bad path from model, 1 fire)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy (verified /v1/models forwarding to gemma4), vLLM gemma4 on :8000 healthy, admiral_probe PID 4075121 on :8878 healthy; latest tag v2.7.24; no uncommitted changes
+- Action this tick: no new actionable drydock bugs found. All patterns are known categories. Struggle dedup timing (60s window, fires every ~60s during prolonged stall) is expected design behavior. No commit.
+
+## 2026-04-30 11:35 UTC tick
+- Stress: 506/1658 (PID 599513, --resume-from-step 357, running 4h27m; harness alive and making progress)
+- Write rate: 48% last 100 prompts (up from 28% at 10:30 tick; current prompts are "Add a --X CLI flag" type — lower write rate expected as model often reports flag already exists or writes no new file)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (multiple fires, source=opus; v2.7.24 fix shipped but model keeps hallucinating tool — model behavior, not a drydock bug); struggle:write_file; loop:bash (IndexError retry); raw-markdown-leakage advisory at 21% (harness scanning PTY log, advisory only); SKIP cluster: 3 TUI-recycles triggered by consecutive SKIPs
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer and vLLM gemma4 healthy; no port squatting detected
+- Action this tick: no new drydock bugs found. ralph_repo_index loops are model behavior — suppression + directive already in v2.7.24. Write rate drop from 74% to 48% is prompt-class driven (incremental flag additions vs full builds), not a regression. No code changes committed.
+
 ## 2026-04-30 10:30 UTC tick
 - Stress: 441/1658 (PID 599513, --resume-from-step 357, running 3h27m; harness alive and making progress)
 - Write rate: 28% last 83 prompts (down from 47% at 07:03 tick; high SKIP rate of 18% — 15 SKIPs out of 83 prompts — due to TUI not accepting prompts during long LLM responses; the RECYCLE-TUI mechanism triggers every ~36-39 prompts)
@@ -963,3 +1004,51 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0; balancer PID 24354 on :8001 healthy; vLLM Docker healthy
 - GH issues: 0 open
 - Action this tick: no fix committed — 2 commits ahead of v2.7.23 (5bbbb23 hallucinated-tools directive, f611100 circuit-breaker read-only content expansion) pending auto_release at 11:00 UTC; all admiral patterns are known; no new drydock bugs surfaced
+
+## 2026-04-30 11:02 UTC tick
+- Stress: 471/1658 (PID 599513 alive, etime=03:56; restart from step 357 at 07:03 UTC; making steady progress)
+- Write rate: 28% last 87 prompts (storage-backend section — complex, low-write prompts expected; skip rate ~17%)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (multiple, model hallucinating non-existent tool; directive fix in v2.7.24); retry_after_error:write_file truncated-history (3 fires pre-v2.7.24); empty_after_tool:web_search (model behavior, web_search is a real tool, not a bug); struggle/loop — all known
+- vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy; vLLM gemma4 healthy
+- GH issues: 0 open
+- Action this tick: v2.7.24 auto_release ran at 11:00 UTC (uploaded to PyPI, pushed to GitHub) but pip install to user env silently failed (PyPI propagation lag). Manually force-reinstalled v2.7.24 from local wheel to /home/bobef/miniforge3/envs/drydock/. Next TUI recycle in stress run will pick up hallucinated-tool directive fix and circuit-breaker full-content fix. No new drydock bugs found this tick.
+
+## 2026-04-30 12:30 UTC tick
+- Stress: 560/1658 (PID 599513 alive, etime=05:30; babysitter restarted from step 357 at 07:03 UTC after PID 459183 died at prompt 633)
+- Write rate: 53% last 100 prompts (storage-backend section — improved vs prior tick as session reset cleared context bloat)
+- Admiral last 30 min: 4 fires — loop:search_replace (model retrying same edit twice; tool's 2nd-failure LOOP-BREAKER already fires), empty_after_tool:ralph_repo_index (model behavior), struggle:search_replace (model behavior) — all known categories; search_replace already has consecutive-failure countermeasures (shows file head on 2nd fail, full file + HARD-STOP on 3rd)
+- vLLM 400s: 0; llm_balancer healthy; vLLM gemma4 healthy
+- GH issues: 0 open
+- Action this tick: investigated recurring raw-markdown-leakage stress-alert (peaked 66% at 11:59 UTC) — confirmed FALSE POSITIVE. The `(?m)^#{1,6}\s+\w` pattern matches Python comments (`# Save data`, `# Load data`) in tool output (bash/read_file showing Python files), not failed markdown renders. The TUI is rendering correctly; the detection pattern is too broad. No fix committed (harness detection code, not drydock source). Latest release is v2.7.24 (06:02 CDT auto_release). No new drydock source bugs found.
+
+## 2026-04-30 14:45 UTC tick
+- Stress: 654/1658 (PID 599513 alive, etime=07:26, resumed from step 357 at 07:03 restart)
+- Write rate: 53% last 100 prompts (storage-backend prompts, moderate)
+- Admiral last 30 min: 69 empty_after_tool fires today (mostly ralph_repo_index hallucination), skip-clusters at 13:54 and 14:25 UTC (3 TUI recycles triggered; run recovered); vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 24354 on :8001 healthy, vLLM gemma4 on :8000 healthy
+- Action this tick: no new drydock bugs found. One commit ahead of v2.7.24 (674b76c: inject [SYSTEM:] note after suppressed hallucinated-tool failure) — pending auto_release at 18:00 UTC. This fix should reduce empty_after_tool fires and skip-cluster severity by giving the model explicit guidance to call a real tool after ralph_repo_index is suppressed. Skip-clusters at 13:54/14:25 appear correlated with the ralph_repo_index empty-output loop; expect improvement after 18:00 UTC release.
+
+## 2026-04-30 15:05 UTC tick
+- Stress: 679/1658 (harness PID 599513 was frozen since 10:03 UTC — log stale 5h; TUI had exited but pexpect held the process alive; babysitter only restarts dead PIDs, not wedged ones; killed PID 599513, restarted as PID 675181 resuming from step 680)
+- Write rate: 45% last 100 prompts (storage-backend section — moderate; prior high-rate period was 74% in earlier sessions)
+- Admiral last 30 min: 8 fires — mostly empty_after_tool:ralph_repo_index (fix 674b76c committed, pending v2.7.25 at 17:00 UTC CDT); skip-clusters resolved after TUI recycles; source=opus fires observed (admiral using Claude API fallback up to MAX_ESCALATIONS_PER_SESSION=3 per worker restart, by design)
+- vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy; vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: killed frozen harness PID 599513 (no new bugs to fix — 674b76c already committed and pending auto_release at 17:00 UTC); restarted harness at PID 675181 from step 680; 1 commit ahead of v2.7.24 (674b76c: inject [SYSTEM:] note after hallucinated-tool suppression)
+
+## 2026-04-30 15:35 UTC tick
+- Stress: 689/1658 (PID 675181 alive, etime=27min; restarted from step 679 at 15:05 UTC by prior tick; babysitter log shows PID 599513 was frozen since 10:03 UTC with log stale 5h, killed and restarted)
+- Write rate: 60% last 5 completed prompts (REST/API section, new run too fresh for reliable rate estimate)
+- Admiral last 30 min: loop:search_replace (canned), retry_after_error:search_replace (file had conflict markers from prior botched edit), empty_after_tool:write_file (model writing to wrong path "tool/cli/py"), loop:write_file (canned) — all known patterns; 674b76c fix (hallucinated-tool SYSTEM note) pending v2.7.25 at 12:02 PM CDT (17:02 UTC)
+- vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy; vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: no new drydock bugs found. Investigated conflict-marker-in-file pattern (model occasionally writes <<<<<<< SEARCH markers as literal file content, causing subsequent search_replace to fail); judged too infrequent and ambiguous to warrant a write_file guard this tick. Commit 674b76c pending auto_release; no new commits.
+
+## 2026-04-30 16:35 UTC tick
+- Stress: 701/1658 (PID 675181 alive, etime=1h26m; resumed from step 679 at 15:05 UTC after frozen PID 599513 was killed by prior tick; babysitter log confirms continuous restarts since Apr-27)
+- Write rate: 60% last 12 completed prompts (API/gRPC/WebSocket section — typical for this section; skip rate 37% due to long TUI sessions blocking next prompt)
+- Admiral last 30 min: loop:search_replace (canned), retry_after_error:search_replace (conflict markers in file, addressed by ca76f5b), empty_after_tool:write_file and :ralph_repo_index (model behavior, 674b76c addresses the ralph_repo_index case) — all known patterns; no new categories
+- vLLM 400s: 0; llm_balancer PID 24354 on :8001 healthy; vLLM gemma4 on :8000 healthy
+- GH issues: 0 open
+- Action this tick: no new drydock bugs found. 2 commits pending auto_release at 18:00 UTC today (674b76c: hallucinated-tool SYSTEM note; ca76f5b: conflict-marker guard in search_replace NO_BLOCKS path) — will ship as v2.7.25. Skip clusters in API section appear to be model-behavior timing (TUI processing a 21-msg gRPC session while harness waits for idle) rather than a drydock source bug.

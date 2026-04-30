@@ -236,6 +236,30 @@ class SearchReplace(
                 # (would be catastrophic data loss). See CLAUDE.md learning
                 # #39: drydock nuked a 5171-char cli.py with a 16-line fragment.
                 raw_content = err_msg[len("NO_BLOCKS:"):]
+                # Guard: if the raw content contains SEARCH/REPLACE markers, it's
+                # a malformed block (e.g. missing >>>>>>> REPLACE closer). Writing
+                # it verbatim would corrupt the file with conflict markers, causing
+                # a retry loop. Return an error instead.
+                if "<<<<<<<" in raw_content or ">>>>>>>" in raw_content:
+                    yield SearchReplaceResult(
+                        file=args.file_path.strip() or "(unknown)",
+                        blocks_applied=0,
+                        lines_changed=0,
+                        warnings=[],
+                        content=(
+                            "PARSE ERROR: your search_replace content looks like a "
+                            "SEARCH/REPLACE block but it could not be parsed — likely "
+                            "the >>>>>>> REPLACE closer is missing or the markers are "
+                            "malformed. Fix the format:\n"
+                            "<<<<<<< SEARCH\n"
+                            "[exact text to find]\n"
+                            "=======\n"
+                            "[replacement text]\n"
+                            ">>>>>>> REPLACE\n"
+                            "Do NOT send conflict markers as literal file content."
+                        ),
+                    )
+                    return
                 file_path_str = args.file_path.strip()
                 if file_path_str and len(raw_content) > 20:
                     target = Path(file_path_str).expanduser()

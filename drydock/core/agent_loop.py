@@ -1531,6 +1531,13 @@ class AgentLoop:
                 self.format_handler.create_failed_tool_response_message(failed, error_msg)
             )
             self.stats.tool_calls_failed += 1
+            # Inject a [SYSTEM: ...] note (the format admiral uses) so the model
+            # is more likely to break out of the empty-response loop that often
+            # follows a suppressed hallucinated-tool call.
+            self._inject_system_note(
+                f"'{failed.tool_name}' does not exist — do NOT call it again. "
+                "Call glob, grep, or read_file NOW to make progress."
+            )
 
     async def _handle_tool_calls(
         self, resolved: ResolvedMessage
