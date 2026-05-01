@@ -3,6 +3,26 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-01 11:33 UTC tick
+- Stress: 990/1658 (PID 675181, alive 19h26m, log stress_2000_v10_restart_1777561483.log; 311 entries this restart; block is "Test: unit/integration" prompts)
+- Write rate: 17% last 100 prompts (expected — current block is "Test: X" prompts; model runs bash tests and reports, not writing files; matches 09:33 and 07:31 ticks)
+- Skip rate: 75/311 = 24% (down from 33% last tick; TUI wedge on API/Test server prompts, FORCE-RESET recovering normally; no orphan processes on ports)
+- Admiral last 30 min: 3 fires of loop:bash::k_anonymity_golden_test.py (10:28-10:30 UTC), 2 empty_after_tool:bash; no new retry_after_error:search_replace since 08:23 UTC
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 healthy; admiral_probe PID 4075121 on :8878 healthy; current version v2.7.26 (latest tag)
+- Action this tick: no fix committed — system healthy; write rate/skip rate consistent with prior ticks at "Test:" prompt block; search_replace LOOP-BREAKER and loop detection already in place for observed admiral patterns; no new actionable drydock bugs found
+
+## 2026-05-01 09:33 UTC tick
+- Stress: 982/1658 (PID 675181, alive 18h29m, writing to stress_2000_v10_restart_1777561483.log; 303 entries this run; block is "Test: regression/smoke/performance/memory" prompts)
+- Write rate: 17% last 100 prompts (expected — all current prompts are "Test: X" type; model runs bash tests and reports results, not writing files)
+- Skip rate: 101/303 = 33% (TUI wedge pattern consistent with prior ticks; FORCE-RESET recovering; no orphan servers on :8001/:8000/:8878)
+- Admiral last 30 min: 7 fires (all struggle:search_replace — model doing 20-21 tool calls without writing during a long search_replace session around 09:28-09:32 UTC; fixed by user-turn reset from 71cb046 for cross-turn accumulation but within-turn depth still fires normally)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 up 7 days healthy; admiral_probe PID 4075121 on :8878 healthy; current version v2.7.26; 1 commit ahead of latest tag (ships at next 0/6/12/18 auto-release)
+- Action this tick: no fix committed — system healthy; write rate and skip rate consistent with prior ticks at same "Test:" prompt block; no new drydock bugs identified; harness progressing normally
+
 ## 2026-05-01 07:31 UTC tick
 - Stress: 950/1658 (PID 675181, alive 16h27m, log stress_2000_v10_restart_1777561483.log; 271 entries this run)
 - Write rate: 21% last 100 prompts (expected — current block is "Test: fuzz/property/integration" prompts; model asks clarifying questions instead of writing, producing 0-writes responses; prompt-category effect, not regression)
@@ -1315,3 +1335,18 @@ restarted, cron self-match bug fixed in this same session).
 - Admiral last 30 min: single retry_after_error:search_replace:file at 08:09 UTC (model retried a failed search_replace on test_integ path; canned intervention fired correctly); no struggle:none false positives in current session (admiral counter reset fix 71cb046 working as intended)
 - vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 container up; GH issues: 0 open; v2.7.26 current
 - Action this tick: no new drydock bugs found; all services healthy; no commits
+
+## 2026-05-01 08:30 UTC tick
+- Stress: 977/1658 (PID 675181 alive, 18h elapsed; log /tmp/stress_2000_v10_restart_1777561483.log; session reset at 975, now on "Test:" prompt cluster)
+- Write rate: 19% last 100 prompts (expected — entire range is "Test: unit/integration/fuzz/property/regression test" prompts; model runs bash to explore, rarely writes files; this matches prompt-type not a regression)
+- Admiral last 30 min: 1 retry_after_error:write_file (truncated history, model retried same call once then self-corrected); 2 retry_after_error:search_replace; 1 loop:search_replace (BaseTool class replacement); 107 interventions total today, all normal patterns
+- vLLM 400s: 0; GH issues: 0 open; 1 pending commit (71cb046 fix(admiral): reset struggle counter per user turn) ships at next 12:00 UTC auto-release as v2.7.27
+- Action this tick: no new drydock bugs found; stress healthy and progressing; no commits
+
+## 2026-05-01 10:01 UTC tick
+- Stress: 984/1658 (PID 675181 alive, 19h elapsed; babysitter reporting done=229 skip=72 at 10:00 UTC tick)
+- Write rate: 17% last 100 prompts (slight dip from 19% prior; same "Test:" prompt cluster, expected low-write range)
+- Admiral last 30 min: 6x struggle:search_replace (model making 20-28 read-only calls before attempting edits; count reaching 28 in one session), 2x empty_after_tool:bash; all canned interventions; no new unknown patterns
+- vLLM 400s: 0; llm_balancer healthy (PID 713929 on :8001, forwarding confirmed); GH issues: 0 open
+- TUI session session_20260501_093430_40e5bc06 stuck in search_replace struggle loop for ~30min; harness FORCE-RESET (ESC+/clear) cycling; session last modified 09:58 UTC so still alive; harness will auto-recover
+- Action this tick: no actionable drydock bugs found; all failure patterns are known model-behavior (struggle:search_replace, empty_after_tool); no commits
