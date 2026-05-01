@@ -2414,7 +2414,8 @@ class AgentLoop:
         # edit that already succeeded or that keeps failing with the same
         # "not found" error.  Nudge after just 2 identical attempts.
         recent_sr: list[str] = []
-        for msg in reversed(self.messages[-20:]):
+        recent_sr_files: list[str] = []
+        for msg in reversed(self.messages[-30:]):
             if msg.role == Role.assistant and msg.tool_calls:
                 for tc in msg.tool_calls:
                     if tc.function and tc.function.name == "search_replace":
@@ -2423,12 +2424,27 @@ class AgentLoop:
                             # Build a key from file_path + old_string (content block)
                             key = f"{args.get('file_path', '')}:{args.get('content', '')}"
                             recent_sr.append(key)
+                            recent_sr_files.append(args.get("file_path", ""))
                         except (json.JSONDecodeError, AttributeError):
                             pass
-                if len(recent_sr) >= 4:
+                if len(recent_sr) >= 6:
                     break
         if len(recent_sr) >= 2 and recent_sr[0] == recent_sr[1]:
             return "WARNING|search_replace"
+        # Detect when 5+ search_replace calls target the same file with
+        # varying search text (model adapts after HARD-STOP but still
+        # cannot find the right text). The per-file fail counter in
+        # search_replace.py escalates at count 3 — this adds a
+        # loop-detection layer that fires FORCE_STOP when the same file
+        # dominates 5 of the last 6 search_replace calls.
+        if len(recent_sr_files) >= 5:
+            from collections import Counter as _SRCounter
+            _sr_counts = _SRCounter(f for f in recent_sr_files if f)
+            if _sr_counts:
+                _top_sr_file, _top_sr_count = _sr_counts.most_common(1)[0]
+                if _top_sr_count >= 5:
+                    self._hot_tool_path = ("search_replace", _top_sr_file)
+                    return "FORCE_STOP"
 
         # Early check: write_file with _truncated args twice in a row for the
         # same path.  format.py already embeds the file content in the error,
@@ -2453,6 +2469,34 @@ class AgentLoop:
                 and recent_wf_truncated[0] == recent_wf_truncated[1]):
             self._hot_tool_path = ("write_file", recent_wf_truncated[0])
             return "FORCE_STOP"
+
+        # Early check: same bash command 5+ times across last 20 tool calls.
+        # Catches alternating bash/read_file exploration loops where neither
+        # the consecutive-N check nor the 9/12 path-dominance check fires
+        # (because bash and read_file alternate, keeping bash below 9/12).
+        _bash_cmds: list[str] = []
+        _total_tc = 0
+        for _msg in reversed(self.messages[-40:]):
+            if _msg.role == Role.assistant and _msg.tool_calls:
+                for _tc in _msg.tool_calls:
+                    _total_tc += 1
+                    if _tc.function and _tc.function.name == "bash":
+                        try:
+                            _a = json.loads(_tc.function.arguments or "{}")
+                            _cmd = _a.get("command", "")
+                            if _cmd:
+                                _bash_cmds.append(_cmd)
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
+            if _total_tc >= 20:
+                break
+        if len(_bash_cmds) >= 5:
+            from collections import Counter as _Counter
+            _cmd_counts = _Counter(_bash_cmds)
+            _top_cmd, _top_count = _cmd_counts.most_common(1)[0]
+            if _top_count >= 5:
+                self._hot_tool_path = ("bash", _top_cmd)
+                return "FORCE_STOP"
 
         sigs: list[str] = []
         tool_names: list[str] = []

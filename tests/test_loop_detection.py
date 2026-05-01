@@ -348,6 +348,96 @@ class TestAlternatingPattern:
 
 
 # ============================================================================
+# Bash Exploration Loop (same command alternating with other tools)
+# ============================================================================
+
+class TestBashExplorationLoop:
+    """Same bash command 5+ times across 20 tool calls triggers FORCE_STOP."""
+
+    def test_alternating_bash_read_triggers(self):
+        """bash(same_cmd) + read_file(different) alternating 10x → FORCE_STOP."""
+        al = _make_agent()
+        cmd = "python3 -m tool_agent --list-tools"
+        for i in range(10):
+            if i % 2 == 0:
+                _add_tool_call(al, "bash", json.dumps({"command": cmd}))
+            else:
+                _add_tool_call(al, "read_file", json.dumps({"path": f"file_{i}.py"}))
+        result = al._check_tool_call_repetition()
+        assert result == "FORCE_STOP"
+        assert getattr(al, "_hot_tool_path", None) == ("bash", cmd)
+
+    def test_5_identical_bash_triggers(self):
+        """5 identical bash calls in a row → FORCE_STOP."""
+        al = _make_agent()
+        cmd = "python3 -m tool_agent --list-tools"
+        for _ in range(5):
+            _add_tool_call(al, "bash", json.dumps({"command": cmd}))
+        result = al._check_tool_call_repetition()
+        assert result == "FORCE_STOP"
+
+    def test_4_identical_bash_no_trigger(self):
+        """4 identical bash calls should not trigger (below threshold)."""
+        al = _make_agent()
+        cmd = "python3 app.py"
+        for _ in range(4):
+            _add_tool_call(al, "bash", json.dumps({"command": cmd}))
+        result = al._check_tool_call_repetition()
+        # Should not trigger the bash-exploration check
+        assert result != "FORCE_STOP"
+
+    def test_varied_bash_no_trigger(self):
+        """Different bash commands should not trigger."""
+        al = _make_agent()
+        cmds = ["ls -la", "cat README.md", "python3 app.py", "pwd", "echo hi"]
+        for cmd in cmds:
+            _add_tool_call(al, "bash", json.dumps({"command": cmd}))
+        result = al._check_tool_call_repetition()
+        assert result != "FORCE_STOP"
+
+
+# ============================================================================
+# Search/Replace File-Dominance Loop Detection
+# ============================================================================
+
+class TestSearchReplaceFileDominance:
+    """search_replace on same file 5+ times with varying content → FORCE_STOP."""
+
+    def test_five_sr_same_file_triggers(self):
+        """5 search_replace calls on same file (different search text) → FORCE_STOP."""
+        al = _make_agent()
+        for i in range(5):
+            _add_tool_call(
+                al, "search_replace",
+                json.dumps({"file_path": "tool_agent/cli.py", "content": f"text{i}"})
+            )
+        result = al._check_tool_call_repetition()
+        assert result == "FORCE_STOP"
+
+    def test_four_sr_same_file_no_trigger(self):
+        """4 search_replace on same file should not trigger."""
+        al = _make_agent()
+        for i in range(4):
+            _add_tool_call(
+                al, "search_replace",
+                json.dumps({"file_path": "tool_agent/cli.py", "content": f"text{i}"})
+            )
+        result = al._check_tool_call_repetition()
+        assert result != "FORCE_STOP"
+
+    def test_sr_different_files_no_trigger(self):
+        """search_replace spread across different files should not trigger."""
+        al = _make_agent()
+        for i in range(5):
+            _add_tool_call(
+                al, "search_replace",
+                json.dumps({"file_path": f"tool_agent/file{i}.py", "content": "text"})
+            )
+        result = al._check_tool_call_repetition()
+        assert result != "FORCE_STOP"
+
+
+# ============================================================================
 # Threshold Constants
 # ============================================================================
 
