@@ -1,0 +1,76 @@
+{
+  "mode": "baseline",
+  "timestamp": "2026-05-01T21:49:41Z",
+  "base_url": "http://localhost:8001/v1",
+  "model": "gemma4",
+  "iters": 2,
+  "config": {
+    "note": "live vLLM, configuration not introspected"
+  },
+  "summaries": [
+    {
+      "workload": "short",
+      "ok": 2,
+      "errors": 0,
+      "ttft_s_p50": 6.95924757537432,
+      "ttft_s_p95": 13.365462115965784,
+      "decode_tok_s_p50": 4078.0425275895054,
+      "decode_tok_s_p95": 4282.0288781179615,
+      "total_s_p50": 6.967114160070196,
+      "output_tokens_p50": 32.0
+    },
+    {
+      "workload": "medium",
+      "ok": 2,
+      "errors": 0,
+      "ttft_s_p50": 3.264389889780432,
+      "ttft_s_p95": 5.129394551739097,
+      "decode_tok_s_p50": 11241.063915956902,
+      "decode_tok_s_p95": 13984.807847870794,
+      "total_s_p50": 3.270704676862806,
+      "output_tokens_p50": 67.0
+    }
+  ],
+  "raw": [
+    {
+      "workload": "short",
+      "iter": 0,
+      "ttft_s": 13.365462115965784,
+      "total_s": 13.372935208957642,
+      "decode_s": 0.007473092991858721,
+      "output_tokens": 32,
+      "decode_tok_s": 4282.0288781179615,
+      "error": null
+    },
+    {
+      "workload": "short",
+      "iter": 1,
+      "ttft_s": 0.5530330347828567,
+      "total_s": 0.5612931111827493,
+      "decode_s": 0.008260076399892569,
+      "output_tokens": 32,
+      "decode_tok_s": 3874.0561770610493,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 0,
+      "ttft_s": 5.129394551739097,
+      "total_s": 5.13425697106868,
+      "decode_s": 0.004862419329583645,
+      "output_tokens": 68,
+      "decode_tok_s": 13984.807847870794,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 1,
+      "ttft_s": 1.3993852278217673,
+      "total_s": 1.4071523826569319,
+      "decode_s": 0.007767154835164547,
+      "output_tokens": 66,
+      "decode_tok_s": 8497.31998404301,
+      "error": null
+    }
+  ]
+}

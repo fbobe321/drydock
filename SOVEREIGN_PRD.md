@@ -1,0 +1,520 @@
+# Product Requirements Document (PRD)
+
+# Project Name: **Drydock Sovereign AI Stack v2**
+
+### Local Adaptive AI System — Gemma 4 26B + Drydock + GraphRAG (roadmap) + Deep Noir (roadmap)
+
+---
+
+## Adaptation Notes (vs. upstream PRD draft)
+
+This doc starts from a community PRD draft. Where the draft conflicts with what
+Drydock has already committed to or measured, the draft loses. Specifically:
+
+| Upstream draft says                          | What we actually do                                | Why                                                                                                          |
+| -------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Runtime: llama.cpp / llama-server (Q3\_K\_M) | vLLM Docker (`vllm/vllm-openai:gemma4`), AWQ-4bit  | Already shipped, 0% timeouts, 70% SWE-bench file match. llama.cpp/Ollama become **portability roadmap**.     |
+| Context window: 32 768                       | **131 072** (`--max-model-len 131072`)             | Our hardware (2× RTX 4060 Ti 16GB) handles it with `fp8` KV cache.                                           |
+| `temperature: 1.0`, `top_k: 40`              | `temperature: 0.0–0.2` baseline                    | Article advice targets chat/prose. For agentic coding, temp 1.0 *causes* the loops it claims to fix. We only |
+|                                              |                                                    | escalate temp to ~1.0 deliberately as a loop-break lever (`agent_loop.py:2032`).                             |
+| KV cache `q8_0`                              | `--kv-cache-dtype fp8`                             | vLLM-native equivalent. Different ecosystem (vLLM vs. llama.cpp).                                            |
+| Tier 3: Jetson AGX Orin as supported         | **Explicitly out of scope for v2**                 | Per operator rule — Jetson is not to be modified or treated as a deployment target this cycle.               |
+| GraphRAG / Deep Noir / full Evaluator        | **Roadmap**, not "current components"              | We have Admiral, stress harness, MetaHarness, autonomous\_review. GraphRAG and Deep Noir are real future work. |
+| Cloud-assisted proposer (anywhere)           | **Local-only proposer**                            | Air-gap is the product pitch; cloud proposer contradicts the brand.                                          |
+
+---
+
+# 1. Executive Summary
+
+Drydock Sovereign AI Stack v2 is a fully local, privacy-first AI platform for
+secure environments, defense-adjacent customers, regulated enterprises, and
+research labs that need frontier-style assistance without sending data to the
+cloud.
+
+The system pairs:
+
+- **Gemma 4 26B-A4B-it (AWQ-4bit)** — Google's MoE reasoning model (only ~4B
+  active params per token)
+- **vLLM** — production-grade inference server (Docker, tensor-parallel)
+- **Drydock harness** — orchestration, tool use, loop detection, Admiral
+  observer, MetaHarness self-improvement
+- **GraphRAG memory** — *roadmap, Phase 2*
+- **Deep Noir activation steering** — *roadmap, Phase 4 — leverages the
+  operator's own research*
+- **Evaluator loop** — already partially shipped (Admiral + stress + autonomous
+  review); deepens in Phase 3
+
+Category claim: **AI that improves after installation.**
+
+---
+
+# 2. Product Vision
+
+A sovereign AI system that:
+
+- Runs offline on customer hardware
+- Uses local GPUs only
+- Protects sensitive data (no telemetry, no remote model calls)
+- Learns customer-specific knowledge
+- Performs coding and reasoning tasks autonomously
+- Self-diagnoses failures (Admiral) and self-improves (MetaHarness, evaluator)
+- Improves continuously without phoning home
+
+---
+
+# 3. Core Problem Statement
+
+## Cloud AI problems
+
+- Data exposure
+- Recurring per-seat subscriptions
+- Vendor lock-in
+- No control over model updates / silent regressions
+- Unavailable in air-gapped or classified networks
+
+## DIY local AI problems
+
+- Difficult setup, hardware-specific tuning
+- Poor inference performance without serving expertise
+- Weak retrieval / no persistent memory
+- No orchestration layer (raw chat ≠ agent)
+- No self-improvement
+- Hard to tune behavior per domain
+
+Drydock Sovereign solves both.
+
+---
+
+# 4. System Architecture
+
+```text
+                         ┌────────────────────┐
+                         │   Gemma 4 26B-A4B  │  ← MoE, ~4B active/token
+                         │   (AWQ-4bit)       │
+                         └────────┬───────────┘
+                                  │
+                         ┌────────▼───────────┐
+                         │ vLLM (Docker)      │  ← :8000, fp8 KV cache,
+                         │ tensor-parallel 2  │    131K ctx, gemma4 tool parser
+                         └────────┬───────────┘
+                                  │
+                         ┌────────▼───────────┐
+                         │  llm_balancer      │  ← :8001, OpenAI-compatible,
+                         │  (failover/health) │    cron keepalive
+                         └────────┬───────────┘
+                                  │
+                         ┌────────▼───────────┐
+                         │  Drydock Harness   │  ← v2 (TUI) + v3 (clean rewrite)
+                         │  • Tool execution  │
+                         │  • Loop detection  │
+                         │  • Adaptive think  │
+                         │  • search_replace  │
+                         │  • write_file safety
+                         │  • Subagents       │
+                         └────────┬───────────┘
+                                  │
+            ┌─────────────────────┼─────────────────────────┐
+            │                     │                         │
+   ┌────────▼─────────┐  ┌────────▼────────┐    ┌───────────▼──────────┐
+   │ Admiral observer │  │ MetaHarness     │    │ Stress harness +     │
+   │ (ship)           │  │ self-improve    │    │ stress_watcher       │
+   │                  │  │ (local-only)    │    │ (continuous regression)
+   └──────────────────┘  └─────────────────┘    └──────────────────────┘
+                                  │
+                         ┌────────▼───────────┐
+                         │  GraphRAG (Phase 2)│  ← persistent memory
+                         └────────┬───────────┘
+                                  │
+                         ┌────────▼───────────┐
+                         │ Deep Noir (Phase 4)│  ← activation steering
+                         └────────────────────┘
+```
+
+---
+
+# 5. Core Components
+
+## 5.1 Base Model Layer
+
+**Gemma 4 26B-A4B-it-AWQ-4bit** (Google, MoE, ~4B active per token).
+
+Used for:
+
+- Coding (primary)
+- Reasoning over local repos and documents
+- Technical assistance / shell automation
+- Document understanding (text)
+
+Operational notes:
+
+- Thinking-token leak (`<|channel>thought<channel|>`) is filtered in
+  `providers.py` before display and before message-history storage.
+- `tool_choice="auto"`; the gemma4 tool-call parser handles native tool
+  decisions.
+- Adaptive thinking: OFF for routine writes, HIGH for planning and user
+  messages, LOW for error recovery — eliminates 30–120s hangs between file
+  writes (see `CLAUDE.md` learnings).
+
+## 5.2 Hosting / Runtime Layer
+
+### Primary runtime: **vLLM (already shipped)**
+
+```bash
+# /data3/Models/start_gemma4.sh
+docker run -d --gpus all --name gemma4 -p 8000:8000 \
+  -v /data3/Models:/models --ipc=host \
+  vllm/vllm-openai:gemma4 \
+  --model /models/Gemma-4-26B-A4B-it-AWQ-4bit \
+  --quantization compressed-tensors \
+  --tensor-parallel-size 2 \
+  --max-model-len 131072 \
+  --max-num-seqs 2 \
+  --gpu-memory-utilization 0.95 \
+  --kv-cache-dtype fp8 \
+  --served-model-name gemma4 \
+  --trust-remote-code \
+  --tool-call-parser gemma4 \
+  --enable-auto-tool-choice \
+  --attention-backend TRITON_ATTN
+```
+
+| Setting             | Value                  | Why                                              |
+| ------------------- | ---------------------- | ------------------------------------------------ |
+| Quantization        | AWQ-4bit (compressed-tensors) | Fits 2× RTX 4060 Ti 16GB                  |
+| Context             | 131 072                | Coding/RAG headroom                              |
+| Tensor parallel     | 2                      | Both GPUs                                        |
+| KV cache dtype      | `fp8`                  | vLLM equivalent of `q8_0`                        |
+| Tool-call parser    | `gemma4`               | Native function-call decoding                    |
+| Attention backend   | `TRITON_ATTN`          | Stable on Ampere/Ada; flash-attn benchmark TBD   |
+| Max sequences       | 2                      | Matches 2-GPU serving budget                     |
+
+### Portability runtimes (roadmap, customer-hardware story)
+
+To ship onto customer hardware that prefers other stacks, Drydock must support:
+
+- **llama.cpp / llama-server** — for single-GPU customers (RTX 3090/4090).
+  Recommended GGUF: **Q3\_K\_M** (community sweet spot for 24GB cards).
+- **Ollama** — easiest first-install path; same Q3\_K\_M.
+- **vLLM** — current baseline; multi-GPU, AWQ.
+- **Failover** between providers via `llm_balancer.py` (already present).
+
+### Drydock connection spec (customer-tunable)
+
+```yaml
+provider: openai_compatible
+base_url: http://localhost:8001/v1   # llm_balancer in front of vLLM
+model: gemma4
+context_window: 131072
+temperature: 0.2     # coding default; 1.0 ONLY as a loop-break lever
+top_p: 0.95          # vLLM default; do not set top_k unless tuning
+```
+
+> ⚠ **Do not** copy the `temperature: 1.0`, `top_k: 40` values from generic
+> "run Gemma locally" articles. Those are tuned for chat/prose. Used as the
+> default for an agentic coding harness, they cause exactly the loops and
+> typos those articles attribute to "the model." Drydock uses temp 1.0
+> deliberately as a loop-break escalation, not a baseline.
+
+## 5.3 Drydock Harness Layer
+
+The control plane. Already shipped (v2 TUI + v3 clean rewrite).
+
+**Already shipped:**
+
+- Prompt routing, tool execution, shell automation
+- Loop detection (advisory nudges + FORCE_STOP only on pure no-op duplicates)
+- `search_replace` quality-of-life: file_path inference, "already applied"
+  detection, raw-code fallback
+- `write_file` safety: dedup escalation, missing-sibling-import check,
+  stub-class anti-pattern detection
+- Adaptive thinking (per-call thinking budget)
+- Subagent progress streaming
+- Hallucinated-tool suppression (`exit_plan_mode`, etc.)
+- Auto-AGENTS.md per project (devstral-era; Gemma 4 doesn't strictly need it)
+
+**Planned for this PRD:**
+
+- **Read-before-write enforcement** — block / warn when a tool call would
+  modify a file the agent never read in this session. Directly addresses the
+  "model leans on internal priors instead of retrieval" failure mode (see §10).
+- Pluggable retriever interface for GraphRAG (Phase 2)
+- Steering hook for Deep Noir vectors (Phase 4)
+
+## 5.4 GraphRAG Memory Layer (Phase 2)
+
+Persistent organisational memory — **not yet implemented.**
+
+Sources: PDFs, Office docs, spreadsheets, markdown vaults, source code,
+ticketing exports, manuals, research papers.
+
+Pipeline:
+
+```text
+ingest → parse → chunk → embed → vector index → graph links → reranker
+```
+
+Used when:
+
+- Internal knowledge required
+- Context missing in working set
+- Cross-session continuity matters
+
+Operational requirement (per §10): retrieval must beat the model's prior.
+
+## 5.5 Deep Noir Layer (Phase 4)
+
+Activation-steering vectors derived from the operator's own Deep Noir research
+(see project memory). Targeted use cases:
+
+- Reduced hallucinations (suppress "make stuff up" directions)
+- Secure-coding mode (suppress eval/exec/shell-injection prone outputs)
+- Citation mode (boost "quote source" directions in RAG flows)
+- Legal-precision / analyst / domain-bias presets
+
+Local-only. No hosted steering service.
+
+## 5.6 Evaluator Layer
+
+Already partially shipped — the system already self-observes.
+
+**Already shipped:**
+
+- **Admiral** — live observer that detects skip clusters, RSS bloat,
+  raw-markdown leakage, TUI-recycle conditions, and intervenes
+- **Stress harness + `stress_watcher.py`** — continuous regression run
+  (~1700 prompts), watcher kills leaky TUIs, babysitter relaunches harness
+- **`autonomous_review.sh`** — cron-driven Claude review every 30 min
+- **`functional_tests.sh` per PRD** + `BASELINE_412.md` — real feature
+  tests, no `--help`-only signals
+
+**To ship in Phase 3:**
+
+- Per-task evaluator that classifies failures into:
+  ```
+  Need memory?      → enqueue GraphRAG ingest
+  Need retrieval?   → tune reranker / chunking
+  Need tool?        → suggest harness extension
+  Need steering?    → flag for Deep Noir
+  Need fine-tune?   → recommend LoRA candidate
+  ```
+- Pareto frontier tracking (accuracy vs. token cost vs. time)
+- Execution trace logging per task (Meta-Harness arXiv:2603.28052)
+
+---
+
+# 6. Adaptive Failure Logic
+
+```text
+If context missing:
+   → enqueue GraphRAG ingest (Phase 2) | meanwhile: inject AGENTS.md hints
+
+If no tool available:
+   → emit harness extension suggestion to evaluator queue
+
+If behavior poor on a category (e.g., language interpreters):
+   → surface worked example in stuck mode (already wired for tree-walking interpreter)
+   → Phase 4: apply Deep Noir vector
+
+If repeated reasoning failures across sessions:
+   → recommend LoRA candidate (data captured by execution trace logging)
+
+If loops detected:
+   → loop-break sampling (temp+0.3/0.5, freq_pen 0.4–0.7, fresh seed)
+   → planner reset + diversity strategy
+   → only escalates to FORCE_STOP on pure no-op duplicates
+```
+
+All logic is **advisory-first**. Hard stops are reserved for objectively useless
+work (identical-content rewrites). Per operator rule: safety mechanisms must
+not block legitimate retries.
+
+---
+
+# 7. Markets
+
+## Primary
+
+- Government secure systems (defense-adjacent first; classified later)
+- Defense contractors
+- Regulated industries: legal, healthcare, financial services
+- Industrial / OT environments
+- Engineering teams with sensitive IP
+- Research labs requiring data isolation
+
+## Beachhead (per startup direction)
+
+Defense / gov-adjacent vertical. Target a first paid pilot ($5–25K) within
+90 days of v2 alpha.
+
+---
+
+# 8. Hardware Targets
+
+| Tier        | Hardware                          | Status                                   |
+| ----------- | --------------------------------- | ---------------------------------------- |
+| Tier 0 dev  | 2× RTX 4060 Ti 16GB (current)     | ✅ shipped, baseline                     |
+| Tier 1      | RTX 3090 / 4090 (single 24GB)     | Roadmap — needs llama.cpp Q3\_K\_M path  |
+| Tier 2      | RTX A6000 / RTX 6000 Ada (48GB)   | Roadmap — single-card vLLM AWQ           |
+| Tier 3      | Multi-GPU server rack             | Roadmap — tensor-parallel vLLM           |
+| **Out of scope** | Jetson AGX Orin              | Explicitly excluded this cycle           |
+
+---
+
+# 9. Key Use Cases
+
+### Secure coding assistant (current strength)
+
+- Local repo coding, bug fixing, refactors
+- Shell automation with allowlist/denylist enforcement
+- PRD-driven project building (370-PRD test suite)
+
+### Internal knowledge AI (Phase 2)
+
+- Policy lookup, contract review, manual Q&A
+- Cross-document reasoning over GraphRAG corpus
+
+### Research copilot (Phase 2+)
+
+- Paper summarisation and method comparison
+- Drafting with grounded citations
+
+### Ops assistant (current)
+
+- Script generation, log triage, workflow automation
+- Already proven by `autonomous_review.sh` running on Drydock itself
+
+---
+
+# 10. Gemma 4 Operational Warning — Retrieval vs. Prior
+
+Confirmed in real-world deployments and consistent with Drydock's own failure
+modes (stub-class anti-pattern, missing-sibling-imports, "writes a function
+without reading the file"): **Gemma 4 leans on its training prior even when
+ground truth is in retrieved context.**
+
+Drydock must enforce:
+
+1. **Retrieval-first prompts** — "answer using the provided context; if the
+   context is insufficient, say so." (system-prompt update)
+2. **Mandatory citations** in RAG flows — answer must reference a chunk id
+3. **Read-before-write enforcement** in the harness — if `write_file` /
+   `search_replace` targets an existing file the agent never read in this
+   session, return an advisory and inject a `read_file` nudge before
+   permitting the write
+4. **Evaluator grounding checks** — sample answers and verify retrieved
+   chunks were actually used (token overlap or citation presence)
+5. **Source-priority templates** — RAG prompt templates that pin retrieved
+   evidence above the model's prior
+
+The read-before-write check is the highest-value low-risk item; it directly
+mitigates several of the failure classes already in `MODEL_SHORTCOMINGS.md`.
+
+---
+
+# 11. Roadmap
+
+### Phase 1 — 30 days (Foundation, mostly done)
+
+- ✅ Gemma 4 local hosting (vLLM Docker)
+- ✅ Drydock harness (v2 TUI + v3 rewrite)
+- ✅ Coding workflows + 370-PRD benchmark
+- ✅ Admiral, stress harness, autonomous review
+- ▢ **Read-before-write enforcement** (this PRD's first new build)
+- ▢ Customer-hardware portability bring-up (llama.cpp + Ollama backends)
+
+### Phase 2 — 60 days (Memory)
+
+- ▢ GraphRAG ingestion pipeline (PDFs, code, markdown)
+- ▢ Pluggable retriever interface in Drydock
+- ▢ Memory routing (when to retrieve, when not to)
+- ▢ Citation-mode prompt templates
+- ▢ Operator dashboards
+
+### Phase 3 — 90 days (Self-Improvement)
+
+- ▢ Per-task evaluator with classifier (memory / retrieval / tool / steering / tune)
+- ▢ Execution trace logging (full prompts + tool calls per task)
+- ▢ Anti-loop signal feedback into proposer
+- ▢ Autonomous upgrade loop (local-only proposer)
+- ▢ First paid pilot ($5–25K, defense-adjacent)
+
+### Phase 4 — 120 days (Steering)
+
+- ▢ Deep Noir vector pipeline
+- ▢ Domain modules (secure-coding, legal-precision, analyst, citation)
+- ▢ Measured improvements on per-domain benchmarks
+
+---
+
+# 12. Metrics
+
+| Metric                                | Target | Baseline                   |
+| ------------------------------------- | ------ | -------------------------- |
+| Coding success (functional\_tests)    | +25 %  | 94 % on 412-suite (current)|
+| Hallucinations (RAG citation miss)    | −40 %  | TBD — establish in Phase 2 |
+| Repeat failures across sessions       | −50 %  | TBD — needs trace logging  |
+| Retrieval relevance (P@5)             | +60 %  | TBD — Phase 2 baseline     |
+| Customer cloud dependency             | −70 %  | Brand promise, qualitative |
+| Task completion rate (interactive)    | +35 %  | Current shakedown baseline |
+| SWE-bench file match                  | maintain ≥70 % | 70 % current        |
+
+Metrics with "TBD" baselines are explicitly required to be **measured** before
+Phase 2 begins, not estimated.
+
+---
+
+# 13. Risks
+
+| Risk                                          | Mitigation                                          |
+| --------------------------------------------- | --------------------------------------------------- |
+| Local model weaker than frontier cloud        | Harness compensates; pick tasks where local wins    |
+| Poor retrieval quality                        | Reranker, chunking discipline, evaluator gating     |
+| Steering instability (Deep Noir)              | Sandbox eval, per-domain regression suite           |
+| Hardware fragmentation                        | Preset configs per Tier; portability roadmap above  |
+| Model regression from upstream releases       | Pin model + image; gate updates through stress run  |
+| DIY copycats (open weights + Ollama)          | Moat is harness + memory + steering, not weights    |
+| Cron clobbering active edits                  | `.pause_auto_release` and `.pause_watchdog` flags   |
+| Cloud creep in proposer / evaluator           | Hard architectural rule: local-only proposer        |
+
+---
+
+# 14. Business Model
+
+- **Software license** — install on customer hardware, per-seat or per-node
+- **Appliance** — prebuilt secure workstation (Tier 1/2 hardware, image
+  preloaded, factory-trusted)
+- **Enterprise support** — annual maintenance, signed updates
+- **Premium secure deployments** — government / classified pricing, on-prem
+  build/audit support
+- **Open core** — harness + agent loop OSS, evaluator/steering/retrieval
+  bundles commercial
+
+---
+
+# 15. Strategic Moat
+
+Not the model weights (open). Not the quantization (commodity). Not the
+harness alone (replicable).
+
+The compound moat:
+
+- Self-improvement logic (evaluator + autonomous review + stress)
+- Memory systems (GraphRAG + retrieval discipline)
+- Adaptive routing (per-failure-class actions)
+- Activation steering (Deep Noir, derived from operator's own research)
+- Secure deployment expertise (air-gap, signed updates, audit logs)
+- Polished local UX (TUI today, appliance tomorrow)
+
+---
+
+# 16. Final Thesis
+
+Open models are commodities.
+Inference hosting is commoditizing.
+RAG is commoditizing.
+
+What stays valuable:
+
+> **A local AI system that knows why it failed and fixes itself.**
+
+That is Drydock Sovereign AI Stack v2.

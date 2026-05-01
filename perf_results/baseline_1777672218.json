@@ -1,0 +1,96 @@
+{
+  "mode": "baseline",
+  "timestamp": "2026-05-01T21:50:18Z",
+  "base_url": "http://localhost:8001/v1",
+  "model": "gemma4",
+  "iters": 3,
+  "config": {
+    "note": "live vLLM, configuration not introspected"
+  },
+  "summaries": [
+    {
+      "workload": "short",
+      "ok": 3,
+      "errors": 0,
+      "ttft_s_p50": 0.8744546752423048,
+      "ttft_s_p95": 0.9475111537612975,
+      "decode_tok_s_p50": 7323.381409126503,
+      "decode_tok_s_p95": 10098.40980223307,
+      "total_s_p50": 0.8778928192332387,
+      "output_tokens_p50": 33
+    },
+    {
+      "workload": "medium",
+      "ok": 3,
+      "errors": 0,
+      "ttft_s_p50": 1.3927166252397,
+      "ttft_s_p95": 1.6120391129516065,
+      "decode_tok_s_p50": 9809.190437065818,
+      "decode_tok_s_p95": 12131.316133645545,
+      "total_s_p50": 1.3986699949018657,
+      "output_tokens_p50": 70
+    }
+  ],
+  "raw": [
+    {
+      "workload": "short",
+      "iter": 0,
+      "ttft_s": 0.9475111537612975,
+      "total_s": 0.9576197029091418,
+      "decode_s": 0.0043695662170648575,
+      "output_tokens": 33,
+      "decode_tok_s": 7323.381409126503,
+      "error": null
+    },
+    {
+      "workload": "short",
+      "iter": 1,
+      "ttft_s": 0.7149268351495266,
+      "total_s": 0.7205250370316207,
+      "decode_s": 0.005315639078617096,
+      "output_tokens": 32,
+      "decode_tok_s": 5831.848163789346,
+      "error": null
+    },
+    {
+      "workload": "short",
+      "iter": 2,
+      "ttft_s": 0.8744546752423048,
+      "total_s": 0.8778928192332387,
+      "decode_s": 0.0031688157469034195,
+      "output_tokens": 33,
+      "decode_tok_s": 10098.40980223307,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 0,
+      "ttft_s": 1.3927166252397,
+      "total_s": 1.3986699949018657,
+      "decode_s": 0.005687758792191744,
+      "output_tokens": 70,
+      "decode_tok_s": 12131.316133645545,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 1,
+      "ttft_s": 1.1050976640544832,
+      "total_s": 1.111232141032815,
+      "decode_s": 0.00591425783932209,
+      "output_tokens": 55,
+      "decode_tok_s": 9130.477815994178,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 2,
+      "ttft_s": 1.6120391129516065,
+      "total_s": 1.6195359812118113,
+      "decode_s": 0.007238110061734915,
+      "output_tokens": 72,
+      "decode_tok_s": 9809.190437065818,
+      "error": null
+    }
+  ]
+}

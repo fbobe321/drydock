@@ -1,0 +1,112 @@
+{
+  "mode": "baseline",
+  "timestamp": "2026-05-01T21:52:02Z",
+  "base_url": "http://localhost:8001/v1",
+  "model": "gemma4",
+  "iters": 3,
+  "config": {
+    "note": "live vLLM, configuration not introspected"
+  },
+  "summaries": [
+    {
+      "workload": "short",
+      "ok": 3,
+      "errors": 0,
+      "ttft_s_p50": 3.4746645567938685,
+      "ttft_s_p95": 15.153419387061149,
+      "e2e_tok_s_p50": 9.48352471563142,
+      "e2e_tok_s_p95": 44.587722354728264,
+      "decode_tok_s_p50": null,
+      "total_s_p50": 3.4797188797965646,
+      "output_tokens_p50": 33,
+      "streamed_any": false
+    },
+    {
+      "workload": "medium",
+      "ok": 3,
+      "errors": 0,
+      "ttft_s_p50": 1.4096450079232454,
+      "ttft_s_p95": 18.753366630990058,
+      "e2e_tok_s_p50": 44.812573541892746,
+      "e2e_tok_s_p95": 48.446008038206905,
+      "decode_tok_s_p50": null,
+      "total_s_p50": 1.4242659569717944,
+      "output_tokens_p50": 65,
+      "streamed_any": false
+    }
+  ],
+  "raw": [
+    {
+      "workload": "short",
+      "iter": 0,
+      "ttft_s": 15.153419387061149,
+      "total_s": 15.15663709398359,
+      "output_tokens": 33,
+      "e2e_tok_s": 2.1772639798243447,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 32,
+      "error": null
+    },
+    {
+      "workload": "short",
+      "iter": 1,
+      "ttft_s": 0.7334558041766286,
+      "total_s": 0.740114055108279,
+      "output_tokens": 33,
+      "e2e_tok_s": 44.587722354728264,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 32,
+      "error": null
+    },
+    {
+      "workload": "short",
+      "iter": 2,
+      "ttft_s": 3.4746645567938685,
+      "total_s": 3.4797188797965646,
+      "output_tokens": 33,
+      "e2e_tok_s": 9.48352471563142,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 32,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 0,
+      "ttft_s": 1.4096450079232454,
+      "total_s": 1.4242659569717944,
+      "output_tokens": 69,
+      "e2e_tok_s": 48.446008038206905,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 68,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 1,
+      "ttft_s": 18.753366630990058,
+      "total_s": 18.765199271962047,
+      "output_tokens": 65,
+      "e2e_tok_s": 3.463858766323868,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 64,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 2,
+      "ttft_s": 1.2421587342396379,
+      "total_s": 1.2496492741629481,
+      "output_tokens": 56,
+      "e2e_tok_s": 44.812573541892746,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 55,
+      "error": null
+    }
+  ]
+}

@@ -104,6 +104,19 @@ if [ "$ALIVE" = "1" ]; then
     if [ "$CURIDX" -ge "$TOTAL_PROMPTS" ]; then
         notify_on_change "complete" "stress run COMPLETE: done=$DONE skip=$SKIP timeout=$TIMEOUT"
     fi
+    # Ensure the watcher is running for this harness PID. It may be absent
+    # if the harness was manually started outside the babysitter's restart
+    # path, or if the watcher died.
+    WATCHER_ALIVE=$(pgrep -f "stress_watcher.py" 2>/dev/null | head -1)
+    if [ -z "$WATCHER_ALIVE" ]; then
+        WATCHER_LOG="/tmp/stress_watcher_v10_restart_$(date +%s).log"
+        nohup "$PY_DRYDOCK" /data3/drydock/scripts/stress_watcher.py \
+            --log "$STRESS_LOG" --pid "$STRESS_PID" --stall-threshold 900 \
+            > "$WATCHER_LOG" 2>&1 &
+        disown 2>/dev/null || true
+        log "launched missing watcher: log=$WATCHER_LOG pid=$STRESS_PID"
+        notify_on_change "watcher_relaunch" "relaunched missing stress_watcher for PID $STRESS_PID"
+    fi
     exit 0
 fi
 

@@ -1343,12 +1343,17 @@ class AgentLoop:
             result_dict = result_model.model_dump()
             text = "\n".join(f"{k}: {v}" for k, v in result_dict.items())
 
-            # After task subagent completes, nudge the model to continue rather
-            # than stall (Gemma 4 sees "completed: True" and produces empty turn).
-            if tool_call.tool_name == "task" and result_dict.get("completed"):
-                self._inject_system_note(
-                    "Task complete. Continue with your next step — call the next tool now."
-                )
+            # After task subagent finishes (completed or cancelled), nudge the
+            # model to continue — Gemma 4 produces an empty turn without this.
+            if tool_call.tool_name == "task":
+                if result_dict.get("completed"):
+                    self._inject_system_note(
+                        "Task complete. Continue with your next step — call the next tool now."
+                    )
+                else:
+                    self._inject_system_note(
+                        "Task subagent stopped. Continue with your current goal — call the next tool now."
+                    )
 
             # After a successful bash test of built code, nudge to wrap up
             if tool_call.tool_name in ("bash", "run_command"):

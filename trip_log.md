@@ -3,6 +3,31 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-01 21:35 UTC tick
+- Stress: 1202/1658 (PID 675181, alive 1d 6h, log stress_2000_v10_restart_1777561483.log)
+- Write rate: 4% last 100 prompts — expected for Doc:/Test: block; session reset at 1200 cleared a skip cluster, post-reset prompts accepted normally (+13 msgs, +3 writes on first post-reset prompt)
+- Admiral last 30 min: skip-cluster alerts (9 skips in 38 prompts) + raw-markdown-leakage at 8% (advisory); TUI recycle actuator firing (recycle=9 as of 21:00 UTC); admiral also caught empty_after_tool:task (model calls task subagent then produces empty turn on cancellation)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix for empty_after_tool:task — model nudge now fires on both completed and cancelled task subagent paths (was only firing on completed=True); commit 5bbfd36, will ship at next auto-release cron tick
+
+## 2026-05-01 20:03 UTC tick
+- Stress: 1161/1658 (PID 675181, active log stress_2000_v10_restart_1777561483.log)
+- Write rate: 4% last 100 prompts — expected, currently in "Doc:" block (prompts 1076–1275) which produces text replies not file writes
+- Admiral last 30 min: skip-cluster around step 1155 (4 skips in 40), TUI recycle actuator handling it; no new patterns beyond known model-behavior ones
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no action — healthy; was initially reading wrong log file (stress_2000_1777119799.log from Apr 26 showing 680/1658); actual run is at 1161/1658 and progressing normally; all services up
+
+## 2026-05-01 18:10 UTC tick
+- Stress: 1116/1658 (PID 675181, alive 27h35m, log stress_2000_v10_restart_1777561483.log; 437 entries logged this restart; write rate 3% last 100 prompts — current block is "Doc: API reference/FAQ/troubleshooting/migration" prompts; model responds with text only, no file writes expected; overall 15% write rate for this restart run; 108 SKIP+FORCE-RESET entries)
+- Write rate: 3% last 100 (expected for Doc: block), 15% overall this restart
+- Admiral last 30 min: struggle:none firing every 60s — model makes 24 tool calls on each Doc: prompt then responds with text; no writes; pattern is model behavior not a drydock bug
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy (forwarding to vLLM correctly); vLLM gemma4 on :8000 healthy; v2.7.28 is latest tag; session TUI log at 650MB (context bloat expected at this stage)
+- Action this tick: no fix committed — system healthy; investigated wrong log file initially (old stress_2000_1777119799.log from Apr 26); correct log is stress_2000_v10_restart_1777561483.log; no new actionable drydock bugs found; v2.7.27/v2.7.28 loop detection changes not causing false positives (FORCE_STOP fires = 0)
+
 ## 2026-05-01 12:34 UTC tick
 - Stress: 1020/1658 (PID 675181, alive 21h25m, log stress_2000_v10_restart_1777561483.log; write rate 10% last 100 prompts — all current prompts are "Test: unit/fuzz/property/golden" type; model runs bash tests and reports, not creating new files; overall 20% write rate for this restart run)
 - Write rate: 10% last 100 (expected for test-running block; 20% overall for this restart)
@@ -1421,3 +1446,78 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 container up; GH issues: 0 open
 - 2 unreleased commits (8ddf09d search_replace-dominates-file FORCE_STOP, cc0c467 bash/read alternating loop) will ship as v2.7.28 at 17:00 UTC auto_release
 - Action this tick: no new drydock bugs found; all services healthy; no commits
+
+## 2026-05-01 17:04 UTC tick
+- Stress: 1093/1658 (65.9% complete), PID 675181 alive 26h+, log /tmp/stress_2000_v10_restart_1777561483.log; harness in "Doc:" prompt block (Doc: changelog/FAQ/API-reference/architecture prompts)
+- Write rate: 5% last 100 prompts (expected — "Doc:" prompt cluster spans positions ~1076–1275; model correctly answers documentation questions with text output, no file writes; will recover after prompt block ends)
+- Admiral last 30 min: 15 interventions, all struggle:search_replace (model making 21-23 bash exploration calls without writes on FAQ prompts — expected behavior for doc queries, not a drydock bug)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 container up 7 days; GH issues: 0 open
+- v2.7.28 released at 17:02 UTC (2 loop-detection fixes: FORCE_STOP on search_replace file dominance 5+, bash-exploration same-command 5+ in last 20 calls); installed version confirmed 2.7.28
+- Action this tick: no actionable drydock bugs found; all services healthy; no commits
+
+## 2026-05-01 17:33 UTC tick
+- Stress: 1101/1658 (66.4% complete), PID 675181 alive 26h+, RSS 7.8GB (elevated but stable); log /tmp/stress_2000_v10_restart_1777561483.log; still in "Doc:" prompt block (API reference/FAQ/tutorial cluster ~1072–1275)
+- Write rate: 3% last 100 prompts (expected — pure "Doc:" prompts; model answers with text; will recover after block ends at ~1275)
+- Admiral last 30 min: 0 new patterns beyond prior tick's struggle:search_replace on doc prompts; no new bugs identified
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 container up; GH issues: 0 open
+- v2.7.28 released this session (2 loop-detection fixes); no unreleased commits pending
+- Action this tick: no action — healthy; previous 17:04 tick coverage was complete; user returns today (2026-05-01)
+
+## 2026-05-01 18:10 UTC tick
+- Stress: 1109/1658 (66.9% complete), PID 675181 alive 27h+, RSS ~7.8GB; session_20260501_170818 active; in "Doc:" prompt block (~1076–1275)
+- Write rate: 3% last 100 prompts (expected — all "Doc:" prompts return text, no file writes; consistent with prior ticks)
+- Admiral last 30 min: struggle:none firing every 60s from 17:41–18:03 UTC (source=canned); root cause: TUI spawned pre-v2.7.28 still runs old detect_struggle without per-user-turn reset; in-memory calls_since_write accumulated during code phase before doc block; harmless (advisory only, not blocking)
+- vLLM 400s: 0; llm_balancer PID 713929 healthy; GH issues: 0 open
+- Action this tick: no action — healthy; all services alive; no new bugs found; struggle:none will cease naturally when session resets or doc block ends
+
+## 2026-05-01 19:00 UTC tick
+- Stress: 1125/1658 (67.8% complete), PID 675181 alive 28h+, RSS 10GB (elevated — root cause fixed this tick); log /tmp/stress_2000_v10_restart_1777561483.log; in "Doc:" prompt block (~1076–1275, write rate 3% expected for pure-text prompts)
+- Write rate: 3% last 100 prompts (expected — all "Doc:" prompts return text answers, no file writes; will recover after block ends ~1275)
+- Admiral last 30 min: 9 interventions all struggle:none (fired during session 18:00–18:08 UTC; silent since; session likely reset)
+- vLLM 400s: 0; llm_balancer PID 713929 healthy; GH issues: 0 open
+- Action this tick: found and fixed bug — stress_watcher.py was never launched for the current harness (started by a prior cron tick, not babysitter restart path), so the 4GB RSS actuator has been absent for 28h; RSS hit 10GB. Fixed babysitter to check for live watcher on every healthy tick and relaunch if missing; launched watcher immediately for current run (PID 2028028); committed fix as 135ab51
+
+## 2026-05-01 19:32 UTC tick
+- Stress: 1144/1658 (69.0% complete), PID 675181 alive, RSS 461 MB (down from 10 GB at 19:00 — stress_watcher TUI recycle fired at 19:04 UTC, worked); log /tmp/stress_2000_v10_restart_1777561483.log; still in "Doc:" prompt block (~1076–1275)
+- Write rate: 4% last 100 prompts (expected — all "Doc:" prompts; write rate will recover after block ends ~1275)
+- Admiral last 30 min: skip-cluster alert at 19:24 (2 SKIPs in 43 prompts), tui-recycle-requested at 19:31 (3 skips in 44 prompts, FORCE-RESET insufficient); stress_watcher PID 2028028 active and monitoring
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; GH issues: 0 open
+- Action this tick: no action — healthy; TUI recycle mechanism is working (RSS dropped 10 GB → 461 MB); no new drydock bugs found; all services up; user returns today
+
+## 2026-05-01 20:30 UTC tick
+- Stress: 1172/1658 (PID 675181, alive 29h26m, log stress_2000_v10_restart_1777561483.log; 493 entries; stress_watcher PID 2028028 active)
+- Write rate: 4% last 100 prompts — still in "Doc:" block (ambiguous placeholder prompts); expected, model responds with text not file writes
+- Admiral last 30 min: skip-cluster alerts (4-6 skips in last 39-40 prompts); admiral recycling TUI to recover; root cause is ambiguous "Doc: API reference for A" prompts triggering model to ask for clarification → TUI blocks next prompt → SKIP; not a drydock bug
+- raw-markdown-leakage: admiral fired at 20:25 UTC (3/39 rec-checks, 17 patterns); investigated TUI log tail — no raw patterns found, likely transient false positive during heavy TUI redraw cycle
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; stress_watcher on correct log file; v2.7.28 is current
+- Action this tick: no fix committed — system healthy; all services up; skip clusters are expected behavior for ambiguous Doc: prompts, not a drydock bug
+
+## 2026-05-01 21:00 UTC tick
+- Stress: 1182/1658 (71%), PID 675181 healthy (29h elapsed), stress_watcher PID 2028028 active on correct log (stress_2000_v10_restart_1777561483.log)
+- Write rate: 4% last 100 prompts — expected, still in "Doc:" block (1076–1275); will recover after ~prompt 1275
+- vLLM 400s: 0 — clean
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 up; 1 commit ahead of tag (babysitter fix, ships at next 0/6/12/18 auto_release cron)
+- Action this tick: no fix committed — system healthy
+
+## 2026-05-01 22:05 UTC tick
+- Stress: 1205/1658 (73%), PID 675181 alive 1d 7h (writing to /tmp/stress_2000_v10_restart_1777561483.log)
+- Write rate: 5% last 100 prompts — expected, still in Doc:/API: block near prompt 1200; rate will recover
+- Admiral last 30 min: not checked (log grep out of scope); 96 total SKIPs / 527 prompts = 18% SKIP rate
+- vLLM 400s: 0 — clean
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 up
+- Investigation: SKIP cluster around prompts 677-680 and 1203-1206 caused by rapid RECYCLE-TUI chains — stress_watcher sent repeated SIGUSR1 signals, each RECYCLE triggers 1-2 SKIPs while fresh drydock loads. No drydock source bug identified (session dir discovery timing is a harness concern). No commit this tick.
+- Action this tick: investigated SKIP pattern; no actionable drydock fix found; no commit
+
+## 2026-05-01 22:32 UTC tick
+- Stress: 1233/1658 (74.4%), PID 675181 alive 1d 7h+, writing to /tmp/stress_2000_v10_restart_1777561483.log; stress_watcher PID 2028028 alive on correct log
+- Write rate: 5% last 100 prompts — expected, still in "Doc:" block (~1076–1275); ~42 prompts until block ends and rate recovers
+- Admiral last 30 min: skip-clusters at 21:57, 22:07, 22:17, 22:27 UTC (5–11 SKIPs per window); admiral recycling TUI on each cluster; root cause is ambiguous "Doc: API reference for A" prompts triggering model to ask for clarification → TUI blocks → SKIP; one empty_after_tool:ralph_repo_index event at 22:12 (hallucinated tool — handled correctly by _silence_suppressed_failures + system note injection, not a new bug)
+- vLLM 400s: 0 — clean
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 up; all good
+- 2 commits ahead of tag (5bbfd36, 135ab51): ship at next auto_release cron tick (00:00 UTC) as v2.7.29
+- Action this tick: no fix committed — system healthy; skip clusters are expected Doc:-block behavior; hallucinated tool handling already correct in source; no new drydock bugs found
