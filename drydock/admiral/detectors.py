@@ -64,11 +64,17 @@ def detect_struggle(messages: Sequence[LLMMessage], threshold: int = 20) -> Find
     """Fires when `threshold` tool calls have happened without any write.
 
     Reading + grepping forever without writing code is the classic
-    "stuck exploring" failure mode.
+    "stuck exploring" failure mode. Counter resets on each user turn so
+    test-only prompts (run tests, report results) don't accumulate across
+    turns and cause false positives.
     """
     calls_since_write = 0
     last_write_tool: str | None = None
     for m in messages:
+        if m.role == Role.user:
+            # Each new user prompt gives the model a fresh budget.
+            calls_since_write = 0
+            continue
         if m.role != Role.assistant or not m.tool_calls:
             continue
         for tc in m.tool_calls:

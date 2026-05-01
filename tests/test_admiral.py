@@ -64,6 +64,30 @@ def test_struggle_resets_on_write() -> None:
     assert detect_struggle(msgs) is None
 
 
+def test_struggle_resets_on_user_turn() -> None:
+    """Multiple test-only prompts must not accumulate into a false struggle."""
+    msgs: list[LLMMessage] = []
+    # 5 user prompts, each generating 8 bash calls (total 40 non-write calls)
+    for _ in range(5):
+        msgs.append(LLMMessage(role=Role.user, content="Test: run benchmarks"))
+        for _ in range(8):
+            msgs.append(_assistant("bash", '{"command":"python3 test.py"}'))
+            msgs.append(LLMMessage(role=Role.tool, content="ok"))
+        msgs.append(LLMMessage(role=Role.assistant, content="Tests passed."))
+    assert detect_struggle(msgs) is None
+
+
+def test_struggle_still_fires_within_single_turn() -> None:
+    """A single turn with 25+ non-write calls still fires struggle."""
+    msgs: list[LLMMessage] = [LLMMessage(role=Role.user, content="implement feature X")]
+    for i in range(25):
+        msgs.append(_assistant("read_file", f'{{"path":"f{i}.py"}}'))
+        msgs.append(LLMMessage(role=Role.tool, content="..."))
+    f = detect_struggle(msgs)
+    assert f is not None
+    assert "without writing" in f.directive
+
+
 def test_run_all_returns_multiple_findings() -> None:
     msgs: list[LLMMessage] = []
     for i in range(25):

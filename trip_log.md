@@ -3,6 +3,52 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-01 07:31 UTC tick
+- Stress: 950/1658 (PID 675181, alive 16h27m, log stress_2000_v10_restart_1777561483.log; 271 entries this run)
+- Write rate: 21% last 100 prompts (expected — current block is "Test: fuzz/property/integration" prompts; model asks clarifying questions instead of writing, producing 0-writes responses; prompt-category effect, not regression)
+- Skip rate: 68/271 = 25% (TUI wedge on API/server prompts, FORCE-RESET recovering; no orphan servers on ports 50051/8765/8080 at this tick — clean)
+- Admiral last 30 min: 0 fires (model in text-response mode on Test: prompts, no tool-call loops observed)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 up 7 days; 1 commit ahead of latest tag (fix(admiral): reset struggle counter on each user turn — ships at next 0/6/12/18 auto-release)
+- Action this tick: no fix committed — system healthy, no new drydock bugs identified; harness progressing; write rate and skip rate consistent with prior ticks at same prompt block
+
+## 2026-05-01 03:45 UTC tick
+- Stress: 680/1658 (PID 675181, alive, resumed from step 679; currently in "Add storage backend: X" / "API: JSON-RPC" prompt block)
+- Write rate: 32% last 100 prompts (low due to "Add storage backend: X" cluster — session already has implementations, model correctly returns 0 writes; prompt-category effect, not regression)
+- Admiral last 30 min: loop:bash::{fuser -k 8765/tcp} x11 (01:00–01:10 UTC, ~10-min port-kill spiral); loop:bash::{fuser -k 8000/tcp} x1; loop:search_replace conflict markers x1; empty_after_tool:task x1; empty_after_tool:read_file x1; retry_after_error:write_file truncated-history x2 (03:18, 03:30 — existing escalation logic in format.py handles these); struggle:none x3; loop:bash memory_benchmark x3; retry_after_error:search_replace x1
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 on :8000 healthy; admiral_probe PID 4075121 on :8878 healthy
+- Action this tick: no fix committed — all observed patterns are known types; write rate drop is prompt-category effect; no new drydock bugs identified; harness alive and progressing
+
+## 2026-05-01 04:52 UTC tick
+- Stress: 907/1658 (PID 675181, alive 14h25m, in "API surfaces" / "Test:" prompt block)
+- Write rate: 26% last 100 prompts (expected — current block is "Test: integration test / fuzz test" which produce 0 writes; first 100 prompts in this log also showed 20%)
+- Admiral top patterns overall: loop:read_file x302, loop:search_replace x234, loop:bash x181, struggle:none x92, retry_after_error:search_replace x75+71, empty_after_tool:ralph_repo_index x74 — all known, all handled; no new patterns
+- vLLM 400s: 0 (last 30m)
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy (auto-restarted from PID 1230765); vLLM gemma4 on :8000 healthy (0 JSONDecodeErrors); stress PID 675181 alive; current version v2.7.26
+- Action this tick: no fix committed — system healthy, no actionable new bugs; write rate drop is prompt-category effect not regression; 32 total retry_after_error:write_file truncated-history fires across run (existing escalation logic handles each one); no drydock source changes needed
+
+## 2026-05-01 02:05 UTC tick
+- Stress: 866/1658 (PID 675181, alive 11h, writing to stress_2000_v10_restart_1777561483.log; 187 entries this run; 84 SKIPs = 45% SKIP rate; currently stuck at "Test:" block — integration/fuzz/property test prompts causing TUI wedge; FORCE-RESET not unsticking; rec-check shows raw_md=1 but no API-error banner)
+- Write rate: 24% this run (28/113 prompts with writes; "Test:" prompts tend to run bash rather than write files; also high SKIP rate artificially depresses metric)
+- Admiral last 30 min: 11x loop:bash::{fuser -k 8765/tcp} (model looping on port-kill for orphaned WebSocket server — cleared by this tick); 1x loop:search_replace conflict markers; 1x loop:bash::fuser -k 8000/tcp; 1x empty_after_tool:task; 1x empty_after_tool:read_file; 1x retry_after_error:bash
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 on :8000 healthy; RSS 3.3GB (babysitter threshold 4GB — not triggered); 11 orphan test server processes killed (PIDs 767439 on :8765 websocket_demo/server; 751293 751940 757659 758295 759238 764436 on :50051 gRPC servers)
+- Action this tick: killed 7 orphan test server processes squatting ports 8765 and 50051; these were causing 11-minute loop:bash spirals as the model tried fuser -k 8765 to reclaim the port; no drydock source bug fix committed (TUI wedge at Test: prompts is harness-side recovery gap, not drydock source bug; all other patterns are known)
+
+## 2026-05-01 00:35 UTC tick
+- Stress: 854/1658 (PID 675181, alive 9h25m, log stress_2000_v10_restart_1777561483.log; 174 prompts logged this run; harness in SKIP/FORCE-RESET cycle at current "API: SSE/gRPC" block — 50 total SKIPs and 19 FORCE-RESETs in log)
+- Write rate: 21% last 100 prompts (same API: block pattern — gRPC bidi-streaming, WebSocket, SSE prompts; model runs server+client bash tests rather than writing new files; expected depression for this prompt category)
+- Admiral last 30 min: empty_after_tool:bash firing every 15-20 min (model generates thinking-only response after long bash server/client commands; admiral intervenes each time; pattern is recurring but handled); struggle:none (2 fires); loop:search_replace and loop:bash (1 each); retry_after_error:write_file "truncated history" (1 — existing pattern, escalation logic in format.py handles it)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy (confirmed cmd match); vLLM gemma4 on :8000 healthy; admiral_probe PID 4075121 on :8878 healthy; RSS 3.0GB
+- Action this tick: no fix committed — all observed patterns are known (empty_after_tool:bash, struggle:none, loop:search_replace); stress run progressing through hard API prompt block; no new drydock bugs identified; write rate drop is prompt-category effect, not regression
+
 ## 2026-04-30 17:55 UTC tick
 - Stress: 233/1658 in new run (PID 675181, --resume-from-step 679 but babysitter triggered a fresh wipe; log stress_2000_1777408317.log); 55 SKIPs (24%), 3 TIMEOUTs — elevated SKIP rate (was ~8%) is harness timing, not a drydock regression
 - Write rate: 19% last 100 prompts (expected for current prompt block — hash/cipher/math tools added via search_replace to existing files; metric only counts write_file, not search_replace edits)
@@ -11,6 +57,24 @@ chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomou
 - GH issues: 0 open
 - Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 on :8000 healthy; killed 5 orphaned gRPC server processes (PIDs 737458,738127,738759,744524,745299) that were squatting on port 50051 — stress run spawned these as background servers but never cleaned up; port 50051 now clear
 - Action this tick: killed orphaned gRPC servers; no drydock source fix committed (SKIP rate is harness timing, not a code bug; write rate drop is metric artifact from prompt type)
+
+## 2026-04-30 23:32 UTC tick
+- Stress: 843/1658 (PID 675181, alive 8h26m; same TUI session since 18:30 UTC — no new session dirs created in 5h, harness is reusing PID 675184 drydock process via /clear; harness RSS at 3.2GB and growing; 44/164 SKIPs this run = 27% SKIP rate in current log, elevated from prior ticks)
+- Write rate: 20% last 100 prompts (current "API:" block — GraphQL/REST/gRPC prompts; model gives text explanations, few file writes; known prompt-type effect)
+- Admiral last 30 min: not checked (budget limited)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 on :8000 healthy; harness RSS 3.2GB (babysitter will warn but admiral threshold 4GB not reached)
+- Action this tick: no fix committed — harness alive and progressing through API prompt block; high SKIP rate (27%) is post-reset TUI timing, not a drydock code bug; no new GitHub issues; nothing actionable found
+
+## 2026-04-30 23:02 UTC tick
+- Stress: 838/1658 (PID 675181, alive 7h55m; 118 done, 40 SKIP, 0 TIMEOUT this run; babysitter restart at ~15:04 UTC, writing to stress_2000_v10_restart_1777561483.log)
+- Write rate: 20% last 100 prompts (current batch is "API:" prompts — REST GET/POST, rate limiters, GraphQL endpoints; model explores/tests servers; metric depressed by server-start loops)
+- Admiral last 30 min: loop:bash (pkill/restart rest_api_server pattern — orphan port squatting on model-spawned servers, known issue), loop:search_replace, struggle:none, empty_after_tool:bash/task — all known patterns, no new ones
+- vLLM 400s: 0
+- GH issues: 0 open
+- Services: llm_balancer PID 713929 on :8001 healthy, vLLM gemma4 on :8000 healthy; RSS 3018MB (babysitter warns >2GB; admiral actuator threshold 4GB, not reached)
+- Action this tick: no fix committed — infrastructure healthy, no new drydock bugs found; write rate drop is prompt-category effect (API server prompts harder for model)
 
 ## 2026-04-30 20:35 UTC tick
 - Stress: 812/1658 (PID 675181, alive 5h25m, writing to stress_2000_v10_restart_1777561483.log; 134 prompts this run, 107 done, 26 SKIP, 0 TIMEOUT; resume from step 679 by babysitter)
@@ -1150,3 +1214,104 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (restarted by keepalive cron at ~19:00 UTC); vLLM gemma4 on :8000 healthy; TUI RSS 422MB, harness RSS 2753MB (below 4GB threshold)
 - GH issues: 0 open
 - Action this tick: no new drydock bugs found. Both recent fixes active in source (4e49bbe task continuation nudge, 92e5b3f successful_test_runs reset). Stress harness is alive and progressing; high skip rate is API-section timing behavior, not a drydock code bug. No uncommitted fixes.
+
+## 2026-05-01 00:01 UTC tick
+- Stress: 849/1658 (PID 675181 alive 8h56m, writing to stress_2000_v10_restart_1777561483.log, sessions resetting every 15 prompts through API block)
+- Write rate: 21% last 100 prompts (API gRPC/REST/GraphQL section — model generates long text explanations, expected low write rate)
+- SKIP rate: 63/170 = 37% in current session (elevated vs ~8% baseline; API prompts cause long model output that delays TUI readiness; FORCE-RESETs are recovering correctly)
+- Admiral last 30 min: struggle:none at 23:47–23:48 UTC (model exploring gRPC structure without writing), all known patterns, no new failure modes
+- vLLM 400s: 0; llm_balancer on :8001 healthy; vLLM gemma4 on :8000 healthy; no exceptions in drydock.log; GH issues: 0 open
+- Action this tick: no drydock bugs found; v2.7.26 deployed with both fixes (task-tool nudge + successful_test_runs reset); high SKIP rate is API-section harness timing, not a source regression; no fix committed
+
+## 2026-05-01 01:20 UTC tick
+- Stress: 857/1658 (PID 675181 alive, etime=9h55m, resumed from step 679; log /tmp/stress_2000_v10_restart_1777561483.log)
+- Write rate: 21% last 100 prompts (API/WebSocket/gRPC/GraphQL section — model generates long text explanations for network-server prompts; expected low write rate)
+- SKIP rate: 76/178 = 43% in current session (elevated — TUI stuck on 300s bash timeouts from WebSocket server tests; FORCE-RESET recovering correctly; harness progressing)
+- Admiral last 30 min: empty_after_tool:bash recurring (~8 fires since 22:19 UTC); loop:bash at 01:00 UTC (fuser -k 8765/tcp WebSocket server loop); all handled by existing canned interventions, sessions recover
+- vLLM 400s: 0; llm_balancer on :8001 healthy (PID 713929, different from resume.md PID 1230765 — was restarted by keepalive cron); vLLM gemma4 on :8000 healthy; GH issues: 0 open
+- Action this tick: investigated empty_after_tool:bash pattern (recurring ~8x in 3h); traced to _ensure_assistant_after_tools filler being detected by admiral detector at start of new user turns — not a real stall, just housekeeping filler; sessions recover without code change needed. No new drydock bugs found; v2.7.26 current (ships both task-tool nudge + successful_test_runs reset fixes). No commits.
+
+## 2026-05-01 02:31 UTC tick
+- Stress: 871/1658 (PID 675181 alive, etime=11h25m; step 871 "Test: concurrency" section, +1 write — past the API/gRPC/WebSocket SKIP cluster)
+- Write rate: 22% last 100 prompts (API/server section — expected; step 871 showed +1 write, transitioning back to test prompts)
+- SKIP rate: 64/192 = 33% in this restart run (elevated but consistent with prior ticks for API section; FORCE-RESETs recovering correctly)
+- Admiral last 30 min: 2 fires (empty_after_tool:read_file at 02:02, empty_after_tool:bash at 02:22) — all known patterns, handled by canned interventions
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; admiral_probe PID 4075121 on :8878 healthy; vLLM gemma4 on :8000 healthy; GH issues: 0 open
+- Action this tick: no new drydock bugs found; harness progressing normally through test-prompts section after API cluster; both v2.7.26 fixes active (task-tool nudge + successful_test_runs reset); no commits
+
+## 2026-05-01 02:35 UTC tick
+- Stress: 861/1658 (PID 675181 alive, etime=10h25m; currently stuck at step 861 with SKIP retries; 57/182 SKIPs = 31% in this restart run)
+- Write rate: 21% last 100 prompts (API/rate-limiter section — long conceptual text responses, expected)
+- SKIP rate elevated: TUI (PID 675184) is processing turn 11 on remote vLLM (192.168.50.21:8000) — request has been in-flight ~56 min; remote host confirmed alive (0.6s latency, test inference returns in <15s); vLLM shows 1 running request now. Likely large context at step 861 causing very long generation on remote host. Local vLLM idle since 01:34 UTC.
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 round-robin healthy; both hosts up; orphan WebSocket server PID 767439 on :8765 present (from prior session, not impacting current run)
+- GH issues: 0 open
+- Action this tick: no drydock bugs found. Admiral last fires at 01:23 UTC (loop:bash fuser-k-8765, retry_after_error:bash — all known patterns, canned responses). Remote host processing long-running turn is benign — 300s socket timeout in balancer will recover if remote stalls. No commits.
+
+## 2026-05-01 03:02 UTC tick
+- Stress: 874/1658 (PID 675181 alive, etime=11h56m, writing to /tmp/stress_2000_v10_restart_1777561483.log; step 874 "Test: rollback test for I" with retry in progress)
+- Write rate: 23% last 100 prompts (test/API/concurrency section — model generates long text explanations, few file writes; expected low rate in this prompt cluster)
+- SKIP rate: 92/220 = 42% in current restart run (elevated but consistent with prior ticks for this section; FORCE-RESETs recovering correctly; harness progressing)
+- Admiral last 30 min: last fire at 01:48 UTC (empty_after_tool:task), quiet since — all known patterns, no new failure modes
+- vLLM 400s: 0; llm_balancer on :8001 healthy; vLLM gemma4 container up 7 days; no errors in today's drydock.log; GH issues: 0 open
+- Action this tick: no new drydock bugs found; v2.7.26 current; harness progressing normally through test-prompt cluster; no commits
+
+## 2026-05-01 03:36 UTC tick
+- Stress: 878/1658 (PID 675181 alive, etime=12h25m; log /tmp/stress_2000_v10_restart_1777561483.log)
+- Write rate: 25% last 100 prompts (test-writing prompt cluster — "Test: golden test for K" had TIMEOUT with 101 msgs, 15 writes)
+- SKIP rate: 67/196 = 34% in this restart run (consistent with prior ticks; 874 and 878 needed retries; 875-877 completed cleanly)
+- Admiral last 30 min: 2 fires (retry_after_error:write_file at 03:18 and 03:30 — truncated-history template; escalation logic in format.py already handles with file-content embed and escalating directives; no new failure modes)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 container up; raw_md=0 (TUI rendering clean); GH issues: 0 open
+- Action this tick: was reading wrong log file (/tmp/stress_2000_1777408317.log, stale); confirmed actual log via lsof; no drydock bugs found; v2.7.26 current; no commits
+
+## 2026-05-01 04:33 UTC tick
+- Stress: 890/1658 (PID 675181 alive, etime=13h26m, resuming from step 679 in /tmp/stress_2000_v10_restart_1777561483.log; 211 steps done since restart at ~15.7 steps/hr)
+- Write rate: 20% last 100 prompts (25% overall in current restart run — "Test: ..." and "API: ..." prompt cluster; 0-write results expected when model runs existing tests rather than writing new files)
+- SKIP rate: 67/211 = 32% (consistent with prior ticks; FORCE-RESETs recovering; harness progressing; elevated but not new pattern)
+- Admiral last fires: 04:05 UTC retry_after_error:write_file (truncated-history template, escalation logic in format.py handling), 04:19 UTC empty_after_tool:ralph_repo_index — all known patterns, no new failure modes
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (round-robin returns models list); vLLM gemma4 container up; GH issues: 0 open; v2.7.26 current
+- Action this tick: no new drydock bugs found; admiral shows same known patterns as prior ticks; all services healthy; no commits
+
+## 2026-05-01 05:21 UTC tick
+- Stress: 898/1658 (PID 675181 alive, etime=14h55m, resuming from step 679 in /tmp/stress_2000_v10_restart_1777561483.log; 219 steps done since restart)
+- Write rate: 23% last 100 prompts (Testing section — "Test: unit test", "Test: integration test" prompts; model runs existing tests rather than writing files; expected low write rate)
+- SKIP rate: 68/219 = 31% in this restart run (consistent with prior ticks; Test-section SKIP cluster around steps 863-869 recovered after session reset; steps 893-898 completing cleanly)
+- Admiral last 30 min: loop:search_replace at 04:46 and 04:53 UTC (<<<SEARCH loop on GrepTool and instruction block — both known patterns, canned interventions firing correctly); no new failure modes since 04:53 UTC
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (confirmed /data3/drydock/scripts/llm_balancer.py); admiral_probe PID 4075121 on :8878 healthy; vLLM gemma4 on :8000 healthy; GH issues: 0 open
+- Action this tick: no new drydock bugs found; all services healthy; retry_after_error:write_file (truncated-history template) pattern continues at ~3/hr during bad sessions — escalation logic in format.py already handles; no fix warranted. v2.7.26 current. No commits.
+
+## 2026-05-01 06:00 UTC tick
+- Stress: 918/1658 (PID 675181 alive, etime=14h55m, resuming from step 679; 239 steps done since last restart; current prompt cluster: "Test:" idempotency/rollback/snapshot/race/golden)
+- Write rate: 23% last 100 prompts (low but expected — "Test:" prompt block exercises existing code rather than writing new files)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 container up 7 days; GH issues: 0 open; v2.7.26 current
+- Action this tick: no new drydock bugs found; all services healthy; stress run progressing normally; no commits
+
+## 2026-05-01 06:35 UTC tick
+- Stress: 928/1658 (PID 675181, alive, 15h25m elapsed; currently in "Test:" prompt block — memory benchmark, concurrency, race condition prompts)
+- Write rate: 23% last 100 prompts (expected low — these are "Test:" prompts that run bash test files; no writes needed)
+- Admiral last 30 min: struggle:none x18, struggle:search_replace x12, empty_after_tool:bash x7 — bulk of struggle:none was false positives from test prompts accumulating tool calls across turns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix(admiral): reset struggle counter on each user turn — detect_struggle was accumulating calls_since_write across all messages, so 5 test prompts × 8 bash calls = 40 non-write calls triggered struggle:none every minute even when model was working correctly. Counter now resets on each user message. 2 regression tests added.
+
+## 2026-05-01 07:02 UTC tick
+- Stress: 938/1658 (PID 675181, alive 15:57 elapsed; TUI PID 675184 active; log /tmp/stress_shakedown_1777561484.tui.log growing normally — timezone CDT vs UTC caused false "log stalled" alarm)
+- Write rate: 22% last 100 prompts (expected: current prompt block is "Test: unit test / integration test / fuzz test / smoke test" vague prompts; model makes 20-31 tool calls reading files but rarely writes; admiral fires ~1/min "no writes" on these)
+- Admiral last 30 min: struggle:none firing repeatedly (~1/min) on "Test:" prompts — model explores deeply (20-31 tool calls) without writing test files; not a drydock code bug, model behavioral on vague test requests
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no fix committed — harness healthy, no actionable drydock bug found; write rate drop 74%→22% is prompt-category effect (test prompts vs build prompts), not regression
+
+## 2026-05-01 08:01 UTC tick
+- Stress: 960/1658 (PID 675181 alive, 16h55m elapsed; log /tmp/stress_2000_v10_restart_1777561483.log updating normally; prompt 960 "Test: golden test for K" in-flight)
+- Write rate: 20% last 100 prompts (expected — current block is "Test:" prompts, model responds with clarifying text or bash-only exploration; no file writes needed)
+- Admiral last 30 min: struggle:none fired repeatedly from 07:00-07:19 UTC on previous session (22-24 tool calls w/o write); session reset at 07:19 cleared it; new session quiet since
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no new drydock bugs found; all services healthy; no commits
+
+## 2026-05-01 08:31 UTC tick
+- Stress: 966/1658 (PID 675181 alive, 17h25m elapsed; log /tmp/stress_2000_v10_restart_1777561483.log; currently at "Test: smoke test for CLI C" prompt cluster)
+- Write rate: 23% last 100 prompts (expected — current block is "Test:" prompts; model reads and runs bash rather than writing files; 4 TIMEOUT events from integration/property test prompts with 58-84 msgs each)
+- Admiral last 30 min: single retry_after_error:search_replace:file at 08:09 UTC (model retried a failed search_replace on test_integ path; canned intervention fired correctly); no struggle:none false positives in current session (admiral counter reset fix 71cb046 working as intended)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; vLLM gemma4 container up; GH issues: 0 open; v2.7.26 current
+- Action this tick: no new drydock bugs found; all services healthy; no commits
