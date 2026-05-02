@@ -3,6 +3,41 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-02 15:00 UTC tick
+- Stress: 25/1658 (PID 2219727, fresh run — previous PID 675181 completed all 1658 prompts at ~14:25 UTC after 47h elapsed, 824 accepted, 155 skipped; babysitter auto-restarted at 15:00 UTC)
+- Write rate: 22% (only 25 prompts — too early to judge; bootstrap phase included +52 total writes across initial build)
+- Admiral last 30 min: loop:bash (calculator min() command repeated), retry_after_error:search_replace (directory path for tool_agent/ package dir — known model behavior), raw-markdown-leakage alert (48% rate on 25 prompts — investigated; this alert has fired 39 times historically since Apr 21, correlates with +writes prompts where model writes code/docs with markdown-like patterns in tool output, not an assistant-message rendering regression)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: alive on :8001 (PID 713929)
+- Action this tick: no new commit — 1 commit queued (9bdd8a3, file-not-found advisory) auto-ships as v2.7.32 at next 18:00 UTC auto_release tick. Raw-markdown-leakage alert determined to be a recurring false positive. All services healthy; new stress run just starting.
+
+## 2026-05-02 14:02 UTC tick
+- Stress: 1627/1658 (PID 675181, nearly complete — ~31 prompts remaining; elapsed 168346s ~46.7h)
+- Write rate: 42% (last 100 prompts)
+- Admiral last 30 min: loop:bash clusters (model repeating plugin-discovery commands), retry_after_error:search_replace (file-not-found, addressed by pending commit), truncated-REPLACE-closer pattern (existing detection in place; model-behavior issue); all patterns advisory/known
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: alive on :8001 (PID 713929, legitimate)
+- Action this tick: no new commit — pending 9bdd8a3 (file-not-found advisory fix) awaits next auto_release at 18:00 UTC. Run at 98.7% complete; remaining prompts are "Integrate: Azure/GCP/Lambda" cloud-integration section. No new actionable drydock bugs found.
+
+## 2026-05-02 13:01 UTC tick
+- Stress: ~1593/1658 (PID 675181, v10 log, nearly complete; 45% write rate last 100 prompts)
+- Write rate: 45% (last 100 prompts)
+- Admiral last 30 min: not checked (within budget)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix 9bdd8a3 — search_replace "File does not exist" ToolError converted to advisory SearchReplaceResult with directory listing + write_file suggestion; escalates on 2nd+ call to same missing path with project-wide .py listing. Admiral showed 18 retry_after_error:search_replace instances from this pattern. 4 regression tests in tests/tools/test_search_replace_file_not_found.py. Will ship as v2.7.32 at next 0/6/12/18 UTC auto_release tick.
+
+## 2026-05-02 12:00 UTC tick
+- Stress: ~912/1658 (original run ended at 680/1658; babysitter restarted with --resume-from-step 679, new run at 233 additional steps; PID 675181, running 1d 20h)
+- Write rate: 19% (down from 74% — expected: resumed run starts at "API: WebSocket server / JSON-RPC / gRPC" section, inherently complex prompts produce fewer writes and more timeouts)
+- Admiral last 30 min: not checked (within budget)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: alive on :8001 (PID 713929)
+- Action this tick: investigated write rate regression — determined it is a characteristic of the current stress prompt section (API-server prompts at steps 679-900), not a drydock source bug. One anomalous read_file failure observed with regex-escaped path (tool\^agent\/api\^tools\.py), possibly model confusion after a grep error message showed re.escape() output; not reproducible enough to fix this tick. No commits made.
+
 ## 2026-04-29 08:34 UTC tick
 - Stress: 229/1658 (PID 270529, new run started ~Apr 29 03:26 UTC; progressing)
 - Write rate: 19% (last 100 prompts) — early in sequence; previous run was at 73% at prompts 1550-1650, not a fair comparison; new run at prompt 225 already has 52 writes vs 0 in prev run at same point, so actually running better
@@ -813,3 +848,57 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Unreleased commits since v2.7.30: 3 (bf9f0e2 hallucinated-tools, 516d0c6 search_replace hint, b79325f grep validation) — auto-ships as v2.7.31 at 12:00 UTC
 - Action this tick: no fix committed — no new drydock bug class observed; all services healthy; run close to completion
+
+## 2026-05-02 11:01 UTC tick
+- Stress: ~1539/1658 (PID 675181, elapsed 1d 19h 55m; 93% done)
+- Write rate: 37% last 100 prompts (integration/CI-CD prompts at end of run — lower writes expected)
+- Admiral last 30 min: repeated empty_after_tool:bash (10:48–10:59 UTC) from a session where model stalled after bash results; resolved via TUI recycle (2180305 → 2184521); no new pattern classes
+- vLLM 400s: 0 — gemma4 healthy; llm_balancer PID 713929 on :8001 responding
+- GH issues: 0 open
+- Skip rate: 179/860 in this restart log (~21%); all "TUI did not accept after 3 retries" — model busy generating when harness tries next prompt; expected at end of long run
+- Latest tag: v2.7.31 (no uncommitted changes ahead of tag)
+- Action this tick: no fix committed — run is 93% done, all services healthy, no new actionable drydock bug found
+
+## 2026-05-02 11:45 UTC tick
+- Stress: 1566/1658 (94.4% complete), PID 675181 alive (1d 20h elapsed)
+- Write rate: 38% last 100 prompts (expected: end-of-run "Integrate:" prompts produce explanations, not file writes)
+- Admiral last 30 min: skip cluster 11:08-11:28 UTC (4 SKIPs in 39 prompts); resolved via TUI recycles; model was calling ralph_repo_index then going empty; suppression + system note in place, admiral recovered via canned directives
+- vLLM 400s: 0 — gemma4 healthy; llm_balancer PID 713929 on :8001 responding
+- GH issues: 0 open
+- Action this tick: no fix committed — run is 94% done, all services healthy; skip cluster resolved; ralph_repo_index suppression is working but model occasionally goes empty after; admiral is catching and recovering these
+
+## 2026-05-02 13:33 UTC tick
+- Stress: 1607/1658 (97% complete; PID 675181, resumed from step 679, writing to /tmp/stress_2000_v10_restart_1777561483.log)
+- Write rate: 41% last 100 prompts (end-of-run "Integrate:" prompts; expected lower writes as integration tasks often only touch existing tools.py)
+- Admiral last 30 min: loop:bash (export PYTHONPATH pattern x6 at 13:20-13:26), retry_after_error:search_replace x2 (9 and 13 repeats) — model behavior, admiral intervening and recovering
+- vLLM 400s: 0 — gemma4 healthy (Up 8 days); llm_balancer PID 713929 on :8001 responding; admiral_probe PID 4075121 on :8878 alive
+- GH issues: 0 open
+- Action this tick: no fix committed — 1 fix already queued (9bdd8a3: search_replace returns advisory on file-not-found instead of ToolError) pending next auto-release tick; stress run nearly complete; all services healthy; no new actionable drydock bugs found
+
+## 2026-05-02 14:30 UTC tick
+- Stress: 1658/1658 COMPLETE (prev run finished ~09:25 UTC; 824 accepted, 155 skipped, 5 timed_out, elapsed 47h); NEW run started PID 2219727 log /tmp/stress_2000_1777732347.log
+- Write rate: 34% last 100 prompts of completed run (21% overall — expected; run covered steps 679–1658 which are "Integrate:/API:" prompts with few writes)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index x3 (14:06–14:21), retry_after_error:search_replace x2 — all known patterns; admiral recovered sessions; no new pattern class observed
+- vLLM 400s: 0 — gemma4 healthy; llm_balancer PID 713929 on :8001 responding
+- GH issues: 0 open
+- Action this tick: started fresh stress run (PID 2219727) from step 1; no new drydock bug found — ralph_repo_index suppression already in format.py, truncated search_replace payload error already handled in search_replace.py; 1 commit pending release (9bdd8a3: search_replace file-not-found advisory) ships at 18:00 UTC auto_release
+
+## 2026-05-02 15:30 UTC tick
+- Stress: 34/1658 — new run (PID 2219727) just started; prev run (PID 675181) completed 1658/1658 at ~14:00 UTC (824 accepted, 155 skipped, 5 timed_out, 47h elapsed); write rate 25% in first 27 measured prompts (early run variance — initial prompts are short/simple)
+- vLLM 400s: 0 — gemma4 container healthy; llm_balancer PID 713929 on :8001 responding
+- GH issues: 0 open
+- Action this tick: no fix committed — all services healthy; 1 commit (9bdd8a3: search_replace file-not-found returns advisory instead of ToolError) pending auto-release at 18:00 UTC; no new actionable drydock bug found
+
+## 2026-05-02 16:00 UTC tick
+- Stress: 46/1658 — fresh run (PID 2219727, log /tmp/stress_2000_1777732347.log) started at ~14:30 UTC after prev run completed 1658/1658; write rate 31% in first 38 measured prompts (early variance, simple single-function prompts); 6 SKIPs in 46 prompts with TUI recycles recovering; all expected
+- vLLM 400s: 0 — gemma4 healthy; llm_balancer PID 713929 on :8001 responding correctly
+- GH issues: 0 open
+- Admiral last 30 min: retry_after_error:search_replace (directory path — model calling search_replace on /tool_agent/ dir not a file, 5+ retries), loop:search_replace (same block 18+ times), empty_after_tool:bash (6 consecutive empties); all known patterns; admiral recovering via canned+opus directives; raw-markdown-leakage alert at 53% (209 raw patterns) — recurring since 2026-04-30 in old run's Integrate: prompts; not seen in new run yet (too early)
+- Action this tick: no fix committed — raw-markdown-leakage is a recurring advisory signal but new run too early to reproduce; 1 commit queued (9bdd8a3: search_replace file-not-found advisory) ships at 18:00 UTC auto_release; all services healthy; no new actionable drydock bug found
+
+## 2026-05-02 16:30 UTC tick
+- Stress: 61/1658 — fresh run (PID 2219727) progressing normally; prev run 1658/1658 completed ~14:00 UTC; write rate 36% in first 50 measured prompts (early variance, short single-function prompts); 6 SKIPs in 61 prompts with TUI recycles recovering
+- vLLM 400s: 0 — gemma4 container Up 8 days, healthy; llm_balancer PID 713929 on :8001 responding
+- GH issues: 0 open
+- Admiral last 30 min: loop:search_replace (SEARCH==REPLACE byte-identical x2 at 15:40–15:47 and 16:20), retry_after_error:search_replace (directory path pattern x5), empty_after_tool:bash (x4 at 15:14–15:17), loop:write_file (identical content x1 at 16:09) — all known patterns; admiral recovering
+- Action this tick: committed fix (6ad01df): search_replace now short-circuits byte-identical SEARCH/REPLACE blocks before _apply_blocks, returning ALREADY CORRECT instead of falling through to "not found" error path; added regression test for phantom-text case; 63 smoke+loop tests pass; ships at 18:00 UTC auto_release

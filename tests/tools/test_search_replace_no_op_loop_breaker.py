@@ -114,6 +114,33 @@ async def test_noop_edit_does_not_write_file(tool, py_file, ctx):
 
 
 @pytest.mark.asyncio
+async def test_noop_edit_text_not_in_file_returns_already_correct(tool, py_file, ctx):
+    """When SEARCH == REPLACE and the text is NOT in the file, return ALREADY CORRECT early.
+
+    Previously this would fall through to the 'search text not found' error path,
+    causing the model to loop. With the early short-circuit, it returns ALREADY CORRECT
+    regardless of whether the search text exists in the file.
+    """
+    ctx.read_file_state[str(py_file)] = {
+        "content": py_file.read_text(),
+        "timestamp": py_file.stat().st_mtime_ns,
+        "offset": 0,
+        "limit": None,
+    }
+    phantom_text = "    this_text_is_not_in_the_file = True"
+    content = f"<<<<<<< SEARCH\n{phantom_text}\n=======\n{phantom_text}\n>>>>>>> REPLACE\n"
+    args = SearchReplaceArgs(file_path=str(py_file), content=content)
+
+    result = await _run_to_result(tool, args, ctx)
+
+    assert isinstance(result, SearchReplaceResult)
+    assert "ALREADY CORRECT" in result.content, (
+        f"Expected ALREADY CORRECT advisory for byte-identical no-op, got: {result.content!r}"
+    )
+    assert result.lines_changed == 0
+
+
+@pytest.mark.asyncio
 async def test_real_edit_still_works(tool, py_file, ctx):
     """A genuine edit still succeeds and produces a non-zero lines_changed or new content."""
     original = py_file.read_text()

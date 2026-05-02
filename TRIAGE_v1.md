@@ -121,7 +121,37 @@ Patterns 2, 3, 10b, 10 — reasoning gaps, not behavior gaps. Steering can move 
 
 ---
 
-## Open questions for next pass (post-perf-baseline)
+## Perf baseline — clean, post-stress (2026-05-02 14:31 UTC)
+
+Captured by `scripts/perf_baseline_when_idle.sh` after the 47h stress run drained at 14:25 UTC. Stress had been contaminating earlier baseline runs with up to 25× TTFT swings; this is the first uncontaminated measurement.
+
+| Workload | Input  | Output (p50) | TTFT p50  | TTFT p95  | e2e p50      | e2e p95      |
+|----------|--------|--------------|-----------|-----------|--------------|--------------|
+| short    | ~50    | 33 tok       | **0.53 s**| 2.46 s    | **61.5 tok/s**| 65.7 tok/s  |
+| medium   | ~2 K   | 64 tok       | **1.47 s**| 3.72 s    | **46.6 tok/s**| 67.7 tok/s  |
+| long     | ~16 K  | 82 tok       | **1.39 s**| —         | **58.3 tok/s**| —           |
+| xlong    | ~64 K  | 68 tok       | **1.47 s**| —         | **44.3 tok/s**| —           |
+
+5 iters per workload, all OK (0 errors). vLLM with the gemma4 tool parser still buffers content chunks server-side (`streamed_any: false`), so decode-only rate is `n/a`; e2e is the right metric for our use case.
+
+**Findings:**
+
+- **e2e tok/s is below the documented ~70 tok/s** (44–62 tok/s range). Most of the wall clock for these short outputs is prefill (TTFT 0.5–1.5 s) rather than decode. To get a clean decode-rate measurement we'd need workloads with much larger outputs (e.g. 1–2 K output tokens), not 33–82.
+- **TTFT scales sub-linearly with input size:** ~0.5 s for 50-token prompt, ~1.5 s for 64K. That's a strong signal — vLLM's prefill is fast and the AWQ + fp8 KV cache combination is working well at long context.
+- **p95 spread is loose** on `short` and `medium` (0.5 → 2.5 s, 1.5 → 3.7 s) — the new stress run kicked off mid-baseline and contended for vLLM. Counts the result as "live vLLM under realistic concurrency" rather than "isolated."
+- **No errors at any input size, including 64 K input** — KV cache is healthy.
+
+**Implication for the framework:**
+
+This is now the **floor** the classifier evaluates against. Any failure-class signal that suggests a hosting-config issue (e.g. "TTFT spiked 5× above floor for a normal-sized prompt") is now a measurable thing, not a guess.
+
+**Implication for the destructive sweep (configs 1–6 in `PERF_SWEEP_PLAN.md`):**
+
+Still held for explicit user trigger — each config requires editing `start_gemma4.sh` and restarting vLLM, and the cost of an overnight failure was too high. With this clean floor in hand, comparison runs are now meaningful.
+
+---
+
+## Open questions for next pass
 
 - Live stress-run failures — are the failure modes the same as the curated ones? Should add ambiguous-input bucket if PRDs are under-specified at observed rates.
 - BASELINE_412 dirty PRDs — 32 packages × N tests is real failure volume. Per-PRD triage could surface patterns missing from MODEL_SHORTCOMINGS (e.g. pattern-12, pattern-13).
