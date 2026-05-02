@@ -505,16 +505,24 @@ class Bash(
                 return
 
             encoding = _get_subprocess_encoding()
-            stdout = (
-                stdout_bytes.decode(encoding, errors="replace")[:max_bytes]
-                if stdout_bytes
-                else ""
-            )
-            stderr = (
-                stderr_bytes.decode(encoding, errors="replace")[:max_bytes]
-                if stderr_bytes
-                else ""
-            )
+            stdout_raw = stdout_bytes.decode(encoding, errors="replace") if stdout_bytes else ""
+            stderr_raw = stderr_bytes.decode(encoding, errors="replace") if stderr_bytes else ""
+            if len(stdout_raw) > max_bytes:
+                stdout = stdout_raw[:max_bytes] + (
+                    f"\n[OUTPUT TRUNCATED: stdout exceeded {max_bytes} bytes. "
+                    "Use 'grep -l' to list matching files only, narrow your "
+                    "pattern, or pipe through 'head -50' to limit output. "
+                    "Do NOT re-run the same command — the result will be "
+                    "identical.]"
+                )
+            else:
+                stdout = stdout_raw
+            if len(stderr_raw) > max_bytes:
+                stderr = stderr_raw[:max_bytes] + (
+                    f"\n[STDERR TRUNCATED: exceeded {max_bytes} bytes]"
+                )
+            else:
+                stderr = stderr_raw
 
             returncode = proc.returncode or 0
 

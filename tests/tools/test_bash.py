@@ -94,9 +94,20 @@ async def test_truncates_output_to_max_bytes(bash):
         bash_tool.run(BashArgs(command="printf 'abcdefghij'"))
     )
 
-    assert result.stdout == "abcde"
+    assert result.stdout.startswith("abcde")
+    assert "[OUTPUT TRUNCATED" in result.stdout
+    assert "Do NOT re-run" in result.stdout
     assert result.stderr == ""
     assert result.returncode == 0
+
+
+@pytest.mark.asyncio
+async def test_truncation_notice_absent_when_output_fits(bash):
+    # No truncation notice when output is within max_output_bytes.
+    result = await collect_result(bash.run(BashArgs(command="printf 'short'")))
+
+    assert result.stdout == "short"
+    assert "[OUTPUT TRUNCATED" not in result.stdout
 
 
 @pytest.mark.asyncio

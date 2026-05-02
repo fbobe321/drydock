@@ -98,25 +98,28 @@ class ReadFile(
         # pointing to the earlier tool_result. Saves context + kills the
         # "re-read 50x for no reason" pattern. Also preserves Read-before-
         # Write because the stub still counts as having read the file.
+        #
+        # Per-slot dedup: track ALL (offset, limit) combinations independently.
+        # The old single-slot approach allowed alternating offsets to bypass
+        # dedup (read offset=0, read offset=50, read offset=0 again — the
+        # offset=50 read evicted the offset=0 cache entry each time).
         read_state = ctx.read_file_state if ctx else None
         path_key = str(file_path)
         try:
             current_mtime = file_path.stat().st_mtime_ns
         except OSError:
             current_mtime = 0
-        prior = read_state.get(path_key) if read_state is not None else None
-        if (
-            prior is not None
-            and prior.get("timestamp") == current_mtime
-            and prior.get("offset") == args.offset
-            and prior.get("limit") == args.limit
-        ):
+        slot_key = (args.offset, args.limit)
+        existing_entry = read_state.get(path_key, {}) if read_state is not None else {}
+        slots: dict = existing_entry.get("_slots", {})
+        prior_slot = slots.get(slot_key)
+        if prior_slot is not None and prior_slot.get("timestamp") == current_mtime:
             # Re-embed the cached content so the model has it even if the
             # earlier tool_result was truncated by _truncate_old_tool_results.
             # Pointing at a stale/truncated prior result causes re-read loops.
-            cached_content = prior.get("content", "")
-            prior_lines = prior.get("lines_read", 0)
-            dedup_count = prior.get("dedup_count", 0)
+            cached_content = prior_slot.get("content", "")
+            prior_lines = prior_slot.get("lines_read", 0)
+            dedup_count = prior_slot.get("dedup_count", 0)
             if dedup_count == 0:
                 header = "[Unchanged since last read — content re-embedded]\n"
             else:
@@ -128,12 +131,13 @@ class ReadFile(
                     f"or move on to the next task.]\n"
                 )
             if read_state is not None:
-                read_state[path_key] = {**prior, "dedup_count": dedup_count + 1}
+                slots[slot_key] = {**prior_slot, "dedup_count": dedup_count + 1}
+                read_state[path_key] = {**existing_entry, "_slots": slots}
             yield ReadFileResult(
                 path=path_key,
                 content=f"{header}{cached_content}",
                 lines_read=prior_lines,
-                was_truncated=prior.get("was_truncated", False),
+                was_truncated=prior_slot.get("was_truncated", False),
             )
             return
 
@@ -155,7 +159,18 @@ class ReadFile(
 
         # Record read state so Write/Edit can enforce Read-before-Write
         # and so future re-reads can dedup against this one.
+        # Top-level entry (backward-compat: write_file/search_replace check
+        # read_state.get(path_key) is not None).  Per-slot entry enables
+        # independent dedup for every (offset, limit) combination so that
+        # alternating offsets can't bypass dedup.
         if read_state is not None:
+            slots[slot_key] = {
+                "content": content,
+                "timestamp": current_mtime,
+                "lines_read": len(read_result.lines),
+                "was_truncated": read_result.was_truncated,
+                "dedup_count": 0,
+            }
             read_state[path_key] = {
                 "content": content,
                 "timestamp": current_mtime,
@@ -163,6 +178,7 @@ class ReadFile(
                 "limit": args.limit,
                 "lines_read": len(read_result.lines),
                 "was_truncated": read_result.was_truncated,
+                "_slots": slots,
             }
 
         yield ReadFileResult(

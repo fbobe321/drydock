@@ -97,18 +97,21 @@ async def test_dedup_escalates_on_repeated_reads(tmp_path):
     r2 = await _run_result(tool, args, ctx)
     assert "re-embedded" in r2.content
     assert "REPEATED READ" not in r2.content
-    assert read_state[str(f)]["dedup_count"] == 1
+    slot = read_state[str(f)]["_slots"][(args.offset, args.limit)]
+    assert slot["dedup_count"] == 1
 
     # Third read: second dedup hit — escalated advisory.
     r3 = await _run_result(tool, args, ctx)
     assert "REPEATED READ #2" in r3.content
     assert "def main" in r3.content
-    assert read_state[str(f)]["dedup_count"] == 2
+    slot = read_state[str(f)]["_slots"][(args.offset, args.limit)]
+    assert slot["dedup_count"] == 2
 
     # Fourth read: third dedup hit — counter increments.
     r4 = await _run_result(tool, args, ctx)
     assert "REPEATED READ #3" in r4.content
-    assert read_state[str(f)]["dedup_count"] == 3
+    slot = read_state[str(f)]["_slots"][(args.offset, args.limit)]
+    assert slot["dedup_count"] == 3
 
 
 @pytest.mark.asyncio

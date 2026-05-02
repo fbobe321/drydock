@@ -2,7 +2,7 @@
 
 # Project Name: **Drydock Sovereign AI Stack v2**
 
-### Local Adaptive AI System — Gemma 4 26B + Drydock + GraphRAG (roadmap) + Deep Noir (roadmap)
+### Local Adaptive AI System — Gemma 4 26B + Drydock + GraphRAG + Deep Noir (parallel v2 modules)
 
 ---
 
@@ -19,7 +19,7 @@ Drydock has already committed to or measured, the draft loses. Specifically:
 |                                              |                                                    | escalate temp to ~1.0 deliberately as a loop-break lever (`agent_loop.py:2032`).                             |
 | KV cache `q8_0`                              | `--kv-cache-dtype fp8`                             | vLLM-native equivalent. Different ecosystem (vLLM vs. llama.cpp).                                            |
 | Tier 3: Jetson AGX Orin as supported         | **Explicitly out of scope for v2**                 | Per operator rule — Jetson is not to be modified or treated as a deployment target this cycle.               |
-| GraphRAG / Deep Noir / full Evaluator        | **Roadmap**, not "current components"              | We have Admiral, stress harness, MetaHarness, autonomous\_review. GraphRAG and Deep Noir are real future work. |
+| GraphRAG / Deep Noir as faith-based "current" | **First-class roadmap modules**, both ship          | They are deployable v2 capabilities, not contingent on classifier verdict. Classifier sequences engineering attention; it doesn't gate module existence. |
 | Cloud-assisted proposer (anywhere)           | **Local-only proposer**                            | Air-gap is the product pitch; cloud proposer contradicts the brand.                                          |
 
 ---
@@ -38,13 +38,35 @@ The system pairs:
 - **vLLM** — production-grade inference server (Docker, tensor-parallel)
 - **Drydock harness** — orchestration, tool use, loop detection, Admiral
   observer, MetaHarness self-improvement
-- **GraphRAG memory** — *roadmap, Phase 2*
-- **Deep Noir activation steering** — *roadmap, Phase 4 — leverages the
-  operator's own research*
-- **Evaluator loop** — already partially shipped (Admiral + stress + autonomous
-  review); deepens in Phase 3
+- **GraphRAG memory** — first-class deployable module; persistent context for
+  customer corpora (PDFs, code, manuals, tickets). Roadmap: Phase 2 first cut,
+  hardened in Phase 3.
+- **Deep Noir activation steering** — first-class deployable module; behavior
+  shaping via activation vectors derived from the operator's own research.
+  Roadmap: Phase 3 first cut, deepened in Phase 4.
+- **Evaluator + classifier loop** — already partially shipped (Admiral + stress
+  + autonomous review). The classifier (added in Phase 2) sequences which
+  module gets engineering attention next; it does **not** gate whether a module
+  ships.
 
 Category claim: **AI that improves after installation.**
+
+### Module posture (read this before reading the rest)
+
+Two questions are kept separate throughout this PRD:
+
+1. **What ships as a deployable customer module?**
+   *All three:* harness, GraphRAG, Deep Noir. Defense-adjacent and regulated
+   customers ask for these by name; the answer is "yes, here's the module."
+2. **Where does engineering attention go next?**
+   *Classifier-driven.* The Phase 2 classifier tags each failure as
+   harness-class / steering-class / retrieval-class / model-prior /
+   ambiguous-input and feeds a prioritized backlog. The classifier sequences
+   our work; it does **not** decide whether a module exists.
+
+The product is the **living loop** that ties these together: failures get
+classified, the right module gets the fix, the customer's deployment quietly
+improves over time.
 
 ---
 
@@ -122,11 +144,11 @@ Drydock Sovereign solves both.
    └──────────────────┘  └─────────────────┘    └──────────────────────┘
                                   │
                          ┌────────▼───────────┐
-                         │  GraphRAG (Phase 2)│  ← persistent memory
+                         │  GraphRAG (Phase 2)│  ← persistent memory module
                          └────────┬───────────┘
                                   │
                          ┌────────▼───────────┐
-                         │ Deep Noir (Phase 4)│  ← activation steering
+                         │ Deep Noir (Phase 3)│  ← activation steering module
                          └────────────────────┘
 ```
 
@@ -237,12 +259,18 @@ The control plane. Already shipped (v2 TUI + v3 clean rewrite).
 - **Read-before-write enforcement** — block / warn when a tool call would
   modify a file the agent never read in this session. Directly addresses the
   "model leans on internal priors instead of retrieval" failure mode (see §10).
-- Pluggable retriever interface for GraphRAG (Phase 2)
-- Steering hook for Deep Noir vectors (Phase 4)
+- Pluggable **retriever interface** for GraphRAG (Phase 2 — module ships then)
+- **Steering hook** for Deep Noir vectors (Phase 3 — module ships then)
+- Failure-class **classifier** signal consumer (routes incoming
+  classifier output to harness / GraphRAG / Deep Noir dispatchers)
 
-## 5.4 GraphRAG Memory Layer (Phase 2)
+## 5.4 GraphRAG Memory Layer — Phase 2 first cut, hardened in Phase 3
 
-Persistent organisational memory — **not yet implemented.**
+**Status:** first-class deployable module. Not yet implemented; ships as a
+parallel v2 deliverable alongside Deep Noir.
+
+Persistent organisational memory. Customers turn it on by pointing it at their
+corpus; it ingests, indexes, and serves grounded retrieval to Drydock.
 
 Sources: PDFs, Office docs, spreadsheets, markdown vaults, source code,
 ticketing exports, manuals, research papers.
@@ -250,8 +278,21 @@ ticketing exports, manuals, research papers.
 Pipeline:
 
 ```text
-ingest → parse → chunk → embed → vector index → graph links → reranker
+ingest → parse → chunk → embed → vector index → graph links → reranker → citation
 ```
+
+Drydock-side integration:
+
+- Pluggable retriever interface in the harness (so vector-only and
+  graph-augmented retrievers swap cleanly)
+- Source-priority prompt templates (retrieved evidence pinned above prior)
+- Mandatory citation in RAG flows; evaluator verifies citations resolve to
+  retrieved chunks
+- Read-before-write enforcement (§5.3) makes retrievals actually get used,
+  not bypassed in favor of the model's prior
+
+Local-only. No hosted vector DB. Embedding model and reranker run on the same
+host as vLLM.
 
 Used when:
 
@@ -261,17 +302,37 @@ Used when:
 
 Operational requirement (per §10): retrieval must beat the model's prior.
 
-## 5.5 Deep Noir Layer (Phase 4)
+## 5.5 Deep Noir Activation Steering — Phase 3 first cut, deepened in Phase 4
+
+**Status:** first-class deployable module. Ships as a parallel v2 deliverable
+alongside GraphRAG.
 
 Activation-steering vectors derived from the operator's own Deep Noir research
-(see project memory). Targeted use cases:
+(see project memory). Customers select preset modes per session or per
+deployment; Drydock applies the chosen vector via vLLM's logit/activation
+hooks (or a sidecar if vLLM upstream support lags).
 
-- Reduced hallucinations (suppress "make stuff up" directions)
-- Secure-coding mode (suppress eval/exec/shell-injection prone outputs)
-- Citation mode (boost "quote source" directions in RAG flows)
-- Legal-precision / analyst / domain-bias presets
+Targeted use cases:
 
-Local-only. No hosted steering service.
+- **Reduced-hallucination mode** — suppress "make stuff up" directions; pairs
+  well with GraphRAG citation enforcement
+- **Secure-coding mode** — suppress eval/exec/shell-injection-prone outputs
+- **Citation mode** — boost "quote source" directions in RAG flows
+- **Legal-precision / analyst / domain-bias presets** — opinionated stacks
+  for verticals
+
+Drydock-side integration:
+
+- Steering hook in the harness so the active vector is applied per request
+- Per-failure-class routing: if the classifier tags a failure as
+  steering-class, Drydock surfaces "try mode X" to the user / queues a vector
+  refinement candidate
+- Sandbox eval suite: each new vector is regression-tested against a category
+  benchmark before promotion
+
+Local-only. No hosted steering service. Vectors ship with the deployment;
+retraining / refinement runs on customer hardware (per local-only-proposer
+rule).
 
 ## 5.6 Evaluator Layer
 
@@ -313,7 +374,7 @@ If no tool available:
 
 If behavior poor on a category (e.g., language interpreters):
    → surface worked example in stuck mode (already wired for tree-walking interpreter)
-   → Phase 4: apply Deep Noir vector
+   → Phase 3+: apply Deep Noir vector for that category
 
 If repeated reasoning failures across sessions:
    → recommend LoRA candidate (data captured by execution trace logging)
@@ -413,36 +474,51 @@ mitigates several of the failure classes already in `MODEL_SHORTCOMINGS.md`.
 
 # 11. Roadmap
 
-### Phase 1 — 30 days (Foundation, mostly done)
+### Phase 1 — 30 days (Foundation + perf floor)
 
 - ✅ Gemma 4 local hosting (vLLM Docker)
 - ✅ Drydock harness (v2 TUI + v3 rewrite)
 - ✅ Coding workflows + 370-PRD benchmark
 - ✅ Admiral, stress harness, autonomous review
-- ▢ **Read-before-write enforcement** (this PRD's first new build)
+- ▢ **Hosting performance sweep** — lock the inference floor (`PERF_SWEEP_PLAN.md`)
+- ▢ **Manual failure triage** — seed the classifier taxonomy from existing
+  diagnostic data (`MODEL_SHORTCOMINGS.md`, `BASELINE_412.md`, Admiral logs)
+- ▢ **Read-before-write enforcement** in the harness
 - ▢ Customer-hardware portability bring-up (llama.cpp + Ollama backends)
 
-### Phase 2 — 60 days (Memory)
+### Phase 2 — 60 days (Classifier + GraphRAG first cut)
 
-- ▢ GraphRAG ingestion pipeline (PDFs, code, markdown)
-- ▢ Pluggable retriever interface in Drydock
+- ▢ **Failure classifier** — extends Admiral / runs as a sibling; emits
+  structured signals tagged harness-class / retrieval-class / steering-class /
+  model-prior / ambiguous-input
+- ▢ **GraphRAG ingestion pipeline** (PDFs, code, markdown) — first cut, ships
+  as a deployable module
+- ▢ **Pluggable retriever interface** in Drydock (vector + graph backends)
 - ▢ Memory routing (when to retrieve, when not to)
-- ▢ Citation-mode prompt templates
-- ▢ Operator dashboards
+- ▢ Citation-mode prompt templates + grounding eval
+- ▢ Operator dashboards (per-class failure rates over time)
 
-### Phase 3 — 90 days (Self-Improvement)
+### Phase 3 — 90 days (Deep Noir first cut + self-improvement)
 
-- ▢ Per-task evaluator with classifier (memory / retrieval / tool / steering / tune)
+- ▢ **Deep Noir steering** — first cut, ships as a deployable module;
+  initial vectors for reduced-hallucination, secure-coding, citation modes
+- ▢ Steering hook in the harness; sandbox eval per new vector
+- ▢ Classifier-driven dispatch: harness-class signals open auto-PRs to
+  drydock; retrieval-class signals queue corpus gaps; steering-class signals
+  queue vector candidates
 - ▢ Execution trace logging (full prompts + tool calls per task)
-- ▢ Anti-loop signal feedback into proposer
-- ▢ Autonomous upgrade loop (local-only proposer)
+- ▢ Autonomous upgrade loop (**local-only** proposer)
 - ▢ First paid pilot ($5–25K, defense-adjacent)
 
-### Phase 4 — 120 days (Steering)
+### Phase 4 — 120 days (Hardening + verticals)
 
-- ▢ Deep Noir vector pipeline
-- ▢ Domain modules (secure-coding, legal-precision, analyst, citation)
+- ▢ Deep Noir vector deepening — additional vectors driven by classifier
+  evidence (legal-precision, analyst, per-vertical bias presets)
+- ▢ GraphRAG hardening — graph-augmented retrieval, hybrid reranker,
+  ingestion freshness signals
+- ▢ Domain bundles per vertical (secure-coding, legal-precision, analyst)
 - ▢ Measured improvements on per-domain benchmarks
+- ▢ Appliance image (factory-trusted, signed updates, audit logs)
 
 ---
 
