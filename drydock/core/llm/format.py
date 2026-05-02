@@ -353,6 +353,9 @@ class APIToolFormatHandler:
             # mini_db fresh build (called ralph_repo_index 5 times).
             "ralph_repo_index", "repo_index", "index_repo",
             "list_mcp_resources", "list_resources", "search_resources",
+            # Observed in stress run 2026-05-02: model hallucinates ralph_file_summary
+            # after receiving tool results, causing empty_after_tool stalls.
+            "ralph_file_summary", "file_summary", "repo_summary",
         }
 
         suppressed_failures = []

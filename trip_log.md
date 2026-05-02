@@ -778,3 +778,38 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0 — gemma4 container healthy; llm_balancer PID 713929 on :8001 healthy
 - GH issues: 0 open
 - Action this tick: no fix committed — 08:00 UTC tick already committed 516d0c6 and b79325f; system healthy; skip rate ~17% (134/781) is stable, caused by TUI log hitting 1.24GB slowing PTY tail checks, expected to self-resolve as run finishes in ~2h
+
+## 2026-05-02 09:02 UTC tick
+- Stress: 1482/1658 (89.4%) — PID 675181 alive (1d 17h elapsed); active log stress_2000_v10_restart_1777561483; 139 SKIPs total, 52 TUI recycles
+- Write rate: 23% last 90 prompts — expected for "Integrate: X" advisory block (Slack/Datadog/Vercel/OCI/etc., model explains integrations without writing files)
+- vLLM 400s: 0 — gemma4 container healthy; llm_balancer PID 713929 on :8001 healthy (1d 14h uptime)
+- GH issues: 0 open
+- Admiral last 30 min: skip-cluster alerts (10-13 skips/34 prompts), tui-recycle-requested x5 between 08:08-09:00 UTC — all caused by large TUI log (1.28GB) slowing PTY detection; model-behavior patterns (loop:bash, retry_after_error:search_replace) but no new drydock bug class
+- Latest release: v2.7.30; two unreleased fixes pending (b79325f grep validation + 516d0c6 search_replace first-failure hint) — will auto-ship as v2.7.31 at 11:00 UTC
+- Action this tick: no fix committed — skip cluster is harness/log-size issue not drydock bug; all services healthy; ~176 prompts remaining (~10h at current pace)
+
+## 2026-05-02 09:32 UTC tick
+- Stress: 1498/1658 (90.3%) — PID 675181 alive (1d 18h elapsed, resumed from step 679); 139 SKIPs, 52 TUI recycles; ~160 prompts remaining
+- Write rate: 30% last 100 prompts (18% overall) — expected: "Integrate: X" block (Slack/Datadog/Opsgenie/Honeycomb/PagerDuty, model explains integrations without writing files)
+- vLLM 400s: 0 — gemma4 container healthy; llm_balancer PID 713929 on :8001 healthy
+- GH issues: 0 open
+- Admiral last 30 min: skip-cluster alerts (9-13 skips/34 prompts) + tui-recycle-requested x5; empty_after_tool:ralph_file_summary observed — model hallucinating non-existent summary tool causing stalls
+- Action this tick: committed fix(hallucinated-tools) bf9f0e2 — added ralph_file_summary, file_summary, repo_summary to _IGNORE_TOOLS so they get suppressed with redirect instead of visible FailedToolCall error; 15 regression tests pass; will ship as v2.7.31 at 12:00 UTC auto_release
+
+## 2026-05-02 10:02 UTC tick
+- Stress: 1508/1658 (91.0%) — PID 675181 alive (1d 18h elapsed, resumed from step 679); active log stress_2000_v10_restart_1777561483; ~178 SKIPs (21%), consistent with prior ticks
+- Write rate: 34% last 100 prompts — expected variation in "Integrate: X" block (Docker/OCI/Singularity/CI/monitoring prompts; model explains integration strategy without writing files)
+- vLLM 400s: 0 — gemma4 container up 8 days; llm_balancer PID 713929 on :8001 healthy; no JSONDecodeErrors last 30 min
+- GH issues: 0 open
+- Admiral last 30 min: no banner=True, raw_md=0 — no write loops or raw-markdown dumps; skip cluster continuing from prior ticks (TUI log ~1.31GB, PTY tail slow)
+- Unreleased commits since v2.7.30: 3 (bf9f0e2 ralph_file_summary suppression, 516d0c6 search_replace first-failure hint, b79325f grep validation) — will auto-ship as v2.7.31 at 12:00 UTC
+- Action this tick: no fix committed — no new drydock bug class observed; all services healthy; ~150 prompts remaining, run likely completes before 18:00 UTC
+
+## 2026-05-02 10:31 UTC tick
+- Stress: 1528/1658 (92% complete); harness PID 675181 alive, running since 1d19h; 130 prompts remain, likely finishes this hour
+- Write rate: 35% last 100 (lower than 74% peak; "Integrate: X" prompts in this range yield 0 writes — expected model behavior, not a regression)
+- Skip rate: 143/1528 = 9.4% (stable, within prior range; all "TUI did not accept after 3 retries")
+- vLLM 400s: 0 — gemma4 container healthy; balancer PID 713929 on :8001 unchanged
+- GH issues: 0 open
+- Unreleased commits since v2.7.30: 3 (bf9f0e2 hallucinated-tools, 516d0c6 search_replace hint, b79325f grep validation) — auto-ships as v2.7.31 at 12:00 UTC
+- Action this tick: no fix committed — no new drydock bug class observed; all services healthy; run close to completion

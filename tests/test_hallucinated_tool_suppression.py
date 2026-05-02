@@ -42,6 +42,9 @@ HALLUCINATED_TOOLS = [
     "list_mcp_resources",
     "list_resources",
     "search_resources",
+    "ralph_file_summary",
+    "file_summary",
+    "repo_summary",
 ]
 
 
