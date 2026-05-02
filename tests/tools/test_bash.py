@@ -86,6 +86,26 @@ async def test_timeout_escalates_on_repeat(bash):
 
 
 @pytest.mark.asyncio
+async def test_heredoc_write_loop_gives_targeted_hint(bash, tmp_path, monkeypatch):
+    """Repeated cat<<EOF>file loops get a targeted 'read and fix with write_file'
+    hint instead of the generic 'EDIT SOURCE CODE' message."""
+    monkeypatch.chdir(tmp_path)
+    cmd = "cat << 'EOF' > mymodule.py\nimport os\nEOF"
+    # Run 3x to trigger the loop-breaker
+    r1 = await collect_result(bash.run(BashArgs(command=cmd)))
+    assert "NOTICE" not in r1.stdout
+    r2 = await collect_result(bash.run(BashArgs(command=cmd)))
+    assert "NOTICE" not in r2.stdout
+    r3 = await collect_result(bash.run(BashArgs(command=cmd)))
+    # 3rd call triggers the loop-breaker
+    assert "NOTICE" in r3.stdout
+    # Must mention read_file / write_file — not the generic "EDIT SOURCE CODE"
+    assert "read_file" in r3.stdout
+    assert "write_file" in r3.stdout
+    assert "EDIT SOURCE CODE" not in r3.stdout
+
+
+@pytest.mark.asyncio
 async def test_truncates_output_to_max_bytes(bash):
     config = BashToolConfig(max_output_bytes=5)
     bash_tool = Bash(config=config, state=BaseToolState())

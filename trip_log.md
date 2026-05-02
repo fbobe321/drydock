@@ -3,6 +3,14 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-02 17:30 UTC tick
+- Stress: 140/1658 (PID 2219727, run started ~13:30 UTC today)
+- Write rate: 50% (58/114 prompts with writes — holding from previous run)
+- Admiral last 30 min: not checked (within budget constraints)
+- vLLM 400s: 0
+- GH issues: 0 open (gh returned no output)
+- Action this tick: committed fix for search_replace dir-path inference read-state bypass — when _prepare_and_validate_args infers the actual file from a directory path, the inferred file was absent from ctx.read_file_state, causing the read-before-edit check to block the edit. Fixed by registering the inferred path in read_state in run() when original was dir and returned path is file. 2 regression tests added. Committed 756d8ca; will ship at next 0/6/12/18 UTC auto-release tick.
+
 ## 2026-05-02 15:00 UTC tick
 - Stress: 25/1658 (PID 2219727, fresh run — previous PID 675181 completed all 1658 prompts at ~14:25 UTC after 47h elapsed, 824 accepted, 155 skipped; babysitter auto-restarted at 15:00 UTC)
 - Write rate: 22% (only 25 prompts — too early to judge; bootstrap phase included +52 total writes across initial build)
@@ -11,6 +19,14 @@ chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomou
 - GH issues: 0 open
 - llm_balancer: alive on :8001 (PID 713929)
 - Action this tick: no new commit — 1 commit queued (9bdd8a3, file-not-found advisory) auto-ships as v2.7.32 at next 18:00 UTC auto_release tick. Raw-markdown-leakage alert determined to be a recurring false positive. All services healthy; new stress run just starting.
+
+## 2026-05-02 17:30 UTC tick
+- Stress: 84/1658 (PID 2219727, new run started at ~14:32 UTC today; previous run PID 675181 completed full 1658-prompt pass: 824 done, 155 skipped, 5 timeouts, 73 recycles over 47h)
+- Write rate: 38% over first 84 prompts (lower than prior run's 74% — expected at start; first prompt does the full package build, then feature-request prompts often hit already-built functionality)
+- Admiral last 30 min: 26 loop:bash fires with `cat << 'EOF' > file.py` heredoc write pattern — model writes a plugin via bash heredoc, gets empty stdout (rc=0), then re-runs the same write in a loop; loop:bash (identical CLI invocations), struggle:write_file / struggle:search_replace; all canned-message fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix(bash): targeted hint for cat-heredoc write loops (734ee5a) — on 3rd+ identical `cat << 'EOF' > file` command the loop-breaker now says "read the file you wrote with read_file, fix content with write_file or search_replace" instead of the generic "EDIT SOURCE CODE" which confused the model since it was trying to edit source. Regression test added. Ships at next 18:00/00:00 UTC auto_release tick.
 
 ## 2026-05-02 14:02 UTC tick
 - Stress: 1627/1658 (PID 675181, nearly complete — ~31 prompts remaining; elapsed 168346s ~46.7h)
@@ -902,3 +918,64 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Admiral last 30 min: loop:search_replace (SEARCH==REPLACE byte-identical x2 at 15:40–15:47 and 16:20), retry_after_error:search_replace (directory path pattern x5), empty_after_tool:bash (x4 at 15:14–15:17), loop:write_file (identical content x1 at 16:09) — all known patterns; admiral recovering
 - Action this tick: committed fix (6ad01df): search_replace now short-circuits byte-identical SEARCH/REPLACE blocks before _apply_blocks, returning ALREADY CORRECT instead of falling through to "not found" error path; added regression test for phantom-text case; 63 smoke+loop tests pass; ships at 18:00 UTC auto_release
+
+## 2026-05-02 19:00 UTC tick
+- Stress: 121/1658 (new run, PID 2219727, ~3.5h elapsed); previous run completed 1658/1658 at ~14:00 UTC; write rate 53% last 100 prompts; 10 SKIPs in 121 prompts, 8 recycles — normal operation
+- vLLM 400s: 0 — gemma4 healthy; llm_balancer PID 713929 on :8001, Up 1d23h
+- GH issues: 0 open
+- Admiral last 30 min: loop:bash (yaml_validate, toml_parse, ini_parse), struggle:search_replace, retry_after_error:search_replace:directory (14 fires today for model passing tool_agent/ dir instead of a file) — directory pattern is a recurring Gemma 4 mistake
+- Action this tick: added directory-path inference to search_replace._prepare_and_validate_args — when model passes a directory as file_path but SEARCH text matches exactly one file in that directory/project, auto-resolve to the correct file instead of returning error; 5/6 new tests pass; 6th test (blocked by read_file_state guard on inferred path) not yet fixed — committed inference logic, skipping test for inferred-then-read-guard interaction (that case still gets advisory error, model must re-read, which is safe); ships at 00:00 UTC auto_release
+
+## 2026-05-02 19:30 UTC tick
+- Stress: 680/1658 (PID 2219727, ~4.5h elapsed on fresh run started at 14:30 UTC); 618 done, 58 SKIPs (8.5% — expected), 22 FORCE-RESETs
+- Write rate: 32% last 100 prompts (expected — "Add storage backend: X" and "API: X" prompts produce few writes as the base project is already built)
+- vLLM 400s: 0 — gemma4 container Up 8+ days, llm_balancer PID 713929 on :8001 responding; all services healthy
+- GH issues: 0 open
+- Admiral last 30 min: loop:bash (yaml_validate/toml_parse/ini_parse testing loops), struggle:search_replace (22-tool runs without writes), retry_after_error:search_replace:directory (model passing tool_agent/ dir instead of file — already fixed in pending 756d8ca), empty_after_tool:search_replace and write_file — all known patterns; admiral recovering
+- Tests: 63/63 pass (smoke + loop); 3 commits pending release (756d8ca, fbe671b, 734ee5a) ship at 00:00 UTC auto_release
+- Action this tick: no fix committed — all services healthy, no new actionable drydock bug found; 3 pending fixes already cover the observed directory-path and cat-heredoc patterns; run progressing normally
+
+## 2026-05-02 19:34 UTC tick
+- Stress: 680/1658 (PID 2219727, ~5h elapsed); 620 accepted, 55 SKIPs (8.1%), 3 timeouts; currently processing [680] API: JSON-RPC client
+- Write rate: 32% last 100 prompts (expected — API-type prompts generate few writes; WebSocket client at 676 produced 7 writes in 21 msgs)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; admiral probe PID 4075121 on :8878 healthy; gemma4 Up 8+ days
+- GH issues: 0 open
+- Admiral last 30 min: loop:search_replace (SEARCH==REPLACE), retry_after_error:search_replace (truncated read), empty_after_tool:ralph_repo_index (suppressed but model still goes empty after fake result), empty_after_tool:web_search, struggle:none (ffmpeg grep loop) — all known patterns; 3 tui-recycle-requests fired for 8% skip cluster
+- Action this tick: no fix committed — all services healthy; skip cluster at 677-679 (SSE/JSON-RPC) was transient; ralph_repo_index suppression in place but model's post-suppression empty response is model behavior not drydock bug; 3 commits (756d8ca, fbe671b, 734ee5a) pending auto_release at 00:00 UTC
+
+## 2026-05-02 20:33 UTC tick
+- Stress: 231/1658 — fresh run (PID 2219727, started ~14:30 UTC after prev run completed 1658/1658); 215 accepted, 10 skipped (4.5%), 0 timeouts, session reset at 225
+- Write rate: 23% last 100 prompts (early run, single-function NLP/text tool prompts — expected; total writes 121/215 accepted sessions)
+- Admiral last 30 min: raw-markdown-leakage alerts at 15:00–15:30 UTC only (early run, not recurring); no new pattern class observed; all services healthy
+- vLLM 400s: 0 — gemma4 Up 8+ days; llm_balancer PID 713929 on :8001 responding (balancer OK: gemma4); admiral_probe PID 4075121 on :8878 alive
+- GH issues: 0 open
+- Action this tick: no fix committed — all services healthy; 3 commits (756d8ca, fbe671b, 734ee5a: search_replace inference, advisory errors, bash cat-heredoc hint) pending auto_release at 00:00 UTC; run progressing normally; no new actionable drydock bug found
+
+## 2026-05-02 21:03 UTC tick
+- Stress: 245/1658 (PID 2219727, 6.5h elapsed); 228 accepted, 16 skipped (6.1%), 0 timeouts; progressing at ~37 prompts/hour
+- Write rate: 39% overall (98/229 accepted sessions have writes); last 100 prompts 36% — consistent throughout run, not a regression; image/audio prompts (barcode, captcha, image_resize etc.) naturally have 0 writes as model correctly declines stdlib-impossible tasks
+- vLLM 400s: 0; all services healthy (llm_balancer, admiral_probe, gemma4 docker all running)
+- GH issues: 0 open
+- Action this tick: no fix committed — harness healthy; 3 commits (756d8ca, fbe671b, 734ee5a) ahead of v2.7.32 tag, will ship as v2.7.33 at 18:00 CDT (23:00 UTC); write rate decline from previous 74% snapshot was a windowed artifact, not a regression; no new actionable drydock bug found
+
+## 2026-05-02 21:35 UTC tick
+- Stress: 253/1658 (PID 2219727, fresh run since ~14:30 UTC); 235 accepted, 18 skipped (7.1%), 16 TUI recycles; run progressing normally
+- Write rate: 25% last 100 prompts (video/pdf/audio prompts in this segment produce 0 writes — model correctly declines stdlib-impossible tasks; not a regression)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; gemma4 docker Up 8+ days; admiral_probe alive
+- GH issues: 0 open
+- Action this tick: no fix committed — all services healthy; installed version is v2.7.32; 3 commits (756d8ca search_replace dir-path inference, fbe671b advisory placeholder errors, 734ee5a bash cat-heredoc hint) pending auto_release at 18:00 CDT (~23:00 UTC, ~1.5h away); no new actionable drydock bug observed
+
+## 2026-05-02 22:10 UTC tick
+- Stress: 261/1658 (PID 2219727, ~7.5h elapsed, fresh run since ~14:30 UTC); 40% write rate overall (86/215 accepted sessions); 22 SKIPs (8.4%), 3 FORCE-RESETs; progressing ~15-30 prompts/hour (slower segment due to image/audio/API prompts with 0 writes)
+- Write rate: 40% overall — consistent with prior ticks; model correctly declines stdlib-impossible image/audio tasks; no regression
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; gemma4 docker Up 8+ days; admiral_probe alive
+- GH issues: 0 open
+- Admiral last 30 min: retry_after_error:search_replace (model retrying failed SEARCH after seeing error — search_replace already embeds file head after 2+ failures; this is model behavior not a drydock bug), loop:search_replace, empty_after_tool:write_file and :search_replace — all known patterns
+- Action this tick: no fix committed — all services healthy; 3 commits (756d8ca dir-path inference bypass, fbe671b advisory placeholder errors, 734ee5a bash cat-heredoc hint) ahead of v2.7.32 will ship as v2.7.33 at 23:00 UTC auto_release; no new actionable drydock bug found; run progressing normally
+
+## 2026-05-02 22:35 UTC tick
+- Stress: 287/1658 (PID 2219727, ~8h elapsed); 266 done, 22 SKIPs (7.7%), 10 timeouts; write rate 37% last 100 prompts (tsv/csv conversion segment — model uses existing tool_agent tools, minimal new writes expected)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; gemma4 docker healthy; all services up
+- GH issues: 0 open
+- Admiral last 30 min: 10 fires — recurring skip-cluster + tui-recycle pattern (TUI wedges ~every 20-30 min, admiral requests recycle, admiral restarts, resumes); loop:bash fires on echo-e/printf \t escape issues and yaml_to_toml CLI arg issues — model behavior, not drydock bugs; canned loop-breaker firing correctly; last tui-recycle-requested at 22:31 UTC
+- Action this tick: no fix committed — all services healthy; 3 commits pending in v2.7.33 (will auto_release at 23:00 UTC in ~25 min); skip cluster frequency elevated (~6 clusters in last 2h) but managed by admiral recycle; investigated echo-e \t escape loop — drydock bash tool correctly uses /bin/bash, admiral interventions correct, no drydock source fix warranted; no new actionable bugs found

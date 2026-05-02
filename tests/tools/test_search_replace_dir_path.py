@@ -112,3 +112,56 @@ async def test_directory_path_escalates_on_second_call(tool, ctx, tmp_path):
     results3 = await _collect(tool.run(args, ctx))
     assert "REPEATED ERROR" in results3[-1].content
     assert "#3" in results3[-1].content
+
+
+@pytest.mark.asyncio
+async def test_directory_path_infers_file_when_search_text_matches(tool, ctx, tmp_path, monkeypatch):
+    """When model passes a directory but SEARCH text matches exactly one file, auto-infer and apply."""
+    target = tmp_path / "target.py"
+    target.write_text("def old_func():\n    return 1\n")
+    (tmp_path / "other.py").write_text("# unrelated\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    args = SearchReplaceArgs(
+        file_path=str(tmp_path),
+        content=(
+            "<<<<<<< SEARCH\n"
+            "def old_func():\n"
+            "    return 1\n"
+            "=======\n"
+            "def new_func():\n"
+            "    return 42\n"
+            ">>>>>>> REPLACE"
+        ),
+    )
+    results = await _collect(tool.run(args, ctx))
+    result = results[-1]
+    assert isinstance(result, SearchReplaceResult)
+    assert result.blocks_applied == 1, "should have auto-inferred and applied the edit"
+    assert "new_func" in target.read_text()
+
+
+@pytest.mark.asyncio
+async def test_directory_path_falls_back_to_error_when_no_match(tool, ctx, tmp_path, monkeypatch):
+    """When search text matches no file in the directory, return the advisory error."""
+    (tmp_path / "cli.py").write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+
+    args = SearchReplaceArgs(
+        file_path=str(tmp_path),
+        content=(
+            "<<<<<<< SEARCH\n"
+            "def nonexistent_function_xyz():\n"
+            "    pass\n"
+            "=======\n"
+            "def replaced():\n"
+            "    pass\n"
+            ">>>>>>> REPLACE"
+        ),
+    )
+    results = await _collect(tool.run(args, ctx))
+    result = results[-1]
+    assert isinstance(result, SearchReplaceResult)
+    assert result.blocks_applied == 0
+    assert "PATH ERROR" in result.content

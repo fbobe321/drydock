@@ -538,14 +538,35 @@ class Bash(
             if entry and entry["hash"] == out_hash:
                 entry["count"] += 1
                 if entry["count"] >= 3:
-                    notice = (
-                        f"[NOTICE: this is the #{entry['count']} identical "
-                        f"run of `{args.command[:80]}` with byte-identical "
-                        f"output and rc={returncode}. Re-running will not "
-                        f"change anything — you must EDIT SOURCE CODE to "
-                        f"change this output. Previous stdout first 300 "
-                        f"chars:\n{stdout[:300]}]"
-                    )
+                    cmd_preview = args.command[:80]
+                    # Detect file-write-via-heredoc pattern: cat << ... > file
+                    # The model writes a file, gets empty stdout (rc=0), then
+                    # re-runs the same write thinking it didn't work.  Generic
+                    # "EDIT SOURCE CODE" confuses it — give a targeted hint.
+                    import re as _re
+                    _is_heredoc_write = bool(_re.search(
+                        r"cat\s+<<\s*['\"]?EOF['\"]?\s+>", args.command
+                    ))
+                    if _is_heredoc_write:
+                        notice = (
+                            f"[NOTICE: this is the #{entry['count']}th identical "
+                            f"heredoc write of `{cmd_preview}`. "
+                            f"The file already has this exact content — re-running "
+                            f"the same cat command will not change it. "
+                            f"If the feature is still broken, READ the file you "
+                            f"wrote (use read_file), find the bug in the content, "
+                            f"then fix it with write_file or search_replace with "
+                            f"CORRECTED content. Do NOT re-run this cat command.]"
+                        )
+                    else:
+                        notice = (
+                            f"[NOTICE: this is the #{entry['count']} identical "
+                            f"run of `{cmd_preview}` with byte-identical "
+                            f"output and rc={returncode}. Re-running will not "
+                            f"change anything — you must EDIT SOURCE CODE to "
+                            f"change this output. Previous stdout first 300 "
+                            f"chars:\n{stdout[:300]}]"
+                        )
                     yield self._build_result(
                         command=args.command,
                         stdout=notice,
