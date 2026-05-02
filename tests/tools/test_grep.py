@@ -110,6 +110,39 @@ async def test_fails_with_nonexistent_path(grep):
 
 
 @pytest.mark.asyncio
+async def test_invalid_regex_unmatched_paren_raises_with_hint(grep, tmp_path):
+    # Pattern with unescaped ( triggers POSIX ERE error — model must get escaped form
+    (tmp_path / "test.py").write_text("def run(self):\n    pass\n")
+    with pytest.raises(ToolError) as err:
+        await collect_result(grep.run(GrepArgs(pattern="def run(self,")))
+
+    msg = str(err.value)
+    assert "Invalid regex" in msg
+    assert "literal text" in msg
+    # Escaped suggestion must contain escaped paren so model can retry without loop
+    assert r"\(" in msg
+
+
+@pytest.mark.asyncio
+async def test_invalid_regex_unclosed_bracket_raises_with_hint(grep, tmp_path):
+    (tmp_path / "test.py").write_text("items = [1, 2]\n")
+    with pytest.raises(ToolError) as err:
+        await collect_result(grep.run(GrepArgs(pattern="[abc")))
+
+    msg = str(err.value)
+    assert "Invalid regex" in msg
+    assert "literal text" in msg
+
+
+@pytest.mark.asyncio
+async def test_valid_escaped_regex_does_not_raise(grep, tmp_path):
+    (tmp_path / "test.py").write_text("def run(self):\n    pass\n")
+    # Properly escaped pattern must work without error
+    result = await collect_result(grep.run(GrepArgs(pattern=r"def run\(self\)")))
+    assert result.match_count >= 1
+
+
+@pytest.mark.asyncio
 async def test_searches_in_specific_path(grep, tmp_path):
     subdir = tmp_path / "subdir"
     subdir.mkdir()

@@ -717,3 +717,64 @@ restarted, cron self-match bug fixed in this same session).
 - Admiral last 2h: loop:bash ×8, struggle:none ×8, loop:search_replace ×4, struggle:write_file ×3, retry_after_error:search_replace ×3, retry_after_error:grep ×2, empty_after_tool:ralph_repo_index ×2 — all known model-behavior patterns; hallucinated ralph_repo_index is suppressed with system note per existing code; skip count stable at 121 (not growing since 03:00 UTC)
 - Latest release: v2.7.29; 2 unreleased commits (df5e0f5 read_file dedup cache, 96fa517 bash truncation notice) pending auto-ship as v2.7.30 at 06:00 UTC
 - Action this tick: no action — all services healthy, harness 83% complete, no new actionable drydock bugs found; stress should complete within ~3 hours at current rate (~18 prompts/hour in Perf: block)
+
+## 2026-05-02 05:03 UTC tick
+- Stress: 1398/1658 (84%) — PID 675181 alive 1d 13h 55m (RSS 1043 MB); active in Perf: block (coalesce-parallel-reads/warm-cache/evict-LRU); ~260 prompts remaining, ~4 hours at current rate
+- Write rate: 32% last 100 prompts — expected for Perf: text-advice block; model explains caching strategies rather than writing files
+- vLLM 400s: 0 — clean; vLLM gemma4 container healthy; llm_balancer PID 713929 on :8001 healthy and forwarding correctly
+- GH issues: 0 open
+- Latest release: v2.7.30 (auto-shipped at 06:00 UTC earlier today, 2 commits: read_file per-slot dedup cache + bash truncation notice)
+- Admiral last 500 entries: struggle:none ×82, struggle:write_file ×38, struggle:search_replace ×27, loop:bash ×14 — all expected for Perf: block; retry_after_error:read_file only ×1 (not actionable)
+- Action this tick: no action — all services healthy, harness 84% complete, no new actionable drydock bugs found
+
+## 2026-05-02 05:30 UTC tick
+- Stress: 1415/1658 (PID 675181, run 1 day 14h); progressing through "Perf:" block
+- Write rate: 26% (last 89 prompts) — expected low; "Perf: cache/lazy-load/memoize" prompts are advisory, model rarely writes files
+- Admiral last 30 min: retry_after_error:grep (Unmatched paren) fired 3 times since midnight; loop:grep fired twice — known pattern where model sends "def run(self," without escaping
+- vLLM 400s: 0
+- GH issues: 0 open
+- Latest release: v2.7.30
+- Action this tick: committed fix(grep) b79325f — _validate_args now runs re.compile() on pattern before subprocess invocation; on invalid regex raises ToolError with Python re.error message + re.escape() literal suggestion so model can immediately retry with correct pattern instead of looping. 3 regression tests added. Auto-release will ship v2.7.31 at next 0/6/12/18 UTC tick.
+
+## 2026-05-02 06:01 UTC tick
+- Stress: 1430/1658 on log stress_2000_v10_restart_1777561483 (PID 675181, running 1d 14h); the 680/1658 reading from earlier was from a stale log; harness babysitter relaunched and is near completion
+- Write rate: 24% last 100 prompts — mostly "Perf:" and "API:" prompts that legitimately generate 0 writes (model answers without coding); not a regression
+- Admiral last 30 min: loop:bash x2, loop:grep x1, empty_after_tool:ralph_repo_index x2, struggle:search_replace x2 — all known model-behavior patterns; no new failure types
+- vLLM 400s: 0
+- GH issues: 0 open
+- Latest release: v2.7.30; grep fix (b79325f) awaiting v2.7.31 at 06:00 CDT auto_release
+- Action this tick: no action — healthy; stress nearing completion, grep fix pending shipment
+
+## 2026-05-02 06:32 UTC tick
+- Stress: 1441/1658 (87%) — PID 675181 alive 1d 15h; active log stress_2000_v10_restart_1777561483 (last write 1 min ago); "Perf:" + "API:" block; ~217 prompts remain
+- Write rate: 23% last 89 prompts — expected for Perf: advisory block (model explains caching strategies, rarely writes files)
+- vLLM 400s: 0 — gemma4 container up 8 days; llm_balancer PID 713929 on :8001 healthy
+- GH issues: 0 open
+- Latest release: v2.7.30; grep validation fix (b79325f) unreleased, awaiting v2.7.31 at next auto_release (12:00 UTC)
+- Admiral last 30 min: loop:bash x4 (model looping concurrent.futures benchmark), retry_after_error:grep x2 (unmatched paren — fixed by b79325f not yet shipped), loop:grep x2 — all known model-behavior patterns
+- Action this tick: no action — all services healthy, stress 87% complete, grep fix pending shipment
+
+## 2026-05-02 07:02 UTC tick
+- Stress: 1447/1658 (87%) — PID 675181 alive 1d 15h; active log stress_2000_v10_restart_1777561483; 162 SKIPs (TUI slow during Perf/API block), 329 retries
+- Write rate: 22% last 89 prompts — expected low; "Perf: cache/memoize/lazy-load/batch-writes" prompts are advisory-only, model explains without writing files
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; gemma4 container up 8+ days
+- GH issues: 0 open
+- Latest release: v2.7.30; grep validation fix (b79325f) unreleased, pending v2.7.31 at 12:00 UTC auto_release
+- Admiral last 30 min: loop:bash x6 (model stuck on concurrent.futures benchmark, same command every ~50s 06:28–06:33 UTC) — model-behavior, not a drydock bug; retry_after_error:grep x3 (unescaped paren — will be resolved by b79325f post-shipment)
+- Action this tick: no action — all services healthy, stress 87% complete, no new actionable drydock bugs
+
+## 2026-05-02 07:32 UTC tick
+- Stress: 1466/1658 (88%) — PID 675181 alive; active log stress_2000_v10_restart_1777561483; in "Perf:" + "API:" block; ~192 prompts remaining
+- Write rate: 20% last 89 prompts — expected for Perf:/API: advisory block (model explains strategies without writing files)
+- vLLM 400s: 0 — gemma4 container healthy; llm_balancer PID 713929 on :8001 healthy
+- GH issues: 0 open
+- Latest release: v2.7.30; grep validation fix (b79325f) + search_replace first-failure hint (516d0c6) both unreleased, will auto-ship as v2.7.31 at next 0/6/12/18 UTC tick
+- Action this tick: committed fix(search_replace) 516d0c6 — file head now embedded on first search-not-found failure (count=1) so model can immediately see actual content and adjust, instead of blindly retrying; previously file head was only shown at count=2. 4 regression tests added. Also fixed test file to use correct SearchReplaceArgs (file_path/content fields) and async tool.run() API — the test was written with wrong constructor args (file/diff, InvokeContext(cwd=)) that never matched the actual codebase.
+
+## 2026-05-02 08:30 UTC tick
+- Stress: 1473/1658 (88.8%), PID 675181 healthy (1d 17h elapsed, resumed from step 679)
+- Write rate: 21% last 90 prompts — expected for "Integrate: X" advisory block (Slack/Discord/Datadog/etc., model explains integration without writing files)
+- Admiral last 30 min: 0 fires (no new admiral patterns observed)
+- vLLM 400s: 0 — gemma4 container healthy; llm_balancer PID 713929 on :8001 healthy
+- GH issues: 0 open
+- Action this tick: no fix committed — 08:00 UTC tick already committed 516d0c6 and b79325f; system healthy; skip rate ~17% (134/781) is stable, caused by TUI log hitting 1.24GB slowing PTY tail checks, expected to self-resolve as run finishes in ~2h

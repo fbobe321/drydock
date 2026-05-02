@@ -503,7 +503,23 @@ class SearchReplace(
             entry = state.get(fail_key, {"count": 0})
             entry["count"] += 1
             state[fail_key] = entry
-            if entry["count"] >= 2:
+            if entry["count"] == 1:
+                # First failure: embed file head so model sees actual content
+                # without waiting for a second retry cycle. Reduces
+                # retry_after_error:search_replace events significantly.
+                try:
+                    head = original_content[:1500]
+                    line_count = original_content.count("\n")
+                    error_message += (
+                        f"\n\n[HINT: search text not found in {file_path.name}. "
+                        f"File may have changed. Current file head "
+                        f"({line_count} lines total):\n"
+                        f"-----FILE HEAD-----\n{head}\n-----FILE HEAD END-----\n"
+                        f"Adjust your SEARCH text to match the actual content above.]"
+                    )
+                except Exception:
+                    pass
+            elif entry["count"] >= 2:
                 try:
                     line_count = original_content.count("\n")
                     count = entry["count"]

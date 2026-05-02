@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from enum import StrEnum, auto
 from pathlib import Path
+import re as _re
 import shutil
 from typing import TYPE_CHECKING, ClassVar
 
@@ -130,6 +131,15 @@ class Grep(
     def _validate_args(self, args: GrepArgs) -> None:
         if not args.pattern.strip():
             raise ToolError("Empty search pattern provided.")
+
+        try:
+            _re.compile(args.pattern)
+        except _re.error as regex_err:
+            escaped = _re.escape(args.pattern)
+            raise ToolError(
+                f"Invalid regex pattern: {regex_err}\n"
+                f"To search for this as literal text, use pattern={escaped!r}"
+            ) from None
 
         path_obj = Path(args.path).expanduser()
         if not path_obj.is_absolute():
