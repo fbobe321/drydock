@@ -357,6 +357,14 @@ class APIToolFormatHandler:
             # after receiving tool results, causing empty_after_tool stalls.
             "ralph_file_summary", "file_summary", "repo_summary",
         }
+        # Subset of _IGNORE_TOOLS that are retrieval-flavored hallucinations.
+        # When `retrieve` is registered, redirect the model there instead of
+        # to glob/grep (which don't satisfy the model's retrieval intent and
+        # cause it to loop calling the hallucinated name again).
+        _RETRIEVAL_HALLUCINATIONS = {
+            "ralph_repo_index", "repo_index", "index_repo",
+            "ralph_file_summary", "file_summary", "repo_summary",
+        }
 
         suppressed_failures = []
         for parsed_call in parsed.tool_calls:
@@ -366,17 +374,29 @@ class APIToolFormatHandler:
                 # history well-formed (prevents empty_after_tool loops) but
                 # route to suppressed_failures so the TUI doesn't show an error.
                 if parsed_call.tool_name in _IGNORE_TOOLS:
+                    if (
+                        parsed_call.tool_name in _RETRIEVAL_HALLUCINATIONS
+                        and "retrieve" in active_tools
+                    ):
+                        redirect = (
+                            f"'{parsed_call.tool_name}' does not exist. "
+                            f"The correct retrieval tool is `retrieve`. "
+                            f"Call `retrieve(query='<your search terms>')` NOW — "
+                            f"it searches the project index and returns relevant results."
+                        )
+                    else:
+                        redirect = (
+                            f"'{parsed_call.tool_name}' does not exist — stop calling it. "
+                            f"Use glob/grep/read_file to explore the project instead. "
+                            f"Available tools: "
+                            f"{', '.join(sorted(active_tools.keys())[:8])}. "
+                            f"Call one of these NOW."
+                        )
                     suppressed_failures.append(
                         FailedToolCall(
                             tool_name=parsed_call.tool_name,
                             call_id=parsed_call.call_id,
-                            error=(
-                                f"'{parsed_call.tool_name}' does not exist — stop calling it. "
-                                f"Use glob/grep/read_file to explore the project instead. "
-                                f"Available tools: "
-                                f"{', '.join(sorted(active_tools.keys())[:8])}. "
-                                f"Call one of these NOW."
-                            ),
+                            error=redirect,
                         )
                     )
                     continue

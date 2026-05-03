@@ -111,6 +111,20 @@ class CommandRegistry:
                             "proposals.",
                 handler="_admiral_status_command",
             ),
+            "graphrag": Command(
+                aliases=frozenset(["/graphrag", "/rag"]),
+                description="GraphRAG index control "
+                            "(usage: /graphrag stats | ingest <path> | "
+                            "query <text>). No arg shows stats + path.",
+                handler="_graphrag_command",
+            ),
+            "steering": Command(
+                aliases=frozenset(["/steering", "/noir"]),
+                description="Deep Noir steering control "
+                            "(usage: /steering | /steering on <mode> | "
+                            "/steering off | /steering list).",
+                handler="_steering_command",
+            ),
         }
 
         for command in excluded_commands:

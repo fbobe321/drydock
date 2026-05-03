@@ -689,6 +689,31 @@ class SearchReplace(
                 except Exception:
                     pass
 
+            # Context recovery — query GraphRAG with the file basename
+            # and the first symbol in the SEARCH text. If we find the
+            # symbol elsewhere in the codebase, append it. Best-effort,
+            # never blocks the original error.
+            try:
+                from drydock.core.context_recovery import (
+                    recover_for_search_replace,
+                )
+                # Pick the first block's search text as the query source.
+                first_search = ""
+                if args.content:
+                    import re as _re
+                    m = _re.search(
+                        r"<{3,}\s*SEARCH\s*\n(.*?)={3,}", args.content, _re.DOTALL
+                    )
+                    if m:
+                        first_search = m.group(1)[:300]
+                recovery = recover_for_search_replace(
+                    str(file_path), first_search
+                )
+                if recovery:
+                    error_message += recovery
+            except Exception:
+                pass  # never block on recovery
+
             # Return advisory result instead of raising ToolError.
             # Hard ToolError blocks cause their own retry loops on longer tasks
             # (model panics and re-calls the same failing search_replace). The

@@ -7,21 +7,27 @@ without them.
 ## Your task this tick
 
 1. Read `/data3/drydock/resume.md` to load current state.
-2. Run the STATUS COMMANDS block from resume.md to check stress run health.
-3. Scan for new failure patterns:
+2. **Check the classifier dispatch queue FIRST**: `~/.drydock/dispatch/harness.jsonl`
+   - Each line is a structured `{bucket, pattern_id, evidence, suggested_action, confidence, source, ts}` record
+   - Group by `pattern_id`, sort by recent `ts`. Pick the most-fired recent pattern that is NOT already addressed by a commit in the last 24h (`git log --since="24 hours ago" --oneline`).
+   - The `suggested_action` is your starting hypothesis — verify against current source before implementing.
+   - If you fix a queued pattern, mention `addresses pattern <pattern_id>` in the commit message so future ticks can dedup.
+3. Run the STATUS COMMANDS block from resume.md to check stress run health.
+4. Scan for new failure patterns NOT in the dispatch queue:
    - Has the stress harness died? (PID in `/tmp/stress_pid.txt`)
    - New vLLM 400s? (`docker logs --since 30m gemma4 | grep -c JSONDecodeError`)
    - New admiral patterns that aren't already known (loop, struggle, retry_after_error, empty_after_tool)?
    - New GitHub issues? (`/home/bobef/miniconda3/bin/gh issue list --repo fbobe321/drydock --state open`)
    - llm_balancer or vLLM Docker container down?
-4. **If you find a real drydock bug** (not just admiral noise):
+5. **If you find a real drydock bug** (queued or fresh):
    - Find it in source under `/data3/drydock/drydock/`
    - Fix it minimally (no scope creep)
    - Write a regression test under `/data3/drydock/tests/` that fails without the fix
    - Commit with descriptive message + `Co-Authored-By: Claude` line
+   - If the fix addresses a queued pattern, prepend `addresses pattern <pattern_id>:` to the commit subject
    - Auto_release will ship at the next 0/6/12/18 CDT cron tick
-5. **If everything is healthy or the issue is not actionable**: just append a status line to `trip_log.md` and exit.
-6. **Always end** by appending one paragraph to `/data3/drydock/trip_log.md`:
+6. **If everything is healthy or the issue is not actionable**: just append a status line to `trip_log.md` and exit.
+7. **Always end** by appending one paragraph to `/data3/drydock/trip_log.md`:
 
 ```
 ## YYYY-MM-DD HH:MM UTC tick
@@ -30,7 +36,8 @@ without them.
 - Admiral last 30 min: N fires
 - vLLM 400s: N
 - GH issues: N open
-- Action this tick: <"committed fix X" | "investigated Y, no fix needed" | "no action — healthy">
+- Dispatch queue: harness=N, retrieval=N, steering=N (totals)
+- Action this tick: <"committed fix X (addresses pattern P)" | "investigated Y, no fix needed" | "no action — healthy">
 ```
 
 ## You have free rein — fix and restart things as needed.

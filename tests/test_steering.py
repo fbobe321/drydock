@@ -15,8 +15,10 @@ from pathlib import Path
 import pytest
 
 from drydock.steering import (
+    LogitBiasSteeringApplier,
     NullSteeringApplier,
     SteeringConfig,
+    accumulate_logit_bias,
     apply_steering,
     load_registry,
 )
@@ -43,6 +45,8 @@ def _write_vector(
     hidden_dim: int = 4096,
     payload: bytes | None = None,
     bad_sha: bool = False,
+    tokens_boost: tuple[str, ...] = (),
+    tokens_suppress: tuple[str, ...] = (),
 ) -> Path:
     """Create a (toml, .npy) pair under root/mode/. Returns manifest path."""
     if payload is None:
@@ -55,6 +59,15 @@ def _write_vector(
     if bad_sha:
         sha = "0" * 64
     manifest_path = mode_dir / f"{name}.toml"
+    extra = ""
+    if tokens_boost or tokens_suppress:
+        boost_list = ", ".join(f'"{t}"' for t in tokens_boost)
+        suppress_list = ", ".join(f'"{t}"' for t in tokens_suppress)
+        extra = textwrap.dedent(f"""
+            [steering]
+            tokens_boost = [{boost_list}]
+            tokens_suppress = [{suppress_list}]
+        """)
     manifest_path.write_text(textwrap.dedent(f"""
         [vector]
         name = "{name}"
@@ -68,7 +81,7 @@ def _write_vector(
         [tags]
         mode = ["{mode}"]
         family = "test"
-    """))
+    """) + extra)
     return manifest_path
 
 
@@ -259,6 +272,93 @@ def test_sandbox_detects_fix(tmp_path: Path):
     assert summary.fixes == 1
     assert summary.regressions == 0
     assert summary.passed()
+
+
+def test_manifest_parses_token_boost_and_suppress(tmp_path: Path):
+    mp = _write_vector(
+        tmp_path, "secure_coding", "v1",
+        tokens_boost=("subprocess", "shlex"),
+        tokens_suppress=("eval", "exec"),
+    )
+    v = Vector.load(mp)
+    assert v.manifest.tokens_boost == ("subprocess", "shlex")
+    assert v.manifest.tokens_suppress == ("eval", "exec")
+
+
+def test_logit_bias_applier_accepts_matching_target(tmp_path: Path):
+    _write_vector(tmp_path, "x", "v1", tokens_boost=("foo",))
+    reg = load_registry(tmp_path)
+    config = SteeringConfig.from_mode_names(["x"])
+    decision = apply_steering(
+        config, reg, LogitBiasSteeringApplier(), active_model="gemma4-26b-a4b"
+    )
+    assert decision.applier_kind == "logit_bias"
+    assert decision.applied_vectors
+    assert decision.applied_vectors[0].manifest.tokens_boost == ("foo",)
+
+
+def test_accumulate_logit_bias_with_mock_tokenizer(tmp_path: Path):
+    _write_vector(
+        tmp_path, "x", "v1",
+        scale=1.0,
+        tokens_boost=("subprocess", "shlex"),
+        tokens_suppress=("eval",),
+    )
+    reg = load_registry(tmp_path)
+    config = SteeringConfig.from_mode_names(["x"])
+    decision = apply_steering(
+        config, reg, LogitBiasSteeringApplier(), active_model="gemma4-26b-a4b"
+    )
+
+    # Mock tokenizer: encode("subprocess") -> [101, 102], encode("eval") -> [200]
+    class MockTok:
+        def encode(self, text, add_special_tokens=False):
+            if text == "subprocess":
+                return [101, 102]
+            if text == "shlex":
+                return [110]
+            if text == "eval":
+                return [200]
+            return []
+
+    biases = accumulate_logit_bias(decision, tokenizer=MockTok())
+    # boosts → positive (scale 1.0 × 4.0 = +4.0)
+    assert biases.get(101) == pytest.approx(4.0)
+    assert biases.get(102) == pytest.approx(4.0)
+    assert biases.get(110) == pytest.approx(4.0)
+    # suppress → negative
+    assert biases.get(200) == pytest.approx(-4.0)
+
+
+def test_accumulate_logit_bias_returns_empty_for_log_only_decision(tmp_path: Path):
+    _write_vector(tmp_path, "x", "v1", tokens_boost=("foo",))
+    reg = load_registry(tmp_path)
+    config = SteeringConfig.from_mode_names(["x"])
+    decision = apply_steering(
+        config, reg, LogOnlySteeringApplier(), active_model="gemma4-26b-a4b"
+    )
+    # LogOnly decision → accumulator returns {} (right thing: don't bias the
+    # request because the operator chose a non-bias applier)
+    assert accumulate_logit_bias(decision, tokenizer=object()) == {}
+
+
+def test_accumulate_logit_bias_clamps_to_max(tmp_path: Path):
+    """Stacked vectors with high scale don't produce biases > max_bias."""
+    _write_vector(tmp_path, "x", "v1", scale=5.0, tokens_boost=("foo",))
+    _write_vector(tmp_path, "x", "v2", scale=5.0, tokens_boost=("foo",))
+    reg = load_registry(tmp_path)
+    config = SteeringConfig.from_mode_names(["x"])
+    decision = apply_steering(
+        config, reg, LogitBiasSteeringApplier(), active_model="gemma4-26b-a4b"
+    )
+
+    class MockTok:
+        def encode(self, text, add_special_tokens=False):
+            return [42] if text == "foo" else []
+
+    biases = accumulate_logit_bias(decision, tokenizer=MockTok(), max_bias=10.0)
+    # Two vectors at scale 5.0 each produce +20 raw → clamped to +10
+    assert biases[42] == 10.0
 
 
 def test_sandbox_writes_json(tmp_path: Path):

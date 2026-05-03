@@ -288,20 +288,32 @@ class ReadFile(
 
     @staticmethod
     def _not_found_msg(file_path: Path) -> str:
-        """Return 'File not found' error with parent directory listing for context."""
+        """Return 'File not found' error with parent directory listing for context.
+
+        Also tries GraphRAG context recovery — if the requested basename is
+        defined elsewhere in the indexed corpus, the response includes the
+        location so the agent retries with the correct path."""
         parent = file_path.parent if file_path.parent != file_path else Path(".")
+        msg_parts: list[str] = [f"File not found at: {file_path}"]
         try:
             entries = sorted(p.name for p in parent.iterdir())
             if entries:
                 listing = "\n".join(f"  {e}" for e in entries[:30])
                 suffix = f"\n  ... ({len(entries) - 30} more)" if len(entries) > 30 else ""
-                return (
-                    f"File not found at: {file_path}\n"
-                    f"Contents of {parent}/:\n{listing}{suffix}"
-                )
+                msg_parts.append(f"Contents of {parent}/:\n{listing}{suffix}")
         except (PermissionError, OSError):
             pass
-        return f"File not found at: {file_path}"
+
+        # Best-effort context recovery via GraphRAG (no-op if no index).
+        try:
+            from drydock.core.context_recovery import recover_for_read_file
+            recovery = recover_for_read_file(str(file_path))
+            if recovery:
+                msg_parts.append(recovery.lstrip())
+        except Exception:
+            pass
+
+        return "\n".join(msg_parts)
 
     @staticmethod
     def _is_dir_msg(file_path: Path, resolved_path: Path) -> str:

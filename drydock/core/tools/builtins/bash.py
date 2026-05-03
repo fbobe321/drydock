@@ -412,6 +412,8 @@ class Bash(
             # the model can reason about what happened.
             # See feedback_no_tool_errors_for_loop_detection.md.
             annotation = f"[Exit code {returncode}]"
+            import re as _rc_re
+            _has_kill = _rc_re.search(r'\bkill\b', command)
             if returncode < 0:
                 # Negative returncode means killed by a Unix signal.
                 try:
@@ -422,6 +424,19 @@ class Bash(
                     f" — process killed by {sig_name}."
                     " If this command starts a server or long-running process,"
                     " background it with `command &` and verify ports with `ss -tlnp`."
+                )
+            elif _has_kill and returncode in (1, 2):
+                # `kill` on a non-existent PID returns exit 1 ("No such process")
+                # or exit 2 (usage error when $! is unset in the subshell).
+                # This is NOT a real failure — the server process already exited.
+                # Give a targeted hint so the model doesn't retry the whole command.
+                annotation += (
+                    " — `kill` returned a non-zero exit code because the"
+                    " target process was not found or $! was unset."
+                    " This does NOT mean your server failed to start."
+                    " If the server crash is real, its stderr output above"
+                    " will show why. Do NOT re-run the same command —"
+                    " read the server output and fix any crash there."
                 )
             elif not stdout and not stderr:
                 annotation += " (no output)"
@@ -537,10 +552,36 @@ class Bash(
 
             # Mechanical loop-breaker (ADVISORY ONLY — never raise
             # ToolError; see feedback_no_tool_errors_for_loop_detection.md).
-            # 3rd+ identical call: collapse body to short notice so the
-            # model sees "this ran already with same output" without
-            # getting refused into a block-loop.
+            # Two complementary checks:
+            #   A) Same command + byte-identical output: trigger on 3rd run.
+            #   B) Same command + non-zero exit code, output varies: trigger
+            #      on 5th failing run.  Covers "python3 -m pkg list" called
+            #      14× where each traceback has slightly different content
+            #      (timestamp, object id) that defeats the hash check.
             state = self.state.__dict__.setdefault("_bash_history", {})
+            # Track total error-exit calls per command (regardless of output).
+            err_state = self.state.__dict__.setdefault("_bash_err_count", {})
+            if returncode != 0:
+                err_count = err_state.get(args.command, 0) + 1
+                err_state[args.command] = err_count
+                if err_count >= 5:
+                    cmd_preview = args.command[:80]
+                    notice = (
+                        f"[NOTICE: `{cmd_preview}` has failed with a non-zero "
+                        f"exit code {err_count} times this session. "
+                        f"Re-running without changing the code will produce the "
+                        f"same error. STOP retrying. Read the full traceback "
+                        f"above, identify the root cause, and fix the source "
+                        f"file before running again. "
+                        f"Latest stderr: {stderr[:200]}]"
+                    )
+                    yield self._build_result(
+                        command=args.command,
+                        stdout=notice,
+                        stderr="",
+                        returncode=returncode,
+                    )
+                    return
             combined = stdout + "\n---STDERR---\n" + stderr
             out_hash = hash((combined, returncode))
             entry = state.get(args.command)

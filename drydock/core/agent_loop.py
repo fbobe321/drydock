@@ -1547,13 +1547,21 @@ class AgentLoop:
                 self.format_handler.create_failed_tool_response_message(failed, error_msg)
             )
             self.stats.tool_calls_failed += 1
-            # Inject a [SYSTEM: ...] note (the format admiral uses) so the model
-            # is more likely to break out of the empty-response loop that often
-            # follows a suppressed hallucinated-tool call.
-            self._inject_system_note(
-                f"'{failed.tool_name}' does not exist — do NOT call it again. "
-                "Call glob, grep, or read_file NOW to make progress."
-            )
+            # Inject a [SYSTEM: ...] note so the model is more likely to break
+            # out of the empty-response loop that often follows a suppressed
+            # hallucinated-tool call.
+            if "retrieve" in {t for t in self.tool_manager.available_tools}:
+                note = (
+                    f"'{failed.tool_name}' does not exist — do NOT call it again. "
+                    "Call `retrieve(query='<terms>')` to search the project index, "
+                    "or glob/grep/read_file for direct file access. Act NOW."
+                )
+            else:
+                note = (
+                    f"'{failed.tool_name}' does not exist — do NOT call it again. "
+                    "Call glob, grep, or read_file NOW to make progress."
+                )
+            self._inject_system_note(note)
 
     async def _handle_tool_calls(
         self, resolved: ResolvedMessage
@@ -2056,6 +2064,28 @@ class AgentLoop:
                 self._loop_detected = False
                 self._loop_signal = None
 
+            # Deep Noir steering hook — env-gated, log-only by default.
+            # No-op unless DRYDOCK_STEERING_MODES is set; never raises.
+            steering_logit_bias: dict[int, float] | None = None
+            try:
+                from drydock.core.steering_hook import (
+                    decide_for_request,
+                    logit_bias_for_request,
+                )
+                steering_decision = decide_for_request(active_model.name)
+                if steering_decision is not None:
+                    logger.info("[STEERING] %s", steering_decision.summary())
+                    if steering_decision.applier_kind == "logit_bias":
+                        bias = logit_bias_for_request(active_model.name)
+                        if bias:
+                            steering_logit_bias = bias
+                            logger.info(
+                                "[STEERING] logit_bias entries: %d",
+                                len(bias),
+                            )
+            except Exception as _e:  # defense in depth
+                logger.debug("steering hook bypassed: %s", _e)
+
             complete_kwargs = dict(
                 model=active_model,
                 messages=self.messages,
@@ -2070,6 +2100,14 @@ class AgentLoop:
             )
             if extra_sampling:
                 complete_kwargs["extra_sampling"] = extra_sampling
+            if steering_logit_bias:
+                # Merge into extra_sampling so vLLM/Mistral backends pick it up
+                # via SamplingParams. Backends that don't understand logit_bias
+                # will TypeError below and we'll retry without extra_sampling
+                # (keeping inference behavior intact).
+                merged = dict(extra_sampling) if extra_sampling else {}
+                merged["logit_bias"] = steering_logit_bias
+                complete_kwargs["extra_sampling"] = merged
             try:
                 result = await self.backend.complete(**complete_kwargs)
             except TypeError:

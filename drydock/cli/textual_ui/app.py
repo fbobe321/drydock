@@ -1573,6 +1573,187 @@ class DrydockApp(App):  # noqa: PLR0904
         except Exception as e:
             await self._mount_and_scroll(UserCommandMessage(f"Error: {e}"))
 
+    async def _graphrag_command(self, args: str = "") -> None:
+        """GraphRAG index control: stats / ingest <path> / query <text>."""
+        from pathlib import Path
+        try:
+            from drydock.graphrag import Index
+            from drydock.core.tools.builtins.retrieve import _resolve_db_path
+        except Exception as e:
+            await self._mount_and_scroll(
+                UserCommandMessage(f"GraphRAG module unavailable: {e}")
+            )
+            return
+
+        parts = args.strip().split(None, 1)
+        sub = parts[0].lower() if parts else "stats"
+        rest = parts[1] if len(parts) > 1 else ""
+        db_path = _resolve_db_path("")
+
+        if sub in ("stats", ""):
+            if not db_path.is_file():
+                msg = (
+                    f"### GraphRAG\n\n"
+                    f"No index at `{db_path}`.\n\n"
+                    f"Create one: `/graphrag ingest .` or "
+                    f"`python -m drydock.graphrag ingest .`"
+                )
+            else:
+                idx = Index(db_path)
+                s = idx.stats()
+                msg = (
+                    f"### GraphRAG\n\n"
+                    f"- DB: `{db_path}`\n"
+                    f"- Symbols: **{s['symbols']}**\n"
+                    f"- Text chunks: **{s['chunks']}**\n"
+                    f"- Unique terms: **{s['unique_terms']}**\n\n"
+                    f"`/graphrag query <text>` to search · "
+                    f"`/graphrag ingest <path>` to refresh."
+                )
+            await self._mount_and_scroll(UserCommandMessage(msg))
+            return
+
+        if sub == "ingest":
+            target = Path(rest or ".").expanduser().resolve()
+            if not target.exists():
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"Path not found: `{target}`"
+                ))
+                return
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Ingesting `{target}` into `{db_path}`..."
+            ))
+            try:
+                idx = Index(db_path)
+                counts = idx.ingest_path(target)
+            except Exception as e:
+                await self._mount_and_scroll(
+                    UserCommandMessage(f"Ingest failed: {e}")
+                )
+                return
+            await self._mount_and_scroll(UserCommandMessage(
+                f"### GraphRAG ingest complete\n\n"
+                f"- Files: **{counts['files']}**\n"
+                f"- Symbols: **{counts['symbols']}**\n"
+                f"- Text chunks: **{counts['chunks']}**\n"
+                f"- DB: `{db_path}`"
+            ))
+            return
+
+        if sub == "query":
+            if not rest:
+                await self._mount_and_scroll(UserCommandMessage(
+                    "Usage: `/graphrag query <text>`"
+                ))
+                return
+            if not db_path.is_file():
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"No index at `{db_path}`. Run `/graphrag ingest .` first."
+                ))
+                return
+            try:
+                idx = Index(db_path)
+                result = idx.retrieve(rest, symbol_limit=5, text_limit=3)
+            except Exception as e:
+                await self._mount_and_scroll(
+                    UserCommandMessage(f"Query failed: {e}")
+                )
+                return
+            formatted = result.format()
+            if len(formatted) > 4000:
+                formatted = formatted[:4000] + "\n... (truncated)"
+            await self._mount_and_scroll(UserCommandMessage(
+                f"### GraphRAG: `{rest}`\n\n```\n{formatted}\n```"
+            ))
+            return
+
+        await self._mount_and_scroll(UserCommandMessage(
+            "Usage: `/graphrag {stats | ingest <path> | query <text>}`"
+        ))
+
+    async def _steering_command(self, args: str = "") -> None:
+        """Deep Noir steering control: status / on <mode> / off / list."""
+        import os
+        try:
+            from drydock.steering import load_registry
+            from drydock.core import steering_hook
+        except Exception as e:
+            await self._mount_and_scroll(
+                UserCommandMessage(f"Steering module unavailable: {e}")
+            )
+            return
+
+        parts = args.strip().split(None, 1)
+        sub = parts[0].lower() if parts else "status"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        registry = load_registry(os.environ.get("DRYDOCK_STEERING_ROOT"))
+        active_modes = os.environ.get("DRYDOCK_STEERING_MODES", "").strip()
+
+        if sub in ("status", ""):
+            modes_list = registry.list_modes()
+            lines = [
+                "### Deep Noir steering",
+                "",
+                f"- Active modes: **{active_modes or '(none)'}**",
+                f"- Registry root: `{registry.root}`",
+                f"- Discovered modes: **{len(modes_list)}**",
+            ]
+            for mode in modes_list:
+                vectors = registry.vectors_for_mode(mode)
+                lines.append(f"  - `{mode}` ({len(vectors)} vector(s))")
+            lines += [
+                "",
+                "`/steering on <mode>` to enable · `/steering off` to disable · "
+                "`/steering list` for full vector inspection.",
+            ]
+            await self._mount_and_scroll(UserCommandMessage("\n".join(lines)))
+            return
+
+        if sub == "on":
+            if not rest:
+                await self._mount_and_scroll(UserCommandMessage(
+                    "Usage: `/steering on <mode>` (or comma list)"
+                ))
+                return
+            os.environ["DRYDOCK_STEERING_MODES"] = rest
+            steering_hook.reset_cache_for_tests()
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Steering enabled: **{rest}** (active for this session). "
+                f"Applier is log-only until real Deep Noir vectors land."
+            ))
+            return
+
+        if sub == "off":
+            os.environ.pop("DRYDOCK_STEERING_MODES", None)
+            steering_hook.reset_cache_for_tests()
+            await self._mount_and_scroll(UserCommandMessage(
+                "Steering disabled."
+            ))
+            return
+
+        if sub == "list":
+            modes_list = registry.list_modes()
+            if not modes_list:
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"No vectors discovered under `{registry.root}`."
+                ))
+                return
+            lines = ["### Discovered steering vectors", ""]
+            for mode in modes_list:
+                lines.append(f"#### `{mode}`")
+                for v in registry.vectors_for_mode(mode):
+                    lines.append(
+                        f"- `{v.name}` — layer {v.layer}, scale {v.scale}, "
+                        f"target `{v.target_model}`"
+                    )
+            await self._mount_and_scroll(UserCommandMessage("\n".join(lines)))
+            return
+
+        await self._mount_and_scroll(UserCommandMessage(
+            "Usage: `/steering {status | on <mode> | off | list}`"
+        ))
+
     async def _show_config(self) -> None:
         """Switch to the configuration app in the bottom panel."""
         if self._current_bottom_app == BottomApp.Config:

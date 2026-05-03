@@ -1,0 +1,96 @@
+{
+  "mode": "baseline",
+  "timestamp": "2026-05-03T12:28:13Z",
+  "base_url": "http://192.168.50.19:8080/v1",
+  "model": "gemma-4-26b",
+  "iters": 3,
+  "config": {
+    "note": "live vLLM, configuration not introspected"
+  },
+  "summaries": [
+    {
+      "workload": "short",
+      "ok": 0,
+      "errors": 3
+    },
+    {
+      "workload": "medium",
+      "ok": 0,
+      "errors": 3
+    }
+  ],
+  "raw": [
+    {
+      "workload": "short",
+      "iter": 0,
+      "ttft_s": 0.0,
+      "total_s": 4.928445743396878,
+      "output_tokens": 64,
+      "e2e_tok_s": 12.985838402654036,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 0,
+      "error": null
+    },
+    {
+      "workload": "short",
+      "iter": 1,
+      "ttft_s": 0.0,
+      "total_s": 4.453918140381575,
+      "output_tokens": 64,
+      "e2e_tok_s": 14.369370514411164,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 0,
+      "error": null
+    },
+    {
+      "workload": "short",
+      "iter": 2,
+      "ttft_s": 0.0,
+      "total_s": 4.435586132109165,
+      "output_tokens": 64,
+      "e2e_tok_s": 14.4287582506187,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 0,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 0,
+      "ttft_s": 0.0,
+      "total_s": 23.28112149052322,
+      "output_tokens": 256,
+      "e2e_tok_s": 10.996033851041368,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 0,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 1,
+      "ttft_s": 0.0,
+      "total_s": 16.854371700435877,
+      "output_tokens": 256,
+      "e2e_tok_s": 15.18893759732257,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 0,
+      "error": null
+    },
+    {
+      "workload": "medium",
+      "iter": 2,
+      "ttft_s": 0.0,
+      "total_s": 16.87941854633391,
+      "output_tokens": 256,
+      "e2e_tok_s": 15.166399203697772,
+      "decode_tok_s": 0.0,
+      "streamed": false,
+      "chunk_count": 0,
+      "error": null
+    }
+  ]
+}

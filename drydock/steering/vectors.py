@@ -43,7 +43,13 @@ except ImportError:  # pragma: no cover - py310 fallback
 
 @dataclass(frozen=True)
 class VectorManifest:
-    """Metadata describing one steering vector. Fully serialisable."""
+    """Metadata describing one steering vector. Fully serialisable.
+
+    For activation-steering vectors (the Deep Noir endgame), the .npy
+    payload + layer + scale are the load-bearing fields. For the v0
+    LogitBiasSteeringApplier (token-level approximation), the
+    `tokens_boost` / `tokens_suppress` fields drive the bias dict.
+    Both are optional — a manifest can carry one, the other, or both."""
     name: str
     description: str
     layer: int
@@ -54,6 +60,8 @@ class VectorManifest:
     research_provenance: str = ""
     mode_tags: tuple[str, ...] = ()
     family: str = ""
+    tokens_boost: tuple[str, ...] = ()      # token-level steering (logit_bias)
+    tokens_suppress: tuple[str, ...] = ()   # token-level steering (logit_bias)
 
     @classmethod
     def from_toml_dict(cls, data: dict[str, Any]) -> "VectorManifest":
@@ -62,6 +70,15 @@ class VectorManifest:
         modes = tags.get("mode", []) if isinstance(tags, dict) else []
         if not isinstance(modes, list):
             modes = [modes]
+        # Token-level lists live at the top level under `[steering]`
+        # to keep them out of the [tags] free-form area.
+        steering = data.get("steering", {})
+        boost_raw = steering.get("tokens_boost", []) if isinstance(steering, dict) else []
+        suppress_raw = steering.get("tokens_suppress", []) if isinstance(steering, dict) else []
+        if not isinstance(boost_raw, list):
+            boost_raw = [boost_raw]
+        if not isinstance(suppress_raw, list):
+            suppress_raw = [suppress_raw]
         return cls(
             name=str(v["name"]),
             description=str(v.get("description", "")),
@@ -73,6 +90,8 @@ class VectorManifest:
             research_provenance=str(v.get("research_provenance", "")),
             mode_tags=tuple(str(m) for m in modes),
             family=str(tags.get("family", "")) if isinstance(tags, dict) else "",
+            tokens_boost=tuple(str(t) for t in boost_raw),
+            tokens_suppress=tuple(str(t) for t in suppress_raw),
         )
 
 

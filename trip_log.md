@@ -3,6 +3,39 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-03 16:17 UTC tick
+- Stress: 845/1658 (PID 2219727, active log `/tmp/stress_2000_1777732347.log`, on "API: GraphQL subscription"; recycle-TUI triggered at 845 after 3 SKIPs — normal for API-server prompts with slow context)
+- Write rate: 33% (last 100 prompts — API:REST/GraphQL/gRPC category; low rate consistent with prior API-category ticks; not a regression)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=6363 total; last 200 entries: harness:tool:hallucinated_name (102, all ralph_repo_index — already in _IGNORE_TOOLS and _RETRIEVAL_HALLUCINATIONS; admiral canned nudge handles the empty_after_tool stall), harness:loop:bash_generic (80, model behavior), harness:search_replace:not_found_loop (16, existing handling), harness:bash:heredoc_loop (2)
+- Action this tick: no new fix committed. Prior ticks were reading old log (1777119799, stopped at 680); current run is 1777732347 (845 entries). All top patterns already have drydock-side handling from prior commits this week. Balancer healthy on :8001. No new GitHub issues.
+
+## 2026-05-03 14:12 UTC tick
+- Stress: 797/1658 (PID 2219727, alive 23h, on "API: gRPC*" prompts — log live)
+- Write rate: 28% (last 100 prompts — gRPC/WebSocket/SSE/JSON-RPC API prompts; these get text-only responses more often; not a regression)
+- vLLM 400s: 0 in last 30 min
+- GH issues: 0 open
+- Dispatch queue: harness=3577 total; recent 200 entries dominated by harness:tool:hallucinated_name (96) + harness:loop:bash_generic (82); bash loops are `fuser -k 8000/tcp && python3 api_versioning_*` (port-conflict test pattern, model behavior)
+- Action this tick: no new fix committed. cfe0ee0 (retrieval hallucination redirect to `retrieve`) was shipped by prior tick at 13:05 UTC; installed v2.7.35 does NOT yet include it — auto_release at 18:00 UTC will ship v2.7.37 (or next) with the fix. search_replace:not_found_loop confirmed as directory-path inference miss (model passes `/tool_agent` dir, inference scans for matching .py, if none found falls through to ToolError); existing handling present. harness:loop:bash_generic is model behavior (no drydock fix viable without blocking). Overall: healthy, waiting for 18:00 UTC auto_release to deploy today's fix.
+
+## 2026-05-03 14:05 UTC tick
+- Stress: 784/1658 (PID 2219727, alive, 22h elapsed, on "API: *" prompts)
+- Write rate: 27% (last 100 prompts — all "API: *" category; low write rate is partly expected for prompts like "API versioning", "API deprecation policy" that are conceptual; compare: prompts 781+782 "OpenAPI generation" and "Swagger UI" each got 3 writes)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=2208 total (960 harness:tool:hallucinated_name, 898 harness:loop:bash_generic, 250 harness:search_replace:not_found_loop, 60 harness:bash:heredoc_loop) — classified 13:00 UTC, mostly from events before cfe0ee0 fix
+- Action this tick: no new fix committed. cfe0ee0 (hallucinated retrieval redirect) is committed but not yet installed (installed=v2.7.35; source is ahead; auto_release ships at 12:00 CDT/17:00 UTC). harness:bash:heredoc_loop and harness:search_replace:not_found_loop both have existing handling in source (file-head on first failure, HARD-STOP on 3rd). harness:loop:bash_generic is model behavior. SKIP rate 86/784 (11%) — some prompt 783/784 SKIP is harness retry timeout, possibly TUI stuck after fuser/graphql server session.
+
+## 2026-05-03 13:05 UTC tick
+- Stress: 757/1658 (PID 2219727, alive, on "API: Swagger UI" prompts)
+- Write rate: 34% (last 100 prompts — harness:tool:hallucinated_name pattern confirmed as cause; model calls ralph_repo_index, gets generic "use glob/grep" redirect that doesn't satisfy retrieval intent, triggers empty_after_tool loop; 85 SKIPs / 757 prompts)
+- Admiral last 30 min: 0 vLLM 400s, harness:tool:hallucinated_name and harness:bash:heredoc_loop both active in dispatch queue (1545 entries total)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=1545 (dominated by harness:tool:hallucinated_name and harness:loop:bash_generic)
+- Action this tick: committed fix cfe0ee0 — when model calls a retrieval-flavored hallucinated tool (ralph_repo_index etc.) AND `retrieve` IS registered, redirect to `retrieve(query=...)` instead of glob/grep. Old redirect didn't satisfy model's retrieval intent causing loops. Fixed test construction bugs (wrong constructor arg + wrong field name raw_args). 5 regression tests in tests/tools/test_hallucinated_retrieval_redirect.py. Addresses pattern harness:tool:hallucinated_name. Ships at next 0/6/12/18 UTC auto_release tick as v2.7.37 (or next available).
+
 ## 2026-05-03 07:31 UTC tick
 - Stress: 523/1658 (PID 2219727, run started ~12:30 UTC May 2, currently on "Add storage backend" prompts)
 - Write rate: 34% (last 100 prompts — down from 74% in previous run; model looping on exploration for storage backend prompts rather than coding; admiral intervening)
@@ -1175,3 +1208,53 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - llm_balancer: PID 713929 on :8001 healthy (gemma4 docker up; curl OK); no orphan port squatters
 - Action this tick: investigated user_cancellation pattern for ralph_repo_index in session_20260503_102706_e2884772 — model calls ralph_repo_index on fresh session start, suppression code fires (_IGNORE_TOOLS in format.py), system note injected, but model still responds "Previous turn ended; awaiting your next instruction." (text response, not empty, so stall-handler misses it). Consistent with CLAUDE.md learning #2 (Gemma 4 ignores advisory nudges). No new actionable drydock source bug — existing suppression + system-note injection is the correct approach; weak recovery is model-behavior. No fix committed.
+
+## 2026-05-03 11:30 UTC tick
+- Stress: 661/1658 (PID 2219727, 20h 28m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy)
+- Write rate: 42% last 100 prompts ("Add storage backend: X" cluster — fictional backends produce 0 writes after session resets when model lacks project context; consistent with prior ticks)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: healthy on :8001; gemma4 docker up; balancer curl confirmed responsive
+- Action this tick: no fix committed — stress progressing normally at 40% completion; 83 SKIPs (12.5% skip rate, consistent with prior ticks); current session actively writing azure_blob_storage plugin files; no new drydock source bugs found; v2.7.35 (binary-file grep hint) is the latest shipped fix with no unreleased commits queued
+
+## 2026-05-03 11:33 UTC tick
+- Stress: 689/1658 (PID 2219727, 20h 58m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy; 74 SKIPs, 10.7% skip rate)
+- Write rate: 50% last 100 prompts (improvement over prior 37-42% range; current "API: JSON-RPC / REST endpoint" cluster producing writes)
+- Admiral last 30 min: empty_after_tool:ralph_repo_index (already suppressed in _IGNORE_TOOLS + stall handler); search_replace not_found (known model pattern); no new patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: healthy on :8001; gemma4 docker up; dispatch queues active (harness.jsonl 221 signals, retrieval.jsonl 1 signal)
+- Action this tick: no fix committed — investigated classifier dispatch queue (top signals: 96x hallucinated_name, 87x loop:bash_generic, 29x search_replace:not_found_loop); all are known patterns already handled in source; 6 unreleased classifier/GraphRAG commits ahead of v2.7.35 tag (7160667..75daa69) will auto-release at next 12:00 UTC cron tick; stress progressing normally
+
+## 2026-05-03 13:45 UTC tick
+- Stress: 792/1658 (47.8%), PID 2219727, alive (old PID 3713698 from resume.md is stale — harness was restarted by babysitter at some earlier point, new log at /tmp/stress_2000_1777732347.log)
+- Write rate: 28% last 100 / 37% last 200 (down from 74% pre-trip baseline)
+- vLLM 400s: 0 — clean
+- GH issues: 0 open
+- Dispatch queue: harness=2892 total; top patterns: hallucinated_name=1263, bash_generic=1183, search_replace:not_found_loop=313
+- Action this tick: investigated write rate drop. Root cause: current prompt batch (750–792) is all API-server prompts (WebSocket, GraphQL, gRPC, REST) — model tries to spawn live Flask/FastAPI servers, binds ports, loops on fuser -k 8000/tcp when port is busy. This is prompt-category behavior, not a new drydock regression. cfe0ee0 (ralph_repo_index redirect to retrieve) is in source tree; ralph_repo_index calls still fire occasionally but _silence_suppressed_failures system-note is active. No fix committed this tick — no single actionable drydock bug identified that wouldn't require harness-level changes. Scheduling next wakeup in ~20 min to track write rate recovery as prompts cycle past the API-server batch.
+
+## 2026-05-03 14:45 UTC tick
+- Stress: 812/1658 (49%), PID 2219727, alive, log /tmp/stress_2000_1777732347.log; 98 SKIPs total (12% skip rate)
+- Write rate: 32% last 100 prompts (rate limiter / API server prompt batch; consistent with prior tick)
+- vLLM 400s: 0 — clean
+- GH issues: 0 open
+- Dispatch queue: harness=4274 total; top: hallucinated_name=1889, bash_generic=1753, search_replace:not_found_loop=439, heredoc_loop=123, tool_error_raised=19
+- Action this tick: committed fix — `args.diff` → `args.content` in search_replace context_recovery block (a77e9c4). `SearchReplaceArgs` has no `diff` field; AttributeError was silently swallowed by try/except so GraphRAG recover_for_search_replace never received real SEARCH text. Fix enables GraphRAG symbol lookup to actually run after not-found failures (addresses pattern harness:search_replace:not_found_loop). cfe0ee0 (hallucinated_name redirect fix) committed earlier today by prior tick — still pre-release, will ship at noon CDT auto_release. llm_balancer healthy, vLLM docker up.
+
+## 2026-05-03 15:35 UTC tick
+- Stress: 839/1658 (50.6%), PID 2219727, alive, log /tmp/stress_2000_1777732347.log
+- Write rate: 33% last 100 prompts (API prompt batch: rate-limiter, REST, REST DELETE; low writes expected)
+- vLLM 400s: 0 — clean; gemma4 docker up 9 days; llm_balancer on :8001 (PID 2462362, restarted since resume baseline)
+- GH issues: 0 open
+- Dispatch queue: harness=5672 total; top: hallucinated_name=102, bash_generic=80, search_replace:not_found_loop=16 (last 200 entries); high SKIP/retry rate observed (~7-11 SKIPs per 36 prompts) due to TUI getting stuck during API-server prompt batch; admiral recycling TUI on skip clusters, which is recovering it
+- Action this tick: committed fix e4bdc27 — bash error-loop-breaker for varying-output failures (addresses pattern harness:loop:bash_generic). Existing hash-based dedup only fires on byte-identical output; commands like `python3 -m tool_agent list` with per-run traceback variation could loop 14+ times. New `_bash_err_count` tracker fires advisory NOTICE on 5th+ non-zero-exit call to same command regardless of output variation. 3 regression tests added.
+
+## 2026-05-03 16:33 UTC tick
+- Stress: 854/1658 (51%), write rate 33% last 100 prompts (down from 74%)
+- vLLM 400s: 0 (container up 9 days, healthy)
+- Admiral last 30 min: multiple tui-recycle-requested and retry-spike events; ~12% SKIP rate (99 SKIPs in 854 prompts)
+- GH issues: 0 open
+- Dispatch queue: harness=7048 total; top patterns: hallucinated_name=3178, bash_generic=2876, search_replace:not_found_loop=685, bash:heredoc_loop=207
+- Root cause of degraded write rate: TUI's "Queued" feature (buffers new prompt while busy) looks like prompt rejection to the harness, causing 3-retry SKIP cycles. TUI log confirms prompt IS accepted into queue ("Queued: 'API: JSON-RPC server' (1 pending)") but harness sees no new user message and SKIPs. Not a simple drydock fix — would require harness-side queue-state detection (off-limits per CLAUDE.md). Services healthy; stress continues making progress slowly.
+- Action this tick: investigated SKIP/retry-spike root cause — harness/TUI queue-state mismatch; no drydock fix committed (harness cannot be modified, drydock change would alter UX queuing behavior user has not flagged as broken)

@@ -200,6 +200,57 @@ v3 is a from-scratch rewrite using nano-claude-code as foundation. 4 core files,
 └── start_gemma4.sh                ← Docker startup (vLLM + Gemma 4)
 ```
 
+## Sovereign v2 framework (active as of v2.7.36)
+
+The Sovereign Stack v2 deliverables (per `SOVEREIGN_PRD.md` and
+`TRIAGE_v1.md`) are now shipping. The framework is a **living loop**:
+
+```
+observation (logs)
+   → drydock.core.classifier  (rule-based, 5 buckets)
+   → drydock.core.classifier.dispatcher  (~/.drydock/dispatch/<bucket>.jsonl)
+   → autonomous_review.sh  (consumes harness.jsonl as primary signal)
+   → harness fix shipped via auto_release
+```
+
+Cron wiring:
+
+| Cron | Cadence | Purpose |
+| ---- | ------- | ------- |
+| `scripts/classify_pulse.sh` | `*/10` | Classifies recent log activity, fills queues |
+| `scripts/autonomous_review.sh` | `*/30` | Reads queue, picks highest-priority unhandled, fixes |
+| `scripts/auto_release.sh` | `0 0,6,12,18 * * *` (CDT) | Tags + publishes to PyPI |
+| `scripts/stress_babysitter.sh` | `0 * * * *` | Restarts stress run if dead |
+| `scripts/llm_balancer.py` keepalive | `*/5` | Resurrects balancer if killed |
+| `scripts/telegram_bot.py --daemon` | `*/2` | Resurrects telegram daemon |
+
+Per-fix convention: when an autonomous fix addresses a queued classifier
+pattern, the commit subject prefixes `addresses pattern <pattern_id>:`
+so subsequent ticks dedup naturally via 24h git log.
+
+### Modules added in v2.7.34–v2.7.36
+
+| Path | Purpose |
+| ---- | ------- |
+| `drydock/graphrag/` | GraphRAG: AST symbol indexer + cross-package alias resolution + TF-IDF text retriever + SQLite storage. CLI: `python -m drydock.graphrag {ingest,query,symbol,chain,stats}` |
+| `drydock/steering/` | Deep Noir scaffolding: vector format (.npy + .toml manifest with sha256), registry, SteeringConfig, applier protocol. CLI: `python -m drydock.steering {list,inspect,sha256,eval}` |
+| `drydock/core/classifier/` | Rule-based failure classifier + Dispatcher. CLI: `python -m drydock.core.classifier <log> [--dispatch]` |
+| `drydock/core/tools/builtins/retrieve.py` | Agent-facing `retrieve` tool. Auto-discovered. Auto-ingests cwd on first call when project markers are present. |
+| `drydock/core/steering_hook.py` | Pre-`backend.complete()` hook in agent_loop. Env-gated (`DRYDOCK_STEERING_MODES=...`), log-only by default. |
+| `drydock/core/config/local_detect.py` | First-launch local-LLM autodetection (vLLM/Ollama/llama.cpp/LM Studio). Skips Mistral API-key prompt. |
+
+### Slash commands (live operator control)
+
+- `/graphrag stats|ingest <path>|query <text>` — index control + ad-hoc retrieval
+- `/steering status|on <mode>|off|list` — Deep Noir mode toggle (no-op until vectors land)
+
+### Where signal lives
+
+- Classifier rules: `drydock/core/classifier/rules.py`
+- Bucket taxonomy validated against MODEL_SHORTCOMINGS.md + TRIAGE_v1.md (5 buckets, no `OTHER` matches in v0)
+- Dispatcher queues: `~/.drydock/dispatch/<bucket>.jsonl` — append-only, dedup-aware, structured records
+- Live first pulse produced 211 signals (210 harness, 1 retrieval) — distribution matches the framework's prediction
+
 ## Configuration Management
 
 **All scripts use explicit Python path:** `/home/bobef/miniconda3/bin/python3`

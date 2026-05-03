@@ -143,7 +143,16 @@ def run_one(client: OpenAI, model: str, prompt: str, max_tokens: int) -> RunResu
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
-            if delta and delta.content:
+            # Some servers (Jetson llama-server with thinking mode) return
+            # `reasoning_content` instead of `content` for the first chunks.
+            # Treat both as content for TTFT/decode-rate purposes.
+            content_payload = None
+            if delta:
+                content_payload = (
+                    getattr(delta, "content", None)
+                    or getattr(delta, "reasoning_content", None)
+                )
+            if content_payload:
                 now = time.perf_counter()
                 if ttft is None:
                     ttft = now - t0

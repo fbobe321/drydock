@@ -39,8 +39,12 @@ CLI:
 from __future__ import annotations
 
 from drydock.steering.applier import (
+    LogitBiasSteeringApplier,
+    LogOnlySteeringApplier,
     NullSteeringApplier,
     SteeringApplier,
+    SteeringDecision,
+    accumulate_logit_bias,
     apply_steering,
 )
 from drydock.steering.config import SteeringConfig
@@ -51,12 +55,16 @@ from drydock.steering.registry import (
 from drydock.steering.vectors import Vector, VectorManifest
 
 __all__ = [
+    "LogitBiasSteeringApplier",
+    "LogOnlySteeringApplier",
     "NullSteeringApplier",
     "SteeringApplier",
     "SteeringConfig",
+    "SteeringDecision",
     "SteeringRegistry",
     "Vector",
     "VectorManifest",
+    "accumulate_logit_bias",
     "apply_steering",
     "load_registry",
 ]

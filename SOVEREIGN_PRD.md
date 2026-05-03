@@ -480,34 +480,52 @@ mitigates several of the failure classes already in `MODEL_SHORTCOMINGS.md`.
 - ✅ Drydock harness (v2 TUI + v3 rewrite)
 - ✅ Coding workflows + 370-PRD benchmark
 - ✅ Admiral, stress harness, autonomous review
-- ▢ **Hosting performance sweep** — lock the inference floor (`PERF_SWEEP_PLAN.md`)
-- ▢ **Manual failure triage** — seed the classifier taxonomy from existing
-  diagnostic data (`MODEL_SHORTCOMINGS.md`, `BASELINE_412.md`, Admiral logs)
-- ▢ **Read-before-write enforcement** in the harness
-- ▢ Customer-hardware portability bring-up (llama.cpp + Ollama backends)
+- ✅ **Hosting performance sweep** — clean baseline captured 2026-05-02
+  (44–62 tok/s e2e, `perf_results/baseline_1777732278.json`)
+- ✅ **Manual failure triage** — `TRIAGE_v1.md`, 11 patterns mapped,
+  GraphRAG + Deep Noir justified by data
+- ✅ **Read-before-write enforcement** — shipped in `write_file.py` +
+  `search_replace.py` advisory paths (already in v2.7.30+)
+- ✅ **Install auto-detect** — fresh installs detect local vLLM/Ollama/
+  llama.cpp/LM Studio and skip the Mistral API-key prompt (v2.7.34)
+- ▢ Customer-hardware portability bring-up (llama.cpp + Ollama backends
+  beyond detection — full provider configs)
 
-### Phase 2 — 60 days (Classifier + GraphRAG first cut)
+### Phase 2 — 60 days (Classifier + GraphRAG)  *— shipping live as of v2.7.36*
 
-- ▢ **Failure classifier** — extends Admiral / runs as a sibling; emits
-  structured signals tagged harness-class / retrieval-class / steering-class /
-  model-prior / ambiguous-input
-- ▢ **GraphRAG ingestion pipeline** (PDFs, code, markdown) — first cut, ships
-  as a deployable module
-- ▢ **Pluggable retriever interface** in Drydock (vector + graph backends)
-- ▢ Memory routing (when to retrieve, when not to)
+- ✅ **Failure classifier** — `drydock.core.classifier`, rule-based v0
+  (LLM swap-in is v1). 5-bucket taxonomy: harness / retrieval / steering /
+  model_prior / ambiguous_input. CLI + `--dispatch` flag.
+- ✅ **Per-bucket Dispatcher** — routes signals to
+  `~/.drydock/dispatch/<bucket>.jsonl` queues, dedup, error isolation,
+  pluggable handlers
+- ✅ **Periodic pulse** — `*/10` cron classifies + dispatches recent log
+  activity; live pulse produced 211 signals (210 harness, 1 retrieval —
+  matches predicted distribution exactly)
+- ✅ **GraphRAG first cut** — `drydock.graphrag`, AST symbol indexer
+  with cross-package alias resolution + TF-IDF text retriever + SQLite
+  storage + CLI (v2.7.34)
+- ✅ **Retriever interface in Drydock** — `retrieve` builtin tool,
+  auto-discovered, auto-ingest on first call when cwd looks like a project
+- ✅ `/graphrag` slash command (stats / ingest / query)
+- ✅ autonomous_review consumes dispatch queue as primary signal
+- ▢ Embeddings backend (sentence-transformers) behind same Retriever protocol
 - ▢ Citation-mode prompt templates + grounding eval
-- ▢ Operator dashboards (per-class failure rates over time)
 
-### Phase 3 — 90 days (Deep Noir first cut + self-improvement)
+### Phase 3 — 90 days (Deep Noir + self-improvement)  *— scaffolding shipping as of v2.7.36*
 
-- ▢ **Deep Noir steering** — first cut, ships as a deployable module;
-  initial vectors for reduced-hallucination, secure-coding, citation modes
-- ▢ Steering hook in the harness; sandbox eval per new vector
-- ▢ Classifier-driven dispatch: harness-class signals open auto-PRs to
-  drydock; retrieval-class signals queue corpus gaps; steering-class signals
-  queue vector candidates
+- ✅ **Deep Noir scaffolding** — `drydock.steering`, vector format
+  (.npy + .toml manifest with sha256), registry, SteeringConfig, three
+  applier implementations (Null/LogOnly/sidecar-stub), sandbox eval
+- ✅ **Steering hook in agent_loop** — env-gated, log-only by default,
+  zero behavior change until DRYDOCK_STEERING_MODES is set
+- ✅ `/steering` slash command (status / on / off / list)
+- ▢ Real vLLM sidecar applier — drops in as a single class behind the
+  existing SteeringApplier protocol when vectors arrive
+- ▢ Initial vectors (operator's Deep Noir research output)
+- ▢ Per-vector sandbox eval gating — auto-promote if zero regressions on
+  the regression suite
 - ▢ Execution trace logging (full prompts + tool calls per task)
-- ▢ Autonomous upgrade loop (**local-only** proposer)
 - ▢ First paid pilot ($5–25K, defense-adjacent)
 
 ### Phase 4 — 120 days (Hardening + verticals)
