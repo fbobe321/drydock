@@ -68,8 +68,28 @@ def bootstrap_config_files() -> None:
     if not config_file.exists():
         try:
             config_file.parent.mkdir(parents=True, exist_ok=True)
+            default = DrydockConfig.create_default()
+            # Auto-detect a running local LLM server (llama.cpp, Ollama,
+            # vLLM, LM Studio). If found, point the default config at it
+            # and set local as the active model — so a fresh install with
+            # a local server already running starts up without demanding
+            # a Mistral API key.
+            try:
+                from drydock.core.config.local_detect import (
+                    detect_local_llm,
+                    patch_config_for_local,
+                )
+                info = detect_local_llm()
+                if info is not None:
+                    patch_config_for_local(default, info)
+                    rprint(
+                        f"[green]Detected {info.label} at {info.api_base} — "
+                        f"using model '{info.model_name}'.[/]"
+                    )
+            except Exception as e:  # detection must never break first launch
+                logger.debug("local-LLM detection failed: %s", e)
             with config_file.open("wb") as f:
-                tomli_w.dump(DrydockConfig.create_default(), f)
+                tomli_w.dump(default, f)
         except Exception as e:
             rprint(f"[yellow]Could not create default config file: {e}[/]")
 

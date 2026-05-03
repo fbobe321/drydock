@@ -141,6 +141,74 @@ async def test_noop_edit_text_not_in_file_returns_already_correct(tool, py_file,
 
 
 @pytest.mark.asyncio
+async def test_noop_second_offense_contains_hard_stop(tool, py_file, ctx):
+    """On 2nd consecutive SEARCH==REPLACE no-op, response must include HARD-STOP with file content."""
+    ctx.read_file_state[str(py_file)] = {
+        "content": py_file.read_text(),
+        "timestamp": py_file.stat().st_mtime_ns,
+        "offset": 0,
+        "limit": None,
+    }
+    content = _make_noop_content(py_file)
+    args = SearchReplaceArgs(file_path=str(py_file), content=content)
+
+    # First call — advisory only
+    first = await _run_to_result(tool, args, ctx)
+    assert "HARD-STOP" not in first.content, "First offense should not be a HARD-STOP"
+    assert "ALREADY CORRECT" in first.content
+
+    # Update read state to allow second call (timestamp unchanged, same content)
+    ctx.read_file_state[str(py_file)] = {
+        "content": py_file.read_text(),
+        "timestamp": py_file.stat().st_mtime_ns,
+        "offset": 0,
+        "limit": None,
+    }
+
+    # Second call — must escalate to HARD-STOP with file content
+    second = await _run_to_result(tool, args, ctx)
+    assert "HARD-STOP" in second.content, (
+        f"Second offense should produce HARD-STOP, got: {second.content!r}"
+    )
+    assert "write_file" in second.content, "HARD-STOP should suggest write_file"
+    assert "FILE START" in second.content, "HARD-STOP should embed current file content"
+
+
+@pytest.mark.asyncio
+async def test_noop_escalation_resets_across_files(tool, tmp_path, ctx):
+    """HARD-STOP counter is per-file; a different file starts fresh."""
+    file_a = tmp_path / "a.py"
+    file_b = tmp_path / "b.py"
+    src = "x = 1\n"
+    file_a.write_text(src)
+    file_b.write_text(src)
+
+    def _make_read_state(p: Path):
+        return {
+            "content": p.read_text(),
+            "timestamp": p.stat().st_mtime_ns,
+            "offset": 0,
+            "limit": None,
+        }
+
+    noop_text = "x = 1"
+    content = f"<<<<<<< SEARCH\n{noop_text}\n=======\n{noop_text}\n>>>>>>> REPLACE\n"
+
+    # Two offenses on file_a
+    ctx.read_file_state[str(file_a)] = _make_read_state(file_a)
+    await _run_to_result(tool, SearchReplaceArgs(file_path=str(file_a), content=content), ctx)
+    ctx.read_file_state[str(file_a)] = _make_read_state(file_a)
+    second_a = await _run_to_result(tool, SearchReplaceArgs(file_path=str(file_a), content=content), ctx)
+    assert "HARD-STOP" in second_a.content
+
+    # First offense on file_b should still be advisory only
+    ctx.read_file_state[str(file_b)] = _make_read_state(file_b)
+    first_b = await _run_to_result(tool, SearchReplaceArgs(file_path=str(file_b), content=content), ctx)
+    assert "HARD-STOP" not in first_b.content, "Different file should start fresh"
+    assert "ALREADY CORRECT" in first_b.content
+
+
+@pytest.mark.asyncio
 async def test_real_edit_still_works(tool, py_file, ctx):
     """A genuine edit still succeeds and produces a non-zero lines_changed or new content."""
     original = py_file.read_text()

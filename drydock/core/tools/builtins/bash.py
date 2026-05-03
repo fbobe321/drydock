@@ -547,6 +547,15 @@ class Bash(
                     _is_heredoc_write = bool(_re.search(
                         r"cat\s+<<\s*['\"]?EOF['\"]?\s+>", args.command
                     ))
+                    # Detect echo -e / printf with \n or \t escape sequences.
+                    # These loops when the shell doesn't interpret the escapes
+                    # (e.g. dash ignores echo -e; backslash doubling in quoting
+                    # turns \t into literal \t instead of a tab).  The generic
+                    # "EDIT SOURCE CODE" hint is wrong here — the model needs
+                    # to use $'...' quoting or write_file instead.
+                    _is_echo_escape = bool(_re.search(
+                        r'(?:echo\s+.*-[eE]|printf)\b', args.command
+                    ) and _re.search(r'\\[nt]', args.command))
                     if _is_heredoc_write:
                         notice = (
                             f"[NOTICE: this is the #{entry['count']}th identical "
@@ -557,6 +566,19 @@ class Bash(
                             f"wrote (use read_file), find the bug in the content, "
                             f"then fix it with write_file or search_replace with "
                             f"CORRECTED content. Do NOT re-run this cat command.]"
+                        )
+                    elif _is_echo_escape:
+                        notice = (
+                            f"[NOTICE: this is the #{entry['count']}th identical "
+                            f"run of `{cmd_preview}` — escape sequences (\\n, \\t) "
+                            f"in echo -e / printf are NOT being interpreted correctly. "
+                            f"This shell may be /bin/sh (dash) where echo -e is a "
+                            f"no-op, or backslash doubling in quoting is consuming "
+                            f"the escape. "
+                            f"Use ANSI $'...' quoting: printf $'name\\\\tage\\\\n' "
+                            f"OR use Python: python3 -c \"print('name\\\\tage')\" "
+                            f"OR use write_file to create the test file directly. "
+                            f"Do NOT re-run this command unchanged.]"
                         )
                     else:
                         notice = (

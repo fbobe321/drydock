@@ -565,6 +565,38 @@ class SearchReplace(
         # "edited successfully (+0 lines)" path for this structural no-op.
         noop_blocks = [b for b in search_replace_blocks if b.search == b.replace]
         if noop_blocks:
+            noop_state = self.state.__dict__.setdefault("_sr_noop_history", {})
+            noop_key = str(file_path)
+            noop_entry = noop_state.get(noop_key, {"count": 0})
+            noop_entry["count"] += 1
+            noop_state[noop_key] = noop_entry
+            noop_count = noop_entry["count"]
+            if noop_count >= 2:
+                try:
+                    body = original_content[:3000]
+                    tail = (
+                        f"\n...[truncated, {original_content.count(chr(10))} lines total]"
+                        if len(original_content) > 3000 else ""
+                    )
+                    extra = (
+                        f"\n\n[HARD-STOP: #{noop_count} consecutive SEARCH==REPLACE no-op "
+                        f"on {file_path.name}. Your SEARCH and REPLACE blocks are still "
+                        f"byte-identical — this call can never change anything. "
+                        f"DO NOT retry search_replace on this file again. "
+                        f"REQUIRED: call write_file with overwrite=True and the complete "
+                        f"corrected file content. Current file:\n"
+                        f"-----FILE START-----\n{body}{tail}\n-----FILE END-----]"
+                    )
+                except Exception:
+                    extra = (
+                        f"\n\n[HARD-STOP: #{noop_count} consecutive SEARCH==REPLACE no-op "
+                        f"on {file_path.name}. Stop retrying. Use write_file overwrite=True.]"
+                    )
+            else:
+                extra = (
+                    f" Re-read the file with read_file, identify what you actually need "
+                    f"to change, and send a corrected SEARCH/REPLACE block."
+                )
             yield SearchReplaceResult(
                 file=str(file_path),
                 blocks_applied=0,
@@ -572,9 +604,7 @@ class SearchReplace(
                 warnings=[],
                 content=(
                     f"{file_path.name}: ALREADY CORRECT — the SEARCH and REPLACE text "
-                    f"are byte-identical, so this block can never make any change. "
-                    f"Re-read the file with read_file, identify what you actually need "
-                    f"to change, and send a corrected SEARCH/REPLACE block."
+                    f"are byte-identical, so this block can never make any change.{extra}"
                 ),
             )
             return

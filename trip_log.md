@@ -979,3 +979,102 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Admiral last 30 min: 10 fires — recurring skip-cluster + tui-recycle pattern (TUI wedges ~every 20-30 min, admiral requests recycle, admiral restarts, resumes); loop:bash fires on echo-e/printf \t escape issues and yaml_to_toml CLI arg issues — model behavior, not drydock bugs; canned loop-breaker firing correctly; last tui-recycle-requested at 22:31 UTC
 - Action this tick: no fix committed — all services healthy; 3 commits pending in v2.7.33 (will auto_release at 23:00 UTC in ~25 min); skip cluster frequency elevated (~6 clusters in last 2h) but managed by admiral recycle; investigated echo-e \t escape loop — drydock bash tool correctly uses /bin/bash, admiral interventions correct, no drydock source fix warranted; no new actionable bugs found
+
+## 2026-05-02 22:45 UTC tick
+- Stress: 317/1658 in latest run log (PID 2219727, 8h+ elapsed; 3 log segments totalling ~1020 prompts across resets)
+- Write rate: 53% last 100 prompts (down from 74% peak; SKIP clusters degrading rate)
+- Admiral last 30 min: severe — tui-recycle-requested fired 4x in ~70min due to 10-12 SKIP clusters per window; root cause: model looping on echo -e / printf escape-sequence commands which bloat context and slow inference
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: committed fix for echo -e / printf escape-sequence loop pattern (bash.py dedup loop-breaker). When model runs 3rd+ identical echo -e or printf command with \n/\t, now emits targeted hint ("use $'...' quoting, python3 -c, or write_file") instead of generic "EDIT SOURCE CODE" which was wrong for testing scenarios. 4 regression tests in tests/tools/test_bash_echo_escape_loop_breaker.py. Commit 15f0566; ships at next 0/6/12/18 UTC auto-release tick.
+
+## 2026-05-02 23:31 UTC tick
+- Stress: 324/1658 (PID 2219727, fresh run since ~14:30 UTC); 56% write rate last 100 prompts; 24 SKIPs (7.4%); 43% overall write rate; run progressing normally
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; gemma4 docker Up 8+ days; admiral_probe PID 4075121 alive
+- GH issues: 0 open
+- Admiral last 30 min: recurring loop:search_replace (SEARCH==REPLACE identical blocks) — 562 total in admiral_history.log; model retries after advisory "ALREADY CORRECT" with no escalation; loop:read_file repeats; skip-clusters managed by recycle
+- Action this tick: committed fix a965832 — HARD-STOP escalation on 2nd+ consecutive SEARCH==REPLACE no-op per file; first offense stays advisory, 2nd+ embeds full file content + directive to use write_file(overwrite=True); 2 regression tests added; 63 smoke/loop tests pass; ships at next 0/6/12/18 UTC auto-release
+
+## 2026-05-03 00:01 UTC tick
+- Stress: 336/1658 (PID 2219727, fresh run; current log /tmp/stress_2000_1777732347.log; 26 SKIPs 7.7%, 0 timeouts); run progressing normally
+- Write rate: 61% last 100 prompts — recovering from earlier image/audio/API segment that produced 0 writes
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (gemma4 responding); gemma4 docker Up 8+ days; admiral_probe alive
+- GH issues: 0 open
+- Admiral last 30 min: struggle:search_replace (00:00 UTC, ongoing — model SEARCH text doesn't match file; existing hard-stop escalation embeds full file after 3rd failure); loop:search_replace; loop:read_file; skip-clusters managed by tui-recycle at 23:43 and 23:55 UTC; all patterns known, handled
+- Action this tick: no fix committed — v2.7.33 shipped at 23:00 UTC (6 commits: search_replace dir-path inference, advisory placeholder errors, bash cat-heredoc hint, bash echo-e/printf hint); 2 commits ahead of v2.7.33 (a965832 SEARCH==REPLACE hard-stop, 15f0566 echo-e targeted hint) will ship at 06:00 UTC auto_release; no new actionable drydock bug found; all services healthy
+
+## 2026-05-03 00:33 UTC tick
+- Stress: 347/1658 (PID 2219727 alive 10h; current log /tmp/stress_2000_1777732347.log; 30 SKIPs 8.6%, run progressing)
+- Write rate: 62% last 100 prompts; recovering from skip-cluster at prompts 240-260 after session reset
+- vLLM 400s: 0; llm_balancer healthy on :8001; gemma4 docker up; admiral_probe PID 4075121 alive
+- GH issues: 0 open
+- Admiral last 30 min: tui-recycle-requested 3x (00:07, 00:18, 00:29 UTC) due to 7-8 SKIP clusters per window; retry-spike alert at 00:31 (53% retry rate in 38 prompts); patterns are recurring skip/retry clusters after session resets — known, managed by admiral; loop:search_replace; empty_after_tool:ralph_repo_index (suppressed in format.py)
+- Action this tick: no fix committed — 2 unreleased commits (a965832, 15f0566) ship at 06:00 UTC auto_release; no new actionable drydock bug found; all services healthy
+
+## 2026-05-03 01:05 UTC tick
+- Stress: 353/1658 (PID 2219727, 10.5h elapsed; babysitter restarted run since last note, new log /tmp/stress_2000_1777732347.log)
+- Write rate: 62% last 100 prompts (41% last 200 — SKIP cluster at prompts ~338-355 dragging average; 37 total SKIPs, ~10.5%)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; gemma4 docker up
+- GH issues: 0 open
+- Admiral last 30 min: severe skip-cluster (12/36 prompts) at 00:55 UTC; tui-recycle-requested 3x; retry-spike at 00:31; loop:search_replace (SEARCH==REPLACE no-op) firing because a965832 fix not yet in production (ships 06:00 UTC); retry_after_error:search_replace with existing file-head mitigations
+- Action this tick: no fix committed — a965832 (HARD-STOP SEARCH==REPLACE escalation) and 15f0566 (bash echo-e hint) are unreleased; confirmed they are NOT in installed v2.7.33; they will ship as v2.7.34 at 06:00 UTC auto_release; no new actionable drydock bug found; all services healthy
+
+## 2026-05-03 01:30 UTC tick
+- Stress: 362/1658 (PID 2219727, fresh run since ~10:30 UTC; log /tmp/stress_2000_1777732347.log; run progressing normally after TUI recycle at 01:30 UTC)
+- Write rate: 61% last 100 prompts; currently in "Add a --X CLI flag" segment (prompts 350+)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (gemma4 responding); gemma4 docker up; admiral_probe PID 4075121 alive
+- GH issues: 0 open
+- Admiral last 30 min: retry_after_error:write_file (missing path, 2-3 consecutive retries — model ignoring error + file listing hint; admiral canned intervention fires; no drydock bug, model behavior); retry_after_error:search_replace (known pattern, canned intervention handles); skip-cluster 11/36 prompts at 01:17 UTC, tui-recycle-requested at 01:17 and 01:30 UTC; all patterns known and managed
+- Action this tick: no fix committed — 5 commits ahead of v2.7.33 (a965832 SEARCH==REPLACE HARD-STOP, 15f0566 bash echo-e hint, ab0f322 install auto-detect, 8e5c509 graphrag, b54064a Deep Noir skeleton) ship at 06:00 UTC auto_release; write_file missing-path retry pattern examined — existing error message with file listing + admiral canned intervention is adequate; no new actionable drydock bug found; all services healthy
+
+## 2026-05-03 02:01 UTC tick
+- Stress: 372/1658 (babysitter restarted run after old PID 3713698 died; new PID 2219727, log /tmp/stress_2000_1777732347.log, elapsed 11h 28m)
+- Write rate: 60% last 100 prompts (in "Add a --X CLI flag" prompt segment 350+; some low-write CLI-flag prompts drag rate down)
+- Admiral last 30 min: not directly readable (log path differs); stress log shows intermittent SKIP clusters every ~130 prompts, each resolved by FORCE-RESET (ESC + /clear); known harness behavior, not a drydock bug
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 healthy, forwarding to gemma4 OK; gemma4 Docker up 8 days
+- 5 commits ahead of v2.7.33 tag (Deep Noir skeleton, graphrag module, install auto-detect, SEARCH==REPLACE HARD-STOP, bash echo-e hint) — shipping at 06:00 UTC auto_release
+- Action this tick: no fix committed — all services healthy, stress progressing, no new actionable drydock bugs found in log scan
+
+## 2026-05-03 02:32 UTC tick
+- Stress: 392/1658 (PID 2219727, 11h 58m elapsed; fresh run restarted at ~14:30 UTC 2026-05-02; log /tmp/stress_2000_1777732347.log; babysitter healthy)
+- Write rate: 52% last 100 prompts (187 done-with-0-writes vs 168 done-with-writes; in "Plugin feature" prompt segment ~380-392)
+- vLLM 400s: 0; llm_balancer on :8001 healthy; gemma4 docker up; both :8001 and :8000 responding OK
+- GH issues: 0 open
+- Admiral last 30 min: skip-cluster alerts at 02:16 and 02:26 UTC (3-9 skips per 33-38 prompts); tui-recycle-requested twice; retry_after_error:search_replace (8x opus, 5x canned); retry_after_error:write_file:missing-path (2x canned); struggle:none (4x, model making tool calls without writing); loop:read_file, loop:bash, loop:search_replace (each 1-2x); empty_after_tool:ralph_repo_index (1x, model called hallucinated tool then sent empty response — thinking-stall nudge should catch this); all patterns known and managed by admiral
+- Action this tick: no fix committed — examined write_file missing-path retry pattern (format.py:556 already provides file listing hint), ralph_repo_index empty-after-tool (suppressed in format.py, thinking-stall nudge handles empty response), no new actionable drydock bug found; 5 commits ahead of v2.7.33 shipping at 06:00 UTC auto_release; all services healthy
+
+## 2026-05-03 03:02 UTC tick
+- Stress: 401/1658 (PID 2219727, 12h 30m elapsed; log /tmp/stress_2000_1777732347.log; babysitter last ticked 03:00 UTC confirming alive)
+- Write rate: 49% last 100 prompts (down from 74% in resume.md; "Plugin feature" segment 380-401 has mixed write rates)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy; gemma4 docker up
+- GH issues: 0 open
+- Admiral last 30 min: struggle:none firing every 60s from 02:43-02:55 UTC (model making 27 tool calls without writing for 12+ minutes; Gemma 4 ignoring advisory nudges per CLAUDE.md learning #2); empty_after_tool:task (1x at 02:55); tui-recycle-requested at 02:55 (skip-cluster); loop:bash with same command repeated 3x; skip-cluster alert at 02:58 UTC; all patterns known
+- Action this tick: no fix committed — struggle:none 12-minute read-loop is known Gemma 4 behavior (CLAUDE.md learning #2), not a drydock code bug; no new actionable bugs found; 5 commits ahead of v2.7.33 shipping at 06:00 UTC; all services healthy
+
+## 2026-05-03 03:32 UTC tick
+- Stress: 406/1658 (PID 2219727, 12h 58m elapsed; log /tmp/stress_2000_1777732347.log; babysitter last ticked 03:00 UTC confirming idx=401/1658)
+- Write rate: 38% last 50 prompts / 43% overall for current log (100–406 range; "Plugin feature" and "dict/csv/json/yaml" segments have lower write rates than "build tool_agent" segments)
+- vLLM 400s: 0; llm_balancer PID 713929 on :8001 healthy (confirmed llm_balancer.py, NOT an orphan); gemma4 docker up
+- GH issues: 0 open
+- Admiral last 30 min: skip-cluster at 03:30 (8 SKIPs in 35 prompts); tui-recycle-requested 03:13 and 03:30; struggle:none (model re-reading files without writing); loop:bash::grep (same grep repeated 3x); empty_after_tool:task (03:11); retry_after_error:bash (03:12); admiral firing every ~60-90s; all patterns known model-behavior, not drydock code bugs
+- Action this tick: no fix committed — all services healthy; write rate lower than 74% peak but reflecting harder/test-tool prompt types (dict_get_nested, csv_filter, Plugin feature) not a code regression; 5 commits ahead of v2.7.33 shipping at 06:00 UTC auto_release tick
+
+## 2026-05-03 04:01 UTC tick
+- Stress: 417/1658 (PID 2219727, 13h 28m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy)
+- Write rate: 49% last 100 prompts (current run overall; "Plugin feature" prompt segment 380-417 with mixed write rates)
+- Admiral last 30 min: skip-clusters at 03:13, 03:30, 03:41, 03:58 UTC; tui-recycle-requested 4x; struggle:none (model re-reading without writing); loop:bash::grep (same grep 15x); retry_after_error:search_replace and write_file:truncated-history (canned advisor fires); empty_after_tool:bash; all known patterns, all managed by admiral
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 healthy; gemma4 docker up; balancer forwarding OK (verified curl)
+- 5 commits ahead of v2.7.33 tag (Deep Noir skeleton, graphrag, install auto-detect, SEARCH==REPLACE HARD-STOP, bash echo-e hint) — shipping at 06:00 UTC auto_release
+- Action this tick: no fix committed — services healthy, no new actionable drydock bugs; skip-cluster pattern (52 SKIPs / 417 prompts = 12.5%) is elevated but tui-recycle is managing it; write rate drop from 74% peak is prompt-type-driven (Plugin feature / API prompts complete with 0 writes when model correctly explains), not a code regression
+
+## 2026-05-03 04:33 UTC tick
+- Stress: 436/1658 (just completed session reset at 435; prompt 436 "Plugin feature: monte carlo" in retry loop — expected post-reset behavior; harness last updated 2 min ago, still alive)
+- Write rate: 50% (last 100 prompts; down from 74% due to "Plugin feature:" prompts cycling through read/test before write)
+- Admiral last 30 min: 77 fires (last 200 log lines) — loop:read_file on plugins.py, struggle:search_replace, retry_after_error:bash; all known patterns, admiral handling correctly
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no action — healthy; investigated v9 stress log confusion (harness actually writes to timestamp log, not v9; false alarm), confirmed balancer PID 713929 on :8001 is legitimate llm_balancer.py, vLLM responsive on :8000
