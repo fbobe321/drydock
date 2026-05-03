@@ -71,7 +71,7 @@ RULES: tuple[ClassificationRule, ...] = (
     ),
     ClassificationRule(
         pattern_id="harness:tool:hallucinated_name",
-        regex=_r(r"(unknown\s+tool|empty_after_tool[:\s]*\w+|hallucinated.*tool)"),
+        regex=_r(r"(unknown\s+tool|hallucinated.*tool)"),
         bucket=Bucket.HARNESS,
         suggested_action="Add the hallucinated tool name to _IGNORE_TOOLS suppression list.",
     ),
@@ -84,7 +84,7 @@ RULES: tuple[ClassificationRule, ...] = (
     ),
     ClassificationRule(
         pattern_id="harness:thinking_stall",
-        regex=_r(r"(empty[-\s]*response|thinking[-\s]*stall|empty\s+assistant\s+message)"),
+        regex=_r(r"(empty[-\s]*response|thinking[-\s]*stall|empty\s+assistant\s+message|empty_after_tool[:\s]*\w+)"),
         bucket=Bucket.HARNESS,
         suggested_action="Pop empty message and inject 'Continue working' nudge.",
     ),

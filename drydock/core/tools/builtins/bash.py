@@ -561,6 +561,15 @@ class Bash(
             state = self.state.__dict__.setdefault("_bash_history", {})
             # Track total error-exit calls per command (regardless of output).
             err_state = self.state.__dict__.setdefault("_bash_err_count", {})
+            # Track consecutive empty-stdout search commands (any command, not
+            # just identical ones).  The model semantic-loops by trying different
+            # search terms for a non-existent target:
+            #   ls | grep "test_cli" → empty → ls | grep "test_race" → empty → ...
+            # Each command is unique so the identical-hash check never fires.
+            # After 5 consecutive empty searches reset is_search → nudge.
+            _consec_empty_search_state = self.state.__dict__.setdefault(
+                "_consec_empty_searches", {"count": 0}
+            )
             if returncode != 0:
                 err_count = err_state.get(args.command, 0) + 1
                 err_state[args.command] = err_count
@@ -597,6 +606,22 @@ class Bash(
                     _is_heredoc_write = bool(_re.search(
                         r"cat\s+<<\s*['\"]?EOF['\"]?\s+>", args.command
                     ))
+                    # Detect ls/grep/find search that returned empty output.
+                    # The model runs `ls -F | grep "test_cli"` repeatedly when
+                    # the file doesn't exist — each run returns empty stdout.
+                    # Generic "EDIT SOURCE CODE" is confusing; tell it to
+                    # stop searching and create the file instead.
+                    # grep/rg return rc=1 when no matches found; ls returns 0.
+                    # Accept both as "empty search" since the key signal is
+                    # empty stdout on a repeated search command.
+                    _is_empty_search = (
+                        not stdout.strip()
+                        and returncode in (0, 1)
+                        and bool(_re.search(
+                            r'(?:^|\|)\s*(?:ls\b|grep\b|find\b|rg\b)',
+                            args.command,
+                        ))
+                    )
                     # Detect echo -e / printf with \n or \t escape sequences.
                     # These loops when the shell doesn't interpret the escapes
                     # (e.g. dash ignores echo -e; backslash doubling in quoting
@@ -606,7 +631,27 @@ class Bash(
                     _is_echo_escape = bool(_re.search(
                         r'(?:echo\s+.*-[eE]|printf)\b', args.command
                     ) and _re.search(r'\\[nt]', args.command))
-                    if _is_heredoc_write:
+                    # Detect sed -i with \n or \t in substitution patterns.
+                    # GNU sed interprets \n in replacement strings but the shell
+                    # may swallow the backslash before sed sees it (depends on
+                    # quote style). The model loops retrying the same sed
+                    # command when the substitution silently fails.
+                    _is_sed_escape = bool(_re.search(
+                        r"\bsed\b.*-i\b", args.command
+                    ) and _re.search(r"\\[nt\\]", args.command))
+                    if _is_empty_search:
+                        notice = (
+                            f"[NOTICE: this is the #{entry['count']}th identical "
+                            f"run of `{cmd_preview}` — it returned empty output "
+                            f"every time. The file, symbol, or pattern you are "
+                            f"searching for does not exist yet. "
+                            f"STOP searching — you will keep getting empty results. "
+                            f"Either CREATE the missing file/function with "
+                            f"write_file or search_replace, or ask the user what "
+                            f"'{cmd_preview[:40]}' refers to. "
+                            f"Do NOT re-run this search unchanged.]"
+                        )
+                    elif _is_heredoc_write:
                         notice = (
                             f"[NOTICE: this is the #{entry['count']}th identical "
                             f"heredoc write of `{cmd_preview}`. "
@@ -630,6 +675,18 @@ class Bash(
                             f"OR use write_file to create the test file directly. "
                             f"Do NOT re-run this command unchanged.]"
                         )
+                    elif _is_sed_escape:
+                        notice = (
+                            f"[NOTICE: this is the #{entry['count']}th identical "
+                            f"run of `{cmd_preview}` — the sed substitution with "
+                            f"\\n / \\t escape sequences is a no-op. Shell quoting "
+                            f"may have consumed the backslash before sed sees it, "
+                            f"or the search pattern doesn't match any line. "
+                            f"Use search_replace with a proper SEARCH/REPLACE block "
+                            f"to make exact text edits, or use write_file to "
+                            f"rewrite the file with the corrected content. "
+                            f"Do NOT re-run this sed command unchanged.]"
+                        )
                     else:
                         notice = (
                             f"[NOTICE: this is the #{entry['count']} identical "
@@ -648,6 +705,33 @@ class Bash(
                     return
             else:
                 state[args.command] = {"hash": out_hash, "count": 1}
+
+            # Consecutive-empty-search cross-command check (C).  Tracks any
+            # ls/grep/find/rg that returned empty stdout, regardless of command
+            # text.  Resets on any search with non-empty output.  After 5
+            # consecutive empty searches, injects a clarification nudge.
+            import re as _re2
+            _is_any_search = bool(_re2.search(
+                r'(?:^|\|)\s*(?:ls\b|grep\b|find\b|rg\b)', args.command
+            ))
+            if _is_any_search:
+                if not stdout.strip() and returncode in (0, 1):
+                    _consec_empty_search_state["count"] += 1
+                else:
+                    _consec_empty_search_state["count"] = 0
+            _consec = _consec_empty_search_state["count"]
+            if _is_any_search and _consec >= 5 and not stdout.strip():
+                cmd_preview2 = args.command[:80]
+                stdout = (
+                    f"[LOOP-BREAKER: {_consec} consecutive search commands have "
+                    f"all returned empty results (most recent: `{cmd_preview2}`). "
+                    f"The thing you are looking for does NOT exist in this project. "
+                    f"STOP searching. Either (a) CREATE the missing file/function "
+                    f"with write_file or search_replace, or (b) ask the user to "
+                    f"clarify what they meant — e.g. 'I don't see any test for "
+                    f"\"bug B\" — can you clarify what component you mean?'. "
+                    f"Do NOT run another search command.]"
+                )
 
             yield self._build_result(
                 command=args.command,

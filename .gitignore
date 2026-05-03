@@ -209,3 +209,7 @@ test_bank_results/
 research/staged/
 research/traces/
 research/STOP
+
+# HLE eval outputs: per-run TUI logs, session symlinks, and copyrighted
+# HLE dataset content. Never commit.
+hle_results/

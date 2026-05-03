@@ -12,6 +12,10 @@ without them.
    - Group by `pattern_id`, sort by recent `ts`. Pick the most-fired recent pattern that is NOT already addressed by a commit in the last 24h (`git log --since="24 hours ago" --oneline`).
    - The `suggested_action` is your starting hypothesis — verify against current source before implementing.
    - If you fix a queued pattern, mention `addresses pattern <pattern_id>` in the commit message so future ticks can dedup.
+2a. **Drain the RETRIEVAL bucket**: run `/home/bobef/miniconda3/bin/python3 /data3/drydock/scripts/consume_retrieval_queue.py --apply`
+    - This is non-source-fix work: it reads `~/.drydock/dispatch/retrieval.jsonl`, finds the affected project for each entry, and ingests it into GraphRAG so the retrieve tool can answer cross-package symbol queries on the next session.
+    - Idempotent + dedup'd via `~/.drydock/dispatch/.retrieval_consumed.json` (7-day re-ingest window). Cheap, ~20s per project.
+    - If it ingests anything, note it in the trip_log line as `retrieval-drain: N project(s) ingested`.
 3. Run the STATUS COMMANDS block from resume.md to check stress run health.
 4. Scan for new failure patterns NOT in the dispatch queue:
    - Has the stress harness died? (PID in `/tmp/stress_pid.txt`)

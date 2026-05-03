@@ -3,6 +3,30 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-03 22:35 UTC tick
+- Stress: 1180/1658 (PID 2219727, 1d 8h elapsed, "Documentation" section — prompts like "Doc: changelog entry for E"; done=1068, skip=117)
+- Write rate: 2% last 100 prompts (Doc prompts use abstract placeholders, model replies with text not file writes; overall run write rate 29%)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=14809 total, retrieval=12 (all recently ingested, 0 actionable); top patterns — thinking_stall 97 (inline MAX_STALL_RETRIES=3 already handles), bash_generic 77 (model behavior, bash loop-breaker fires at count 3), search_replace:not_found_loop 19 (file-head embedding already present), tool:hallucinated_name 3 (ralph_repo_index in _IGNORE_TOOLS). All fixes verified present in current source.
+- Action this tick: no fix committed. Balancer healthy on :8001 (PID 2462362, up ~8h). gemma4 Docker up. retrieval-drain: 0 projects ingested (all up to date). Skip rate 9.9% (stable, within expected range for Doc/Test sections with abstract prompts).
+
+## 2026-05-03 21:10 UTC tick
+- Stress: 1072/1658 (PID 2219727, 1d 6h elapsed, in "Documentation" section; done=956, skip=115, recycle=99)
+- Write rate: 4% (last 100 prompts — Documentation prompts like "Doc: README section about X" use abstract placeholders, model responds with text not file writes; first-200 write rate was 37%; not a regression)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=12964 lines, retrieval=12 (no steering.jsonl); top patterns this tick — harness:bash:escape_loop (sed escape), harness:search_replace:not_found_loop (file-head embedding already present), harness:thinking_stall (model stalls on abstract ambiguous prompts, existing MAX_STALL_RETRIES=3 recovery in place), harness:loop:bash_generic (ls|grep empty loops); 3 commits ahead of v2.7.36 (d2de14f/a29a76c/e8be997) address escape_loop and bash_generic — ship at 00:00 UTC auto_release
+- Action this tick: no fix committed. All identified patterns already addressed in source or in pending commits. Balancer healthy on :8001 (PID 2462362). gemma4 Docker up 9 days. Skip rate 10.7% (slightly above 8% baseline, expected in Doc/Test sections with abstract prompts).
+
+## 2026-05-03 17:35 UTC tick
+- Stress: 876/1658 (PID 2219727, 1d 3h elapsed, "Test: golden test for K"; done=760, skip=102, recycle=87)
+- Write rate: 32% (last 100 prompts — "Test: ..." category gets 0 writes when model discusses vs. writes tests; model behavior, not regression)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=8381 total; top patterns — hallucinated_name 3504 (ralph_repo_index already in _IGNORE_TOOLS), bash_generic 3399 (model behavior), search_replace:not_found_loop 803 (file-head embedding already in place since prior commit), thinking_stall 329 (already handled), heredoc_loop 233 (already handled in bash.py). All queued fixes already implemented in source.
+- Action this tick: no new fix committed. Balancer healthy on :8001. All top dispatch patterns verified already addressed in current source. RSS peaked at 851MB (12:00 UTC) then recycled back to 104MB — normal harness churn. Skip rate stable at ~12%.
+
 ## 2026-05-03 16:17 UTC tick
 - Stress: 845/1658 (PID 2219727, active log `/tmp/stress_2000_1777732347.log`, on "API: GraphQL subscription"; recycle-TUI triggered at 845 after 3 SKIPs — normal for API-server prompts with slow context)
 - Write rate: 33% (last 100 prompts — API:REST/GraphQL/gRPC category; low rate consistent with prior API-category ticks; not a regression)
@@ -1258,3 +1282,68 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=7048 total; top patterns: hallucinated_name=3178, bash_generic=2876, search_replace:not_found_loop=685, bash:heredoc_loop=207
 - Root cause of degraded write rate: TUI's "Queued" feature (buffers new prompt while busy) looks like prompt rejection to the harness, causing 3-retry SKIP cycles. TUI log confirms prompt IS accepted into queue ("Queued: 'API: JSON-RPC server' (1 pending)") but harness sees no new user message and SKIPs. Not a simple drydock fix — would require harness-side queue-state detection (off-limits per CLAUDE.md). Services healthy; stress continues making progress slowly.
 - Action this tick: investigated SKIP/retry-spike root cause — harness/TUI queue-state mismatch; no drydock fix committed (harness cannot be modified, drydock change would alter UX queuing behavior user has not flagged as broken)
+
+## 2026-05-03 17:30 UTC tick
+- Stress: 863/1658 (52%), babysitter restarted (new PID 2219727 vs old 3713698)
+- Write rate: 35% last 100 prompts (SKIP cascade from TUI queue-state mismatch, same root cause as prior tick)
+- Admiral last 30 min: 0 vLLM 400s; llm_balancer healthy on :8001 (PID 2462362)
+- GH issues: 0 open
+- Dispatch queue: harness=7722 total; top patterns: hallucinated_name=3498 (classifier misfire), bash_generic=3143, search_replace:not_found_loop=743, heredoc_loop=224
+- Action this tick: committed fix for classifier misfire — empty_after_tool events were being classified as harness:tool:hallucinated_name (3498 false positives directing reviewer to add non-existent tool names to _IGNORE_TOOLS); moved pattern to harness:thinking_stall. Also added sed escape-sequence detection to bash loop-breaker so sed -i \n loop gets targeted hint instead of generic "EDIT SOURCE CODE". (commit e8be997, addresses pattern harness:tool:hallucinated_name)
+
+## 2026-05-03 18:03 UTC tick
+- Stress: 900/1658 (54%), PID 2219727, alive, log /tmp/stress_2000_1777732347.log
+- Write rate: 27% last 100 prompts (expected — current batch is "Test: smoke/perf/memory/concurrency" prompts that produce few writes)
+- vLLM 400s: 0 — container up 9 days, clean; llm_balancer healthy on :8001 (PID 2462362)
+- GH issues: 0 open
+- Dispatch queue: harness=9038 total; top patterns last 500: thinking_stall=245, bash_generic=185, search_replace:not_found_loop=48, bash:heredoc_loop=8, bash:escape_loop=6 (thinking_stall is renamed hallucinated_name misfires from e8be997 fix in prior tick)
+- Action this tick: no action — system healthy; existing handlers (hallucinated-tool suppression note, adaptive thinking, bash loop-breaker, search_replace file-head embed) cover all active patterns; no new drydock bug found
+
+## 2026-05-03 18:45 UTC tick
+- Stress: 680/1658 (41%), PID 2219727, alive (1d 4h elapsed), log /tmp/stress_2000_1777119799.log
+- Write rate: 32% last 100 prompts (context-bloat period before session reset at prompt 675; prompts like "API: gRPC server-streaming" produce 2 msgs/0 writes; new session at 676+ shows 21 msgs/7 writes recovery)
+- vLLM 400s: 0; llm_balancer healthy on :8001 (PID 2462362, confirmed forwarding to gemma4)
+- GH issues: 0 open
+- Dispatch queue: harness=9706 total; top recent patterns: bash_generic=10, thinking_stall=4, search_replace:not_found_loop=4, bash:escape_loop=2
+- Action this tick: committed fix for harness:loop:bash_generic — bash loop-breaker new _is_empty_search branch: when model runs ls/grep/find/rg 3+ times and gets empty output (rc=0 or rc=1), give targeted "file does not exist, stop searching, CREATE it" hint instead of generic "EDIT SOURCE CODE". 4 regression tests. (commit a29a76c, addresses pattern harness:loop:bash_generic)
+
+## 2026-05-03 19:04 UTC tick
+- Stress: 961/1658 (58%), PID 2219727, alive, log /tmp/stress_2000_1777732347.log
+- Write rate: 13% last 100 prompts — expected; current batch is "Test: memory/concurrency/race/idempotency" prompts cycling (prompts 940-1000 repeat the test-suite block); model runs existing tests via bash rather than writing new files for the majority
+- vLLM 400s: 0; llm_balancer healthy on :8001 (PID 2462362 — different PID from prior ticks, confirming a restart happened); gemma4 forwarding OK
+- GH issues: 0 open
+- Dispatch queue: harness=10378 total; recent 200: thinking_stall=104 (mainly from empty_after_tool:ralph_repo_index — model still calling hallucinated tool and stalling after the error result), bash_generic=72, search_replace:not_found_loop=20
+- Action this tick: investigated all active patterns; no new drydock bug found. Two commits (a29a76c empty-search hint, e8be997 sed-escape hint + classifier fix) are in source but not yet shipped — next auto_release tick ships them. The ralph_repo_index empty-after-tool stall at 19:01 UTC is still happening despite the cfe0ee0 redirect fix; the admiral is catching and nudging it but the underlying model behavior persists. Leaving for next tick or user review.
+
+## 2026-05-03 19:45 UTC tick
+- Stress: 972/1658 (58.6%), PID 2219727, alive (1d 5h elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 13% last 100 prompts — expected; current batch is "Test: concurrency/race/idempotency/rollback" prompts; model runs existing tests via bash rather than writing files
+- vLLM 400s: 0; llm_balancer healthy on :8001 (PID 2462362); gemma4 docker up and forwarding
+- GH issues: 0 open
+- Dispatch queue: harness=11044 total; top: bash_generic=4436, hallucinated_name=3531, thinking_stall=1585, search_replace:not_found_loop=1065 (all accumulated; recent pattern rate is lower)
+- Action this tick: investigated thinking_stall pattern — stall debug log (/tmp/drydock_stall_debug.log) shows all entries at attempt=0 with has_tool_calls=True, meaning the stall handler is NOT firing for stalls; model is completing tool calls normally. The 1585 dispatch queue entries are accumulated historical noise. No new actionable drydock bug found. Two unreleased commits (a29a76c empty-search hint, e8be997 sed-escape + classifier fix) ship at 00:00 UTC auto_release. Skip clusters (~6-7 per 43 prompts) from TUI wedging on context-heavy sessions; admiral recycling appropriately.
+
+## 2026-05-03 20:50 UTC tick
+- Stress: 1056/1658, PID 2219727, alive (1d 6h elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 5% last 100 prompts — expected; current batch is "Test: rollback/idempotency/smoke/perf" prompts; model runs existing tests via bash, no writes needed
+- vLLM 400s: 0; llm_balancer on :8001 healthy; gemma4 docker up
+- GH issues: 0 open
+- Dispatch queue: harness=12335 total; recent top: bash_generic=8, thinking_stall=6, search_replace:not_found_loop=4, bash:heredoc_loop=2 (heredoc already handled; bash_generic partially addressed by a29a76c)
+- Action this tick: committed fix for cross-command consecutive-empty-search semantic loop (commit d2de14f). The identical-hash check catches the same command run 3+ times; this new check catches 5+ *different* search commands that each return empty (the model varies the search term but never creates the missing file). Fixed test file (ToolPermission.ALLOW → ALWAYS, bash.invoke → bash.run); 3 regression tests pass.
+
+## 2026-05-03 21:33 UTC tick
+- Stress: 1106/1658 (66.7%), PID 2219727, alive (1d 7h elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 0% last 100 prompts — expected; current batch is "Doc:" documentation prompts (indices 1080-1110); model produces text responses, not file writes; not a regression
+- vLLM 400s: 0; llm_balancer healthy on :8001 (PID 2462362); gemma4 docker up and forwarding
+- GH issues: 0 open
+- Dispatch queue: harness=13585 total; top patterns all already addressed — bash_generic (5351, fixed d2de14f/a29a76c), hallucinated_name (3567, fixed e8be997/cfe0ee0), thinking_stall (2851, handled inline in agent_loop), search_replace:not_found_loop (1329, handled with file-head embed), heredoc_loop (293, handled), escape_loop (62, handled e8be997); retrieval=12 (all already ingested, 0 new); steering=0
+- Action this tick: no new drydock bug found. All major dispatch patterns are addressed by recent commits. Retrieval drain: 0 new projects ingested. System healthy.
+
+## 2026-05-03 22:03 UTC tick
+- Stress: 1150/1658 (69.4%), PID 2219727, alive (1d 8h elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 1% last 100 prompts — expected; current batch is "Doc:" documentation prompts (indices 1149-1153 and surrounding); model produces text responses, not file writes
+- vLLM 400s: 0; llm_balancer healthy on :8001 (PID 2462362, keepalive cron restarted from old 1230765); gemma4 docker forwarding OK
+- GH issues: 0 open
+- Dispatch queue: harness=14200 total; top recent-1000: thinking_stall=504, bash_generic=358, search_replace:not_found_loop=102 — all same patterns addressed by commits from the last 24h (d2de14f, a29a76c, e8be997); skip count 117 cumulative (~10%), stable
+- Retrieval drain: consume_retrieval_queue.py timed out at 15s on both attempts; 0 projects ingested this tick; retrieval queue has 12 entries (unchanged from prior ticks); may be hanging on GraphRAG ingest for a missing-index project
+- Action this tick: no new drydock bug found; system healthy; no commit warranted

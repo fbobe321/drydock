@@ -1,0 +1,11 @@
+# HLE-shaped seed questions for smoke-testing the hle_eval pipeline.
+# Used when HF auth isn't available. NOT real HLE — these are ~undergrad
+# difficulty, not PhD frontier. Real evaluation uses --source hle.
+# Schema mirrors HLE: {id, question, answer, answer_type, category, raw_subject}
+{"id": "seed_math_01", "question": "What is the smallest positive integer n such that n! is divisible by 10^10?", "answer": "45", "answer_type": "exactMatch", "category": "Mathematics", "raw_subject": "Number Theory"}
+{"id": "seed_math_02", "question": "Compute the sum of all integers from 1 to 100 that are NOT divisible by 3 or 7. Give the numeric answer only.", "answer": "2842", "answer_type": "exactMatch", "category": "Mathematics", "raw_subject": "Combinatorics"}
+{"id": "seed_phys_01", "question": "A photon's wavelength is 500 nm. What is its energy in electron-volts (eV), to two decimal places? Use h = 4.136e-15 eV·s and c = 3e8 m/s.", "answer": "2.48", "answer_type": "exactMatch", "category": "Physics", "raw_subject": "Quantum"}
+{"id": "seed_chem_01", "question": "What is the IUPAC name of the simplest aromatic carboxylic acid?", "answer": "benzoic acid", "answer_type": "exactMatch", "category": "Chemistry", "raw_subject": "Organic"}
+{"id": "seed_bio_01", "question": "Which enzyme catalyzes the formation of phosphoenolpyruvate from oxaloacetate during gluconeogenesis? Give the standard abbreviation.", "answer": "PEPCK", "answer_type": "exactMatch", "category": "Biology", "raw_subject": "Biochemistry"}
+{"id": "seed_hist_01", "question": "In what year did the Treaty of Westphalia formally end the Thirty Years' War?", "answer": "1648", "answer_type": "exactMatch", "category": "History", "raw_subject": "Early Modern Europe"}
+{"id": "seed_phil_01", "question": "Which philosopher coined the phrase 'cogito, ergo sum' and in which work did it first appear in this exact Latin form?", "answer": "Descartes; Principles of Philosophy (1644)", "answer_type": "text", "category": "Philosophy", "raw_subject": "Early Modern"}
