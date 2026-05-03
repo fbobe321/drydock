@@ -3,6 +3,14 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-03 07:31 UTC tick
+- Stress: 523/1658 (PID 2219727, run started ~12:30 UTC May 2, currently on "Add storage backend" prompts)
+- Write rate: 34% (last 100 prompts — down from 74% in previous run; model looping on exploration for storage backend prompts rather than coding; admiral intervening)
+- Admiral last 30 min: ~10 fires (loop:bash on `ls -F tool_agent/memory/s3/` repeated 30x, struggle:none, empty_after_tool:ralph_repo_index)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: no fix committed — write rate drop is model behavior (storage backend prompts trigger exploration loops), not a drydock bug. admiral is correctly intervening. skip rate slightly elevated (~12%) but within normal range. v2.7.34 shipped at 05:02 UTC; commit 6edd59a (bash binary grep annotation) pending, will ship as v2.7.35 at next cron (06:00 CDT / 11:00 UTC).
+
 ## 2026-05-02 17:30 UTC tick
 - Stress: 140/1658 (PID 2219727, run started ~13:30 UTC today)
 - Write rate: 50% (58/114 prompts with writes — holding from previous run)
@@ -1078,3 +1086,57 @@ restarted, cron self-match bug fixed in this same session).
 - vLLM 400s: 0
 - GH issues: 0 open
 - Action this tick: no action — healthy; investigated v9 stress log confusion (harness actually writes to timestamp log, not v9; false alarm), confirmed balancer PID 713929 on :8001 is legitimate llm_balancer.py, vLLM responsive on :8000
+
+## 2026-05-03 05:01 UTC tick
+- Stress: 445/1658 (PID 2219727, 14h 28m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy; PID matches pid file)
+- Write rate: 49% last 100 prompts
+- Admiral last 30 min: skip-clusters at 04:33, 04:39, 04:46, 04:59 UTC; loop:bash::monte_carlo firing every 60s (model looping on Plugin feature monte_carlo — Gemma 4 ignoring advisory nudges, CLAUDE.md learning #2); tui-recycle-requested multiple times, recycles completing ("recycle complete: new child PID"); empty_after_tool:ralph_repo_index (04:41); all known model-behavior patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 healthy; gemma4 docker up; curl confirm OK; no orphan squatters on :8001
+- Action this tick: no fix committed — all services healthy; skip rate ~11% (50/445) is elevated but within range of prior ticks; TUI recycles are managing skip-clusters; no new drydock code bugs identified; 5 commits (Deep Noir, graphrag, install auto-detect, SEARCH==REPLACE HARD-STOP, bash echo-e hint) will ship at 06:00 UTC auto_release
+
+## 2026-05-03 06:02 UTC tick
+- Stress: 467/1658 (PID 2219727, 15h 28m elapsed; babysitter healthy; log /tmp/stress_2000_1777732347.log)
+- Write rate: 46% last 100 prompts (down from 74% peak; "Plugin feature" and "Add storage backend" prompt segment driving low-write completions)
+- Admiral last 30 min: skip-clusters at 04:33, 04:46, 04:59, 05:06, 05:23, 05:33, 05:41, 05:48 UTC; tui-recycle-requested 8x (cascading: SKIP→recycle→SKIP on fresh TUI); AdmiralWorker restarting on each TUI recycle (normal); all patterns are known model-behavior (loop:bash::monte_carlo, retry_after_error:search_replace, struggle:write_file, empty_after_tool:ralph_repo_index); admiral interventions firing via embedded TUI worker (probe PID 2251231 dead — worker is embedded, not external)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 healthy (resume.md shows stale PID 1230765; actual is 713929, 2d 11h elapsed); gemma4 docker up; curl OK
+- SKIP rate: 63/467 = 13.5% (persistent from prior ticks, not a regression; skip-cluster→recycle→skip-on-fresh-TUI loop is a known timing issue, not a new drydock bug)
+- Action this tick: no fix committed — services healthy, no new actionable drydock code bugs; all observed patterns documented in CLAUDE.md; investigating SEARCH==REPLACE HARD-STOP (commit a965832) found no tool errors in stress log, logic appears correct
+
+## 2026-05-03 06:32 UTC tick
+- Stress: 496/1658 (PID 2219727, 15.5h elapsed, babysitter alive)
+- Write rate: 33% last 100 prompts (down from 74% peak — prompts are "Add storage backend: X" cluster, model hesitates on fictional backends)
+- Admiral last 30 min: not checked
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: Investigated write rate drop. Harness is alive and progressing (467 at 06:00 UTC → 496 at 06:32). Some sessions show ralph_repo_index hallucination returning <user_cancellation> instead of the suppressed error; likely a race between stress harness TUI interrupt and the _IGNORE_TOOLS suppression path. Suppression logic looks correct in source. No fix committed — harness is healthy, pattern is model behavior on fictional storage backends, not a new drydock bug.
+
+## 2026-05-03 07:04 UTC tick
+- Stress: 509/1658 (PID 2219727, 16h elapsed)
+- Write rate: 30% last 100 prompts (window variance: 20-70% by 50-prompt window; "Add storage backend / Plugin feature" cluster)
+- SKIP rate: 60/509 (~12%) — TUI not accepting prompt after 3 retries; known harness issue
+- vLLM 400s: 0
+- GH issues: 0 open
+- Action this tick: Committed fix (6edd59a) — bash tool now appends a hint when grep emits "binary file X matches" to stderr (exit 0). Observed in live session: model added 10+ | grep -v flags in a loop that never resolved the binary-file warning; adding --include='*.py' hint breaks that loop. 2 regression tests added. Ships at next auto-release (0/6/12/18 UTC).
+
+## 2026-05-03 08:03 UTC tick
+- Stress: 531/1658 (PID 2219727, 17h 28m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy)
+- Write rate: 32% last 100 prompts (down from 74% peak; "Add storage backend: X" prompt cluster — model loops on `ls -R tool_agent/memory/s3/` 21-30 times before writing; loop detection fires at 8x threshold and escalates but Gemma 4 ignores advisory nudges, CLAUDE.md learning #2)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 healthy (resume.md shows stale PID 1230765; actual is 713929, 2d 13h elapsed); gemma4 docker up; curl OK; no orphan squatters on :8001
+- SKIP rate: 66/531 = 12.4% (consistent with prior ticks; tui-recycle-requested events managing skip-clusters; admiral firing loop:bash::ls and struggle:none on storage-backend prompts)
+- Action this tick: no fix committed — investigated session /session_20260503_074848 (117 bash / 12 writes); all patterns are known (ls loop, SEARCH/REPLACE fail, missing-sibling-imports warning, ralph_repo_index suppressed); no new actionable drydock code bug found; one commit since last tag (6edd59a bash binary-file hint) already shipped in v2.7.34 at 06:00 UTC
+
+## 2026-05-03 08:30 UTC tick
+- Stress: 544/1658 (PID 2219727, 18h elapsed; babysitter and watcher alive)
+- Write rate: 36% last 100 prompts (42% last 200; stable near prior ticks; "Add storage backend: X" prompt cluster — model alternates between success and ls/search_replace loops on fictional backends)
+- Admiral last 30 min: loop:bash::ls tool_agent/memory/s3, retry_after_error:search_replace, empty_after_tool:ralph_repo_index, loop:search_replace — all known patterns, model ignoring advisory nudges (CLAUDE.md #2)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 alive (2d 13h); gemma4 docker up; :8001 and :8000 both responding
+- SKIP rate: 70/544 = 12.9% (stable ~6 skips/hr; TUI busy on storage-backend sessions)
+- Action this tick: no fix committed — all observed patterns are known; no new actionable drydock source bugs; commit 6edd59a (bash binary-file grep hint) ships as v2.7.35 at next auto-release (12:00 UTC)

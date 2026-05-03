@@ -437,6 +437,15 @@ class Bash(
                 returncode=returncode,
             )
 
+        # When grep emits "binary file X matches" to stderr with exit 0, the
+        # model loops adding more | grep -v flags that don't help.  Annotate
+        # stderr so it knows to add --include="*.py" instead.
+        if returncode == 0 and stderr and "binary file" in stderr and "matches" in stderr:
+            stderr = stderr + (
+                "\n[Hint: grep skipped binary files (e.g. .pyc). "
+                "Add --include='*.py' to restrict to Python source files.]"
+            )
+
         return BashResult(
             command=command, stdout=stdout, stderr=stderr, returncode=returncode
         )
