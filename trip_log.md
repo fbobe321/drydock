@@ -1140,3 +1140,38 @@ restarted, cron self-match bug fixed in this same session).
 - llm_balancer: PID 713929 alive (2d 13h); gemma4 docker up; :8001 and :8000 both responding
 - SKIP rate: 70/544 = 12.9% (stable ~6 skips/hr; TUI busy on storage-backend sessions)
 - Action this tick: no fix committed — all observed patterns are known; no new actionable drydock source bugs; commit 6edd59a (bash binary-file grep hint) ships as v2.7.35 at next auto-release (12:00 UTC)
+
+## 2026-05-03 09:04 UTC tick
+- Stress: 579/1658 (PID 2219727, 18h 28m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy; 507 accepted, 70 skipped, 0 timed_out, 68 TUI recycles as of 09:00 UTC)
+- Write rate: 26% last 100 prompts (expected for current "Add storage backend: X" / "API: JSON-RPC" prompt cluster — these abstract backends return +0 writes on many prompts; latest session shows model writing s3/gcs plugin files, so writes are occurring)
+- Admiral last 30 min: loop:bash::grep, struggle:none, empty_after_tool:ralph_repo_index, loop:ralph_repo_index — all known patterns from CLAUDE.md; no new actionable patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 (2d 14h elapsed); gemma4 docker up 9 days; :8001 and :8878 healthy; no orphan port squatters
+- Action this tick: no fix committed — investigated empty_after_tool:ralph_repo_index spike; code in format.py/_silence_suppressed_failures is correct (tool result + system note injected on each hallucinated call, stall handler retries up to 3x); pattern is Gemma 4 ignoring advisory nudges (CLAUDE.md #2); no new drydock source bug found; one commit ahead of v2.7.34 tag (6edd59a bash binary-file hint, already shipped at 06:00 UTC auto-release)
+
+## 2026-05-03 09:33 UTC tick
+- Stress: 602/1658 (PID 2219727, 19h elapsed; writing to /tmp/stress_2000_1777732347.log; 530 accepted, 70 skipped, 0 timed_out; session reset completed at 600 prompts)
+- Write rate: 37% last 100 prompts (consistent with 32-37% range; "Add storage backend" cluster — model reads/loops on fictional backends before writing)
+- Admiral last hour: 9 interventions (known patterns: loop:bash, retry_after_error:search_replace, struggle:none)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 healthy; gemma4 docker up; watcher PID 2223647 alive
+- Action this tick: no fix committed — checked recent sessions for new patterns; found model hitting truncated-args write_file error twice in session_20260503_052321, but existing detection+escalation logic in format.py already handles it (FailedToolCall returned, escalation on 2nd hit); no new actionable drydock source bug; stress progressing normally through 600-prompt milestone
+
+## 2026-05-03 10:00 UTC tick
+- Stress: 619/1658 (PID 2219727, 19h 28m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy)
+- Write rate: 37% last 100 prompts (consistent with 32-37% range seen last 3 ticks; "Add storage backend: X" prompt cluster — model reading/looping on fictional backends before writing; no regression)
+- Admiral last 30 min: retry prompts visible in log (TUI recycles handling SKIP clusters); all patterns are known
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: healthy on :8001 (gemma4 docker up; :8001 responding); original PID 1230765 recycled but service alive
+- Action this tick: no fix committed — stress progressing normally; all observed patterns (0-write on abstract backend prompts, SKIP clusters, TUI retries) are known and consistent with prior ticks; no new actionable drydock source bug found; one commit ahead of v2.7.34 tag (6edd59a bash binary-file hint) already auto-released
+
+## 2026-05-03 10:30 UTC tick
+- Stress: 650/1658 (PID 2219727, 19h 57m elapsed; log /tmp/stress_2000_1777732347.log; babysitter healthy)
+- Write rate: 42% last 100 prompts (expected — "Add storage backend: X" cluster with many fictional backends returning 0 writes; only elasticsearch/opensearch/badger produce real plugin files)
+- vLLM 400s: 0
+- GH issues: 0 open
+- llm_balancer: PID 713929 on :8001 healthy (gemma4 docker up; curl OK); no orphan port squatters
+- Action this tick: investigated user_cancellation pattern for ralph_repo_index in session_20260503_102706_e2884772 — model calls ralph_repo_index on fresh session start, suppression code fires (_IGNORE_TOOLS in format.py), system note injected, but model still responds "Previous turn ended; awaiting your next instruction." (text response, not empty, so stall-handler misses it). Consistent with CLAUDE.md learning #2 (Gemma 4 ignores advisory nudges). No new actionable drydock source bug — existing suppression + system-note injection is the correct approach; weak recovery is model-behavior. No fix committed.
