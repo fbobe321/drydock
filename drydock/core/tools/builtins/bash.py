@@ -550,6 +550,31 @@ class Bash(
 
             returncode = proc.returncode or 0
 
+            # Proactive heredoc-write confirmation.  When `cat <<EOF > file`
+            # succeeds silently (empty stdout, rc=0), the model can't tell the
+            # file landed and re-runs the same heredoc.  Check the file on disk
+            # and confirm immediately so the model moves on without a retry.
+            import re as _re_hd
+            import os as _os_hd
+            _hd_match = _re_hd.search(
+                r"cat\s+<<\s*['\"]?[A-Za-z_]*['\"]?\s+>+\s*(\S+)", args.command
+            )
+            if _hd_match and returncode == 0 and not stdout.strip():
+                _hd_path = _hd_match.group(1).strip().rstrip(";")
+                if _os_hd.path.exists(_hd_path):
+                    _hd_size = _os_hd.path.getsize(_hd_path)
+                    _hd_lines = 0
+                    try:
+                        with open(_hd_path, "r", errors="replace") as _hdf:
+                            _hd_lines = sum(1 for _ in _hdf)
+                    except Exception:
+                        pass
+                    stdout = (
+                        f"[File written: {_hd_path} ({_hd_lines} lines, "
+                        f"{_hd_size} bytes). "
+                        f"The file is on disk — do not re-run this command.]"
+                    )
+
             # Mechanical loop-breaker (ADVISORY ONLY — never raise
             # ToolError; see feedback_no_tool_errors_for_loop_detection.md).
             # Two complementary checks:

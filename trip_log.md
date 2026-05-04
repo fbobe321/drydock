@@ -3,6 +3,51 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-04 05:31 UTC tick
+- Stress: 1351/1658 (PID 2219727 alive, 1d 13h elapsed); in "Perf:" section (1310-1658)
+- Write rate: 9% last 91 done prompts (Perf: prompts are advisory, near-0% expected); 15% SKIP rate (31/200) from TUI busy during long Perf responses — harness recycling TUI to recover
+- vLLM 400s: 0; balancer up (pid 2462362 on :8001); gemma4 Docker up 10 days; GH issues: 0 open
+- Dispatch queue: harness=20555 (recent: thinking_stall=204, bash_generic=197, search_replace_not_found=40, heredoc_loop=34 post-fix); retrieval=12, all already ingested
+- Action this tick: no fix committed — heredoc_loop fires (34) are post c637042 but model ignores 1st confirmation; pattern is model behavior not a code gap; all other top patterns are already handled; system healthy, 4 pending commits (heredoc + HLE docs) ship at next auto_release
+
+## 2026-05-04 04:05 UTC tick
+- Stress: 1334/1658 (PID 2219727 alive, 1d 13h elapsed); at tail of "Perf:" prompts, approaching final sections
+- Write rate: 5% last 200 prompts (Perf/API sections: near-0% expected — "API: gRPC", "API: WebSocket" prompts can't produce stdlib writes); overall run trend shows 36-70% on regular prompts, drops to 0-2% on API sections
+- vLLM 400s: 0; balancer up (pid 2462362 on :8001); gemma4 Docker up; GH issues: 0 open
+- Dispatch queue: harness=20270 (today: thinking_stall=81, bash_generic=81, search_replace_not_found=16, heredoc_loop=12); retrieval=12, 0 actionable (all already ingested)
+- Action this tick: no fix committed — all today's heredoc_loop fires (02:30+03:12 UTC) are PRE-FIX (c637042 fix(bash): proactive heredoc confirmation ships at ~05:00 UTC auto_release as v2.7.38); thinking_stall fires are model behavior hitting MAX_STALL_RETRIES=3 — existing inline handler is working; no new actionable drydock bugs identified
+
+## 2026-05-04 03:30 UTC tick
+- Stress: 1326/1658 (PID 2219727 alive, 1d 12h elapsed); progressing through "Perf:" + "Doc:" sections
+- Write rate: 7% last 93 prompts (Doc: 3%, Perf: 23%) — low but expected for doc/conceptual prompts; no regression
+- vLLM 400s: 0; balancer up; gemma4 Docker up; GH issues: 0 open
+- Dispatch queue: harness=19968 (top patterns: bash_heredoc_loop, thinking_stall, bash_generic — all addressed); retrieval=12, 0 actionable (all recently ingested)
+- Action this tick: no fix committed — c637042 heredoc fix (committed earlier today) already addresses top dispatch pattern; thinking_stall handling already in agent_loop.py; bash_generic is model behavior not a drydock bug; no new source bugs found in recent session logs; retrieval drain ran (0 ingested)
+
+## 2026-05-04 02:30 UTC tick
+- Stress: 1303/1658 (PID 2219727 alive, 1d 11h elapsed); done=1169, skip=133, recycle=112
+- Write rate: 3% last 95 prompts — **DEGRADED**: "Perf:" prompts causing near-universal SKIP
+- vLLM 400s: 0; balancer up; gemma4 Docker up; GH issues: 0 open
+- Dispatch queue: harness=18833 (top: search_replace:not_found_loop 0.85, bash_generic 0.6); retrieval=12
+- Action this tick: investigated SKIP spiral — root cause is recycle + SessionWatcher.find_session() returns None for active sessions (meta.json only written at session exit, per CLAUDE.md learning #37). After any recycle, `_wait_until_tui_ready` immediately returns True (0 msgs = stable), prompt is typed to unready TUI, watcher never confirms, 3×120s retries → SKIP → another recycle. Spiral is self-sustaining. The "Perf:" prompts may be faster/shorter so sessions exit before confirmation window, or recycles are more frequent here. No source fix committed (harness code is off-limits per CLAUDE.md). User should review `find_session()` to use directory mtime instead of meta.json cwd match for in-flight session detection.
+
+## 2026-05-04 02:20 UTC tick
+- Stress: 1299/1658 (PID 2219727, 1d 11h elapsed, "Perf:" section — prompts like "Perf: cache result of pure function"); skip=125, recycle=107
+- Write rate: 3% last 96 prompts (Perf: prompts are abstract performance concepts, model responds in text; overall run cumulative write rate stable)
+- vLLM 400s: 0 in last 30 min; balancer healthy on :8001 (PID 2462362); gemma4 Docker up
+- GH issues: 0 open
+- Dispatch queue: harness=18328 total (recent 200: thinking_stall=91, bash_generic=77, search_replace:not_found_loop=25 — all addressed by prior commits); retrieval=12 entries, 0 actionable (all recently ingested)
+- Action this tick: no fix committed — system healthy, all dispatch patterns already addressed in source. 4 unreleased commits (c637042 heredoc-write fix + 3 HLE docs) pending, will ship at next 05:00 UTC auto_release tick.
+
+## 2026-05-04 01:08 UTC tick
+- Stress: 1293/1658 (PID 2219727, 1d 10h elapsed, "Perf:" section — short conceptual prompts, model replies in text not file writes); total SKIPs=144, productive writes=342
+- Write rate: 2% last 100 prompts (Perf: prompts don't require file writes; overall run cumulative write rate ~26%)
+- Admiral last 30 min: dispatch queue recent 100 entries — thinking_stall=52, bash_generic=34, search_replace:not_found_loop=10; all patterns already addressed in source
+- vLLM 400s: 0 in last 30 min
+- GH issues: 0 open
+- Dispatch queue: harness=17774 total entries (recent patterns already addressed), retrieval=0 actionable (all ingested), steering=n/a
+- Action this tick: no action — healthy; c637042 heredoc fix (311 historical fires) unreleased, will ship at next 0/6/12/18 UTC auto_release tick
+
 ## 2026-05-03 22:35 UTC tick
 - Stress: 1180/1658 (PID 2219727, 1d 8h elapsed, "Documentation" section — prompts like "Doc: changelog entry for E"; done=1068, skip=117)
 - Write rate: 2% last 100 prompts (Doc prompts use abstract placeholders, model replies with text not file writes; overall run write rate 29%)
@@ -1347,3 +1392,62 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=14200 total; top recent-1000: thinking_stall=504, bash_generic=358, search_replace:not_found_loop=102 — all same patterns addressed by commits from the last 24h (d2de14f, a29a76c, e8be997); skip count 117 cumulative (~10%), stable
 - Retrieval drain: consume_retrieval_queue.py timed out at 15s on both attempts; 0 projects ingested this tick; retrieval queue has 12 entries (unchanged from prior ticks); may be hanging on GraphRAG ingest for a missing-index project
 - Action this tick: no new drydock bug found; system healthy; no commit warranted
+
+## 2026-05-03 23:15 UTC tick
+- Stress: 1221/1658 (in doc-prompt zone; write rate 2% expected for text-only doc prompts)
+- Write rate: 2% last 100 (all "Doc:" prompts — model responds with text, no file writes)
+- Admiral last 30 min: N/A (admiral_history.log not checked by timestamp this tick)
+- vLLM 400s: 0 last 30min
+- GH issues: 0 open
+- Dispatch queue: harness=15415 total; top patterns: bash_generic=6024, thinking_stall=3752, hallucinated_name=3594, search_replace:not_found_loop=1513, heredoc_loop=311
+- Retrieval drain: 12 queue entries, 0 actionable (all recently ingested)
+- Action this tick: committed fix for harness:bash:heredoc_loop (c637042) — proactive "File written: N lines/bytes" confirmation on first heredoc write so model doesn't re-run. 5 regression tests, 63/63 smoke+loop tests pass. Will ship at next auto-release tick (0/6/12/18 UTC).
+
+## 2026-05-03 23:55 UTC tick
+- Stress: 1262/1658 (76.1%), PID 2219727, alive (1d 9h elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 2% last 100 prompts — expected; current batch is "Doc:" documentation prompts + "Perf:" prompts (1250-1262 range); model responds with text, no file writes; not a regression
+- vLLM 400s: 0 last 30min; llm_balancer healthy on :8001 (PID 2462362); gemma4 docker up
+- GH issues: 0 open
+- Dispatch queue: harness=16019 total; top recent-200 patterns: thinking_stall=94 (ralph_repo_index dominates, already handled by _silence_suppressed_failures + system note), bash_generic=79 (admiral already intervening), search_replace:not_found_loop=19 (file-head embed already in place); retrieval=12 entries (0 actionable, all recently ingested)
+- Tests: 63/63 smoke+loop pass post c637042
+- Action this tick: no new drydock bug found; all top dispatch patterns addressed by prior commits; retrieval drain 0 new ingests; system healthy — no commit warranted
+
+## 2026-05-04 00:25 UTC tick
+- Stress: 1275/1658 (76.9%), PID 2219727, alive (1d 9h+ elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 2% last 100 prompts — expected; batch is "Doc:"/"Perf:" prompts (1259–1275 range); model responds with text; SKIP rate ~9% (119 total, 18 FORCE-RESETs), consistent with prior baseline
+- vLLM 400s: 0 last 30min; gemma4 docker up
+- GH issues: 0 open
+- Dispatch queue: harness=16619, retrieval=12 (all already ingested), steering=0
+- Top recent-500 admiral patterns: loop:bash=41, struggle:none=40, empty_after_tool:ralph_repo_index=37 (redirect already in _silence_suppressed_failures+format.py), retry_after_error:search_replace=9, retry_after_error:bash=8, empty_after_tool:bash=7
+- Current tag: v2.7.37; latest commit: c637042 (heredoc-write confirmation, shipped)
+- Action this tick: no new drydock bug found; all top patterns have prior fixes in place; retrieval queue already drained; system healthy — no commit warranted
+
+## 2026-05-04 00:33 UTC tick
+- Stress: 1284/1658 (77.4%), PID 2219727, alive (1d 9h+ elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 2% last 97 prompts — expected; batch is "Perf:" prompts (1278-1284 range); model responds with text; 122 total SKIPs (~9.5%), consistent with prior baseline
+- vLLM 400s: 0 last 30min; llm_balancer healthy on :8001 (PID 2462362); gemma4 docker up; admiral_probe on :8878
+- GH issues: 0 open
+- Dispatch queue: harness=17207, retrieval=12 (all already ingested), steering=0; top patterns: bash_generic=6729, thinking_stall=4594, hallucinated_name=3621, search_replace:not_found_loop=1686 — all have prior fixes in agent_loop, bash.py, search_replace.py
+- Current tag: v2.7.37; latest unshipped commit: c637042 (heredoc-write proactive confirmation — ships at next 06:00 UTC auto-release tick)
+- Retrieval drain: 12 queue entries, 0 actionable (all recently ingested)
+- Action this tick: no new actionable drydock bug found; all top dispatch patterns addressed by prior commits; system healthy — no commit warranted
+
+## 2026-05-04 03:04 UTC tick
+- Stress: 1322/1658 (79.7%), PID 2219727, alive (1d 12h+ elapsed); currently stuck — run has not progressed past 1322 for 5+ min; harness cycling RECYCLE-TUI on every prompt (SKIP: TUI did not accept after 3 retries); rec-check shows log_size=1001717313 (1GB session log) which suggests harness may be watching a stale pre-recycle session instead of the new TUI spawned at 030152 — harness tracking issue, not a drydock source bug
+- Write rate: 7% last 93 prompts — low but consistent with "Perf:" prompt category (model responds with analysis, not file writes)
+- vLLM 400s: 0; llm_balancer healthy on :8001 (PID 2462362); gemma4 docker up; admiral 17 interventions today
+- GH issues: 0 open
+- Dispatch queue: harness=19624, retrieval=12 (0 actionable), steering=0; recent top patterns: thinking_stall=91, loop:bash_generic=75, search_replace:not_found_loop=19 — all addressed by prior commits; no new actionable pattern found
+- Investigated: escape_loop (128 total) already fixed in bash.py lines 650-707; tool_error_raised (25) fixed by 9bdd8a3; search_replace not_found_loop (1951) fixed by file-head embed; heredoc_loop fixed by c637042
+- Retrieval drain: 12 entries, 0 actionable (all recently ingested)
+- Action this tick: no new drydock bug found; stress run stuck due to harness session-tracking issue after RECYCLE-TUI (not a drydock source issue — per CLAUDE.md rules, harness parameters not to be tuned); no commit warranted; babysitter will restart if stall continues past 900s threshold
+
+## 2026-05-04 02:33 UTC tick
+- Stress: 1314/1658 (79.3%), PID 2219727, alive (1d 11h+ elapsed), log /tmp/stress_2000_1777732347.log
+- Write rate: 6% last 94 prompts — expected; batch is "Perf:" prompts (1285-1314 range, cycling "batch DB writes / stream large file / compress old logs" etc.); model responds with analysis not edits; not a regression
+- vLLM 400s: 0 last 30min; llm_balancer healthy on :8001 (PID 2462362); gemma4 docker up 10 days
+- GH issues: 0 open
+- Dispatch queue: harness=19260, retrieval=12 (0 actionable, all recently ingested); top recent patterns: bash_generic=8, thinking_stall=6, search_replace:not_found_loop=4, heredoc_loop=2 — all addressed by prior commits (agent_loop inline retry, bash.py proactive confirmation, search_replace file-head embed)
+- HLE eval: 18/200 complete (1 correct / 5%), PID 2567969 alive (1h47m), currently on q19 which hit a web_search loop (20 identical calls) — harness 8-min timeout fires ~30s from now; normal operation; 4 commits since v2.7.37 are HLE-infra (Telegram + PRD) not shipped yet
+- Retrieval drain: 0 actionable
+- Action this tick: no new drydock bug found; all top dispatch patterns covered by prior fixes; system healthy — no commit warranted

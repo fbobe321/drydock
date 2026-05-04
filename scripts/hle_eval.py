@@ -53,7 +53,10 @@ from pathlib import Path
 
 REPO = Path("/data3/drydock")
 SHAKEDOWN = REPO / "scripts" / "shakedown_interactive.py"
+NOTIFY = REPO / "scripts" / "notify_release.py"
 RESULTS_ROOT = REPO / "hle_results"
+MILESTONE_EVERY = 50    # send a Telegram progress ping every N completions
+SOTA_REFERENCE = 45.9   # current HLE SOTA per user (2026-05-04); used in pings
 SEED_PATH = Path(os.environ.get("HLE_SEED_PATH",
                                 str(REPO / "scripts" / "hle_eval_seed.jsonl")))
 HF_TOKEN_FILE = Path.home() / ".config" / "drydock" / "hf_token"
@@ -201,6 +204,26 @@ def score_answer(q: dict, pred: str) -> dict:
         "verdict": verdict,
         "judge_reasoning": reasoning,
     }
+
+
+# ── Telegram notifications ────────────────────────────────────────────
+def notify_telegram(tag: str, message: str) -> None:
+    """Fire-and-forget Telegram ping via the existing notify_release.py.
+
+    All HLE runs notify on start, every MILESTONE_EVERY completions, and
+    on final completion (or crash). Failures are silent — a missed
+    Telegram is never worth crashing the eval.
+    """
+    if not NOTIFY.exists():
+        return
+    import subprocess
+    try:
+        subprocess.run(
+            [sys.executable, str(NOTIFY), tag, message],
+            timeout=15, capture_output=True,
+        )
+    except Exception:
+        pass
 
 
 # ── TUI runner per question ───────────────────────────────────────────
@@ -379,27 +402,77 @@ def main() -> int:
     sk = _load_shakedown()
     results_file = run_dir / "results.jsonl"
 
-    for i, q in enumerate(questions, 1):
-        print(f"\n[{i}/{len(questions)}] {q['id']}  ({q.get('category','?')})")
-        print(f"  Q: {q['question'][:120]}")
-        try:
-            outcome = run_one(q, sk, run_dir)
-        except Exception as e:
-            outcome = {
-                "id": q["id"], "category": q.get("category", "?"),
-                "answer_type": q.get("answer_type", "text"),
-                "elapsed_s": 0.0, "msg_count": 0,
-                "predicted": "", "ground_truth": q["answer"],
-                "session_dir": "", "runner_error": repr(e),
-            }
-        score = score_answer(q, outcome["predicted"])
-        outcome.update(score)
-        print(f"  pred: {outcome['predicted'][:120]}")
-        print(f"  gold: {q['answer'][:120]}")
-        print(f"  → {outcome['verdict']:8s} ({outcome['method']}, "
-              f"{outcome['elapsed_s']:.0f}s, {outcome['msg_count']} msgs)")
-        with results_file.open("a") as f:
-            f.write(json.dumps(outcome) + "\n")
+    # Pre-count what's already in results.jsonl (for --resume)
+    prior_done = 0
+    prior_correct = 0
+    if results_file.exists():
+        for ln in results_file.read_text().splitlines():
+            if not ln.strip():
+                continue
+            try:
+                r = json.loads(ln)
+                prior_done += 1
+                if r.get("correct"):
+                    prior_correct += 1
+            except Exception:
+                pass
+
+    notify_telegram(
+        "hle-start",
+        f"HLE eval started — {args.source} N={args.limit} "
+        f"(resuming with {prior_done} done, {prior_correct} correct). "
+        f"Will ping every {MILESTONE_EVERY} completions and at final. "
+        f"SOTA reference: {SOTA_REFERENCE}%."
+    )
+
+    completed = prior_done
+    running_correct = prior_correct
+    last_milestone = (prior_done // MILESTONE_EVERY) * MILESTONE_EVERY
+
+    try:
+        for i, q in enumerate(questions, 1):
+            print(f"\n[{i}/{len(questions)}] {q['id']}  ({q.get('category','?')})")
+            print(f"  Q: {q['question'][:120]}")
+            try:
+                outcome = run_one(q, sk, run_dir)
+            except Exception as e:
+                outcome = {
+                    "id": q["id"], "category": q.get("category", "?"),
+                    "answer_type": q.get("answer_type", "text"),
+                    "elapsed_s": 0.0, "msg_count": 0,
+                    "predicted": "", "ground_truth": q["answer"],
+                    "session_dir": "", "runner_error": repr(e),
+                }
+            score = score_answer(q, outcome["predicted"])
+            outcome.update(score)
+            print(f"  pred: {outcome['predicted'][:120]}")
+            print(f"  gold: {q['answer'][:120]}")
+            print(f"  → {outcome['verdict']:8s} ({outcome['method']}, "
+                  f"{outcome['elapsed_s']:.0f}s, {outcome['msg_count']} msgs)")
+            with results_file.open("a") as f:
+                f.write(json.dumps(outcome) + "\n")
+            completed += 1
+            if outcome.get("correct"):
+                running_correct += 1
+            # Milestone ping every MILESTONE_EVERY completions
+            if completed >= last_milestone + MILESTONE_EVERY:
+                last_milestone = (completed // MILESTONE_EVERY) * MILESTONE_EVERY
+                pct = (running_correct / completed * 100) if completed else 0
+                gap = pct - SOTA_REFERENCE
+                notify_telegram(
+                    "hle-progress",
+                    f"HLE progress {completed}/{args.limit}: "
+                    f"{running_correct}/{completed} = {pct:.1f}% "
+                    f"(SOTA {SOTA_REFERENCE}%, gap {gap:+.1f})"
+                )
+    except Exception as e:
+        notify_telegram(
+            "hle-crash",
+            f"HLE run crashed at {completed}/{args.limit} "
+            f"({running_correct}/{completed} so far). Error: {e!r}. "
+            f"Resume with --resume {run_dir.name}"
+        )
+        raise
 
     # Aggregate
     n = 0
@@ -431,9 +504,21 @@ def main() -> int:
     print(f"\n{'='*60}")
     print(f"  HLE BASELINE: {correct}/{n} = {summary['score']*100:.1f}%")
     print(f"{'='*60}")
+    cat_lines = []
     for cat, v in summary["by_category"].items():
-        print(f"  {cat:30s} {v['correct']}/{v['total']}  ({v['score']*100:.0f}%)")
+        line = f"  {cat:30s} {v['correct']}/{v['total']}  ({v['score']*100:.0f}%)"
+        print(line)
+        cat_lines.append(line.strip())
     print(f"\n  Results: {run_dir}")
+
+    pct = summary["score"] * 100
+    gap = pct - SOTA_REFERENCE
+    notify_telegram(
+        "hle-final",
+        f"HLE FINAL: {correct}/{n} = {pct:.1f}% "
+        f"(SOTA {SOTA_REFERENCE}%, gap {gap:+.1f})\n\n"
+        f"By category:\n" + "\n".join(cat_lines)
+    )
     return 0
 
 
