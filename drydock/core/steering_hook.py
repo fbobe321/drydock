@@ -52,7 +52,9 @@ def _initialize() -> _CachedSteering | None:
 
     try:
         from drydock.steering import (
+            LogitBiasSteeringApplier,
             LogOnlySteeringApplier,
+            NullSteeringApplier,
             SteeringConfig,
             load_registry,
         )
@@ -63,13 +65,23 @@ def _initialize() -> _CachedSteering | None:
     root = os.environ.get("DRYDOCK_STEERING_ROOT") or None
     registry = load_registry(root)
     config = SteeringConfig.from_mode_names(mode_names)
-    # Default applier is log-only — a real applier (vLLM sidecar etc.)
-    # is the next-phase deliverable. The seam is the same either way.
-    applier = LogOnlySteeringApplier()
+    # Applier selection via DRYDOCK_STEERING_APPLIER:
+    #   "log_only" (default)  : log-only, no inference change
+    #   "logit_bias"          : token-level steering via vLLM logit_bias
+    #                            (manifest must carry tags.tokens_boost
+    #                            and/or tags.tokens_suppress)
+    #   "null"                : no-op (same as not setting MODES at all)
+    # Real activation steering (VllmSidecarSteeringApplier) lands later.
+    kind = os.environ.get("DRYDOCK_STEERING_APPLIER", "log_only").strip().lower()
+    if kind == "logit_bias":
+        applier = LogitBiasSteeringApplier()
+    elif kind == "null":
+        applier = NullSteeringApplier()
+    else:
+        applier = LogOnlySteeringApplier()
     logger.info(
-        "steering: enabled, modes=%s, registry=%s",
-        mode_names,
-        registry.root,
+        "steering: enabled, modes=%s, applier=%s, registry=%s",
+        mode_names, applier.kind, registry.root,
     )
     return _CachedSteering(config=config, registry=registry, applier=applier)
 

@@ -586,6 +586,10 @@ class Bash(
             state = self.state.__dict__.setdefault("_bash_history", {})
             # Track total error-exit calls per command (regardless of output).
             err_state = self.state.__dict__.setdefault("_bash_err_count", {})
+            # Track total run count per exact command regardless of output or
+            # exit code.  Catches benchmark/timeit loops where output varies
+            # each run (timings differ) so the hash check never fires.
+            run_count_state = self.state.__dict__.setdefault("_bash_run_count", {})
             # Track consecutive empty-stdout search commands (any command, not
             # just identical ones).  The model semantic-loops by trying different
             # search terms for a non-existent target:
@@ -595,6 +599,73 @@ class Bash(
             _consec_empty_search_state = self.state.__dict__.setdefault(
                 "_consec_empty_searches", {"count": 0}
             )
+            # python -c / python3 -c SyntaxError loop-breaker.
+            # The model truncates multi-line inline scripts; each re-run
+            # produces a SyntaxError but with slightly different stderr
+            # (different column/line), so the hash check never fires.
+            # Track cross-command: any python3 -c that hits SyntaxError.
+            _python_c_err_state = self.state.__dict__.setdefault(
+                "_python_c_syntaxerr_count", 0
+            )
+            _is_python_c_syntaxerr = (
+                returncode != 0
+                and "SyntaxError" in stderr_raw
+                and bool(__import__("re").search(r"\bpython3?\s+-c\b", args.command))
+            )
+            if _is_python_c_syntaxerr:
+                self.state.__dict__["_python_c_syntaxerr_count"] = _python_c_err_state + 1
+                if _python_c_err_state >= 1:
+                    _cnt = _python_c_err_state + 1
+                    yield self._build_result(
+                        command=args.command,
+                        stdout=(
+                            f"[LOOP-BREAKER: `python3 -c '...'` has hit SyntaxError "
+                            f"{_cnt} times. Inline -c scripts get truncated by the "
+                            f"shell when they contain newlines or quotes. "
+                            f"Write the script to a file first, then run it:\n"
+                            f"  write_file path='/tmp/script.py' content='...'\n"
+                            f"  bash command='python3 /tmp/script.py'\n"
+                            f"Do NOT retry the inline -c form again.]"
+                        ),
+                        stderr="",
+                        returncode=returncode,
+                    )
+                    return
+
+            # Exact-command repetition loop-breaker: fires when the same
+            # command text is run 5+ times regardless of output or exit code.
+            # Catches benchmark/timeit/import-check loops where each run has
+            # varying output (timings, object ids) that defeats the hash check.
+            # Excludes commands that write files (heredoc, redirect, sed -i)
+            # since those legitimately run the same form multiple times.
+            _is_write_cmd = bool(
+                __import__("re").search(
+                    r"(>|>>|\bsed\s+-i\b|\btee\b|\bcat\s+<<|\bprintf\b.*>)",
+                    args.command,
+                )
+            )
+            if not _is_write_cmd:
+                _run_cnt = run_count_state.get(args.command, 0) + 1
+                run_count_state[args.command] = _run_cnt
+                if _run_cnt >= 5:
+                    cmd_preview = args.command[:80]
+                    yield self._build_result(
+                        command=args.command,
+                        stdout=(
+                            f"[LOOP-BREAKER: `{cmd_preview}` has been run "
+                            f"{_run_cnt} times this session with the same "
+                            f"command text. The output is stable — re-running "
+                            f"it will not produce new information. "
+                            f"Stop repeating this command and move on to the "
+                            f"next task step. If you are benchmarking, one "
+                            f"run is enough. If you are checking an import, "
+                            f"the result is already known.]\n{stdout}"
+                        ),
+                        stderr=stderr,
+                        returncode=returncode,
+                    )
+                    return
+
             if returncode != 0:
                 err_count = err_state.get(args.command, 0) + 1
                 err_state[args.command] = err_count

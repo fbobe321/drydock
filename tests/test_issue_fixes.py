@@ -1,4 +1,4 @@
-"""Regression tests for GitHub issues #4, #5, #6."""
+"""Regression tests for GitHub issues #4, #5, #6, #14."""
 from __future__ import annotations
 
 import os
@@ -116,3 +116,103 @@ class TestIssue6BashAllowlistBasename:
         # Returns None (caller prompts for approval) — not ALWAYS.
         from drydock.core.tools.base import ToolPermission
         assert res != ToolPermission.ALWAYS
+
+
+# Issue #14: empty assistant messages (no content, no tool_calls) persist in
+# history after stall-retry exhaustion and cause 400 errors on the next turn.
+# _sanitize_message_ordering must drop them before the next LLM call.
+
+class TestIssue14EmptyAssistantDropped:
+    def _make_minimal_agent(self):
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import MessageList
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        # stubs for methods called by _sanitize_message_ordering
+        al._truncate_old_tool_results = lambda: None
+        al._proactive_prune_write_oscillation = lambda: None
+        import os as _os
+        al._os = _os
+        return al
+
+    def test_empty_assistant_dropped(self):
+        """Empty assistant message (no content, no tool_calls) is dropped."""
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import LLMMessage, Role, MessageList
+        import os
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        al._truncate_old_tool_results = lambda: None
+        al._proactive_prune_write_oscillation = lambda: None
+
+        al.messages.append(LLMMessage(role=Role.user, content="hello"))
+        al.messages.append(LLMMessage(role=Role.assistant, content=None))  # empty — bug
+
+        original_env = os.environ.get("DRYDOCK_AUTO_CONTINUE_DISABLE")
+        os.environ["DRYDOCK_AUTO_CONTINUE_DISABLE"] = "1"
+        try:
+            al._sanitize_message_ordering()
+        finally:
+            if original_env is None:
+                os.environ.pop("DRYDOCK_AUTO_CONTINUE_DISABLE", None)
+            else:
+                os.environ["DRYDOCK_AUTO_CONTINUE_DISABLE"] = original_env
+
+        roles = [m.role for m in al.messages]
+        assert Role.assistant not in roles, f"Empty assistant must be dropped; got {roles}"
+
+    def test_empty_assistant_with_preceding_tool_result_both_dropped(self):
+        """Tool result immediately before an empty assistant is also dropped
+        to avoid a dangling tool message with no matching assistant turn."""
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import LLMMessage, Role, MessageList, ToolCall, FunctionCall
+        import os
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        al._truncate_old_tool_results = lambda: None
+        al._proactive_prune_write_oscillation = lambda: None
+
+        al.messages.append(LLMMessage(role=Role.user, content="do it"))
+        al.messages.append(LLMMessage(
+            role=Role.assistant,
+            content=None,
+            tool_calls=[ToolCall(id="c1", function=FunctionCall(name="bash", arguments="{}"))],
+        ))
+        al.messages.append(LLMMessage(role=Role.tool, content="ok", tool_call_id="c1"))
+        al.messages.append(LLMMessage(role=Role.assistant, content=None))  # empty — bug
+
+        os.environ["DRYDOCK_AUTO_CONTINUE_DISABLE"] = "1"
+        try:
+            al._sanitize_message_ordering()
+        finally:
+            os.environ.pop("DRYDOCK_AUTO_CONTINUE_DISABLE", None)
+
+        roles = [m.role for m in al.messages]
+        # The empty assistant AND its preceding orphan tool result should be gone
+        assert roles == [Role.user, Role.assistant, Role.tool] or roles == [Role.user], \
+            f"Unexpected roles after sanitize: {roles}"
+        # The productive assistant (with tool_calls) must survive
+        productive = [m for m in al.messages if m.role == Role.assistant]
+        assert all(m.tool_calls for m in productive), "Non-empty assistant must keep tool_calls"
+
+    def test_non_empty_assistant_preserved(self):
+        """Assistant messages with content are never dropped."""
+        from drydock.core.agent_loop import AgentLoop
+        from drydock.core.types import LLMMessage, Role, MessageList
+        import os
+        al = object.__new__(AgentLoop)
+        al.messages = MessageList()
+        al._truncate_old_tool_results = lambda: None
+        al._proactive_prune_write_oscillation = lambda: None
+
+        al.messages.append(LLMMessage(role=Role.user, content="hi"))
+        al.messages.append(LLMMessage(role=Role.assistant, content="I'm here"))
+
+        os.environ["DRYDOCK_AUTO_CONTINUE_DISABLE"] = "1"
+        try:
+            al._sanitize_message_ordering()
+        finally:
+            os.environ.pop("DRYDOCK_AUTO_CONTINUE_DISABLE", None)
+
+        roles = [m.role for m in al.messages]
+        assert Role.assistant in roles, "Non-empty assistant must not be dropped"

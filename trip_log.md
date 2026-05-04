@@ -3,6 +3,20 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-04 14:32 UTC tick
+- Stress: 1625/1658 (PID 2219727 alive, ~2d elapsed, 98% done — 33 prompts remaining on "Integrate:" series)
+- Write rate: 47% last 100 prompts; balancer healthy (gemma4 OK on :8001); vLLM 400s: 0
+- GH issues: 0 open; llm_balancer responding; vLLM gemma4 container up
+- Dispatch queue: harness=25152 total (top recent: thinking_stall=152, bash_generic=23, search_replace_not_found=20 — all have existing handlers from recent commits 6587ce5, e5581cc, prior cycle); retrieval=67 (0 actionable — all already ingested recently); steering=N/A
+- Action this tick: no fix committed — all top dispatch patterns already addressed; stress run nearly complete; no new drydock bugs detected; retrieval-drain: 0 projects ingested (all current)
+
+## 2026-05-04 09:30 UTC tick
+- Stress: 1435/1658 (PID 2219727 alive, 1d 18h elapsed, 87% done); "Perf:" prompts; log 1.14 GB
+- Write rate: 26% last 84 prompts — Perf prompts at late stage of run; SKIPs at 193 total (13%); TUI-recycle events still firing due to skip clusters; no escalation from prior tick
+- vLLM 400s: 0; balancer PID 2462362 on :8001 healthy; vLLM gemma4 up; GH issues: 0 open
+- Dispatch queue: harness=22440 (top patterns: thinking_stall=209, bash_generic=185, search_replace_not_found=50, heredoc_loop=32; all with existing handlers); retrieval=34 (0 actionable — all already ingested); steering=N/A (no file)
+- Action this tick: no fix committed — all top patterns addressed by existing source handlers (inline stall retry × 3, search_replace file-head embed, bash heredoc confirmation + loop-breaker); no new drydock bugs found; retrieval drain ran (0 actionable); system healthy
+
 ## 2026-05-04 08:06 UTC tick
 - Stress: 1413/1658 (PID 2219727 alive, 1d 17h); progressing through "Perf:" prompts; write rate 17% last 84 prompts (expected for conceptual/advisory prompts)
 - vLLM 400s: 0; balancer healthy PID 2462362 (:8001 → gemma4); vLLM container up 10 days; GH issues: 0 open
@@ -1517,3 +1531,106 @@ restarted, cron self-match bug fixed in this same session).
 - HLE eval: 18/200 complete (1 correct / 5%), PID 2567969 alive (1h47m), currently on q19 which hit a web_search loop (20 identical calls) — harness 8-min timeout fires ~30s from now; normal operation; 4 commits since v2.7.37 are HLE-infra (Telegram + PRD) not shipped yet
 - Retrieval drain: 0 actionable
 - Action this tick: no new drydock bug found; all top dispatch patterns covered by prior fixes; system healthy — no commit warranted
+
+## 2026-05-04 10:04 UTC tick
+- Stress: 1460/1658 (88.1%), PID 2219727, alive; TUI child PID 2677753 (just recycled); moving into "Integration:" prompts after a turbulent "Perf:" section
+- Write rate: 29% last 50 (expected — Perf/Integration prompts are mostly advisory, not write-heavy)
+- SKIPs: 201 total (13.8% rate) — spike of 27 new SKIPs in Perf: section (1440–1458), where model called ralph_repo_index, stalled, and TUI was busy during retry cycles; admiral fired tui-recycle-requested 3× in last ~1h; now recovered with fresh TUI
+- vLLM 400s: 0; balancer and gemma4 docker healthy; no :8001 squatter
+- GH issues: 0 open
+- Dispatch queue: harness=22779, retrieval=40 (0 actionable), steering=0; top 2h patterns: thinking_stall=329, bash_generic=239, search_replace:not_found_loop=62 — all covered by existing fixes
+- Retrieval drain: 40 entries, 0 actionable (all within 7-day re-ingest window)
+- Action this tick: no new drydock bug found; Perf: SKIP spike was transient and self-recovered; no commit warranted
+
+## 2026-05-04 10:00 UTC tick
+- Stress: 1451/1658 (87.5%), PID 2219727, alive (2d 7h+ elapsed), log /tmp/stress_2000_1777732347.log; currently on "Perf: memoize expensive call" batch; last RECYCLE-TUI at 1449 spawned child PID 2671317
+- Write rate: 27% last 86 prompts — expected for Perf: category (lazy-load, memoize, batch DB writes, etc. are conceptual prompts; model analyzes rather than writes)
+- SKIPs: 174 total (12% rate) — consistent with prior baseline; post-recycle SKIPs at 1450 expected (TUI still starting up)
+- vLLM 400s: 0 last 30min; llm_balancer healthy on :8001; gemma4 docker healthy on :8000; no :8001 squatter
+- GH issues: 0 open
+- Dispatch queue: harness=22614, retrieval=37 (0 actionable — all recently ingested); top patterns: loop:bash_generic=8700, thinking_stall=7049, hallucinated_name=3783, search_replace:not_found_loop=2223 — all addressed by prior commits (bash.py loop-breakers, agent_loop inline retry, cfe0ee0 retrieve redirect, search_replace file-head embed)
+- Retrieval drain: 37 entries, 0 actionable (all already ingested within 7-day window)
+- Action this tick: no new drydock bug found; all dispatch patterns covered by existing fixes; stress run on track to finish ~207 prompts remaining at current pace; system healthy — no commit warranted
+
+## 2026-05-04 10:32 UTC tick
+- Stress: ~1480/1658 (89%); babysitter confirmed alive (PID 2219727, etime 1d19h); active prompts are integration stubs (Slack/Discord/CI) naturally producing 0-1 writes per prompt
+- Write rate: 42% last 100 prompts (expected — integration section is text-heavy; 74% was during file-generation section)
+- vLLM 400s: 0; llm_balancer healthy :8001; gemma4 docker healthy :8000; admiral_probe alive :8878
+- GH issues: 0 open
+- Dispatch queue: harness=22965, retrieval=43 (0 actionable); top patterns loop:bash_generic=8798, thinking_stall=7235, hallucinated_name=3804, search_replace:not_found_loop=2245, heredoc_loop=563, escape_loop=170 — all addressed by prior commits (bash.py L626/L650/L659 hints, e8be997, 734ee5a, c637042, 15f0566)
+- Retrieval drain: 43 entries, 0 actionable (all already ingested)
+- Action this tick: no new drydock bugs; all dispatch patterns covered; stress run on track to finish in ~3-4h; system healthy — no commit warranted
+
+## 2026-05-04 11:02 UTC tick
+- Stress: 1499/1658 (90.4%), PID 2219727, alive (1d 20h elapsed), log /tmp/stress_2000_1777732347.log; actively progressing through "Integrate:" prompts (VictorOps, PagerDuty, Opsgenie, Honeycomb etc.) at 2 msgs/prompt average; TUI child PID 2687253 from last RECYCLE-TUI
+- Write rate: 0/3 on v9 (too few to measure; checking v7/v8 yields 0/0 — both old logs); last meaningful rate was 42% from prior tick during integration section; current Integrate: prompts are text-heavy (model responds with analysis, no writes) — consistent with prior pattern
+- vLLM 400s: 0 last 30min; llm_balancer healthy PID 2462362 on :8001; gemma4 docker healthy on :8000; GH issues: 0 open
+- Dispatch queue: harness=23160, retrieval=46 (0 actionable — all recently ingested); recent patterns: thinking_stall=32, loop:bash_generic=16, search_replace:not_found_loop=2 — all addressed by prior commits
+- Retrieval drain: 46 entries, 0 actionable (all already ingested within 7-day window)
+- Action this tick: no new drydock bug found; all dispatch patterns covered by existing code; stress run on track to finish ~159 prompts remaining at current pace (~1-2h); system healthy — no commit warranted
+
+## 2026-05-04 12:05 UTC tick
+- Stress: 1515/1658 (91.4%), PID 2219727, alive (1d 21h elapsed), log /tmp/stress_2000_1777732347.log; progressing through "Integrate:" prompts (Jenkins, CircleCI, VictorOps etc.)
+- Write rate: 47% last 94 prompts (expected — integration prompts are text-heavy)
+- vLLM 400s: 0 last 30min; llm_balancer healthy PID 2462362 on :8001; gemma4 docker healthy on :8000; no :8001 squatter
+- GH issues: 0 open
+- Dispatch queue: harness=23365, retrieval=49 (0 actionable — all recently ingested); top patterns: loop:bash_generic=8896, thinking_stall=7471, hallucinated_name=3828 — all addressed by prior commits (bash.py hints, agent_loop retry, cfe0ee0 retrieve redirect)
+- Retrieval drain: 49 entries, 0 actionable (all already ingested within 7-day window)
+- Action this tick: committed feat(steering) — DRYDOCK_STEERING_APPLIER env var for applier selection (log_only/logit_bias/null); ships at next auto_release tick
+
+## 2026-05-04 13:02 UTC tick
+- Stress: 1569/1658 (94.6%), PID 2219727, alive (1d 22h elapsed), log /tmp/stress_2000_1777732347.log; progressing through "Integrate:" prompts (Jenkins, Prometheus, Grafana, Datadog etc.)
+- Write rate: 51% last 99 prompts (expected for integration section)
+- vLLM 400s: 0 last 30min; llm_balancer healthy; gemma4 docker healthy; GH issues: 0 open
+- Dispatch queue: harness=24192, retrieval=58 (0 actionable — all recently ingested); top patterns: thinking_stall=384, loop:bash_generic=78, search_replace:not_found_loop=16, hallucinated_name=15, bash:heredoc_loop=7
+- Retrieval drain: 58 entries, 0 actionable (all already ingested within 7-day window)
+- Action this tick: committed fix(bash) — python3 -c SyntaxError loop-breaker (addresses pattern harness:bash:heredoc_loop); 4 regression tests pass; ships at next auto_release tick (0/6/12/18 UTC)
+
+## 2026-05-04 12:10 UTC tick
+- Stress: 1540/1658 (92.9% complete, 1d 21h elapsed on PID 2219727)
+- Write rate: 54% last 100 prompts (down from 74% peak — likely harder prompts near end of set)
+- Admiral last 30 min: ~44 thinking_stall fires (empty_after_tool:search_replace, all recovered by inline retry)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=23598, retrieval=52 (0 actionable — all recently ingested); top patterns overall: loop:bash_generic=8946, thinking_stall=7623, hallucinated_name=3840, not_found_loop=2263 — all have existing handling in source
+- Retrieval drain: 52 entries, 0 actionable (all already ingested within 7-day window)
+- Action this tick: no fix committed — all firing patterns have existing handling; harness nearly complete; system healthy
+
+## 2026-05-04 14:00 UTC tick
+- Stress: 1582/1658 (95.4%), PID 2219727 alive (1d 23h elapsed), log /tmp/stress_2000_1777732347.log; ~76 prompts remaining (should finish within ~2h)
+- Write rate: 50% last 100 prompts (integration section — consistent with prior ticks)
+- vLLM 400s: 0 last 30min; llm_balancer healthy PID 2462362 on :8001; gemma4 docker healthy on :8000; admiral_probe healthy PID 4075121 on :8878; no :8001 squatter
+- GH issues: 0 open
+- Dispatch queue: harness=24512, retrieval=61 (0 actionable — all already ingested within 7-day window), steering=0 (totals); top recent patterns: thinking_stall=148, loop:bash_generic=27, search_replace:not_found_loop=20 — all addressed by existing agent_loop inline retry, bash.py loop-breakers, and search_replace handling; write_file:dedup_attempted=1 (already implemented per CLAUDE.md)
+- Action this tick: no new drydock bug found; all dispatch patterns covered by existing code; stress run ~4.6% from completion; system fully healthy — no commit warranted
+
+## 2026-05-04 14:20 UTC tick
+- Stress: 1610/1658 (PID 2219727, alive 1d 23h)
+- Write rate: 42% last 100 prompts (expected — current prompts are "Integrate: X" type, text-only responses)
+- Admiral last 30 min: N/A (no admiral_history.log path available this tick)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=24833, retrieval=64 (all already ingested), steering=N/A
+- llm_balancer: PID 2462362 healthy on :8001
+- Action this tick: committed fix for harness:loop:bash_generic (top queue pattern 9124 entries) — added exact-command repetition loop-breaker in bash.py that fires on 5th run of same command regardless of output hash (timeit/import-check loops produce varying output, defeating hash check). 4 regression tests pass. Ships at next auto-release cron (0/6/12/18 UTC).
+
+## 2026-05-04 15:05 UTC tick
+- Stress: 1637/1658 (PID 2219727 alive, ~2d elapsed, 99% done — 21 prompts remaining on "Integrate:" series); log active at /tmp/stress_2000_1777732347.log
+- Write rate: 44% last 100 prompts; vLLM 400s: 0; balancer PID 2462362 on :8001 healthy; gemma4 running at ~65 tok/s; GH issues: 0 open
+- Dispatch queue: harness=25474 total (top recent: thinking_stall=378, bash_generic=54, search_replace_not_found=48, hallucinated_name=12, heredoc_loop=4, write_file_dedup=4); retrieval=70 (0 actionable — all already ingested); steering=N/A
+- Action this tick: no fix committed — all top dispatch patterns have existing handlers (stall inline retry x3, file-head embed on not_found, exact-command loop-breaker, heredoc confirmation); recent commits 6587ce5 and e5581cc cover bash_generic and heredoc_loop; stress run nearly complete; retrieval-drain: 0 projects ingested
+
+## 2026-05-04 15:32 UTC tick
+- Stress: 1642/1658 (PID 2219727 alive, ~2d 1h elapsed, 99.0% done — 16 prompts remaining on "Integrate:" series); TUI recycling every 2 prompts due to session log bloat (1.3 GB), but making incremental progress; SKIP rate high on tail end
+- Write rate: 44% last 100 prompts; vLLM 400s: 0; balancer PID 2462362 on :8001 healthy; GH issues: 0 open
+- Dispatch queue: harness=25795 total (top 24h: thinking_stall=9242, bash_generic=6921, search_replace:not_found=1866, hallucinated_name=1368, heredoc_loop=466, escape_loop=170, write_file:dedup=69, identical_blocks=21); retrieval=73 (0 actionable — all already ingested within 7d window); steering=N/A
+- Action this tick: no fix committed — all top patterns have existing handlers (inline stall retry, file-head embed, exact-command loop-breaker, redirect for hallucinated retrieval tools); commits 6587ce5 and e5581cc from this morning cover bash_generic and heredoc_loop but not yet deployed (v2.7.38 live; auto_release at noon CDT will ship v2.7.39 with 5 pending commits); retrieval-drain: 0 projects ingested
+
+## 2026-05-04 17:10 UTC tick
+- Stress: 3/1658 (new run v9 log, harness recycled — consecutive SKIPs at start, likely TUI timing issue)
+- Write rate: N/A (run too early to measure)
+- Admiral last 30 min: patterns harness:loop:bash_generic + harness:thinking_stall (from dispatch queue)
+- vLLM 400s: 0
+- GH issues: 3 open (#14 empty-assistant 400 loop, #15 llama.cpp config, #16 markdown rendering)
+- Dispatch queue: harness=26447 entries, retrieval and steering unknown
+- Action this tick: investigated issue #14 (empty assistant messages causing 400 on llama.cpp). Fix is already written in working tree (agent_loop.py Fix 2: drop empty assistant messages in _sanitize_message_ordering) with tests in test_issue_fixes.py. One test failing: test_empty_assistant_with_preceding_tool_result_both_dropped — assertion error on role list comparison. Fix and tests NOT committed; budget exhausted before resolution. Next tick: fix failing test, commit, let auto_release ship.
