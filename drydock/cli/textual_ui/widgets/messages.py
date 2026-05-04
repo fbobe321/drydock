@@ -118,6 +118,16 @@ _SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?]) (?=[A-Z])")
 _INLINE_CAPWORD_HEADING_RE = re.compile(
     r"(?<=[.!?]) (?=[A-Z][A-Za-z]{1,15}:\s)"
 )
+# Issue #16: quantized Gemma 4 (Q3_K_M) strips whitespace tokens, jamming
+# `### Header text body` and `* item * item * item` runs onto one line.
+# These patterns insert paragraph breaks before inline markdown headers
+# and asterisk bullets that weren't preceded by a real newline.
+_INLINE_ATX_HEADING_RE = re.compile(r"(?<=[.!?\)]) (?=#{1,4} [A-Z])")
+# Asterisk-bullet rescue. Accepts either case for the first bullet word
+# (file names start lowercase, sentences start uppercase). Requires the
+# bullet word to be ≥3 alpha chars + dot/space — guards against math
+# (`2 * 3`) and inline emphasis (`a * b`).
+_INLINE_ASTERISK_BULLET_RE = re.compile(r"(?<=[a-zA-Z.!?\)]) (?=\* [A-Za-z][A-Za-z0-9_]{2,})")
 
 
 def _sentence_chunks(text: str, group: int = 2) -> str:
@@ -164,6 +174,10 @@ def _break_walls_of_text(text: str) -> str:
     out = _INLINE_ENUM_RE.sub("\n", out)
     out = _INLINE_DASH_BULLET_RE.sub("\n", out)
     out = _INLINE_CAPWORD_HEADING_RE.sub("\n\n", out)
+    # Issue #16: rescue inline ATX headers (`### Foo`) and asterisk bullets
+    # (`* item`) that quantized Gemma 4 emits without surrounding newlines.
+    out = _INLINE_ATX_HEADING_RE.sub("\n\n", out)
+    out = _INLINE_ASTERISK_BULLET_RE.sub("\n", out)
     # If inline markers didn't produce any breaks AND the text is long
     # enough that one paragraph hurts readability, split at sentence
     # boundaries. group=1 = each sentence on its own paragraph (most

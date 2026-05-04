@@ -51,6 +51,17 @@ if __name__ == "__main__":
         version = sys.argv[1] if len(sys.argv) > 1 else "unknown"
         summary = "New release"
 
+    # User explicitly asked to stop HLE telegram spam (2026-05-04).
+    # Drop HLE-prefixed tags by default; override with HLE_TELEGRAM=1.
+    # This silences the in-flight overnight HLE process too — it shells
+    # out to this script per ping, so the filter applies retroactively.
+    import os as _os
+    if (version.startswith("hle-")
+            and _os.environ.get("HLE_TELEGRAM", "").strip().lower()
+            not in ("1", "true", "yes")):
+        print(f"[notify_release] dropped HLE-tagged ping: {version}")
+        sys.exit(0)
+
     if version == "status":
         # Hourly status — plain text, no Markdown parsing issues
         msg = f"⚓ {summary}"

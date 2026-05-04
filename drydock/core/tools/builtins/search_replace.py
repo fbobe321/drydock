@@ -1069,6 +1069,17 @@ class SearchReplace(
 
                 if fuzzy_context:
                     error_msg += f"\n{fuzzy_context}"
+                elif "not found anywhere" in context:
+                    # First search line not found at all — embed file head so the
+                    # model can craft a correct SEARCH block without calling read_file.
+                    head_lines = current_content.split("\n")[:30]
+                    head = "\n".join(head_lines)
+                    error_msg += (
+                        f"\nFile head (first {len(head_lines)} lines of actual content):\n"
+                        f"```\n{head}\n```\n"
+                        "Read the file head above and craft your SEARCH block using "
+                        "text that actually appears in the file."
+                    )
 
                 error_msg += (
                     "\nDebugging tips:\n"

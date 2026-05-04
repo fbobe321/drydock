@@ -238,6 +238,18 @@ class ModelConfig(BaseModel):
     output_price: float = 0.0  # Price per million output tokens
     thinking: Literal["off", "low", "medium", "high"] = "off"
     auto_compact_threshold: int = 200_000
+    # Free-form sampling overrides forwarded to the LLM backend's
+    # extra_sampling (top_k, top_p, frequency_penalty, repeat_penalty,
+    # min_p, max_tokens, etc). Anything supported by the OpenAI-compat
+    # server. For llama.cpp + Gemma 4 the article-recommended config is:
+    #   [models.extra_params]
+    #   top_k = 40
+    #   top_p = 0.95
+    #   frequency_penalty = 1.1
+    #   max_tokens = 2048
+    # Set temperature via the top-level `temperature` field; do not
+    # duplicate it here.
+    extra_params: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod

@@ -164,5 +164,79 @@ def test_patch_handles_missing_keys_gracefully():
     assert cfg["active_model"] == "local"
 
 
+def test_patch_bakes_llama_cpp_anti_loop_recipe():
+    """When the detected backend is llama.cpp, the local model should
+    inherit the article-recommended Gemma 4 anti-loop recipe — temp 1.0
+    and the extra_params block. (issue #15)"""
+    cfg = {
+        "providers": [
+            {"name": "llamacpp", "api_base": "http://127.0.0.1:8080/v1"},
+        ],
+        "models": [
+            {"alias": "local", "name": "placeholder", "provider": "llamacpp"},
+        ],
+    }
+    info = LocalServerInfo(
+        label="llama.cpp",
+        api_base="http://192.168.50.21:8000/v1",
+        model_name="gemma-4-26B-A4B-it-Q3_K_M",
+    )
+    patch_config_for_local(cfg, info)
+    local = next(m for m in cfg["models"] if m["alias"] == "local")
+    assert local["temperature"] == 1.0
+    assert local["extra_params"]["top_k"] == 40
+    assert local["extra_params"]["top_p"] == 0.95
+    assert local["extra_params"]["frequency_penalty"] == 1.1
+    assert local["extra_params"]["max_tokens"] == 2048
+
+
+def test_patch_does_not_overwrite_user_extra_params():
+    """If the user already configured extra_params, the llama.cpp
+    detector adds missing keys but keeps user values."""
+    cfg = {
+        "providers": [{"name": "llamacpp", "api_base": "http://127.0.0.1:8080/v1"}],
+        "models": [
+            {"alias": "local", "name": "p", "provider": "llamacpp",
+             "temperature": 0.5,
+             "extra_params": {"top_k": 64, "min_p": 0.05}},
+        ],
+    }
+    info = LocalServerInfo(
+        label="llama.cpp",
+        api_base="http://127.0.0.1:8080/v1",
+        model_name="gemma-4-26B-A4B-it-Q3_K_M",
+    )
+    patch_config_for_local(cfg, info)
+    local = next(m for m in cfg["models"] if m["alias"] == "local")
+    # User-set values preserved
+    assert local["temperature"] == 0.5
+    assert local["extra_params"]["top_k"] == 64
+    assert local["extra_params"]["min_p"] == 0.05
+    # Missing keys filled in with article defaults
+    assert local["extra_params"]["top_p"] == 0.95
+    assert local["extra_params"]["frequency_penalty"] == 1.1
+    assert local["extra_params"]["max_tokens"] == 2048
+
+
+def test_patch_does_not_inject_for_non_llama_backends():
+    """vLLM detection should NOT bake in the llama.cpp-specific recipe."""
+    cfg = {
+        "providers": [{"name": "llamacpp", "api_base": "http://127.0.0.1:8080/v1"}],
+        "models": [
+            {"alias": "local", "name": "p", "provider": "llamacpp"},
+        ],
+    }
+    info = LocalServerInfo(
+        label="vLLM",
+        api_base="http://127.0.0.1:8000/v1",
+        model_name="gemma4",
+    )
+    patch_config_for_local(cfg, info)
+    local = next(m for m in cfg["models"] if m["alias"] == "local")
+    # No temperature override, no extra_params injection
+    assert "temperature" not in local
+    assert local.get("extra_params", {}) == {} or "extra_params" not in local
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

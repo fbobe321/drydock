@@ -210,10 +210,15 @@ def score_answer(q: dict, pred: str) -> dict:
 def notify_telegram(tag: str, message: str) -> None:
     """Fire-and-forget Telegram ping via the existing notify_release.py.
 
-    All HLE runs notify on start, every MILESTONE_EVERY completions, and
-    on final completion (or crash). Failures are silent — a missed
-    Telegram is never worth crashing the eval.
+    Default OFF: HLE eval is too noisy for routine notifications and the
+    user explicitly asked to stop. Opt in via HLE_TELEGRAM=1 if you want
+    start/milestone/final/crash pings for a specific run.
+
+    Failures are silent — a missed Telegram is never worth crashing
+    the eval.
     """
+    if os.environ.get("HLE_TELEGRAM", "").strip().lower() not in ("1", "true", "yes"):
+        return
     if not NOTIFY.exists():
         return
     import subprocess

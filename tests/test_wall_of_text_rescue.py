@@ -75,6 +75,36 @@ class TestBreakWallsOfText:
         assert out.count("\n") > 0
         assert out != wall
 
+    def test_inline_atx_headers_get_breaks(self):
+        """Issue #16: Q3_K_M Gemma 4 jams `### Header` markers inline."""
+        wall = (
+            "I reviewed the codebase and there are several layers worth "
+            "describing. ### Architecture The system uses a three-tier "
+            "design with clear separation. ### Components The indexer "
+            "reads markdown files into the database. ### Tests Each "
+            "module has its own pytest file with shared fixtures."
+        )
+        out = _break_walls_of_text(wall)
+        assert "\n\n### Architecture" in out
+        assert "\n\n### Components" in out
+        assert "\n\n### Tests" in out
+
+    def test_inline_asterisk_bullets_get_breaks(self):
+        """Issue #16: `* item * item * item` runs onto one line on quantized
+        Gemma 4. Insert newlines so the markdown renderer treats them as
+        a real list."""
+        wall = (
+            "Here is the project structure overview that captures the "
+            "main building blocks of the system as currently designed. "
+            "* indexer.py reads markdown * searcher.py runs BM25 "
+            "* cli.py exposes the REPL * tests/ is the pytest suite"
+        )
+        out = _break_walls_of_text(wall)
+        # Each `* item` should now be on its own line (or at least
+        # separated by a newline).
+        bullets_with_newlines = sum(1 for line in out.split("\n") if line.strip().startswith("* "))
+        assert bullets_with_newlines >= 3
+
     def test_existing_newlines_preserved(self):
         text = "Already\nhas\nbreaks. " * 30
         # nl >= 3 disables wall-rescue.

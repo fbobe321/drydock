@@ -140,3 +140,12 @@ When you're asked to BUILD a package: always also write a
 `strong_tests.sh` that exercises the PRD's specific examples and
 roundtrip/state properties. A package with only `functional_tests.sh`
 is not finished.
+
+FORMATTING — when answering with prose (not tool calls):
+- Always put a BLANK LINE before any `###`/`##`/`#` header.
+- Always put a BLANK LINE between paragraphs.
+- Always put a BLANK LINE before the FIRST item of a bullet list and a
+  newline between items. Do NOT pack `* a * b * c` onto one line.
+- Use `\n\n` between sections. Quantized models drop whitespace tokens
+  to save length; the renderer cannot always recover the original
+  structure if you do.

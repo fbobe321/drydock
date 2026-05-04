@@ -1918,9 +1918,18 @@ class AgentLoop:
                     and not (msg.content or "").strip()
                     and not msg.tool_calls):
                 # Skip empty assistant — also drop any immediately preceding
-                # tool result that would be left dangling without a matching
-                # assistant turn.
+                # tool result that would be truly orphaned (no matching
+                # assistant.tool_calls entry in the preceding messages).
                 while cleaned2 and cleaned2[-1].role == Role.tool:
+                    preceding_tool = cleaned2[-1]
+                    tcid = getattr(preceding_tool, "tool_call_id", None)
+                    if tcid and any(
+                        m.role == Role.assistant
+                        and m.tool_calls
+                        and any(tc.id == tcid for tc in m.tool_calls)
+                        for m in cleaned2[:-1]
+                    ):
+                        break  # tool result has a valid match; keep it
                     cleaned2.pop()
             else:
                 cleaned2.append(msg)
@@ -2074,22 +2083,37 @@ class AgentLoop:
             temp = active_model.temperature
             extra_sampling: dict | None = None
 
+            # Per-model `extra_params` (top_k, top_p, frequency_penalty,
+            # max_tokens, etc.) declared in config.toml flow through
+            # extra_sampling. This is the seam llama.cpp users need to
+            # pass top_k=40, top_p=0.95, frequency_penalty=1.1 per the
+            # Gemma 4 loop-fix recipe.
+            cfg_extra = getattr(active_model, "extra_params", None) or {}
+            if cfg_extra:
+                extra_sampling = dict(cfg_extra)
+
             # Token-level loop-breaker: when repetition is detected, bump
             # temperature and add frequency_penalty + a fresh seed so the
             # model's next completion is mechanically likely to diverge.
             # Mistral/OpenAI-compat backends pass these straight through
-            # to vLLM's SamplingParams.
+            # to vLLM's SamplingParams. These OVERRIDE config.extra_params
+            # for the duration of the loop-break.
             if getattr(self, "_loop_detected", False):
                 signal = getattr(self, "_loop_signal", "") or ""
                 # Heavier bump if we've already hit the FORCE_STOP signal
                 # (=8 repeats) vs a WARNING (=3-5 repeats).
                 heavy = signal == "FORCE_STOP"
                 temp = min(1.0, temp + (0.5 if heavy else 0.3))
-                extra_sampling = {
+                # Merge loop-breaker overrides on top of any cfg_extra so
+                # config-declared sampling params survive when a loop is
+                # NOT detected, and get overridden when one IS detected.
+                if extra_sampling is None:
+                    extra_sampling = {}
+                extra_sampling.update({
                     "frequency_penalty": 0.7 if heavy else 0.4,
                     "presence_penalty": 0.3,
                     "seed": int(time.time() * 1000) & 0x7FFFFFFF,
-                }
+                })
                 logger.info(
                     "[LOOP-BREAK] %s → temp %.2f, freq_pen %.2f, seed %d",
                     signal, temp, extra_sampling["frequency_penalty"],

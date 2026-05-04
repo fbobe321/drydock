@@ -117,4 +117,17 @@ def patch_config_for_local(
         for model in models:
             if isinstance(model, dict) and model.get("alias") == "local":
                 model["name"] = info.model_name
+                # When the detected backend is llama.cpp, bake in the
+                # Gemma 4 anti-loop sampling recipe (article: i-built-a-
+                # gemma-4-ai-agent-it-kept-looping). Temperature must be
+                # 1.0; lower values reinforce loops on quantized GGUF.
+                # Don't clobber user-defined values if config was already
+                # touched.
+                if info.label == "llama.cpp":
+                    model.setdefault("temperature", 1.0)
+                    extra = model.setdefault("extra_params", {})
+                    extra.setdefault("top_k", 40)
+                    extra.setdefault("top_p", 0.95)
+                    extra.setdefault("frequency_penalty", 1.1)
+                    extra.setdefault("max_tokens", 2048)
                 break
