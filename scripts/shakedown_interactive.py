@@ -1389,19 +1389,31 @@ class SessionWatcher:
     def find_session(self) -> Path | None:
         if self.session_dir is not None:
             return self.session_dir
+        # meta.json is only written at session EXIT (CLAUDE.md learning #37).
+        # For active sessions we fall back to: new dir (mtime > since) that
+        # has messages.jsonl. meta.json match is preferred when available.
+        fallback: Path | None = None
         for entry in sorted(SESSION_ROOT.iterdir(), reverse=True):
             try:
                 if not entry.is_dir():
                     continue
                 if entry.stat().st_mtime < self.since - 5:
                     continue
-                meta = json.loads((entry / "meta.json").read_text())
-                wd = meta.get("environment", {}).get("working_directory", "")
-                if str(self.cwd) == wd:
-                    self.session_dir = entry
-                    return entry
+                try:
+                    meta = json.loads((entry / "meta.json").read_text())
+                    wd = meta.get("environment", {}).get("working_directory", "")
+                    if str(self.cwd) == wd:
+                        self.session_dir = entry
+                        return entry
+                except (FileNotFoundError, json.JSONDecodeError):
+                    # Active session — meta.json not yet written.
+                    if fallback is None and (entry / "messages.jsonl").exists():
+                        fallback = entry
             except Exception:
                 continue
+        if fallback is not None:
+            self.session_dir = fallback
+            return fallback
         return None
 
     def _reset_offsets(self) -> None:

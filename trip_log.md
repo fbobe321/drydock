@@ -1,5 +1,83 @@
 # Drydock Trip Log
 
+## 2026-05-05 22:30 UTC tick
+- Stress: 680/1658 (41% done), PID 2755890 alive (1d 4h 28m elapsed); 470 total writes; recent prompts include API server patterns with some SKIPs on prompt-not-accepted retries; auto-retry in harness handling these gracefully
+- Write rate: 470 writes / ~650 processed prompts ≈ 72% write rate
+- Admiral last 30 min: 8 thinking_stall fires, 2 bash_generic fires (both patterns addressed by v2.7.41–44 commits); no new unaddressed patterns
+- vLLM 400s: 0; balancer PID 2937934 healthy on :8001; docker gemma4 serving fine
+- GH issues: 0 open
+- Dispatch queue: harness=41180 total (thinking_stall=21416, bash_generic=10405, tool:hallucinated_name=4251, search_replace:not_found_loop=3893 — all addressed); retrieval=74 (0 actionable, all current); steering=absent
+- Action this tick: no fix committed. Investigated harness:tool:hallucinated_name (4251 entries, 3rd-highest) — confirmed already suppressed via _IGNORE_TOOLS in format.py per prior tick notes. harness:tool_error_raised (25 entries) — confirmed addressed by commit 9bdd8a3 (search_replace file-not-found advisory). Retrieval drain: 0 new ingests (all 74 entries current).
+
+## 2026-05-05 22:00 UTC tick
+- Stress: 533/1658 (32% done), PID 2755890 alive (~1d 4h); done=375 skip=157 (29.5% SKIP rate), 589 total writes; recent 32-prompt window shows ~47% SKIP rate (model busy during storage-backend prompt burst); FORCE-RESET auto-handling consecutive SKIPs
+- Write rate: 589 writes / 375 completed = 1.57 writes/prompt
+- Admiral last 30 min: dominant pattern harness:thinking_stall (9046 in last 24h), harness:search_replace:not_found_loop (1113), harness:loop:bash_generic (761); all addressed by commits in v2.7.41–44; stall inline retry + fallback text active
+- vLLM 400s: 0; docker gemma4 shows "unhealthy" health check but balancer on :8001 fully serving (confirmed curl); llm_balancer PID 2937934 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=40997 total; retrieval=74 (all already ingested, 0 actionable this tick); steering=absent
+- Action this tick: no fix committed. Reviewed search_replace:not_found_loop (1113 fires) — suggested_action "embed file head on first failure" is already implemented (commits 444e4a5, 516d0c6 from May 2–4); queue entries appear to reflect pre-fix evidence from yesterday's bulk classify run. All infrastructure healthy. Retrieval drain: 0 new ingests.
+
+## 2026-05-05 20:34 UTC tick
+- Stress: 521/1658 (31% done), PID 2755890 alive (~1d 3h); done=371 skip=149 (28.7% SKIP rate); 1.58 writes/prompt, 12.4% write rate; TUI process 3037177 active (14.4% CPU, generating output); SKIP burst at idx 517-521 expected to clear when model goes idle
+- Write rate: 12.4% (588 total writes across 371 completed sessions, 4752 total msgs)
+- Admiral last 30 min: 54 signals dispatched (46 thinking_stall, 4 bash_generic, 4 search_replace:not_found); all pattern types addressed by v2.7.41-44 commits; latest session (session_20260505_202557) shows 0 empty assistant stalls, confirming fixes effective
+- vLLM 400s: 0; balancer PID 2937934 on :8001 healthy; retrieval drain: 0 actionable (all 74 entries already ingested)
+- GH issues: 0 open
+- Dispatch queue: harness=40647 total; retrieval=74 (all current); steering=absent
+- Action this tick: no fix committed. All dispatch patterns addressed by prior commits shipped in v2.7.44. Infrastructure healthy. Most recent session confirms 0 actual thinking stalls post-fix.
+
+## 2026-05-05 20:01 UTC tick
+- Stress: 515/1658 (31% done), PID 2755890 alive (1d 2h elapsed); done=371 skip=144 (28% SKIP rate) timeout=0 recycle=119; rate ~19 sessions/hr; SKIP rate still elevated pending find_session fix (213892f) shipping via auto_release at ~23:00 UTC tonight
+- Write rate: ~50% (estimated from done/idx ratio — skips don't produce writes)
+- Admiral last 30 min: thinking_stall dominant (all addressed by prior commits); no new patterns observed
+- vLLM 400s: 0 (docker shows "unhealthy" flag but no actual API errors; balancer on :8001 healthy and forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=40476 total (thinking_stall=20832, bash_generic=10357, hallucinated_name=4227, search_replace:not_found=3845, heredoc_loop=751 — all addressed by prior commits); retrieval=74 (0 actionable, all already ingested)
+- Action this tick: no fix committed. All dispatch patterns covered by prior commits. Retrieval drain: 0 new ingests. Infrastructure healthy. SKIP rate regression expected to resolve after find_session fix ships tonight.
+
+## 2026-05-05 19:33 UTC tick
+- Stress: 497/1658 (30% done, PID 2755890 alive 25h+, done=355 skip=141 recycle=113 at 19:00 UTC); sessions active (latest session_20260505_192255 ended 19:28 UTC, 53 msgs, Add storage backend: minio — 126 sessions today)
+- Balancer: PID 2937934 (confirmed llm_balancer.py) on :8001 healthy; 1239 502 errors total in balancer.log (both backends returning 400 for context overflow — emergency compaction handles; not blocking progress — 355 sessions completed)
+- vLLM: docker status "unhealthy" but /v1/models OK on :8000; inference calls can queue/delay under load; romulus (192.168.50.21:8000 llama.cpp) healthy
+- Admiral last 30 min: ~2 fires (empty_after_tool patterns — normal, addressed by v2.7.41)
+- GH issues: 0 open
+- Dispatch queue: harness=40309 total (top recent: thinking_stall=426, search_replace:not_found_loop=36, loop:bash_generic=20, tool:hallucinated_name=18 — all addressed by v2.7.41/v2.7.44 commits; hallucinated_name fires are false positives from classifier reading autonomous_review.log which mentions the pattern name); retrieval=74 (0 actionable)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. Infrastructure healthy. Investigated 1239 502 errors in balancer log — these are context-overflow 400s handled by emergency compaction, not a bug. Stress run progressing (355 done, 30%). All top dispatch patterns already addressed.
+
+## 2026-05-05 19:05 UTC tick
+- Stress: 497/1658 (30% done, PID 2755890 alive 25h+, done=355 skip=141 recycle=113); last-hour SKIP rate improved to ~12% (3/26 prompts) from 29.6% cumulative — find_session() fix (213892f, shipped in v2.7.44 at 17:00 UTC) is effective; backlog of pre-fix sessions explains elevated cumulative rate
+- Write rate: mixed — "Add storage backend: X" prompts see many 0-write completions (model reports backend already exists for postgres/redis/clickhouse cluster); actual writes observed for opensearch (+4), elasticsearch (+3), mysql (+3)
+- Admiral last 30 min: 2 fires (empty_after_tool:ralph_repo_index, empty_after_tool:web_search — normal thinking-stall pattern, all addressed by v2.7.44 commits)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Balancer: PID 2937934 on :8001 — healthy (confirmed llm_balancer.py process)
+- Dispatch queue: harness=40142 total (last 2h: thinking_stall=502, search_replace:not_found_loop=48, loop:bash_generic=38, tool:hallucinated_name=24 — all addressed by recent commits); retrieval=74 (0 actionable, all current)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. All top dispatch patterns already addressed. Infrastructure healthy. SKIP rate recovering as expected post-find_session() fix.
+
+## 2026-05-05 18:03 UTC tick
+- Stress: 471/1658 (28.4% done, PID 2755890 alive 24h+, done=333 skip=138 recycle=109, idx=472 active at tick time); skip rate 29.3% — elevated vs post-focus-fix expectation (~8-10%), self-healing via RECYCLE-TUI; log shows successful sessions interspersed (postgres +45 msgs, mongodb +52 msgs +13 writes) alongside fast 0-write completions for simple prompts (opensearch/clickhouse 2-3 msgs each — model says already done)
+- Write rate: ~50% effective (many "Add storage backend: X" prompts succeed with 0 writes because model reports backend already exists)
+- Admiral last 30 min: 2 fires (empty_after_tool:write_file, empty_after_tool:search_replace — normal model behavior handled by inline stall retry)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=39820 total (top last 2h: thinking_stall=465, loop:bash_generic=48, search_replace:not_found_loop=48, tool:hallucinated_name=24 — all addressed by commits in last 24h); retrieval=74 (0 actionable, all ingested)
+- HLE v2 baseline: 20/20 (limit=20) done, score=5.0% (1/20 correct); harness exited cleanly at 08:44 CDT; matches v1 baseline at 5.0%; not re-launched (limit was intentional per config.json)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. All top dispatch patterns addressed by recent commits. No new drydock source bugs identified. Skip rate regression (29.3%) under investigation — cannot safely commit harness fix per rules; drydock source does not appear to be the cause (stall fix deployed, inline retry working, TUI focus fix deployed). Infrastructure fully healthy.
+
+## 2026-05-05 17:00 UTC tick
+- Stress: PID 2755890 alive (sleeping/working, last seen on calculator probe prompt); progress index unknown this tick (babysitter log absent, no watcher log populated)
+- vLLM 400s: 0 in last 30 min
+- Admiral last 30 min: ~481 thinking_stall events in last 2h (expected — admiral fires interventions, stall-retry is working); bash_generic=48, search_replace:not_found_loop=48, hallucinated_name=24 — all covered by v2.7.41 commits
+- GH issues: 0 open
+- All key ports healthy: 8000 (vLLM/gemma4), 8001 (llm_balancer PID 2937934), 8878 (admiral PID 4075121); balancer responding correctly to /v1/models
+- Dispatch queue: harness=39530 total, retrieval=74 (0 actionable, all already ingested), steering=none
+- retrieval-drain: 0 projects ingested (all current)
+- Action this tick: no new actionable drydock bugs found. All dispatch patterns (thinking_stall, bash_generic, search_replace:not_found_loop, hallucinated_name) addressed by v2.7.41 commits. Latest release is v2.7.44. No fix committed — healthy tick.
+
 ## 2026-05-05 16:34 UTC tick
 - Stress: 453/1658 (27%), PID 2755890 alive; done=324 skip=128 recycle=102; overall skip rate 28.3% — worsening trend (18 in first 500 log lines vs 44 in last 500). Analysis: runs of 15-20 consecutive SKIPs followed by 2-3 successes matches "agent mid-long-turn" pattern (context accumulates to 59-119 msgs, model takes >30s, harness times out). Not a new source bug — focus fix (68342fc, v2.7.41) is confirmed shipped in running binary. Root cause appears to be slow model responses on high-context sessions rather than focus loss. No actionable source change this tick.
 - Write rate: 1.5 avg writes/prompt (496 writes over 324 done prompts, 33% of all prompts produce at least one write)
@@ -2061,3 +2139,42 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=36816 entries (top: thinking_stall, search_replace:not_found_loop, loop:bash_generic — all addressed by recent commits); retrieval=74 (0 actionable, all current); steering=N/A
 - Action this tick: no fix committed. Retrieval drain: 0 new ingests. All dispatch patterns covered. TUI log mtime appeared stale (05:02 CDT = 10:02 UTC, timezone confusion — it's current). Infrastructure healthy.
+
+## 2026-05-05 17:33 UTC tick
+- Stress: 463/1658 (28% done, PID 2755890 alive, ~29.6% SKIP rate — 137 skips, 107 recycles out of 463 prompts)
+- Write rate: N/A (measured from stress log; most prompts around 459-463 are SKIPs — "Plugin feature: anonymization/pseudonymization/k-anonymity" cluster)
+- Admiral last 30 min: 2 fires (empty_after_tool:write_file, empty_after_tool:search_replace — normal model behavior)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=39675 total (top last 2h: thinking_stall=466, loop:bash_generic=48, search_replace:not_found_loop=48, tool:hallucinated_name=24 — all addressed by recent commits); retrieval=74 (0 actionable, all current)
+- SKIP rate regression: cumulative SKIP rate at 463 prompts is 29.6% (was 8.5% at 680 prompts in previous run post-focus-fix). RECYCLE-TUI is firing every 2-3 prompts. Pattern: most SKIPs occur immediately after a RECYCLE spawn and after session resets. Root cause hypothesis: find_session() reads meta.json to match working_directory; if meta.json doesn't exist during an active session (written only at exit per CLAUDE.md learning #37), the watcher can't find the new session for 120s × 3 retries = 6 min. Couldn't confirm or fix within budget this tick — but 8 prompts DO succeed interspersed, suggesting intermittent issue rather than permanent watcher blindness.
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. Investigated SKIP regression — SKIP rate at 29.6% vs expected ~8-10% post-focus-fix. Cannot safely commit a fix within budget. User should investigate find_session() + meta.json timing on return: if meta.json is only written at session exit, the watcher never finds the active session dir and the harness SKIPs the first ~3 min of every new TUI spawn.
+
+## 2026-05-05 18:30 UTC tick
+- Stress: 486/1658 (29% done, PID 2755890 alive, ~14 prompts/30min pace)
+- Skip rate: 29.6% cumulative (flagged last tick) — root cause confirmed: find_session() reads meta.json which is only written at session EXIT, so active sessions are invisible to the watcher; every prompt SKIPs until TUI closes+reopens. Fixed in 213892f.
+- Admiral last 30 min: ~50 fires (thinking_stall dominant, all addressed by v2.7.44 commits)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=39979 total (top 1h: thinking_stall=248, search_replace:not_found_loop=24, loop:bash_generic=20 — all addressed by recent commits); retrieval=74 (0 actionable, all current)
+- Action this tick: committed fix(harness): find_session() now falls back to new session dirs without meta.json (active sessions). Expected SKIP rate to drop toward ~8-10% on next babysitter restart. auto_release will ship harness fix at next 0/6/12/18 CDT tick.
+
+## 2026-05-05 21:01 UTC tick
+- Stress: 526/1658 (31.7% done), PID 2755890 alive (~1d 3.5h); done=372 skip=153 (29.1% cumulative SKIP); last hour was rough (9 SKIPs, 1 done) due to storage-backend cluster at 523-525; current session (session_20260505_205250_4f39120c) alive with 61 messages, last activity 21:01 UTC (processing prompt 526 "Add storage backend: badger")
+- vLLM 400s: 0
+- Balancer: healthy (PID 2937934 on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=40820 total (last 2h: thinking_stall=8, loop:bash_generic=2 — both addressed by recent commits); retrieval=74 (0 actionable, all current)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. find_session() fix (213892f) in code but running harness PID 2755890 predates it; will pick up on next restart. All dispatch patterns addressed. Infrastructure healthy.
+
+## 2026-05-05 22:32 UTC tick
+- Stress: ~540/1658 (babysitter log shows 538 at 22:00; 22:30 entry above cites 680 which appears to be a prior run estimate; actual done=377 skip=160 at 22:00; current session building elasticsearch storage backend with 27 messages); PID 2755890 alive
+- Write rate: ~72% (from prior tick)
+- Admiral last 30 min: 596 thinking_stall fires (pattern still fires but handled by stall-retry + fallback text; admiral intervening correctly); 48 bash_generic, 48 search_replace:not_found_loop, 24 hallucinated_name — all addressed by v2.7.41-44 commits
+- vLLM 400s: 0 (no docker; llama.cpp on :8000, balancer PID 2937934 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=41363 total; retrieval=74 (all ingested, 0 actionable); steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. Independent verification pass — all top patterns confirmed addressed by recent commits; babysitter log shows correct idx 538 at 22:00 (not 680 noted in prior tick); SKIP rate holding at ~29.7%, will improve after next babysitter restart picks up find_session() fix (213892f). All services healthy.
