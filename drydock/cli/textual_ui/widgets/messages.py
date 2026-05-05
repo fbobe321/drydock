@@ -113,7 +113,9 @@ class StreamingMessageBase(Static):
 
 _INLINE_ENUM_RE = re.compile(r" (?=\d{1,2}\. [A-Z])")
 _INLINE_HEADING_RE = re.compile(r" (?=\*\*[A-Z][A-Za-z ]{1,20}:\*\*)")
-_INLINE_DASH_BULLET_RE = re.compile(r"(?<=[.!?]) (?=- [A-Z])")
+# Dash-bullet rescue. Accepts ANY whitespace run after the boundary
+# character so jammed nested lists (`init.   - Sub-item`) get broken too.
+_INLINE_DASH_BULLET_RE = re.compile(r"(?<=[.!?])\s+(?=- [A-Z])")
 _SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?]) (?=[A-Z])")
 _INLINE_CAPWORD_HEADING_RE = re.compile(
     r"(?<=[.!?]) (?=[A-Z][A-Za-z]{1,15}:\s)"
@@ -128,6 +130,11 @@ _INLINE_ATX_HEADING_RE = re.compile(r"(?<=[.!?\)]) (?=#{1,4} [A-Z])")
 # bullet word to be ≥3 alpha chars + dot/space — guards against math
 # (`2 * 3`) and inline emphasis (`a * b`).
 _INLINE_ASTERISK_BULLET_RE = re.compile(r"(?<=[a-zA-Z.!?\)]) (?=\* [A-Za-z][A-Za-z0-9_]{2,})")
+# A line is "list-item continuation" when previous was a list item and
+# this line is indented (3+ spaces) without starting a new bullet/number.
+# CommonMark requires the indent to render as part of the parent item.
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d{1,3}\.)\s")
+_CONTINUATION_INDENT_RE = re.compile(r"^   +\S")
 
 
 def _sentence_chunks(text: str, group: int = 2) -> str:
@@ -208,9 +215,25 @@ def _preserve_line_breaks(text: str) -> str:
     Skips: code fences (preserved verbatim), markdown lists (already
     render with proper spacing), and any line ending in a trailing
     backslash (markdown escape).
+
+    Whitespace normalization (added 2026-05-05):
+    - Tabs at the start of a line → 2 spaces per tab. Textual's
+      Markdown widget renders tab-indented sub-bullets inconsistently
+      across terminals; 2-space indent renders cleanly everywhere and
+      matches CommonMark's nested-list convention.
+    - Indented continuations (`1. Foo\\n   detail`) DO NOT get a blank
+      line inserted between them — that would terminate the list item
+      under CommonMark and turn `detail` into a sibling paragraph
+      instead of part of item 1.
     """
     if not text:
         return text
+    # Tabs at line start → 2 spaces. Done before anything else so the
+    # downstream regexes and Markdown widget see consistent indent.
+    text = "\n".join(
+        re.sub(r"^\t+", lambda m: "  " * len(m.group(0)), line)
+        for line in text.split("\n")
+    )
     # First pass: rescue wall-of-text responses (flat prose, inline
     # enumerations, inline bold headings). See _break_walls_of_text.
     text = _break_walls_of_text(text)
@@ -238,6 +261,18 @@ def _preserve_line_breaks(text: str) -> str:
             continue
         if stripped[:2].rstrip(".").isdigit() and nxt_stripped[:2].rstrip(".").isdigit():
             continue  # numbered list
+        # Don't insert blank between a list item and its indented
+        # continuation. CommonMark requires the continuation to stay
+        # attached to the same item, so a blank line would split it.
+        if (_LIST_ITEM_RE.match(line)
+                and _CONTINUATION_INDENT_RE.match(nxt)):
+            continue
+        # Same protection for continuations of continuations
+        # (indent both sides, no new bullet).
+        if (_CONTINUATION_INDENT_RE.match(line)
+                and _CONTINUATION_INDENT_RE.match(nxt)
+                and not _LIST_ITEM_RE.match(nxt)):
+            continue
         # Insert blank line for paragraph break.
         out.append("")
     return "\n".join(out)

@@ -125,6 +125,14 @@ def patch_config_for_local(
                 # touched.
                 if info.label == "llama.cpp":
                     model.setdefault("temperature", 1.0)
+                    # llama-server article recipe uses `-c 32768`. Match
+                    # it here so DrydockConfig's auto-clamp lowers
+                    # auto_compact_threshold to 28K (context_window-4K
+                    # headroom) — otherwise context bloats past 32K and
+                    # the server returns empty/garbage. User can raise
+                    # this if they're running with a larger -c.
+                    model.setdefault("context_window", 32_768)
+                    model.setdefault("auto_compact_threshold", 28_000)
                     extra = model.setdefault("extra_params", {})
                     extra.setdefault("top_k", 40)
                     extra.setdefault("top_p", 0.95)

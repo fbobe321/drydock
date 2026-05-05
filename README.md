@@ -85,7 +85,12 @@ backend = "generic"
 name = "gemma4"
 provider = "local"
 alias = "gemma4"
-temperature = 1.0       # MUST be 1.0 with --jinja — lower temps reinforce loops
+temperature = 1.0           # MUST be 1.0 with --jinja — lower temps reinforce loops
+context_window = 32768       # Match `-c 32768` from llama-server. Drydock
+                             # auto-clamps auto_compact_threshold to
+                             # context_window − 4096 so we never blow past
+                             # the server's max input.
+auto_compact_threshold = 28000
 
 # Article-recommended sampling (passed through extra_sampling to llama-server).
 # Drydock auto-bakes these on first launch when llama.cpp is detected at

@@ -190,6 +190,28 @@ def test_patch_bakes_llama_cpp_anti_loop_recipe():
     assert local["extra_params"]["max_tokens"] == 2048
 
 
+def test_patch_bakes_context_window_for_llama_cpp():
+    """When llama.cpp is detected, the local model should also pick up
+    context_window=32768 (matches `-c 32768` from the article recipe)
+    and auto_compact_threshold=28000. This ensures fresh installs and
+    upgrades don't bloat past the server's context limit."""
+    cfg = {
+        "providers": [{"name": "llamacpp", "api_base": "http://127.0.0.1:8080/v1"}],
+        "models": [
+            {"alias": "local", "name": "p", "provider": "llamacpp"},
+        ],
+    }
+    info = LocalServerInfo(
+        label="llama.cpp",
+        api_base="http://127.0.0.1:8000/v1",
+        model_name="gemma-4-26B-A4B-it-Q3_K_M",
+    )
+    patch_config_for_local(cfg, info)
+    local = next(m for m in cfg["models"] if m["alias"] == "local")
+    assert local["context_window"] == 32768
+    assert local["auto_compact_threshold"] == 28000
+
+
 def test_patch_does_not_overwrite_user_extra_params():
     """If the user already configured extra_params, the llama.cpp
     detector adds missing keys but keeps user values."""

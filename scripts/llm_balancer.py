@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""Simple round-robin load balancer for two vLLM servers.
-Listens on port 8001, forwards to localhost:8000 and 192.168.50.21:8000.
+"""Simple round-robin load balancer for the local LLM serving pool.
+Listens on port 8001, forwards to:
+  - localhost:8000      (remus, llama.cpp Docker)
+  - 192.168.50.21:8000  (romulus, llama.cpp native)
+  - 192.168.50.19:8080  (Jetson AGX Orin, llama.cpp llama-server, ~3-4×
+                         slower per-request decode but still useful pool
+                         capacity — see JETSON_BENCH.md)
 
 Failure handling:
 - Per-request try/except around the entire handler body so a client
@@ -22,6 +27,12 @@ import urllib.request
 BACKENDS = [
     "http://localhost:8000",
     "http://192.168.50.21:8000",
+    # 192.168.50.19:8080 (Jetson) was probed for inclusion 2026-05-05
+    # but its /v1/chat/completions endpoint times out after 90s with
+    # no response (only /v1/models returns, and in Ollama-style schema
+    # `models[]` rather than OpenAI `data[]`). Pulled until the host
+    # serving stack is debugged (SSH also denies us). Re-add the
+    # `"http://192.168.50.19:8080"` line once confirmed responsive.
 ]
 counter = [0]
 lock = threading.Lock()
@@ -71,8 +82,10 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             primary_err = e
 
-        # Failover: try the other backend.
-        other = BACKENDS[1 - idx]
+        # Failover: try the next backend in rotation. (Was hardcoded to
+        # `1 - idx` which only works for 2-backend pools; with 3+ pool
+        # entries that became BACKENDS[-1] = same backend at idx 2 → loop.)
+        other = BACKENDS[(idx + 1) % len(BACKENDS)]
         url = f"{other}{self.path}"
         req = urllib.request.Request(url, data=body, method='POST')
         req.add_header('Content-Type', 'application/json')

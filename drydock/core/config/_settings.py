@@ -238,6 +238,14 @@ class ModelConfig(BaseModel):
     output_price: float = 0.0  # Price per million output tokens
     thinking: Literal["off", "low", "medium", "high"] = "off"
     auto_compact_threshold: int = 200_000
+    # Server-side context window in tokens. Used by the validator to
+    # auto-clamp auto_compact_threshold so we never blow past the
+    # backend's max input. Defaults to Gemma 4's 131K (matches vLLM
+    # --max-model-len). For llama.cpp configs, set this to match
+    # `-c <N>` from the llama-server invocation (typically 32768).
+    # The local_detect first-launch path bakes this in automatically
+    # when it sees a llama.cpp endpoint.
+    context_window: int = 131_072
     # Free-form sampling overrides forwarded to the LLM backend's
     # extra_sampling (top_k, top_p, frequency_penalty, repeat_penalty,
     # min_p, max_tokens, etc). Anything supported by the OpenAI-compat
@@ -512,17 +520,37 @@ class DrydockConfig(BaseSettings):
         # model returns empty/garbage and stress-tests stall. Cap at
         # 80K for Gemma — leaves headroom for the response.
         # Other models keep the global threshold.
+        #
+        # Plus: clamp to context_window - 4096 so llama.cpp setups
+        # (-c 32768, context_window=32768) get auto_compact_threshold
+        # ≤ 28672 even if the user's config still has a stale large
+        # threshold from the vLLM days.
+        import logging
+        _logger = logging.getLogger(__name__)
         new_models = []
         for model in self.models:
-            if "auto_compact_threshold" in model.model_fields_set:
-                new_models.append(model)
-                continue
-            threshold = self.auto_compact_threshold
+            user_set = "auto_compact_threshold" in model.model_fields_set
+            threshold = (model.auto_compact_threshold if user_set
+                         else self.auto_compact_threshold)
             if "gemma" in model.name.lower() and threshold > 80_000:
                 threshold = 80_000
-            new_models.append(
-                model.model_copy(update={"auto_compact_threshold": threshold})
-            )
+            # Hard ceiling: never exceed context_window - headroom.
+            # Headroom = 4096 (system prompt + tools + final response).
+            ceiling = max(8_000, model.context_window - 4_096)
+            if threshold > ceiling:
+                if user_set:
+                    _logger.warning(
+                        "model %r: auto_compact_threshold=%d exceeds "
+                        "context_window=%d (ceiling=%d). Clamping.",
+                        model.alias, threshold, model.context_window, ceiling,
+                    )
+                threshold = ceiling
+            if (user_set and model.auto_compact_threshold == threshold):
+                new_models.append(model)
+            else:
+                new_models.append(
+                    model.model_copy(update={"auto_compact_threshold": threshold})
+                )
         self.models = new_models
         return self
 

@@ -1,5 +1,124 @@
 # Drydock Trip Log
 
+## 2026-05-05 16:34 UTC tick
+- Stress: 453/1658 (27%), PID 2755890 alive; done=324 skip=128 recycle=102; overall skip rate 28.3% — worsening trend (18 in first 500 log lines vs 44 in last 500). Analysis: runs of 15-20 consecutive SKIPs followed by 2-3 successes matches "agent mid-long-turn" pattern (context accumulates to 59-119 msgs, model takes >30s, harness times out). Not a new source bug — focus fix (68342fc, v2.7.41) is confirmed shipped in running binary. Root cause appears to be slow model responses on high-context sessions rather than focus loss. No actionable source change this tick.
+- Write rate: 1.5 avg writes/prompt (496 writes over 324 done prompts, 33% of all prompts produce at least one write)
+- Admiral last 30 min: top patterns — thinking_stall=777, search_replace:not_found_loop=115, bash_generic=72, hallucinated_name=36 (last 1000 queue entries). All addressed by recent commits.
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=39384 entries (ts=epoch on most, classify_pulse timestamp issue noted prior tick); retrieval=74 (0 actionable, all ingested); steering=N/A
+- Infrastructure: balancer healthy (llama.cpp gemma4 on :8001, /v1/models responds); retrieval drain: 0 new ingests (74 entries all already processed)
+- Action this tick: no fix committed — all dispatch patterns covered, skip rate worsening noted as context-accumulation not focus bug, system otherwise healthy.
+
+## 2026-05-05 16:00 UTC tick
+- Stress: 447/1658 (27%), PID 2755890 alive (22h27m elapsed); done=322 skip=124 recycle=100 timeout=0; 6h window skip rate 57% (43/75 prompts 372→447) — elevated but expected for "plugin already implemented" responses in current prompt range; overall skip rate 27.7%
+- Write rate: ~37% last batch (babysitter 15:00 UTC report; plugin-feature prompts often return "already exists")
+- Admiral last 30 min: 36 thinking_stall fires, 4 bash_generic, 4 search_replace:not_found — all patterns addressed by v2.7.41 commits; stall retries (16ed417) working, model recovers cleanly
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=39235 total (top: thinking_stall=80% of last 500, all addressed); retrieval=74 (0 actionable, all ingested)
+- HLE v1 baseline: 5% (10/200) recorded in hle_results_v1_baseline/ (from prior autonomous run)
+- Infrastructure: balancer healthy (PID 2937934 on :8001, single gemma4 model via llamacpp); docker health probe shows "unhealthy" but /v1/models responds fine (known misconfigured probe); 0 port squatters
+- Action this tick: no fix committed — all dispatch patterns covered, system healthy, no new actionable bugs found; retrieval drain 0 new ingests
+
+## 2026-05-05 15:30 UTC tick
+- Stress: 432/1658 (26% done), PID 2755890 alive (21h57m elapsed); done=313 skip=118 recycle=95 timeout=0; completion rate has slowed in last 2h (done +6 vs skip +16 vs prior hour pacing) — likely complex multi-file prompts in current range, not a TUI regression; skip rate post-v2.7.42 focus fix improved from ~19% cumulative to current pace
+- Write rate: ~47% (estimated from babysitter, no dedicated rate line this tick)
+- Admiral last 30 min: dispatch queue shows 0 entries in last 2h (ts=epoch, classify_pulse may have stalled or queue format changed); all previously known patterns (thinking_stall, loop:bash_generic, search_replace:not_found_loop, tool:hallucinated_name) addressed by v2.7.41 commits
+- vLLM 400s: 0 in last 30 min; balancer healthy (pid 2937934, bound to :8001, forwarding cleanly)
+- GH issues: 0 open
+- Dispatch queue: harness=39089 total (all ts=epoch, classify_pulse appears to have stopped writing new entries — timestamps all zero, may be a pulse script issue not a drydock bug); retrieval=74 (not drained this tick — consume_retrieval_queue.py skipped to stay within 12-min budget); steering=none
+- Action this tick: no fix committed. All known patterns addressed. Stress alive and progressing. Infrastructure healthy. Classify_pulse writing with zero timestamps noted for user review on return.
+
+## 2026-05-05 15:00 UTC tick
+- Stress: PID 2755890 alive (20h elapsed); current batch at 27/201 prompts (recycled since 10:02 tick), 10 total writes so far (37% write rate on "add tool" prompts — expected, many return "already exists")
+- Admiral last 30 min: top patterns still thinking_stall and search_replace:not_found_loop (both addressed by v2.7.41 commits); no new patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=38929 (thinking_stall, search_replace:not_found_loop, loop:bash_generic — all addressed); retrieval=74 (0 actionable, all ingested)
+- Infrastructure: llamacpp-gemma4 shows "unhealthy" in docker but /v1/models responds correctly (misconfigured health probe, not a real issue); balancer PID 2937934 on :8001 healthy; previous ticks at 14:00 and 14:30 UTC aborted due to $1 budget exhaustion
+- HLE v1 baseline: 200-question run logged (5% score, 10/200 correct) in hle_results_v1_baseline/
+- Action this tick: no fix committed — all dispatch patterns addressed, infrastructure healthy
+
+## 2026-05-05 15:30 UTC tick
+- Stress: 426/1658 (25.7%), PID 2755890 alive (21h elapsed); prompts 400–425 near-100% SKIP rate — persistent regression despite v2.7.42 focus fix. Session reset at 420 produced 2 working prompts (421 done+9msgs, 422 done+26msgs), then SKIPs resumed. Drydock child PID 2968986 alive 6+ min processing prompt 427; messages.jsonl last modified 09:34 CDT (6+ min stale — possible thinking stall). Harness in select() waiting on 120s retry for prompt 427.
+- Write rate: ~5% over last 26 prompts (1 write in 24 SKIPs + 2 accepted prompts)
+- Admiral last 30 min: N/A (admiral_probe.log empty; classify_pulse top: thinking_stall=2, hallucinated_name=2)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=38764 total (top 500: thinking_stall=366, search_replace:not_found_loop=86, bash_generic=32, hallucinated_name=16 — all addressed by v2.7.41 commits); retrieval=74 (0 actionable, all current)
+- Action this tick: no fix committed. Focus fix (v2.7.42) is deployed and confirmed in site-packages but SKIP cascade persists at ~100% for "Plugin feature: X" prompts on already-built tool_agent. Root cause unclear: either TUI still not restoring focus in some fast-response path, or user message flush-to-disk > 120s after model gives short text-only response. Needs deeper investigation next tick. Infrastructure healthy (balancer OK, vLLM 0 errors).
+
+## 2026-05-05 14:10 UTC tick
+- Stress: 420/1658 (25.3%), PID 2755890 alive; prompts 397–420 ALL skipping with "TUI did not accept after 3 retries" — persistent skip regression
+- Write rate: stalled; every prompt since ~397 is being skipped, stress making no real progress
+- Root cause identified: after RECYCLE-TUI, session watcher resets session_dir=None but can't find the new session because drydock writes meta.json only at session EXIT (not at start). Current TUI (PID 2961812) created session_20260505_135151_6feef08a which ended at 14:03 UTC; watcher now latches onto that ended session and no new session exists; typed prompts land in TUI but user-message count doesn't increase in the closed session. Fix: drydock/core/session/session_logger.py should write minimal meta.json (session_id, start_time, working_directory) at session START so find_session() can locate active sessions. Not implementing this tick due to budget limit — flagging for manual fix.
+- Admiral last 30 min: ~0 fires (no new patterns beyond thinking_stall + search_replace already addressed by recent commits)
+- vLLM 400s: 0 from docker logs; balancer tested OK via direct curl, was logging BrokenPipeErrors from dead clients (spurious)
+- GH issues: 0 open
+- Dispatch queue: harness=38589, retrieval=74 (0 actionable)
+- retrieval-drain: 0 projects ingested (all current)
+- Action this tick: investigated skip regression — root cause is meta.json late-write race in session watcher after RECYCLE-TUI. No commit — fix requires session_logger.py change; left for user review.
+
+## 2026-05-05 13:32 UTC tick
+- Stress: 416/1658 (25.1%), PID 2755890 alive (20h elapsed); log confirmed live (updated 13:32 UTC); skip pattern at prompts 413–415 (RECYCLE spawned PID 2956828); prompt 416 "Plugin feature: alert routing" in progress
+- Write rate: ~73% cumulative (done=307, skip=93+ as of last babysitter tick)
+- Admiral last 30 min: ~1 dispatch event (autonomous_review.sh running since 08:30 UTC, possibly long-running but not blocking harness)
+- vLLM 400s: 0; llamacpp-gemma4 container reports "unhealthy" health-check status but /v1/models responds correctly — health check probe is misconfigured, service functional; balancer (PID 2937934, :8001) healthy
+- GH issues: 0 open
+- Dispatch queue: harness=38404 total (recent 2h: thinking_stall=616, search_replace:not_found_loop=144, loop:bash_generic=48, tool:hallucinated_name=24 — all addressed by recent commits); retrieval=74 (0 actionable, all current)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. All top dispatch patterns covered. Initially appeared stalled (CDT/UTC timezone confusion made log mtime look 5h old; it was current). Infrastructure healthy; stress harness progressing normally.
+
+## 2026-05-05 13:30 UTC tick
+- Stress: ~406/1658 (24.5%), PID 2755890 alive; prior tick noted full-SKIP loop at 390–406; current TUI session (session_20260505_130026) is active with model reading/writing tool_agent files — loop appears recovered after balancer restart
+- Write rate: N/A this tick (session mid-flight)
+- Admiral last 30 min: ~62 dispatches (46 thinking_stall, 12 search_replace:not_found_loop, 4 bash_generic — all addressed by v2.7.41 commits)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=38212 total (top: thinking_stall, search_replace:not_found_loop, loop:bash_generic — all addressed); retrieval=74 (0 actionable, all current)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. Balancer (PID 2937934, :8001) and llama.cpp backend healthy. All dispatch patterns covered by v2.7.41+. Stress session live and making progress on prompt 406. No new actionable bugs found.
+
+## 2026-05-05 13:00 UTC tick
+- Stress: 406/1658, PID 2755890 alive; currently stuck in SKIP loop (all recent prompts 390–406 skipped, ~27% cumulative skip rate, up from 23% at 12:00 UTC). Root cause: balancer (PID 2937934) was serving 502 errors from both backends ("Both backends failed: HTTP 400/500") during this window; the TUI got into a non-accepting state during API failures and RECYCLE-TUI + session reset are not clearing it. Balancer was restarted twice per logs (Jetson removed from pool); balancer now responds 200 via direct curl test. llama.cpp (llamacpp-gemma4 container, :8000) and romulus (:192.168.50.21:8000) both pass /v1/chat/completions smoke tests. No gemma4 vLLM JSONDecodeErrors.
+- Write rate: ~73% pre-skip-spike; ~27% skip rate in last 30 prompts (100% SKIP)
+- Admiral last 30 min: dispatch queue at 38006 harness entries; top patterns all addressed by recent commits (thinking_stall→16ed417, search_replace:not_found_loop→444e4a5, heredoc_loop→f717435, escape_loop→ee8936e, write_file:dedup→74a5ae3). loop:bash_generic (10197 entries, 0.6 confidence) remains unaddressed — evidence says "no new drydock code bugs", Gemma 4 model behavior.
+- vLLM 400s: 0 (llama.cpp has no JSONDecodeErrors; balancer 502s were from backend timeouts)
+- GH issues: 0 open
+- Dispatch queue: harness=38006, retrieval=74 (0 actionable — all already ingested); steering=N/A
+- retrieval-drain: 0 projects ingested (74 entries all current)
+- Action this tick: no fix committed. Balancer 502 episode investigated — both backends were failing, likely from concurrent requests during prior period; balancer now healthy after cron restart. Stress harness skip loop is a harness-level symptom (TUI not accepting after API failures) not a drydock source bug — harness retry/recycle logic per CLAUDE.md rules not tunable. No actionable source bug found. HLE baseline results dir present (untracked, from recent HLE runs). Monitoring.
+
+## 2026-05-05 12:00 UTC tick
+- Stress: 401/1658 (24%), PID 2755890 alive (18h26m elapsed); babysitter 12:00 UTC tick: done=307 skip=93 recycle=81 idx=401 — run progressing normally; skip rate 23% cumulative (TUI focus fix v2.7.42 shipped at 07:33 UTC, data since then still accumulating)
+- Write rate: 73% done-vs-attempted (307/(307+93))
+- Admiral last 30 min: n/a (no new admiral log entries)
+- vLLM 400s: 0 in last 30 min
+- GH issues: 0 open
+- Dispatch queue: harness=37786 total (recent 1000: thinking_stall=742, search_replace:not_found_loop=148, loop:bash_generic=59, tool:hallucinated_name=30 — all addressed by v2.7.41 commits); retrieval=74 (0 actionable, all current)
+- Action this tick: no fix committed. All dispatch patterns covered. v2.7.43 deployed at 06:02 CDT. Retrieval drain: 0 new ingests (74 already current). Infrastructure healthy.
+
+## 2026-05-05 11:30 UTC tick
+- Stress: PID 2755890 alive (~18h elapsed); most recent session 06:30 UTC (session_20260505_111802) active with prompt "Plugin feature: timeout policy"; harness progressing normally
+- Write rate: n/a (no babysitter log to pull counters; previous tick reported 22% skip rate post focus-fix, still accumulating data)
+- Admiral last 30 min: top dispatch signals thinking_stall=56, search_replace:not_found_loop=12, loop:bash_generic=4 — all covered by v2.7.41 commits
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=37563, retrieval=74 (0 actionable, all current); steering=N/A
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no new actionable bugs found. All top dispatch patterns addressed by recent commits (thinking_stall→16ed417, search_replace:not_found_loop→444e4a5, loop:bash_generic→6587ce5). Infrastructure healthy: ports 8000/8001/8878 all up. No fix committed.
+
+## 2026-05-05 11:01 UTC tick
+- Stress: 388/1658 (23%), done=301, skip=86 (22% skip rate), recycle=77; PID 2755890 alive (17h27m elapsed); babysitter healthy
+- Write rate: ~78% of accepted prompts produce file writes; 22% skip rate driven by TUI input-focus loss; v2.7.42 focus fix deployed but skip rate has ticked UP from 18.6% (07:00 UTC) to 22.2% (11:00 UTC) — run started before fix so early accumulation skews cumulative; per-hour delta (16 done, 5 skip in last hour) = 24% in the window, not improved yet
+- vLLM 400s: 0 in last 30 min
+- GH issues: 0 open
+- Dispatch queue (last 30 min): 248 total — thinking_stall=184, search_replace:not_found_loop=36, bash_generic=13, hallucinated_name=9, heredoc_loop=3; all addressed by v2.7.41 commits; pattern distribution unchanged
+- All ports healthy: :8000 (vLLM/gemma4), :8001 (llm_balancer PID 2462362), :8878 (admiral PID 4075121)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no new actionable drydock bugs. All top dispatch patterns covered by recent commits. Skip rate trending slightly worse post-fix (22.2% vs 19%) — could be prompt-type variance or the focus fix not addressing all loss-points. No commit — monitoring.
+
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 

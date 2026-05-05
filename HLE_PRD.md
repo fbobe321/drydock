@@ -18,38 +18,47 @@ or-leg bug to fix, not a harness limitation. See
 
 ## The three legs and their current strength
 
+(updated 2026-05-05 — post v2.7.39, post llama.cpp swap on .21 + .22)
+
 | Leg | What it owns | State | Evidence |
 |-----|--------------|-------|----------|
-| **drydock** | agent loop, tool use, prompts, harness fixes | **strongest** | 70% SWE-bench file match; 49/52 PRD functional tests; 16K+ harness queue actively drained |
-| **GraphRAG** | factual recall over indexed code/text | **medium** | infra works (1842 symbols, 75 chunks); only cwd source ingested; **no general knowledge corpus** |
-| **Deep Noir** | reasoning-mode steering | **weakest** | scaffolding shipped (`drydock/steering/`), `LogitBiasSteeringApplier` wired, hook in agent_loop; **zero vectors trained** — hook is a no-op |
+| **drydock** | agent loop, tool use, prompts, harness fixes | **strongest** | 70% SWE-bench file match; 49/52 PRD functional tests; 16K+ harness queue actively drained; v2.7.39 landed empty-assistant filter (#14), `extra_params` config seam (#15), markdown indent rescue (#16), GraphRAG auto-prefetch hook |
+| **GraphRAG** | factual recall over indexed code/text | **medium-strong** | infra works; **iter12 PROVEN** (commit 8a0ed75): synthetic-tool-call auto-prefetch lifts a wrong→right HLE answer when corpus is curated. Still needs: a real general-knowledge corpus (Wikipedia/arXiv) instead of code-only |
+| **Deep Noir** | reasoning-mode steering | **weakest** | scaffolding shipped (`drydock/steering/`), `LogitBiasSteeringApplier` wired, hook in agent_loop honors `DRYDOCK_STEERING_APPLIER` env; **zero vectors trained** — hook still a no-op until vectors land |
+
+## Serving infrastructure (post 2026-05-05 swaps)
+
+| Box | Endpoint | Stack | Status |
+|-----|----------|-------|--------|
+| remus (.22, this box) | `localhost:8000` | llama.cpp Docker (`ghcr.io/ggml-org/llama.cpp:server-cuda`), `--jinja`, Q3_K_M GGUF, restart=unless-stopped | ✅ running, fingerprint `b9014-d4b0c22f9` |
+| romulus (.21) | `192.168.50.21:8000` | llama.cpp native build, `--jinja`, same recipe | ✅ running, fingerprint `b1-e77056f` |
+| Jetson (.19) | `192.168.50.19:8080` | unknown (responds at /v1/models with Ollama-style schema; /v1/chat/completions hangs after 90s with no response) | 🔒 **NOT in pool** — needs SSH access + diagnosis. Re-add commented line in `scripts/llm_balancer.py:BACKENDS` once fixed |
+| balancer (port 8001) | round-robin remus + romulus | failover: `(idx + 1) % len(BACKENDS)` | ✅ running |
 
 ## Phase plan
 
-### Phase 1 — baseline (in flight)
+### Phase 1 — baseline (DONE 2026-05-04, RE-RUNNING ON LLAMA.CPP)
 
 Goal: bare drydock + bare GraphRAG (cwd only) + zero Deep Noir vs HLE.
 This number is the floor.
 
-- ✅ `scripts/hle_eval.py` — single-file orchestrator
-- ✅ `scripts/hle_eval_seed.jsonl` — 7 undergrad questions for pipeline validation
-- ✅ Pipeline validated: 7/7 = 100% on seed (commit 7c3a2d9 + earlier)
-- ✅ HF token landed at `~/.config/drydock/hf_token` (chmod 600)
-- ✅ HLE accessible: 2500 questions total, 2158 text-only, 342 multimodal (skipped)
-- 🟡 **N=200 overnight baseline running** (PID in `/tmp/hle_overnight.pid`,
-      log `/tmp/hle_overnight.log`, results dir under `/data3/drydock/hle_results/`).
-      Started 2026-05-04 00:46 UTC (restarted with Telegram wiring).
-      Expected runtime ~10-16h based on q1's 6 min pace. Each question
-      writes a line to `results.jsonl` incrementally — partial progress
-      is always visible mid-run.
-- 🟡 **Telegram pings configured** (commit ed7f6de, SOTA ref 45.9%):
-  start ping fired; milestone every 50 completions; final + breakdown
-  on completion; crash + resume command on error.
-- ⏳ Phase 1 deliverable: a number — Gemma 4 + bare drydock baseline on HLE
+**v1 baseline result (vLLM + drydock pre-#14-fix):**
+- 10/200 = **5.0% raw**, 8.62% effective (84/200 thinking-stalls)
+- 22h runtime, avg 396s/question
+- Per category: Humanities 21%, Math 4% (92 questions, dominant), Physics 0%, Chemistry 0%
+- Archived at `/data3/drydock/hle_results_v1_baseline/`
+
+**v2 baseline running 2026-05-05 (llama.cpp + v2.7.39):**
+- PID `/tmp/hle_n20_v2.pid`, log `/tmp/hle_n20_v2.log`
+- N=20 (seed=42 — same first 20 as v1 baseline, apples-to-apples)
+- Tests whether `--jinja` chat template + empty-assistant filter
+  reduces stall rate
+- Output `/data3/drydock/hle_results/run_*/`
 
 Realistic baseline expectation per pre-run analysis:
 - Bare 26B-A4B without retrieval/steering: ~5–10% on HLE
 - Reaching ~22–25% would be defensible vs ~25–30% frontier scores
+- **SOTA reference: 45.9%** (per user, 2026-05-04)
 
 ### Phase 2 — GraphRAG with knowledge corpus
 
@@ -77,13 +86,15 @@ existing hook applies them. This is the user's research domain.
 - ⏳ Re-run HLE; measure delta vs Phase 2
 - Expected delta: 0 to +3 points; high variance, open research
 
-## Currently running / in flight
+## Currently running / in flight (2026-05-05)
 
 | Thing | PID | Log | Notes |
 |-------|-----|-----|-------|
-| stress harness | `/tmp/stress_pid.txt` (was 2219727) | `/tmp/stress_*.log` | 1d 9h+ uptime, ~76% through 1658-prompt suite |
-| llm_balancer | 2462362 (rotates) | `/data3/drydock/logs/balancer.log` | :8001, ~10h uptime |
-| HLE N=200 overnight | `/tmp/hle_overnight.pid` (was 2567027) | `/tmp/hle_overnight.log` | output `/data3/drydock/hle_results/run_*/`; expected 10-16h |
+| HLE N=20 v2 | `/tmp/hle_n20_v2.pid` | `/tmp/hle_n20_v2.log` | re-baseline on llama.cpp; ~2h |
+| stress harness | `/tmp/stress_pid.txt` | `/tmp/stress_*.log` | fresh round started post-completion of v9 |
+| llm_balancer | `/tmp/llm_balancer.pid` | `/data3/drydock/logs/balancer.log` | :8001, 2 backends now |
+| llamacpp-gemma4 (remus) | docker | `docker logs llamacpp-gemma4` | restart=unless-stopped |
+| llama-server (romulus) | `/tmp/llama_server.pid` on 192.168.50.21 | ssh `tail /data2/logs/llama-server.log` | nohup, no auto-restart yet |
 
 ## Resume checklist (if connection dropped)
 

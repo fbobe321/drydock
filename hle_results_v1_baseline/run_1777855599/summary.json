@@ -1,0 +1,48 @@
+{
+  "total": 200,
+  "correct": 10,
+  "score": 0.05,
+  "by_category": {
+    "Biology/Medicine": {
+      "correct": 1,
+      "total": 25,
+      "score": 0.04
+    },
+    "Chemistry": {
+      "correct": 0,
+      "total": 11,
+      "score": 0.0
+    },
+    "Computer Science/AI": {
+      "correct": 1,
+      "total": 18,
+      "score": 0.0556
+    },
+    "Engineering": {
+      "correct": 0,
+      "total": 5,
+      "score": 0.0
+    },
+    "Humanities/Social Science": {
+      "correct": 3,
+      "total": 14,
+      "score": 0.2143
+    },
+    "Math": {
+      "correct": 4,
+      "total": 92,
+      "score": 0.0435
+    },
+    "Other": {
+      "correct": 1,
+      "total": 13,
+      "score": 0.0769
+    },
+    "Physics": {
+      "correct": 0,
+      "total": 22,
+      "score": 0.0
+    }
+  },
+  "run_dir": "/data3/drydock/hle_results/run_1777855599"
+}
