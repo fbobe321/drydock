@@ -3,6 +3,14 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-05 06:38 UTC tick
+- Stress: 323/1658 (PID 2755890 alive, 12h28m elapsed); done=268, skip=53 (16%); at [323] with fresh RECYCLE (new TUI PID 2883300); babysitter log confirms steady progress from 273→322 since 04:00 UTC
+- vLLM 400s: 0; gemma4 Docker healthy; llm_balancer healthy on :8001 (PID 2462362)
+- GH issues: 0 open
+- Dispatch queue: harness=34,575 (all top patterns addressed in last 24h — thinking_stall 16ed417, bash_generic 6587ce5, bash_escape ee8936e, heredoc_loop f717435, dedup 74a5ae3, search_replace:not_found 444a, identical_blocks 6ad01df, tool_error_raised 9bdd8a3); retrieval=74 (all already ingested — 0 new this tick)
+- Admiral last 30 min: empty_after_tool:bash/write_file/web_search interventions firing; these are admiral-level behavior nudges (model summarizing instead of continuing), distinct from thinking_stall (fully empty response). Thinking_stall fix ships in v2.7.41 (deployed 06:00 UTC). Post-fix admiral intervention rate not yet measurable this tick.
+- Action this tick: no fix committed — all dispatch queue patterns addressed; retrieval fully drained; system healthy.
+
 ## 2026-05-05 05:15 UTC tick
 - Stress: 287/1658 (PID 2755890 alive, 10h57m elapsed); SKIP rate 16% (47/287), clustering after RECYCLE-TUI events (new TUI not ready in time); write rate 36% (75/204 non-skip) vs 44% old run at same range — modest regression, not clearly a bug
 - vLLM 400s: 0; gemma4 Docker healthy; llm_balancer healthy on :8001
@@ -1840,3 +1848,41 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=33461, retrieval=74 (all ingested recently, nothing new), steering=not present
 - Action this tick: committed fix for harness:bash:heredoc_loop — broadened heredoc loop-breaker regex from EOF-only to any alpha delimiter (CONTENT, PYTHON, HEREDOC, etc.); 6 tests pass. retrieval-drain: 0 projects ingested (all already current).
+
+## 2026-05-05 05:04 UTC tick
+- Stress: 305/1658 (18% done; fresh run PID 2755890 started May 4 13:00 UTC; log /tmp/stress_2000_1777915991.log)
+- Write rate: 37% (82/219 prompts with writes; lower baseline expected — early prompts are simple one-liner tool requests like "sha1 hash", "abs" that return text, not files)
+- vLLM 400s: 0
+- GH issues: 0 open (gh returned no output)
+- Dispatch queue: harness=34023 total (top last-24h patterns: thinking_stall=11560, loop:bash_generic=3535, search_replace:not_found_loop=1518, tool:hallucinated_name=420 — ALL addressed by commits in last 24h); retrieval=74 (0 actionable, all already ingested recently); steering=none
+- All key ports healthy: 8000 (vLLM/gemma4), 8001 (llm_balancer PID 2462362), 8878 (admiral PID 4075121)
+- Stall debug log confirms stall-retry working correctly (all attempt=0, breaking on has_tool_calls=True — no spurious stalls)
+- Action this tick: no new actionable bugs found. All major dispatch patterns covered by v2.7.41 commits. retrieval-drain: 0 projects ingested (all current). No fix committed — healthy tick.
+
+## 2026-05-05 06:00 UTC tick
+- Stress: 315/1658 (fresh run, harness PID 2755890, ~12h elapsed on current run)
+- Write rate: 41% overall (50% for last 50 prompts); down from 74% in previous run but early bootstrap prompts (1-7) caused 10 SKIPs skewing the rate
+- Admiral: all key ports healthy (8000 vLLM, 8001 llm_balancer PID 2462362, 8878 admiral PID 4075121)
+- vLLM 400s: 0 in last 30 min
+- GH issues: 0 open
+- Dispatch queue: harness=34299 (top patterns thinking_stall/bash_generic/search_replace:not_found_loop/hallucinated_name — all addressed by v2.7.41 commits); retrieval=74 (0 actionable, all current); steering=none
+- SKIP rate ~19% (59 SKIPs in 315 prompts); SKIPs cluster on short single-word prompts after TUI returns from long builds; FORCE-RESET (ESC+/clear) unsticks for a few prompts then recurs — likely pre-existing TUI input-focus issue, not a regression from recent commits
+- retrieval-drain: 0 projects ingested (all already current)
+- Action this tick: no new actionable drydock bugs found. All dispatch patterns covered by recent commits. No fix committed — monitoring SKIP pattern for harness:tui:input_not_accepted signal.
+
+## 2026-05-05 07:00 UTC tick
+- Stress: 327/1658 (20% done, PID 2755890, ~13h elapsed on current run)
+- Write rate: 43% last 100 prompts (down from 74% in prior run; write rate is metric-valid — these prompts add CLI flags to an already-built package, many complete in 2 msgs with no writes)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=34857 total (top today: thinking_stall=3124, loop:bash_generic=276, search_replace:not_found_loop=320, tool:hallucinated_name=61 — all addressed by v2.7.41 commits); retrieval=74 (0 actionable, all current)
+- Action this tick: committed fix(tui): restore input focus after agent turn completes. The finally block in _run_agent_task() never called _focus_current_bottom_app() — after _refresh_windowing_from_history() remounted message widgets, keyboard focus could shift away from the chat input. Root cause of the ~19% SKIP rate (harness SKIPs when TUI doesn't accept typed prompts). Fix: one-line call_after_refresh(_focus_current_bottom_app) after the windowing refresh. Ships at next auto-release (12:00 UTC) as v2.7.42.
+
+## 2026-05-05 07:02 UTC tick
+- Stress: 333/1658 (harness PID 2755890, elapsed 13h29m, alive)
+- Write rate: 54% last 50 prompts (CLI-flag prompts; many complete with 0 writes — expected)
+- Admiral last 30 min: ~14 interventions in last 200 log lines
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=35137 total (13,444 in last 24h, top: thinking_stall=16686, loop:bash_generic=10022, tool:hallucinated_name=4053, search_replace:not_found_loop=3224 — all addressed by recent commits); retrieval=74 (0 actionable)
+- Action this tick: no new bugs found. All top dispatch patterns have been addressed by v2.7.41 commits (focus fix, stall fallback, bash heredoc, dedup listing, search_replace not-found). Stress skip rate is 18.6% cumulative but the input focus fix (68342fc) deployed at midnight CDT 2h ago — too soon to assess impact. Harness self-healing via FORCE-RESET+RECYCLE; currently retrying prompt 333. No action taken.

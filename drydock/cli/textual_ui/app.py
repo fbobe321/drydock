@@ -847,6 +847,7 @@ class DrydockApp(App):  # noqa: PLR0904
                 await self.event_handler.finalize_streaming()
             await self._refresh_windowing_from_history()
             self._terminal_notifier.notify(NotificationContext.COMPLETE)
+            self.call_after_refresh(self._focus_current_bottom_app)
 
             # Process queued messages from user input during agent execution
             if hasattr(self, "_pending_messages") and self._pending_messages:
