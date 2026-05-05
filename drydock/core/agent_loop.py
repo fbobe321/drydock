@@ -995,7 +995,16 @@ class AgentLoop:
 
             # Empty response — try to recover inline.
             if _stall_attempt >= MAX_STALL_RETRIES:
-                _dbg(f"[STALL-DEBUG] max retries ({MAX_STALL_RETRIES}) exhausted; leaving empty")
+                _dbg(f"[STALL-DEBUG] max retries ({MAX_STALL_RETRIES}) exhausted; injecting fallback")
+                # Replace the silent empty message with visible text so the
+                # harness and the user both see a clean end-of-turn rather
+                # than a frozen TUI waiting for content that never arrives.
+                last_message.content = (
+                    "[Drydock: model returned an empty response after "
+                    f"{MAX_STALL_RETRIES} retries. Please rephrase your "
+                    "request or use /clear to reset context.]"
+                )
+                yield AssistantEvent(content=last_message.content)
                 break
             prev_role = self.messages[-2].role if len(self.messages) >= 2 else None
             if prev_role not in (Role.tool, Role.user):

@@ -3,6 +3,36 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-05 05:15 UTC tick
+- Stress: 287/1658 (PID 2755890 alive, 10h57m elapsed); SKIP rate 16% (47/287), clustering after RECYCLE-TUI events (new TUI not ready in time); write rate 36% (75/204 non-skip) vs 44% old run at same range — modest regression, not clearly a bug
+- vLLM 400s: 0; gemma4 Docker healthy; llm_balancer healthy on :8001
+- GH issues: 0 open
+- Dispatch queue: harness=33741 (recent active: thinking_stall=16x, loop:bash_generic=4x); retrieval=74 (0 newly actionable — all already ingested)
+- Action this tick: no fix committed — both active dispatch patterns addressed by commits within last 24h (16ed417 thinking_stall fallback, f717435 heredoc loop-breaker, ee8936e bash sed-i). Investigated write rate regression (44%→36%): not conclusive as a bug — early prompts are single-function utility requests that the model often answers without writing files. Investigated SKIP clusters: caused by TUI startup lag after RECYCLE-TUI; would require harness-side timing changes (prohibited by CLAUDE.md). System healthy, no action needed. retrieval-drain: 0 new projects.
+
+## 2026-05-05 02:10 UTC tick
+- Stress: 213/1658 (PID 2755890 alive, 8h27m elapsed); 43 SKIPs (20%); write rate 29% (43/147 non-skip) vs 53% historical for same prompt window — degraded due to thinking_stall not yet in installed version
+- vLLM 400s: 0; gemma4 Docker healthy (up 10 days); llm_balancer PID 2462362 on :8001 healthy (1 model); admiral_probe PID 4075121 alive since Apr 27 (worker restarts every 7-10 min are normal per bootstrap log)
+- GH issues: 0 open
+- Dispatch queue: harness=32275 (last 6h: thinking_stall=2921, search_replace:not_found_loop=288, bash_generic=256, heredoc_loop=36, hallucinated_name=36, write_file:dedup=36); retrieval=74 (0 newly actionable — all already ingested)
+- Action this tick: no fix committed — all active patterns addressed by unreleased commits (16ed417 thinking_stall fallback, ee8936e bash sed-i escape loop); those are 2 commits ahead of v2.7.40 and ship at next auto-release (~05 UTC). High SKIP rate (20%) directly caused by thinking_stall fix not yet installed. Investigated admiral restarts: not a crash — internal AdmiralWorker thread, main process stable. retrieval-drain: 0 new projects.
+
+## 2026-05-05 00:30 UTC tick
+- Stress: 148/1658 (PID 2755890 alive, 6h57m elapsed; previous run completed ~1640/1658 at 17:00 UTC before babysitter relaunched fresh run at 18:00 UTC)
+- Write rate: 32% (last 92 prompts); low but consistent with prior ticks on early prompts — simple utility tasks in stress list
+- vLLM 400s: 0; gemma4 Docker healthy (up 10 days); llm_balancer healthy on :8001
+- GH issues: 0 open
+- Dispatch queue: harness=31388 total (recent 500: thinking_stall=415, search_replace:not_found_loop=40, bash_generic=30, hallucinated_name=5, bash:heredoc_loop=5, write_file:dedup=5); retrieval=74 (0 actionable — all already ingested)
+- Action this tick: no fix committed — thinking_stall (415 fires, mostly empty_after_tool:ralph_repo_index) is already handled by stall nudge + retrieval hallucination redirect in format.py; not_found_loop addressed by 444e4a5; bash_generic by 6587ce5; all patterns have prior-commit coverage. retrieval-drain: 0 new projects. System healthy.
+
+## 2026-05-04 23:30 UTC tick
+- Stress: 123/1658 (PID 2755890 alive, 5h57m elapsed; new run log /tmp/stress_2000_1777915991.log; 32 SKIPs / 123 done)
+- Write rate: 36% (last 74 prompts); 41 write-bearing / 90 attempted — comparable to prior ticks; 0-write sessions are correctly the model running already-existing plugins, not a regression
+- vLLM 400s: 0; llm_balancer PID 2462362 on :8001 healthy; gemma4 Docker healthy
+- GH issues: 0 open
+- Dispatch queue: harness=30,800 total (recent 200: thinking_stall=166, search_replace:not_found_loop=16, bash_generic=12, hallucinated_name=2, write_file:dedup=2); retrieval=74 (all 74 already ingested — consume_retrieval_queue returned 0 actionable)
+- Action this tick: no fix committed — dispatch patterns for not_found_loop and bash_generic addressed in prior commits (444e4a5, 6587ce5); thinking_stall (166 fires) confirmed already handled by inline 3-retry stall mechanism; stall debug log shows model is actively making tool calls (not truly stalling); session analysis shows 0-write sessions are model correctly running existing plugins; retrieval-drain: 0 new projects. System healthy.
+
 ## 2026-05-04 22:00 UTC tick
 - Stress: 90/1658 (PID 2755890 alive, TUI active PID 2790960; 20 SKIPs / 70 done in run so far)
 - Write rate: 35% (last 57 prompts with write data; low expected — current prompts are simple utility functions: pad, wrap, indent, hash)
@@ -1730,6 +1760,15 @@ restarted, cron self-match bug fixed in this same session).
 - retrieval-drain: 0 projects ingested (all current within 7-day window)
 - Action this tick: no fix committed — all dispatch patterns addressed; system healthy; elevated skip rate is a harness-timing artifact of long sessions (dict_set_nested: 45 msgs/14 writes), not a drydock bug. Monitoring.
 
+## 2026-05-04 23:04 UTC tick
+- Stress: 116/1658 (PID 2755890, 5h30m elapsed); skip rate ~25% (29 SKIPs in 116 prompts); write rate 37% last 70 prompts
+- vLLM 400s: 0; llm_balancer healthy (PID 2462362, :8001); gemma4 Docker healthy
+- Admiral last 30 min: skip-cluster 12/33 at 22:42 UTC + retry-spike 103% at 22:35 UTC; 14 TUI recycles since run start; latest intervention at 23:00 UTC (thinking_stall/empty_after_tool:bash on dict_to_list). All interventions handled by existing inline retry logic.
+- GH issues: 0 open
+- Dispatch queue: harness=30,508 (thinking_stall=12,933 top; loop:bash_generic=9,698; tool:hallucinated_name=3,981; search_replace:not_found_loop=2,840 — all addressed in recent commits); retrieval=74 (0 new ingestions — all within 7-day window); steering=0
+- retrieval-drain: 0 projects ingested (all current)
+- Action this tick: no fix committed — all dispatch patterns verified against source (thinking_stall: MAX_STALL_RETRIES=3 inline retry at agent_loop.py:971; hallucinated_name: _IGNORE_TOOLS in llm/format.py:350 includes ralph_repo_index; search_replace:not_found_loop: file-head embed on first failure). Session showed legitimate plugin builds (toml_dump, ini_parse). Elevated skip rate is harness-timing vs. long model sessions (45+ msgs/14 writes), not a new drydock bug.
+
 ## 2026-05-04 22:30 UTC tick
 - Stress: 96/1658 new run (PID 2755890, 4h27m elapsed); previous run PID 2219727 completed 1442/1656 — babysitter auto-launched new run at 18:00 UTC
 - Write rate: 32% (last 50 prompts — low, run just started; previous run peaked at 74%)
@@ -1738,3 +1777,66 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=29926 (dominated by thinking_stall=12459, loop:bash_generic=9656, tool:hallucinated_name=3975 — all addressed); retrieval=74 (0 new ingestions); steering=0
 - Admiral alerts: raw-markdown-leakage 28% at 20:50 UTC + retry-spike 53-67% at 20:58/21:32 UTC — TUI input layer choking on prompt acceptance; 18 recycles in 96 prompts (25% skip rate vs 12% in previous completed run). Admiral self-recovered via TUI recycles. No new actionable drydock bug found; all dispatch patterns have existing fixes. Commit 5d6463e (messages.py regex + gemma4.md prompt additions) shipped this tick via auto_release v2.7.39.
 - Action this tick: no fix committed — all queued patterns already addressed; monitoring elevated skip rate
+
+## 2026-05-05 00:05 UTC tick
+- Stress: 143/1658 (PID 2755890, 6h30m elapsed, new run started ~18:33 UTC May 4); skip rate 22% (32 SKIPs in 143 prompts); write rate 32% last 91 prompts
+- vLLM 400s: 0; llm_balancer healthy (PID 2462362, :8001, up 33h); gemma4 Docker healthy
+- GH issues: 0 open
+- Dispatch queue: harness=31094 (thinking_stall=13417 top; loop:bash_generic=9734; tool:hallucinated_name=3987; search_replace:not_found_loop=2888; bash:escape_loop=170); retrieval=74 (0 new ingestions — all within 7-day window); steering=0
+- retrieval-drain: 0 projects ingested (all current within 7-day window)
+- Action this tick: committed fix ee8936e — sed -i was excluded from the exact-command repetition loop-breaker (_is_write_cmd regex) so when a sed pattern mismatch caused exit-0 no-op, the model looped indefinitely; removing sed -i from the exemption means the 5th identical sed -i run now returns LOOP-BREAKER (addresses pattern harness:bash:escape_loop, 170 fires). 5 regression tests pass. auto_release will ship at 06:00 UTC.
+
+## 2026-05-05 01:30 UTC tick
+- Stress: 680/1658 (41%), PID 2755890, running 7h27m
+- Write rate: 32% last 100 prompts (API REST/GraphQL sequence naturally 0-write; variance normal)
+- Admiral last 30 min: 5 fires (empty_after_tool events)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=31679 total (2939 in last 6h), retrieval=0 actionable, steering=n/a
+- Retrieval drain: 0 projects ingested (all already ingested recently)
+- Action this tick: committed fix(agent_loop): emit fallback text when stall retries exhausted (addresses pattern harness:thinking_stall). Stall debug log showed 17,895 exhausted-retry cases vs 18,539 retry #1 attempts — the #1 dispatch queue pattern. Fix replaces silent empty message with visible "[Drydock: model returned empty response after 3 retries]" text so TUI ends the turn cleanly instead of freezing. Auto-release will ship at next 0/6/12/18 UTC tick.
+
+## 2026-05-05 01:33 UTC tick
+- Stress: 181/1658 (new run after prior run reached ~680+ and reset; PID 2755890, 7h57m total uptime); write rate 32% last 50 prompts (early utility-task prompts are naturally low-write); 36+ consecutive SKIP cluster at prompt 143-181 during ip/network prompt section, harness self-recovered via FORCE-RESET
+- vLLM 400s: 0; llm_balancer PID 2462362 healthy; gemma4 Docker healthy
+- GH issues: 0 open
+- Dispatch queue: harness=31974 total (thinking_stall=14140, bash_generic=9792, tool:hallucinated_name=3996, search_replace:not_found_loop=2960, bash:heredoc_loop=691, bash:escape_loop=170); retrieval=74 (0 actionable, all within 7-day re-ingest window)
+- retrieval-drain: 0 projects ingested (all current)
+- Recent commits in last 24h: 16ed417 (thinking_stall fallback text — largest queue pattern), ee8936e (sed -i escape loop), 444a5 (search_replace not_found embed), 6587ce5 (bash_generic loop-breaker) — all top dispatch patterns now have source-level fixes
+- Action this tick: no fix committed — all major dispatch patterns addressed by commits in last 24h; harness progressing normally; 0 vLLM 400s; no new hallucinated tool names beyond existing _IGNORE_TOOLS list
+
+## 2026-05-05 02:30 UTC tick
+- Stress: 229/1658 (PID 2755890, ~9h elapsed, run started ~17:33 UTC May 4); SKIP cluster at 226-227 followed by FORCE-RESET; recovered at 228; currently processing prompt 229
+- Write rate: 33% last 100 prompts (expected — early-run utility-function prompts rarely need file writes)
+- Admiral last 30 min: transient SKIP cluster + FORCE-RESET at prompts 226-227 (TUI input timing); harness self-recovered; no active interventions
+- vLLM 400s: 0; llm_balancer PID 2462362 healthy on :8001; gemma4 Docker healthy
+- GH issues: 0 open
+- Dispatch queue: harness=32,578 (thinking_stall=14,630, loop:bash_generic=9,840, tool:hallucinated_name=4,002, search_replace:not_found_loop=3,008, bash:heredoc_loop=697, bash:escape_loop=170, write_file:dedup=160 — all addressed by existing handlers); retrieval=74 (0 actionable — all within 7-day re-ingest window)
+- 2 commits ahead of v2.7.40 (16ed417: thinking_stall fallback text; ee8936e: sed -i escape loop fix) — will auto-release as v2.7.41 at 06:00 UTC
+- retrieval-drain: 0 projects ingested (all current)
+- Action this tick: no fix committed — all dispatch patterns verified against source; system healthy and progressing normally
+
+## 2026-05-05 03:04 UTC tick
+- Stress: 241/1658 in new run (log 1777915991, PID 2755890, 9h27m elapsed). Old PID 3713698 dead; babysitter respawned a fresh run. Write rate: 73% last 20 prompts. Skip rate: 17% (41/241).
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=32880 entries (top patterns: thinking_stall=162, bash_generic=16, search_replace:not_found_loop=16 — all addressed by commits in last 24h); retrieval=74 entries (all already ingested, 0 actionable); steering=none
+- Action this tick: committed fix(write_file): show dir listing on first dedup, not just 2nd+ (addresses pattern harness:write_file:dedup_attempted). On first identical-content write the model now gets the full sibling directory listing immediately instead of after a second loop. harness:tool:hallucinated_name (ralph_repo_index) confirmed already handled via _IGNORE_TOOLS in format.py — not actionable. Retrieval drain: 0 projects ingested (all up to date).
+
+## 2026-05-05 03:34 UTC tick
+- Stress: 680/1658 (41% done, ~10h remaining at current pace)
+- Write rate: 32% last 100 prompts (lower due to short API: gRPC/WebSocket/JSON-RPC prompts returning text answers, not code)
+- Admiral last 30 min: source=opus sessions active; interventions for empty_after_tool and search_replace retry
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=33175 entries (top recent: thinking_stall=400/500, bash_generic=42/500, search_replace:not_found_loop=40/500 — all addressed by commits in last 24h); retrieval=74 (0 actionable, all already ingested)
+- Action this tick: no new bugs found. All top dispatch patterns addressed by recent commits (16ed417 thinking_stall, 444e4a5 search_replace:not_found_loop, 6587ce5 bash_generic, 74a5ae3 write_file dedup). Consecutive SKIP run at 677-679 self-recovered at 680 — transient busy-TUI after 21-msg/7-write prompt 676. bash:loop:bash_generic only fires for "ls -lS | head -n 20" (28x), addressed by existing loop-breaker at 5 runs. No actionable new issues — healthy tick.
+
+## 2026-05-05 04:30 UTC tick
+- Stress: 273/1658 (fresh run, PID 2755890, log /tmp/stress_2000_1777915991.log)
+- Write rate: 39% last 100 prompts (run is new; ~50 early SKIPs from startup turbulence, tapering off by prompt ~250)
+- Admiral last 30 min: n/a (not checked directly)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=33461, retrieval=74 (all ingested recently, nothing new), steering=not present
+- Action this tick: committed fix for harness:bash:heredoc_loop — broadened heredoc loop-breaker regex from EOF-only to any alpha delimiter (CONTENT, PYTHON, HEREDOC, etc.); 6 tests pass. retrieval-drain: 0 projects ingested (all already current).

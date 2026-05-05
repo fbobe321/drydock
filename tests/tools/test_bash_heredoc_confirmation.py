@@ -74,3 +74,27 @@ async def test_non_heredoc_command_unaffected(bash):
     cmd = "true"
     result = await collect_result(bash.run(BashArgs(command=cmd)))
     assert "File written" not in result.stdout
+
+
+@pytest.mark.asyncio
+async def test_heredoc_loop_breaker_non_eof_delimiter(bash, tmp_path):
+    """Loop-breaker targets heredoc message for non-EOF delimiters (CONTENT, PYTHON, etc).
+
+    Before fix: regex only matched 'EOF'; non-EOF delimiters fell through to the
+    generic 'EDIT SOURCE CODE' message, which confused the model.
+    After fix: any alpha delimiter triggers the targeted heredoc hint.
+    """
+    target = tmp_path / "plugin.py"
+    cmd = f"cat <<CONTENT > {target}\nprint('hello')\nCONTENT"
+
+    # Run 3 times to trigger the hash-based loop breaker
+    for _ in range(3):
+        result = await collect_result(bash.run(BashArgs(command=cmd)))
+
+    # The 3rd run must produce the heredoc-targeted notice, not the generic one
+    assert "cat command" in result.stdout or "re-run this cat" in result.stdout, (
+        "Expected heredoc-targeted loop notice, got: " + result.stdout[:200]
+    )
+    assert "EDIT SOURCE CODE" not in result.stdout, (
+        "Got generic loop notice instead of heredoc-targeted one"
+    )

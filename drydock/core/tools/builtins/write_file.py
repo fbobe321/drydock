@@ -470,39 +470,37 @@ class WriteFile(
 
                     body = "File already has this exact content (no-op). "
                     if repeat_n >= 2:
-                        try:
-                            siblings = sorted(
-                                p.name for p in file_path.parent.iterdir()
-                                if p.is_file() and not p.name.startswith("__pycache__")
-                            )
-                            sibling_str = ", ".join(siblings) if siblings else "(none)"
-                            body += (
-                                f"You've written this exact file {repeat_n} times. "
-                                f"Files currently in {file_path.parent.name}/: "
-                                f"{sibling_str}. Move on — write a DIFFERENT file "
-                                f"from your plan, or run `bash` with `python3 -m "
-                                f"{file_path.parent.name} --help` to verify."
-                            )
-                            # Also surface missing imports so the model knows
-                            # which file to write next instead of re-looping.
-                            if file_path.suffix == ".py":
-                                try:
-                                    import ast as _ast
-                                    _tree = _ast.parse(args.content)
-                                    missing = _check_missing_sibling_imports(
-                                        _tree, file_path
+                        body += f"You've written this exact file {repeat_n} times. "
+                    try:
+                        siblings = sorted(
+                            p.name for p in file_path.parent.iterdir()
+                            if p.is_file() and not p.name.startswith("__pycache__")
+                        )
+                        sibling_str = ", ".join(siblings) if siblings else "(none)"
+                        body += (
+                            f"Files currently in {file_path.parent.name}/: "
+                            f"{sibling_str}. Move on — write a DIFFERENT file "
+                            f"from your plan, or run `bash` with `python3 -m "
+                            f"{file_path.parent.name} --help` to verify."
+                        )
+                        # Surface missing imports so the model knows which file
+                        # to write next instead of re-looping.
+                        if file_path.suffix == ".py":
+                            try:
+                                import ast as _ast
+                                _tree = _ast.parse(args.content)
+                                missing = _check_missing_sibling_imports(
+                                    _tree, file_path
+                                )
+                                if missing:
+                                    body += (
+                                        f" This file imports modules that don't "
+                                        f"exist yet: {sorted(missing)}. "
+                                        f"Write those files next."
                                     )
-                                    if missing:
-                                        body += (
-                                            f" This file imports modules that don't "
-                                            f"exist yet: {sorted(missing)}. "
-                                            f"Write those files next."
-                                        )
-                                except Exception:
-                                    pass
-                        except Exception:
-                            body += "Move to the NEXT file in your plan."
-                    else:
+                            except Exception:
+                                pass
+                    except Exception:
                         body += "Move to the NEXT file in your plan."
                     msg = f"<system-reminder>\n{body}\n</system-reminder>"
 

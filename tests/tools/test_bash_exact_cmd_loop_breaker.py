@@ -57,3 +57,20 @@ async def test_distinct_commands_no_breaker(bash, tmp_path):
     for i in range(6):
         result = await collect_result(bash.run(BashArgs(command=f"echo cmd_{i}")))
     assert "LOOP-BREAKER" not in result.stdout
+
+
+@pytest.mark.asyncio
+async def test_sed_i_escape_loop_triggers_breaker(bash, tmp_path):
+    """sed -i with exact same command fires the loop-breaker (harness:bash:escape_loop).
+
+    When the sed pattern is malformed (e.g. escape mismatch), sed exits 0 but
+    makes no change. The model retries the same command indefinitely. The loop-
+    breaker must fire because sed -i is no longer exempt from the repetition check.
+    """
+    target = tmp_path / "demo.py"
+    target.write_text('print("n")\n')
+    # Exact same sed -i command repeated 5 times (same escaping mistake each time)
+    cmd = f"sed -i 's/print(\"n/print(\"\\\\n/g' {target}"
+    for _ in range(5):
+        result = await collect_result(bash.run(BashArgs(command=cmd)))
+    assert "LOOP-BREAKER" in result.stdout

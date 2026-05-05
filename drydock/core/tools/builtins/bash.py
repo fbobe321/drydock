@@ -636,11 +636,14 @@ class Bash(
             # command text is run 5+ times regardless of output or exit code.
             # Catches benchmark/timeit/import-check loops where each run has
             # varying output (timings, object ids) that defeats the hash check.
-            # Excludes commands that write files (heredoc, redirect, sed -i)
-            # since those legitimately run the same form multiple times.
+            # Excludes redirect/heredoc writes since those legitimately append
+            # the same content in loops. Does NOT exclude `sed -i`: when the
+            # sed pattern is wrong (e.g. escape mismatch) it exits 0 but makes
+            # no change, so the model loops forever — the repetition check
+            # must fire to break it (harness:bash:escape_loop pattern).
             _is_write_cmd = bool(
                 __import__("re").search(
-                    r"(>|>>|\bsed\s+-i\b|\btee\b|\bcat\s+<<|\bprintf\b.*>)",
+                    r"(>|>>|\btee\b|\bcat\s+<<|\bprintf\b.*>)",
                     args.command,
                 )
             )
@@ -700,7 +703,7 @@ class Bash(
                     # "EDIT SOURCE CODE" confuses it — give a targeted hint.
                     import re as _re
                     _is_heredoc_write = bool(_re.search(
-                        r"cat\s+<<\s*['\"]?EOF['\"]?\s+>", args.command
+                        r"cat\s+<<\s*['\"]?[A-Za-z_]+['\"]?\s+>+", args.command
                     ))
                     # Detect ls/grep/find search that returned empty output.
                     # The model runs `ls -F | grep "test_cli"` repeatedly when
