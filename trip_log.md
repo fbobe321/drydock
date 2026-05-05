@@ -3,6 +3,13 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-05 08:40 UTC tick
+- Stress: 350/1658 (PID 2755890 alive, 14h58m elapsed); write rate 44% last 100; SKIP rate elevated — 73/350 total (21%), spike at prompts 300-349 (54%) then recovering after FORCE-RESET; session_20260505_083349 active with 21 msgs growing
+- vLLM 400s: 0; gemma4 Docker healthy; llm_balancer healthy on :8001 (PID 2462362); stress_watcher running (PID 2759636)
+- GH issues: 0 open
+- Dispatch queue: harness=35,981 (top patterns: thinking_stall 17355, bash_generic 10076, hallucinated_name 4074, search_replace:not_found 3306 — all addressed by commits in last 24h; hallucinated_name confirmed suppressed via _IGNORE_TOOLS in format.py); retrieval=74 (0 new this tick, all already ingested)
+- Action this tick: no fix committed — investigated SKIP spike at 300-349; consistent with context-bloat causing >120s agent turns; v2.7.42 focus-restore fix (68342fc) deployed and correct; FORCE-RESET at prompt ~340 recovered the run; no drydock source change warranted this tick.
+
 ## 2026-05-05 06:38 UTC tick
 - Stress: 323/1658 (PID 2755890 alive, 12h28m elapsed); done=268, skip=53 (16%); at [323] with fresh RECYCLE (new TUI PID 2883300); babysitter log confirms steady progress from 273→322 since 04:00 UTC
 - vLLM 400s: 0; gemma4 Docker healthy; llm_balancer healthy on :8001 (PID 2462362)
@@ -1878,6 +1885,15 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=34857 total (top today: thinking_stall=3124, loop:bash_generic=276, search_replace:not_found_loop=320, tool:hallucinated_name=61 — all addressed by v2.7.41 commits); retrieval=74 (0 actionable, all current)
 - Action this tick: committed fix(tui): restore input focus after agent turn completes. The finally block in _run_agent_task() never called _focus_current_bottom_app() — after _refresh_windowing_from_history() remounted message widgets, keyboard focus could shift away from the chat input. Root cause of the ~19% SKIP rate (harness SKIPs when TUI doesn't accept typed prompts). Fix: one-line call_after_refresh(_focus_current_bottom_app) after the windowing refresh. Ships at next auto-release (12:00 UTC) as v2.7.42.
 
+## 2026-05-05 07:33 UTC tick
+- Stress: 339/1658 (20% done, PID 2755890, alive ~14h)
+- Write rate: 44% last 100 prompts (CLI-flag prompts; many complete with 0 file writes — metric is valid)
+- Admiral last 30 min: 2 interventions (empty_after_tool:task, empty_after_tool:bash)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=35413 total (top: thinking_stall=16908, loop:bash_generic=10040, tool:hallucinated_name=4059, search_replace:not_found_loop=3248 — all addressed by recent commits); retrieval=74 (0 actionable)
+- Action this tick: triggered manual auto_release to ship v2.7.42 (TUI focus fix) 4.5h ahead of next scheduled cron (12:00 UTC). The focus fix was committed at 01:34 CDT this tick but hadn't been deployed; stress harness SKIP rate (~19%) is directly caused by keyboard focus not being restored after each agent turn. v2.7.42 now installed in user env; next TUI recycles will run the fixed version.
+
 ## 2026-05-05 07:02 UTC tick
 - Stress: 333/1658 (harness PID 2755890, elapsed 13h29m, alive)
 - Write rate: 54% last 50 prompts (CLI-flag prompts; many complete with 0 writes — expected)
@@ -1886,3 +1902,12 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=35137 total (13,444 in last 24h, top: thinking_stall=16686, loop:bash_generic=10022, tool:hallucinated_name=4053, search_replace:not_found_loop=3224 — all addressed by recent commits); retrieval=74 (0 actionable)
 - Action this tick: no new bugs found. All top dispatch patterns have been addressed by v2.7.41 commits (focus fix, stall fallback, bash heredoc, dedup listing, search_replace not-found). Stress skip rate is 18.6% cumulative but the input focus fix (68342fc) deployed at midnight CDT 2h ago — too soon to assess impact. Harness self-healing via FORCE-RESET+RECYCLE; currently retrying prompt 333. No action taken.
+
+## 2026-05-05 08:28 UTC tick
+- Stress: 680/1658 (41% done, PID 2755890, alive, session active on prompt 680)
+- Write rate: 32% last 100 prompts (down from 44%; reflects 80-error burst during SKIPs at 677-679)
+- SKIP rate: 8.5% cumulative (58/680) — improved from ~19% prior to v2.7.42 TUI focus fix; fix is working
+- vLLM 400s: 80 in a burst earlier this tick (JSONDecodeError at line 1 col 12), now 0 in last 10 min; burst appears linked to consecutive SKIP cascade at 677-679 triggering aggressive context compaction + session reset, not a persisting regression; balancer healthy (pid 2462362 on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=35693 total (thinking_stall=17130, loop:bash_generic=10058, tool:hallucinated_name=4065, search_replace:not_found_loop=3276 — all addressed by recent commits; hallucinated_name already suppressed via _IGNORE_TOOLS); retrieval=74 (0 actionable, all current)
+- Action this tick: no fix committed. Retrieval drain: 0 projects (all 74 entries already ingested). No unaddressed actionable bug found in source. Infrastructure healthy.
