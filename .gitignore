@@ -213,3 +213,10 @@ research/STOP
 # HLE eval outputs: per-run TUI logs, session symlinks, and copyrighted
 # HLE dataset content. Never commit.
 hle_results/
+
+# Untracked development clutter that shouldn't go to PyPI
+nohup.out
+.perf_baseline_done
+test/
+perf_results/baseline_*.json
+hle_results_iter/

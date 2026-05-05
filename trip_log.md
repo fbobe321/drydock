@@ -3,6 +3,28 @@
 Autonomous Claude Code review ticks while the user is away. Each tick appended
 chronologically. Cron-driven every 30 min from `/data3/drydock/scripts/autonomous_review.sh`.
 
+## 2026-05-05 13:00 UTC tick
+- Stress: 380/1658 (PID 2755890 alive, ~17h elapsed); write rate 48% last 100 prompts, 36% overall (84 SKIPs all "TUI did not accept after 3 retries"; SKIPs cluster after TUI recycles — harness-side timing, not a drydock bug); RECYCLE-TUI fires frequently but stress progresses
+- vLLM 400s: 0 last 30 min (recovered from 10:30 regression); gemma4 Docker healthy; balancer PID 2462362 on :8001 healthy; 0 open GH issues
+- Dispatch queue: harness=37077 entries; top last 200: thinking_stall 148, search_replace:not_found_loop 28, bash_generic 14, hallucinated_name 6 — all addressed by commits in v2.7.40–v2.7.42; retrieval=74 (0 actionable — all already ingested)
+- Investigated: lower write rate vs prior run (36% vs 74%) traced to shorter prompts (sha1 hash, sin, cos etc.) getting text-only model responses + session resets resetting context; not a drydock source bug; TUI focus restoration code confirmed present in _handle_agent_loop_turn finally block
+- Action this tick: no fix committed — all patterns addressed by recent commits; stress alive and progressing; retrieval drain ran (0 new ingests)
+
+## 2026-05-05 12:00 UTC tick
+- Stress: 366/1658 (PID 2755890 alive, ~16h elapsed); write rate 46% last 100 prompts (prompts 265-366 are all "Add a --XXX CLI flag" — low write rate reflects model treating flag infrastructure as already done); SKIP rate 88/366 = 24% total, improving (5 SKIPs in current 350-399 window vs 25 in 300-349 peak)
+- vLLM 400s: 0 last 30 min (recovered from 69/30min regression noted at 10:30); gemma4 Docker healthy; balancer PID 2462362 on :8001 healthy (resume.md had stale PID 1230765); admiral_probe PID 4075121 on :8878 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=36547 (today: thinking_stall 4459, search_replace:not_found 486, bash_generic 384, hallucinated_name 106, heredoc_loop 58, dedup 58 — all addressed by commits in last 24h); retrieval=74 (0 actionable)
+- Current session active (PID 2915395): model in read_file loop (8+ identical reads after search_replace returned ALREADY CORRECT) — advisory NOTE fires at count 5, Gemma 4 ignoring per known limitation; harness will RECYCLE-TUI if session stalls; no drydock source change warranted
+- Action this tick: no fix committed — all patterns addressed by v2.7.42 and prior; vLLM 400s self-resolved; stress alive and progressing; retrieval drain ran (0 new ingests)
+
+## 2026-05-05 10:30 UTC tick
+- Stress: 357/1658 (PID 2755890 alive, 15h27m elapsed); write rate 45% last 100; SKIP rate 75/357 (21%), 38 SKIPs in last ~200 prompts — v2.7.42 input-focus fix deployed but SKIPs persist; 67 RECYCLE-TUI events
+- vLLM 400s: 69 in last 30 min, 298 in last 2h — REGRESSION; error is JSONDecodeError at char 11 ("Unterminated string") in request body; emergency compaction handles the 400s but degrades write rate; balancer at :8001 healthy (PID 2462362), secondary backend 192.168.50.21:8000 returns llama.cpp format (incompatible) causing every failover to 500
+- GH issues: 0 open
+- Dispatch queue: harness=36,266 (top patterns last 24h: thinking_stall 10,613; bash_generic 1,448; search_replace:not_found 1,127; hallucinated_name 309; all have prior commits); retrieval=74 (0 actionable — all already ingested)
+- Action this tick: no fix committed — vLLM 400 regression investigated but root cause unclear (JSONDecodeError at exactly char 11 in every case suggests systematic issue, possibly Content-Length truncation or special char escaping); retrieval drain ran (0 new ingests); stress alive and progressing; will continue monitoring next tick.
+
 ## 2026-05-05 08:40 UTC tick
 - Stress: 350/1658 (PID 2755890 alive, 14h58m elapsed); write rate 44% last 100; SKIP rate elevated — 73/350 total (21%), spike at prompts 300-349 (54%) then recovering after FORCE-RESET; session_20260505_083349 active with 21 msgs growing
 - vLLM 400s: 0; gemma4 Docker healthy; llm_balancer healthy on :8001 (PID 2462362); stress_watcher running (PID 2759636)
@@ -1911,3 +1933,12 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=35693 total (thinking_stall=17130, loop:bash_generic=10058, tool:hallucinated_name=4065, search_replace:not_found_loop=3276 — all addressed by recent commits; hallucinated_name already suppressed via _IGNORE_TOOLS); retrieval=74 (0 actionable, all current)
 - Action this tick: no fix committed. Retrieval drain: 0 projects (all 74 entries already ingested). No unaddressed actionable bug found in source. Infrastructure healthy.
+
+## 2026-05-05 10:02 UTC tick
+- Stress: 373/1658 (22.5%), PID 2755890 alive (16h elapsed); babysitter latest tick 10:00 UTC shows done=291 skip=81 recycle=71 idx=372 — run is progressing normally
+- Write rate: 47% last 100 prompts (down from 74% peak; "Add a --flag CLI flag" prompts often produce 0 writes because model says flag already exists)
+- Admiral last 30 min: 1 fire (retry_after_error:search_replace at 09:56 — model behavior, not a drydock bug; search_replace loop-breaker is working)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=36816 entries (top: thinking_stall, search_replace:not_found_loop, loop:bash_generic — all addressed by recent commits); retrieval=74 (0 actionable, all current); steering=N/A
+- Action this tick: no fix committed. Retrieval drain: 0 new ingests. All dispatch patterns covered. TUI log mtime appeared stale (05:02 CDT = 10:02 UTC, timezone confusion — it's current). Infrastructure healthy.

@@ -20,7 +20,60 @@ A single 24 GB GPU can run the model with slightly reduced context.
 The AWQ quant is what makes 16 GB cards viable — non-quantized
 Gemma 4 26B needs ≥40 GB.
 
-## vLLM (model server)
+## llama.cpp (recommended for tool-using workflows)
+
+Use this stack if drydock's TUI is your primary workflow. The `--jinja`
+flag is the loop-fix — without it, Gemma 4 enters infinite tool-call
+retry loops on multi-turn sessions (the 400 Bad Request loop fixed
+in v2.7.39, GH #14).
+
+```bash
+# 1. Download Unsloth GGUF (Q3_K_M is the article-recommended quant;
+#    UD-Q4_K_M is higher quality if you have ~17GB VRAM per slot)
+huggingface-cli download unsloth/gemma-4-26B-A4B-it-GGUF \
+    --include "gemma-4-26B-A4B-it-UD-Q3_K_M.gguf" \
+    --local-dir /path/to/models
+
+# 2. Build llama.cpp with CUDA, OR use the prebuilt Docker image
+#    ghcr.io/ggml-org/llama.cpp:server-cuda
+
+git clone https://github.com/ggerganov/llama.cpp.git
+cd llama.cpp
+cmake -B build -DGGML_CUDA=ON -DLLAMA_CURL=OFF
+cmake --build build --config Release -j8 --target llama-server
+
+# 3. Start the server (native binary)
+./build/bin/llama-server \
+    -m /path/to/models/gemma-4-26B-A4B-it-UD-Q3_K_M.gguf \
+    --host 0.0.0.0 --port 8000 \
+    -ngl 99 -c 32768 -np 1 \
+    --jinja \
+    -ctk q8_0 -ctv q8_0 \
+    --alias gemma4
+```
+
+**Don't omit** any of these flags — they're all load-bearing:
+
+| Flag | Why |
+|---|---|
+| `--jinja` | **The loop-fix.** Required for tool-using workflows. The GGUF's bundled chat template handles `tool` turns natively; without `--jinja`, tool results inject without proper turn markers and the model loops or returns empty assistants. |
+| `-ngl 99` | Offload all transformer layers to GPU. Anything less than full offload tanks decode speed on this model. |
+| `-c 32768` | 32K context. Fits in 16GB VRAM with q8 KV cache; raise to 65536 if you have headroom. |
+| `-ctk q8_0 -ctv q8_0` | Quantize K/V cache to q8 for longer contexts. f16 is ~2× slower per token at this size. |
+| `-np 1` | Single slot. Concurrent requests serialize — fine for one user, queue under load. |
+| `--alias gemma4` | What the API reports as the `model` field. Match this to your config.toml's `[[models]] name`. |
+
+**Critical client-side requirement:** temperature MUST be 1.0. Lower
+temperatures reinforce tool-call loops on Q3_K_M quants. The
+auto-detect path in v2.7.39+ (`local_detect.py`) bakes this in
+automatically when it sees a llama.cpp endpoint at first launch.
+
+## vLLM (alternative — higher decode throughput)
+
+Use this stack for batch eval / non-interactive workloads where you
+need ~70 tok/s decode (vs llama.cpp's ~15–17). The drydock-side
+empty-assistant filter (v2.7.39, GH #14) catches the loops vLLM is
+prone to without `--jinja`.
 
 Run via Docker:
 

@@ -17,30 +17,99 @@
 DryDock is a TUI coding assistant designed to work with **local LLMs**. It provides a conversational interface to your codebase — explore, modify, build, and test projects through natural language and a powerful set of tools.
 
 > [!IMPORTANT]
-> DryDock is tested and optimized for **Gemma 4 26B-A4B** (26B MoE, 4B active parameters) served via vLLM. Other models and providers are supported (Mistral, OpenAI, Anthropic, Ollama) but are not as thoroughly tested. If you use a different model, expect to tune prompts and tool settings.
+> DryDock is tested and optimized for **Gemma 4 26B-A4B** (26B MoE, 4B active parameters). **Recommended serving stack: llama.cpp** with `--jinja` (the chat-template fix that prevents the tool-call loops Gemma 4 hits under other backends). vLLM is also documented below as a higher-throughput alternative for batch/eval workloads. Other models and providers are supported (Mistral, OpenAI, Anthropic, Ollama) but are not as thoroughly tested. If you use a different model, expect to tune prompts and tool settings.
 
 ## Tested Hardware + Model
 
 | Component | Spec |
 |-----------|------|
-| GPUs | 2x NVIDIA RTX 4060 Ti 16GB |
-| Model | [Gemma-4-26B-A4B-it-AWQ-4bit](https://huggingface.co/casperhansen/gemma-4-26b-a4b-it-AWQ-4bit) |
-| Serving | vLLM (Docker image `vllm/vllm-openai:gemma4`) |
-| Performance | ~70 tok/s, 131K context, 0% timeouts |
+| GPUs | 2× NVIDIA RTX 4060 Ti 16GB |
+| Model (llama.cpp, recommended) | [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF) — UD-Q3_K_M (12.7GB) or UD-Q4_K_M (16.9GB) |
+| Model (vLLM, alternative) | [casperhansen/gemma-4-26b-a4b-it-AWQ-4bit](https://huggingface.co/casperhansen/gemma-4-26b-a4b-it-AWQ-4bit) |
+| Performance | ~15–17 tok/s decode (llama.cpp Q3), ~70 tok/s decode (vLLM AWQ) |
 | Active params | 4B per token (MoE architecture — fast inference) |
 
-### Install the model
+### Recommended path: llama.cpp + Unsloth GGUF
+
+**Why this is the recommended setup:** Gemma 4's tool-calling format
+requires precise chat-template handling. Without `--jinja`, `tool` results
+get injected without the right turn markers and the model loops or
+returns empty assistant messages — the exact 400 Bad Request loop
+fixed in v2.7.39 (GH #14). With `--jinja`, the GGUF's bundled chat
+template handles tool turns natively and the loops disappear.
 
 ```bash
-# Download the model weights (requires HuggingFace access)
-pip install huggingface-hub
-huggingface-cli download casperhansen/gemma-4-26b-a4b-it-AWQ-4bit \
-    --local-dir /path/to/models/Gemma-4-26B-A4B-it-AWQ-4bit
+# 1. Download Unsloth's GGUF (Q3_K_M is the article-recommended quant;
+#    UD-Q4_K_M is a higher-quality alternative if you have ~17GB VRAM)
+huggingface-cli download unsloth/gemma-4-26B-A4B-it-GGUF \
+    --include "gemma-4-26B-A4B-it-UD-Q3_K_M.gguf" \
+    --local-dir /path/to/models
+
+# 2. Build llama.cpp with CUDA (or use the Docker image
+#    ghcr.io/ggml-org/llama.cpp:server-cuda)
+git clone https://github.com/ggerganov/llama.cpp.git
+cd llama.cpp
+cmake -B build -DGGML_CUDA=ON -DLLAMA_CURL=OFF
+cmake --build build --config Release -j8 --target llama-server
+
+# 3. Start the server with the article recipe
+./build/bin/llama-server \
+    -m /path/to/models/gemma-4-26B-A4B-it-UD-Q3_K_M.gguf \
+    --host 0.0.0.0 --port 8000 \
+    -ngl 99 -c 32768 -np 1 \
+    --jinja \
+    -ctk q8_0 -ctv q8_0 \
+    --alias gemma4
 ```
 
-### Start vLLM
+**Critical flags:**
+- `--jinja` — **the loop-fix.** Required for tool-using workflows. Without it, Gemma 4 enters infinite retry loops on multi-turn tool sessions.
+- `-ngl 99` — offload all layers to GPU
+- `-c 32768` — 32K context (fits in 16GB VRAM with q8 KV cache)
+- `-ctk q8_0 -ctv q8_0` — quantize KV cache for longer contexts
+- `-np 1` — single slot (concurrent requests serialize)
+- `--alias gemma4` — what the API reports as the `model` field
+
+**Drydock config** (`~/.drydock/config.toml`):
+
+```toml
+active_model = "gemma4"
+
+[[providers]]
+name = "local"
+api_base = "http://localhost:8000/v1"
+api_key_env_var = ""
+backend = "generic"
+
+[[models]]
+name = "gemma4"
+provider = "local"
+alias = "gemma4"
+temperature = 1.0       # MUST be 1.0 with --jinja — lower temps reinforce loops
+
+# Article-recommended sampling (passed through extra_sampling to llama-server).
+# Drydock auto-bakes these on first launch when llama.cpp is detected at
+# 127.0.0.1:8080 / :8000, but you can override here.
+[models.extra_params]
+top_k = 40
+top_p = 0.95
+frequency_penalty = 1.1
+max_tokens = 2048
+```
+
+### Alternative: vLLM (higher throughput, no `--jinja` equivalent)
+
+vLLM has its own `--tool-call-parser gemma4` path that works for most
+workflows, but has been observed to enter tool-call loops on long
+multi-turn sessions (GH #14, fixed at the drydock side in v2.7.39 by
+filtering empty assistant messages before re-call). Use vLLM when you
+need higher decode throughput (~70 tok/s vs llama.cpp's ~15–17) for
+batch eval or non-interactive workloads where loop-fix matters less.
 
 ```bash
+huggingface-cli download casperhansen/gemma-4-26b-a4b-it-AWQ-4bit \
+    --local-dir /path/to/models/Gemma-4-26B-A4B-it-AWQ-4bit
+
 docker run -d \
     --gpus all \
     --name gemma4 \
@@ -65,29 +134,17 @@ docker run -d \
 Key flags:
 - `--tensor-parallel-size 2` — split across 2 GPUs
 - `--kv-cache-dtype fp8` — reduce KV cache memory for longer contexts
-- `--tool-call-parser gemma4` + `--enable-auto-tool-choice` — required for Gemma 4 tool calling
+- `--tool-call-parser gemma4` + `--enable-auto-tool-choice` — required for Gemma 4 tool calling under vLLM
 - `--max-num-seqs 2` — limit concurrent requests (prevents OOM on 16GB GPUs)
 
-Verify the model is running:
+Verify either backend is running:
 ```bash
 curl http://localhost:8000/v1/models
 ```
 
-### Configure DryDock
-
-```toml
-# ~/.drydock/config.toml
-[models.gemma4]
-name = "gemma4"
-provider = "generic-openai"
-alias = "gemma4"
-temperature = 0.2
-thinking = "high"
-
-[providers.generic-openai]
-api_base = "http://localhost:8000/v1"
-api_style = "openai"
-```
+For vLLM, drydock config is the same as the llama.cpp block above,
+except `temperature = 0.2` is fine — the `--jinja` requirement only
+applies to llama.cpp.
 
 ## Install
 
