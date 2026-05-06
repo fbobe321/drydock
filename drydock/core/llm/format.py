@@ -379,15 +379,16 @@ class APIToolFormatHandler:
                 # history well-formed (prevents empty_after_tool loops) but
                 # route to suppressed_failures so the TUI doesn't show an error.
                 if parsed_call.tool_name in _IGNORE_TOOLS:
-                    if (
-                        parsed_call.tool_name in _RETRIEVAL_HALLUCINATIONS
-                        and "retrieve" in active_tools
-                    ):
+                    if parsed_call.tool_name in _RETRIEVAL_HALLUCINATIONS:
+                        # These are file-listing/indexing hallucinations, NOT semantic
+                        # search — redirecting to `retrieve` confuses the model (it doesn't
+                        # know what query to write for a directory listing, stalls empty).
+                        # glob/grep are the correct concrete alternatives.
                         redirect = (
-                            f"'{parsed_call.tool_name}' does not exist. "
-                            f"The correct retrieval tool is `retrieve`. "
-                            f"Call `retrieve(query='<your search terms>')` NOW — "
-                            f"it searches the project index and returns relevant results."
+                            f"'{parsed_call.tool_name}' does not exist — do not call it again. "
+                            f"To list project files: call `glob(pattern='**/*.py')`. "
+                            f"To search file content: call `grep(pattern='...')`. "
+                            f"Call one of these tools NOW to continue."
                         )
                     else:
                         redirect = (

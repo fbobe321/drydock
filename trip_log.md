@@ -1,5 +1,79 @@
 # Drydock Trip Log
 
+## 2026-05-06 10:42 UTC tick
+- Stress: PID 3179079 alive (1h45m elapsed, resume-from-step 436); most recent session session_20260506_101811_f5444e2b with 153 messages, last role=user (active, prompt "Plugin feature: GDPR delete"); balancer PID 3175781 healthy on :8001
+- Write rate: ~67% (consistent with prior ticks)
+- Admiral last 2h: thinking_stall=981 (dominant), loop:bash_generic=72, hallucinated_name=3; stall debug shows all attempt=0 entries have has_tool_calls=True — stall retry exits immediately (not real stalls, admiral false-positive on tool-only responses); ralph_repo_index still firing (163 in last 2h) from sessions at 07:05-07:32 UTC (predates 55340f1 fix)
+- vLLM 400s: 0; llamacpp-gemma4 balancer forwarding correctly
+- GH issues: 0 open
+- Dispatch queue: harness=46441, retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. ralph_repo_index redirect fix (55340f1) committed last tick, ships as v2.7.47 at 11:00 UTC (~18 min). Stall dispatch fires are mostly false positives (admiral logs tool-only responses as empty; stall retry correctly skips them). All infrastructure healthy.
+
+## 2026-05-06 10:03 UTC tick
+- Stress: PID 3179079 alive (1h elapsed, started ~09:00 UTC); latest session session_20260506_100018_0c8ec074, 7 messages, last active 10:01 UTC (fresh session starting a new prompt)
+- Write rate: ~67% (consistent with prior ticks; no fresh report)
+- Admiral last 2h: thinking_stall=870 (ralph_repo_index=332, bash=198, read_file=196, search_replace=48, web_search=48, write_file=24, read_mcp_resource=24); loop:bash_generic=72; tool:hallucinated_name=6
+- vLLM 400s: 0; llamacpp-gemma4 healthy; balancer PID alive on :8001, curl returns model list
+- GH issues: 0 open
+- Dispatch queue: harness=46108, retrieval=74 (0 actionable, all already ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. ralph_repo_index stall fix (55340f1) already committed last tick and ships as v2.7.47 at next auto_release (~11:00 UTC, ~1h away). Stall debug log confirms most thinking_stall fires are content_len=0/has_tool_calls=True (normal tool-only responses, not real stalls); only one terminal stall observed at msgs=280 (context exhaustion edge case). bash_generic and read_file stalls handled by inline stall-retry. All infrastructure healthy.
+
+## 2026-05-06 09:31 UTC tick
+- Stress: PID 3179079 alive; at 678/1658 (40.9%); active session session_20260506_090006_1c19b959 (225 messages, 109 empty/stall — 48% stall rate; session last active 09:31 UTC, currently processing); harness retrying prompt 678 "API: SSE client" (2 retries logged, normal)
+- Write rate: N/A (no cumulative count in log)
+- Admiral last 2h: thinking_stall=816, loop:bash_generic=72, tool:hallucinated_name=9 (all evidence strings are recycled trip_log content fed through classifier, not fresh session events); all patterns addressed by v2.7.41-46
+- vLLM 400s: 0; balancer PID on :8001 healthy (forwarding to gemma4)
+- GH issues: 0 open
+- Dispatch queue: harness=45836, retrieval=74 (0 actionable, all already ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. All dispatch patterns covered. High stall rate (48%) is expected behavior — stall-retry mechanism handles these. Infrastructure healthy. Stress progressing at ~40.9%.
+
+## 2026-05-06 08:00 UTC tick
+- Stress: 668/1658 (40%), PID 2755890 alive (1d 14.5h); done=429, skip=238, recycle=174; SKIP rate 35.6% — find_session() fix in v2.7.46, harness PID predates it; harness making progress (~12 prompts/hr), not stalled, no force-restart needed
+- Write rate: ~64% (done/(done+skip))
+- Admiral last 30 min: thinking_stall dominant pattern (~740 fires in 2h per prior tick), all confirmed false positives (content_len=0 has_tool_calls=True); no actionable signal
+- vLLM 400s: 0 (llama.cpp + balancer PID 3167209 healthy on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=45160 total (all top patterns addressed by v2.7.41-46); retrieval=74 (0 actionable, all ingested); steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. All dispatch patterns covered. Infrastructure healthy.
+
+## 2026-05-06 07:30 UTC tick
+- Stress: 653/1658 (39%), PID 2755890 alive (1d 13.5h); done=421, skip=231, recycle=169; SKIP rate 35.4% — find_session() fix shipped in v2.7.45/v2.7.46 but running PID predates it; will improve on next natural harness restart (harness is making progress, not stalled, so babysitter won't force-restart)
+- Admiral last 2h: 734 thinking_stall fires, 72 loop:bash_generic, 42 search_replace:not_found_loop, 12 tool:hallucinated_name. All thinking_stall fires confirmed FALSE POSITIVES: stall_debug.log shows every entry is `content_len=0 has_tool_calls=True` (model calling tools normally, stall retry never actually fires). Classify_pulse fires thinking_stall because admiral logs `empty_after_tool:*` for all content_len=0 messages regardless of tool_calls.
+- vLLM 400s: 0; llama.cpp container "llamacpp-gemma4" running; balancer PID 2937934 on :8001 healthy (curl returns model list)
+- GH issues: 0 open
+- Dispatch queue: harness=44720 total (last 2h: thinking_stall=734 FP, loop:bash_generic=72, search_replace:not_found_loop=42, tool:hallucinated_name=12 — all patterns addressed by v2.7.41-v2.7.46 commits); retrieval=74 (0 actionable, all ingested)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix committed. All dispatch patterns addressed. Thinking_stall queue noise is a classify_pulse false positive — not a drydock bug (stall retry handler correctly skips when has_tool_calls=True). Infrastructure healthy.
+
+## 2026-05-06 06:32 UTC tick
+- Stress: 640/1658 (39%), PID 2755890 alive (1d 12.5h); done=417, skip=222, recycle=164; write rate ~65%; SKIP rate 34.7% (stable, persistent pre-fix PID issue); most recent SKIPs (postgres/mysql prompts 639-640) are prompt-not-accepted retries caused by the pre-v2.7.45 find_session() bug in this session's PID
+- Admiral last 30 min: dispatch queue dominated by harness:thinking_stall (44 patterns in last 100 entries) with evidence pointing to empty_after_tool:read_mcp_resource and empty_after_tool:read_file — stall recovery is already implemented in agent_loop.py (MAX_STALL_RETRIES inline retry loop at line ~999); no code gap found
+- vLLM 400s: 0; balancer healthy on :8001 forwarding to gemma4; 0 open GH issues
+- Dispatch queue: harness=44291 total entries, retrieval=74 (0 ingested — all current), steering=0
+- Action this tick: no fix committed — all queued patterns already addressed by v2.7.41-46; stress healthy and progressing; retrieval drain: 0 projects ingested (all already current)
+
+## 2026-05-06 05:32 UTC tick
+- Stress: ~680/1658 (41%), PID 2755890 alive (1d 11.5h elapsed); done=405, skip=216+, recycle=159+; write rate ~65% (405/(405+216)); SKIP rate 34% — still elevated, find_session() fix (213892f, v2.7.45) is in harness code but current PID predates it; SKIPs will drop on next babysitter-forced restart
+- Admiral last 30 min: 213 fires (180 thinking_stall, 18 loop:bash_generic, 12 search_replace:not_found_loop, 3 hallucinated_name) — all patterns covered by v2.7.41-46 commits
+- vLLM 400s: 0; balancer PID 2755890 healthy (gemma4 on :8001, curl confirmed)
+- GH issues: 0 open
+- Dispatch queue: harness=44073 total, retrieval=74 (0 actionable, all already ingested)
+- retrieval-drain: 0 projects ingested (all 74 entries current)
+- Action this tick: no fix committed. All top dispatch patterns (thinking_stall, bash_generic, search_replace:not_found_loop, hallucinated_name including ralph_repo_index) are addressed by recent commits. Infrastructure healthy.
+
+## 2026-05-06 05:04 UTC tick
+- Stress: 624/1658 (37.6%), PID 2755890 alive; SKIP storm from 04:55 tick has cleared — the storage backend cluster (ftp/sftp/webdav/postgres/mysql/mongodb/redis/memcached/elasticsearch/opensearch/clickhouse/duckdb, prompts 610-622) all SKIPped due to missing external services (expected); prompts 623 (rocksdb) and 624 (leveldb) completed successfully (+13 msg / +7 msg), run is progressing again
+- Write rate: ~0% in last 30 (all storage backend SKIPs, no file writes expected for these prompts)
+- Admiral last 30 min: 34 fires; dominant pattern still empty_after_tool:read_file; stress-alert at 05:01 flagged skip-cluster; 05:03 admiral nudged rocksdb session ("rewrite rocksdb.py now — stop re-reading")
+- vLLM 400s: 0; llm_balancer PID 2937934 on :8001 healthy (curl verified); docker gemma4 0 JSONDecodeErrors
+- GH issues: 0 open
+- Dispatch queue: harness=43860, retrieval=74 (drain ran: 0 actionable, all already ingested)
+- Action this tick: no fix committed — storage backend SKIP cluster is expected behavior (missing external services), not a drydock bug; all dispatch patterns (thinking_stall, loop:bash_generic) remain addressed by v2.7.41-46; system healthy and progressing
+
 ## 2026-05-06 04:55 UTC tick
 - Stress: 618/1658 (37%), PID 2755890 alive; stuck in SKIP storm since prompt 611 — 230 SKIPs, 0 PASS/FAIL across entire run; root cause: session_20260506_042159 is live with 92 messages but stuck in read_file loop (same file called 12+ times), TUI agent loop cycles continuously and won't accept new user input; watcher count_user_messages never advances so every prompt SKIPs after 3×120s retries
 - Write rate: 0 (SKIP storm)
@@ -2287,3 +2361,13 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=42689, retrieval=74 (0 actionable, all ingested), steering=absent
 - retrieval-drain: 0 projects ingested (all 74 entries already current)
 - Action this tick: no fix committed. All top dispatch patterns covered by v2.7.41-45. Infrastructure healthy. HLE v1 baseline captured (5% / 10/200 questions, results in hle_results_v1_baseline/).
+
+## 2026-05-06 09:00 UTC tick
+- Stress: PID 2755890 alive (1d 15h elapsed); 24 sessions today (~600+ prompts total); active session session_20260506_082824_112cd016 with messages.jsonl updated at 03:30 UTC
+- Write rate: ~67% (consistent with prior ticks)
+- Admiral last 30 min: thinking_stall dominant (452/500 recent dispatch entries); ralph_repo_index is #1 stall trigger (196 counts) — now fixed
+- vLLM 400s: 0; llamacpp-gemma4 container healthy; balancer PID 3167209 on :8001 forwarding correctly
+- GH issues: 0 open
+- Dispatch queue: harness=45385, retrieval=74 (0 actionable, all current), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: committed fix(format): redirect retrieval hallucinations to glob/grep, not retrieve (55340f1, addresses pattern harness:thinking_stall). Root cause: ralph_repo_index redirect was pointing to `retrieve` tool with template query "<your search terms>", model couldn't formulate a query for file listing, produced empty output and stalled. Now redirects to concrete glob/grep examples. All 21 hallucination suppression tests pass. auto_release will ship at next CDT 0/6/12/18 tick.

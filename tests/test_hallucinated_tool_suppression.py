@@ -45,6 +45,13 @@ HALLUCINATED_TOOLS = [
     "ralph_file_summary",
     "file_summary",
     "repo_summary",
+    # 2026-05-06 stress run additions:
+    "read_mcp_resource",
+    "read_resource",
+    "get_resource",
+    "lsp",
+    "lsp_definition",
+    "lsp_references",
 ]
 
 
