@@ -326,7 +326,21 @@ class DrydockApp(App):  # noqa: PLR0904
             yield ContextProgress()
 
     async def on_mount(self) -> None:
-        self.theme = "textual-ansi"
+        # textual-ansi is the cleanest reading experience but isn't
+        # registered in every Textual version (e.g. some 8.2.x builds
+        # drop unused builtin themes). Falling back keeps the TUI from
+        # crashing on launch — the default theme renders correctly,
+        # just with sRGB colors instead of ANSI palette colors.
+        # Issue #18: Windows install crashed here on Textual 8.2.5
+        # with "Theme 'textual-ansi' has not been registered".
+        try:
+            self.theme = "textual-ansi"
+        except Exception as e:
+            logger.warning(
+                "preferred theme 'textual-ansi' not available "
+                "(textual=%s): %s — using default theme",
+                getattr(__import__("textual"), "__version__", "?"), e,
+            )
         self._terminal_notifier.restore()
 
         self._cached_messages_area = self.query_one("#messages")

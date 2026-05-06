@@ -710,7 +710,20 @@ class WriteFile(
 
     def _prepare_and_validate_path(self, args: WriteFileArgs) -> tuple[Path, bool, int]:
         if not args.path.strip():
-            raise ToolError("Path cannot be empty")
+            cwd = Path.cwd()
+            try:
+                pkg_dirs = [
+                    d.name for d in sorted(cwd.iterdir())
+                    if d.is_dir() and not d.name.startswith('.') and not d.name.startswith('_')
+                ][:4]
+                hint = f"Package dirs in {cwd.name}/: {', '.join(pkg_dirs)}" if pkg_dirs else f"cwd: {cwd}"
+            except OSError:
+                hint = f"cwd: {cwd}"
+            raise ToolError(
+                f"write_file requires a path argument — you sent an empty path. "
+                f"Retry as: write_file(path='<package>/<file>.py', content='...'). "
+                f"{hint}."
+            )
 
         # Warn about binary file extensions
         ext = Path(args.path).suffix.lower()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import ClassVar
 
-from dotenv import set_key
+from drydock.core.config._dotenv import set_key
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Center, Horizontal, Vertical

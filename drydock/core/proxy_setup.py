@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dotenv import dotenv_values, set_key, unset_key
+from drydock.core.config._dotenv import dotenv_values, set_key, unset_key
 
 from drydock.core.paths import GLOBAL_ENV_FILE
 

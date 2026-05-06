@@ -65,6 +65,31 @@ class TestTabIndentedBlocks:
         out = _preserve_line_breaks(text)
         assert "here.\n\nSecond" in out
 
+    def test_midline_tabs_expand_to_4_spaces(self):
+        """Mid-line tabs in prose/tables would land at unpredictable
+        columns under Rich's tab-stop renderer; expanding to a fixed 4
+        spaces gives consistent alignment regardless of surrounding
+        markdown markers."""
+        text = "Results:\n\nname\tvalue\nfoo\t1\nbar\t2"
+        out = _preserve_line_breaks(text)
+        assert "name    value" in out
+        assert "foo    1" in out
+        assert "\t" not in out  # all tabs gone outside fences
+
+    def test_fenced_code_preserves_tabs(self):
+        """Tabs inside ``` fences must NOT be touched — syntax highlighter
+        handles them consistently and code semantics depend on them."""
+        text = "Sample:\n```python\ndef foo():\n\treturn 1\n```\nDone."
+        out = _preserve_line_breaks(text)
+        # The tab inside the fence is preserved.
+        assert "\treturn 1" in out
+
+    def test_inline_tabs_in_prose_normalized(self):
+        text = "Step 1:\trun. Step 2:\tcheck."
+        out = _preserve_line_breaks(text)
+        assert "Step 1:    run" in out
+        assert "\t" not in out
+
 
 class TestBreakWallsOfText:
     def test_short_input_unchanged(self):

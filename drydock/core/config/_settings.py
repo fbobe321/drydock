@@ -9,7 +9,7 @@ import shlex
 import tomllib
 from typing import Annotated, Any, Literal
 
-from dotenv import dotenv_values
+from drydock.core.config._dotenv import dotenv_values
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
 from pydantic_core import to_jsonable_python
@@ -656,7 +656,55 @@ class DrydockConfig(BaseSettings):
 
     @classmethod
     def _migrate(cls) -> None:
-        pass
+        """Backfill missing top-level keys in an existing user config.
+
+        `bootstrap_config_files` only writes the config when the file
+        does not exist, so users who installed an older version never
+        receive top-level keys added in subsequent releases (e.g.
+        `slim_system_prompt`, added in v2.7.x). The result: their
+        existing config is missing fields that downstream code expects,
+        and silent fallbacks mask the gap.
+
+        This pass: read the live config, compute the default, and
+        write back any TOP-LEVEL keys the user is missing — preserving
+        every value the user already has. Nested sections (providers,
+        models, tools) are NOT touched here; user customizations there
+        are intentional. Idempotent. addresses pattern config:upgrade_drift
+        """
+        if not get_harness_files_manager().persist_allowed:
+            return
+        try:
+            current = TomlFileSettingsSource(cls).toml_data
+        except Exception:
+            return  # config not on disk yet — bootstrap will create it
+        if not current:
+            return
+        try:
+            defaults = cls.create_default()
+        except Exception:
+            return
+        added: list[str] = []
+        for key, default_val in defaults.items():
+            if key in current:
+                continue
+            # Only fill in scalar / simple-collection top-level keys.
+            # Skip the heavyweight section keys that user installs
+            # configure deliberately (providers/models/tools/etc).
+            if isinstance(default_val, (dict, list)) and key in {
+                "providers", "models", "tools", "session_logging",
+                "project_context", "mcp_servers",
+                "tool_paths", "agent_paths", "skill_paths",
+                "enabled_tools", "disabled_tools",
+                "enabled_agents", "disabled_agents",
+                "enabled_skills", "disabled_skills",
+            }:
+                continue
+            current[key] = default_val
+            added.append(key)
+        if added:
+            cls.dump_config(
+                to_jsonable_python(current, exclude_none=True, fallback=str)
+            )
 
     @classmethod
     def load(cls, **overrides: Any) -> DrydockConfig:

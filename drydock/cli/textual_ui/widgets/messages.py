@@ -228,12 +228,39 @@ def _preserve_line_breaks(text: str) -> str:
     """
     if not text:
         return text
-    # Tabs at line start → 2 spaces. Done before anything else so the
-    # downstream regexes and Markdown widget see consistent indent.
-    text = "\n".join(
-        re.sub(r"^\t+", lambda m: "  " * len(m.group(0)), line)
-        for line in text.split("\n")
-    )
+    # Tab handling. Outside fenced code blocks, normalize tabs:
+    #   - Leading tabs → 2 spaces per tab (CommonMark sub-bullet indent).
+    #   - Mid-line tabs → expand to 4-col tab stops.
+    # Textual's Markdown widget routes raw tabs to Rich, which advances
+    # to the next 8-col stop. The "column" Rich sees depends on which
+    # markdown markers (* `_~) it has consumed, so tabs in mixed content
+    # land at unpredictable visible columns and produce the jumbled
+    # output users see (issue #16 follow-up reports). Inside fences,
+    # preserve tabs — the syntax highlighter handles them consistently.
+    _processed: list[str] = []
+    _in_fence = False
+    for _line in text.split("\n"):
+        if _line.lstrip().startswith("```"):
+            _in_fence = not _in_fence
+            _processed.append(_line)
+            continue
+        if _in_fence:
+            _processed.append(_line)
+            continue
+        # Leading tabs → 2 spaces.
+        _line = re.sub(
+            r"^\t+", lambda m: "  " * len(m.group(0)), _line
+        )
+        # Mid-line tabs (any remaining) → spaces at 4-col stops. The
+        # leading-indent transform already removed leading tabs, so any
+        # \t left is mid-line. Use a fixed 4-space replacement (good
+        # enough for table-like output the model emits; we don't try
+        # to replicate true tab-stop alignment because the surrounding
+        # content's visible width is unknowable without rendering).
+        if "\t" in _line:
+            _line = _line.replace("\t", "    ")
+        _processed.append(_line)
+    text = "\n".join(_processed)
     # First pass: rescue wall-of-text responses (flat prose, inline
     # enumerations, inline bold headings). See _break_walls_of_text.
     text = _break_walls_of_text(text)

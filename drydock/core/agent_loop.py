@@ -1027,8 +1027,23 @@ class AgentLoop:
                     prev_tool_name = assistant_msg.tool_calls[-1].function.name if assistant_msg.tool_calls[-1].function else None
             _readonly_tools = {"read_file", "grep", "glob", "ls", "pwd"}
             _prev_was_read = prev_tool_name in _readonly_tools
+            # Detect if prior write_file failed due to missing path argument.
+            _prev_tool_result = ""
+            if prev_role == Role.tool and self.messages:
+                _prev_tool_result = str(self.messages[-1].content or "")
+            _prev_write_path_error = (
+                prev_tool_name == "write_file"
+                and "empty path" in _prev_tool_result
+            )
             if _stall_attempt == 0:
-                if _prev_was_read:
+                if _prev_write_path_error:
+                    note = (
+                        "Your write_file call failed because the path argument was empty. "
+                        "Retry write_file RIGHT NOW with the correct path. "
+                        "Example: write_file(path='package/module.py', content='...'). "
+                        "Do NOT send an empty response — call write_file with a path."
+                    )
+                elif _prev_was_read:
                     note = (
                         f"You read a file but produced no output. "
                         f"Now use write_file, search_replace, or bash "
