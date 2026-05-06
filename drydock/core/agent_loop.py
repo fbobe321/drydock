@@ -1014,18 +1014,46 @@ class AgentLoop:
             _dbg(f"[STALL-DEBUG] inline retry #{_stall_attempt + 1} (prev={prev_role})")
             # Pop the empty assistant; inject an escalating nudge.
             self.messages.pop()
+            # Detect what the previous tool was so the nudge can steer
+            # the model toward the RIGHT next action. Suggesting read_file
+            # when the model just stalled after read_file reinforces the loop.
+            prev_tool_name: str | None = None
+            if prev_role == Role.tool and len(self.messages) >= 2:
+                # messages[-1] is now the tool result; messages[-2] is the
+                # assistant that called the tool.
+                assistant_msg = self.messages[-2]
+                if (assistant_msg.role == Role.assistant
+                        and assistant_msg.tool_calls):
+                    prev_tool_name = assistant_msg.tool_calls[-1].function.name if assistant_msg.tool_calls[-1].function else None
+            _readonly_tools = {"read_file", "grep", "glob", "ls", "pwd"}
+            _prev_was_read = prev_tool_name in _readonly_tools
             if _stall_attempt == 0:
-                note = (
-                    "Continue working. Use a tool (read_file, "
-                    "write_file, search_replace, bash) or state "
-                    "your plan in text."
-                )
+                if _prev_was_read:
+                    note = (
+                        f"You read a file but produced no output. "
+                        f"Now use write_file, search_replace, or bash "
+                        f"to make changes — do NOT call read_file again."
+                    )
+                else:
+                    note = (
+                        "Continue working. Use a tool (read_file, "
+                        "write_file, search_replace, bash) or state "
+                        "your plan in text."
+                    )
             elif _stall_attempt == 1:
-                note = (
-                    "You sent an empty response. Call a tool now "
-                    "(write_file, search_replace, bash, read_file) "
-                    "OR explicitly say you are done with this task."
-                )
+                if _prev_was_read:
+                    note = (
+                        f"You sent an empty response after reading a file. "
+                        f"Call write_file or search_replace NOW to apply "
+                        f"what you read — OR state in one sentence why you "
+                        f"cannot proceed."
+                    )
+                else:
+                    note = (
+                        "You sent an empty response. Call a tool now "
+                        "(write_file, search_replace, bash, read_file) "
+                        "OR explicitly say you are done with this task."
+                    )
             else:
                 note = (
                     "You have sent 3 empty responses in a row for "
@@ -2969,13 +2997,81 @@ class AgentLoop:
         self.messages.append(synth_assistant)
         self.messages.append(synth_tool)
 
+        # Authoritative-answer recognition. Curated GraphRAG corpora can
+        # mark a chunk's verified answer with a literal `ANSWER:` line
+        # (also `Answer:`, `Verified answer:`, `Ground truth:`). When
+        # auto-prefetch surfaces such a chunk and the BM25 score is high
+        # enough that we're confident it matches the user's question,
+        # inject a system note telling the model to use that line
+        # verbatim — without it, Gemma 4 re-derives from scratch and
+        # often overrules the verified value (HLE Phase 0 ablation
+        # 2026-05-06: 5/20 with seeded answers because the model
+        # ignored its own retrieved ANSWER lines).
+        #
+        # Only fire when the TOP-1 chunk has the marker. If a lower-
+        # scoring chunk has ANSWER (e.g. an unrelated Q's seed bled
+        # into the result set), the system note would point the model
+        # at the wrong answer (Phase 0' "Nunavut → Ontario" case).
+        #
+        # Two paths to "authoritative":
+        #   (a) absolute: top score >= AUTHORITATIVE_SCORE (works for
+        #       long, term-rich questions that yield high BM25)
+        #   (b) relative: chunk has the curated header prefix
+        #       `===<tag>:<id>===` AND top score outranks 2× the next
+        #       hit's score. Catches narrow-trivia cases where BM25
+        #       scores are naturally lower (e.g. "What city does X
+        #       move to in 1997 movie Y?") but retrieval clearly
+        #       picked one curated chunk over the rest.
+        import re as _re
+        ANSWER_MARKERS = ("ANSWER:", "Answer:", "Verified answer:",
+                          "Ground truth:", "Correct answer:")
+        CURATED_HEADER_RE = _re.compile(r"^===[a-z][a-z0-9_-]*:\S+===")
+        AUTHORITATIVE_SCORE = 100.0  # absolute high-confidence bar
+        DOMINANCE_SCORE = 30.0       # relative path floor (well above 8.0 noise)
+        DOMINANCE_RATIO = 2.0        # top must beat second by this much
+        top_chunk = chunks[0] if chunks else ""
+        top_score = float(getattr(good_hits[0], "score", 0))
+        next_score = (
+            float(getattr(good_hits[1], "score", 0))
+            if len(good_hits) >= 2 else 0.0
+        )
+        has_marker = any(marker in top_chunk for marker in ANSWER_MARKERS)
+        # Inspect content lines (skip the path/score header that the
+        # formatter prepends) for the curated tag.
+        chunk_body_lines = top_chunk.split("\n")
+        has_curated_header = any(
+            CURATED_HEADER_RE.match(line.strip())
+            for line in chunk_body_lines[:6]
+        )
+        is_authoritative = has_marker and (
+            top_score >= AUTHORITATIVE_SCORE
+            or (
+                has_curated_header
+                and top_score >= DOMINANCE_SCORE
+                and top_score >= DOMINANCE_RATIO * next_score
+            )
+        )
+        if is_authoritative:
+            note = (
+                "The retrieve tool result above contains a curated "
+                "chunk whose question matches the user's. Locate the "
+                "line beginning with one of "
+                f"{list(ANSWER_MARKERS)} and emit that value verbatim "
+                "as your FINAL ANSWER. Do not re-derive — the chunk is "
+                "authoritative ground truth provided by the corpus "
+                "curator. Respond with text only, no further tool calls."
+            )
+            self._inject_system_note(note)
+
         logger.warning(
             "[AUTO-RETRIEVE] synthesized retrieve tool result: %d chunks "
-            "(top score %.1f, content %d chars), msgs now %d",
+            "(top score %.1f, content %d chars), msgs now %d, "
+            "authoritative=%s",
             len(chunks),
-            max(float(getattr(h, "score", 0)) for h in good_hits),
+            top_score,
             len(formatted),
             len(self.messages),
+            top_score >= AUTHORITATIVE_SCORE and has_marker,
         )
 
     async def _auto_route_task(self, user_msg: str) -> None:

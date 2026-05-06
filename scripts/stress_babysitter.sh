@@ -129,11 +129,14 @@ if [ "$CURIDX" -ge "$TOTAL_PROMPTS" ]; then
     exit 0
 fi
 
-# Determine restart step. DONE is the count of successful prompts; feed
-# that into --resume-from-step so the restart continues where the last
-# accepted prompt left off.
-RESUME_AT=$DONE
-if [ "$RESUME_AT" -lt 1 ]; then
+# Determine restart step. Use CURIDX (the 1-indexed step number last seen in
+# the log) minus 1 to re-run the step that was in progress when the harness
+# died. DONE (count of successes in the partial run) is wrong here because
+# it resets to 0 on each restart while CURIDX tracks position in the full
+# 1658-prompt list.
+if [ "$CURIDX" -gt 1 ]; then
+    RESUME_AT=$(( CURIDX - 1 ))
+else
     RESUME_AT=1
 fi
 

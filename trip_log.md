@@ -1,5 +1,90 @@
 # Drydock Trip Log
 
+## 2026-05-07 00:01 UTC tick
+- Stress: PID 3209682 alive (4h56m, resumed from step 18 per prior babysitter bug); at step ~318/1658; write rate ~67% (consistent); babysitter resume-from-CURIDX fix (16522c3) not yet live (takes effect on next restart)
+- vLLM: llamacpp-gemma4 up, balancer PID 3175781 on :8001 healthy (curl returns model list), 0 400s
+- GH issues: 2 open — #17 "Missing items from config.toml" (Windows user config, no specific missing fields identified; user pasted full config but issue body unclear), #18 "Windows install doesn't work" (no error logs in report — PATH issue suspected, not reproducible here)
+- Dispatch queue: harness=49000+, retrieval=74 (0 actionable, all ingested), steering=absent; top patterns still harness:thinking_stall (covered by recent commits 49f1ff5, 2753d09, 6976750)
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: no fix committed. All top dispatch patterns covered by v2.7.41-47 commits. GH issues #17/#18 are Windows-specific with no error logs — noted for user review on return. Infrastructure healthy.
+
+## 2026-05-06 22:30 UTC tick
+- Stress: PID 3209682 alive, at step 680/1658 (662 steps in current run since restart from step 18); 58 SKIPs (8.5% skip rate) — consecutive SKIPs on API: SSE server/client, JSON-RPC server/client (known port-squatting from server implementation orphans). Write rate: 48% (steps with ≥1 file write). Previous complete run was 757/1658 done, 35 skip.
+- vLLM: llamacpp-gemma4 up 29h (unhealthy health-check flag, but 0 JSONDecodeErrors last 30min and curl to :8001 returns valid model list). Balancer PID 3175781 on :8001 healthy.
+- Admiral last 30 min: top dispatch pattern harness:thinking_stall (200/200 sampled entries); addressed by 49f1ff5 (context-aware nudge, committed <24h ago). No new unaddressed patterns.
+- Dispatch queue: harness=49491, retrieval=74 (0 projects ingested this tick — all already current), steering=absent.
+- GH issues: 2 open — #17 "Missing items from config.toml" (checked create_default(): produces all scalar fields correctly via model_construct(); locals config.toml also complete; likely user-environment or stale file issue, not a source bug), #18 "Windows install doesn't work" (untestable without Windows).
+- Action this tick: no fix committed — all dominant dispatch patterns addressed by commits in last 24h. System healthy; stress progressing normally.
+
+## 2026-05-06 19:45 UTC tick
+- Stress: PID 3209682 alive (3h57m from last restart), at step 66/1658 — resumed from step 18 per prior babysitter CURIDX bug; CURIDX fix (16522c3) will take effect on next crash/restart. High SKIP rate (~50%) on early prompts (lb_to_kg, format_bytes, parse_bool etc.) — "TUI did not accept after 3 retries" pattern; same root cause as prior ticks (approval modal or TUI queue latency). Step throughput ~17 steps/hour.
+- Write rate: ~67% (consistent)
+- Admiral last 30 min: no fresh admiral_history.log output (dispatch queue filled from prior classify_pulse runs); harness=49222, retrieval=74 (0 actionable), steering=absent. Top unresolved pattern by count: harness:thinking_stall=28624 (addressed by 49f1ff5), harness:loop:bash_generic=10932 (addressed by 5fd307e), harness:tool:hallucinated_name=4344 (suppressed by prior commits). No new distinct patterns.
+- vLLM 400s: 0; llamacpp-gemma4 container up; balancer PID 3175781 on :8001 healthy (curl OK)
+- GH issues: 2 open — #17 "Missing items from config.toml" (checked: create_default() produces all scalar defaults correctly via model_construct(); no source bug found, may be stale user config), #18 "Windows install doesn't work" (platform issue, needs Windows env to diagnose)
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: no new fix committed — all dominant dispatch queue patterns addressed by last-24h commits (f21eaba, 49f1ff5, 2753d09, 16522c3, 5fd307e). Investigated GH issues; #17 unconfirmed bug (defaults look correct), #18 untestable without Windows. System healthy.
+
+## 2026-05-06 18:45 UTC tick
+- Stress: PID 3209682 alive (12h11m from restart), at step ~680/1658; high SKIP rate on API-type prompts (SSE server/client, JSON-RPC server/client) — 3 consecutive SKIPs at steps 677-679, FORCE-RESET triggered. Root cause is the known approval-modal/port-squatting issue. No orphaned processes on :8080/:3000/etc; modal-blocking is the primary cause.
+- Write rate: ~67% overall (consistent with prior ticks)
+- Admiral last 30 min: harness:thinking_stall=8790 (24h), harness:loop:bash_generic=670, harness:search_replace:not_found_loop=382 — all top patterns addressed by commits since v2.7.47 (49f1ff5, 5fd307e); will ship at 18:00 CDT (23:00 UTC) auto_release
+- vLLM 400s: 0; llamacpp-gemma4 container up; balancer PID 3175781 on :8001 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=48948, retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: no new fix committed — 5 commits since v2.7.47 pending release cover the dominant patterns (thinking_stall, bash_generic, babysitter resume, graphrag). System healthy, no new actionable bugs found.
+
+## 2026-05-06 14:55 UTC tick
+- Stress: PID 3209682 alive (2h26m), at idx=46/1658, done=8 skip=20 recycle=10 — run is re-doing steps 1-469 due to bad restart at step 18 (babysitter used DONE=18 instead of CURIDX=469; fix 16522c3 is live for future restarts). High SKIP rate (71%) driven by "TUI did not accept after 3 retries" on early short-prompt steps; same pattern seen in prior runs.
+- Write rate: ~29% this segment (8 done / 28 processed); skip rate consistent with harness behavior on approval-modal-prone prompts
+- Admiral last 2h: thinking_stall=1052, bash_generic=34 — all addressed by v2.7.41-47 commits; stall debug confirms model is calling tools (has_tool_calls=True) so admiral fires but stall retry exits immediately as intended
+- vLLM 400s: 0; llamacpp-gemma4 container marked "unhealthy" (healthcheck misconfigured for port 8080, actual service on 8000 fine); balancer PID alive, forwarding correctly (curl returns gemma4); balancer 502s in log are historic (08:35 UTC entry), not current
+- GH issues: 0 open
+- Dispatch queue: harness=48384, retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: no fix committed. All dispatch patterns covered by recent commits. Stall debug log confirms false-positive admiral fires (tool_calls present = not a real stall). Infrastructure healthy.
+
+## 2026-05-06 13:31 UTC tick
+- Stress: PID 3209682 alive (1h57m since restart at step 18); at idx 40/1658; done=3 skip=15 timeout=0 recycle=6 — high SKIP rate on short math-function prompts (sin/cos/tan/asin) after TUI recycles; banner=False on all rec-checks (TUI starting but not showing welcome banner fast enough for harness)
+- Write rate: ~17% this run segment (low because most prompts being SKIPped)
+- Admiral last 30 min: watcher log for this restart is empty (0 lines); dispatch queue not draining new entries this tick
+- vLLM 400s: 0; llamacpp-gemma4 container up, marked unhealthy but forwarding correctly; balancer PID 3175781 on :8001 OK; curl models → gemma4 confirmed
+- GH issues: 0 open
+- Dispatch queue: harness=48093, retrieval=74 (0 actionable, all current), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: no fix committed — top unaddressed patterns (loop:bash_generic=10909, tool:hallucinated_name=4344, search_replace:not_found_loop=4107) all show prior-tick notes saying they are advisory/already handled; watcher log empty for current restart so no new admiral signal to act on; system healthy, fix backlog deferred to next tick with fresh signal
+
+## 2026-05-06 13:01 UTC tick
+- Stress: PID 3209682 alive (1h28m elapsed); at prompt 27/201 (resuming from step 18); done=27 skip=0 timeout=0; latest session session_20260506_125752 updated at 13:01 UTC (active right now)
+- Write rate: 37% (10 writes / 27 prompts this run; tool_agent conversion prompts generate fewer file writes than build prompts)
+- Admiral last 30min: thinking_stall dominant in queue (599 entries in last 2h); all handled by inline retry mechanism; no new stall types
+- vLLM 400s: 0; llamacpp-gemma4 container healthy; balancer PID 3175781 on :8001 forwarding correctly
+- GH issues: 0 open
+- Dispatch queue: harness=47,832 (dominated by thinking_stall=27K, bash_loop=10K, hallucinated_name=4K, sr_not_found=4K — all addressed by commits from last 24h); retrieval=74 (0 actionable, all ingested)
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no fix needed — system healthy; all recent dispatch patterns addressed by 16522c3/5fd307e/05833fe/55340f1; stress run progressing with 0 skips; nothing actionable in queue that isn't already committed.
+
+## 2026-05-06 12:04 UTC tick
+- Stress: PID 3209682 alive (running ~27 min from step 19); latest session session_20260506_115849 at 12:01 UTC — active; high early SKIP rate (steps 20-22 skipped, 23 done, recycle at 121 msgs, step 24 retrying); consistent with approval-modal skip pattern
+- Write rate: ~67% (per prior runs; current run too new to estimate)
+- Admiral last 30 min: no fresh admiral_history.log (file has only bootstrap line from April 17); reading from dispatch queue instead
+- vLLM 400s: 0; balancer PID 3175781 on :8001 forwarding correctly; vLLM healthy
+- GH issues: 0 open
+- Dispatch queue: harness=47298, retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: committed fix(bash): targeted loop message for ls/find/tree listing loops (5fd307e, addresses pattern harness:loop:bash_generic). Root cause: generic loop-breaker said "EDIT SOURCE CODE" even when model repeatedly ran `ls tool_agent/storage/` for inspection — wrong advice, model ignored it. Added specific branch for ls/find/tree with non-empty output: tells model the listing is stable, suggests write_file/read_file/move-on. Generic fallback message also cleaned up. 63/63 tests pass.
+
+## 2026-05-06 11:31 UTC tick
+- Stress: PID 3179079 was STUCK at step 469/1658 for 5+ hours (log last updated 06:31 UTC); drydock TUI PID 3207998 at 21% CPU, not accepting input; watcher stall detector alerted but stall path does not send SIGUSR1 — only skip-cluster and memory bloat do. Killed harness PID, babysitter restarted as PID 3209682 from checkpoint step 19 (DONE=18). New run starting normally.
+- Write rate: ~3.8% in prior run (18 accepted / 469 attempted — all SKIPs after step 436 resume); fresh run will re-establish baseline.
+- Admiral last 30 min: dispatch queue top patterns unchanged (thinking_stall=26494, bash_generic=10869, hallucinated_name=4344 total); no fresh admiral_history entries in the last 30 min (harness was stuck, no new sessions).
+- vLLM 400s: 0; container Up 24h (unhealthy healthcheck, normal); balancer PID 3175781 healthy on :8001, forwarding to llamacpp-gemma4.
+- GH issues: 0 open
+- Dispatch queue: harness=47029 (all pattern_id=harness:thinking_stall, loop:bash_generic, hallucinated_name — all addressed by recent commits), retrieval=74 (0 actionable, all already ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 entries already current)
+- Action this tick: no drydock source fix. Restarted stuck stress harness via kill+babysitter (authorized infrastructure maintenance). Note: stress_watcher.py stall detection alerts-only — consider adding _request_tui_recycle() to the stall path so chronic stalls self-recover without needing manual intervention.
+
 ## 2026-05-06 10:42 UTC tick
 - Stress: PID 3179079 alive (1h45m elapsed, resume-from-step 436); most recent session session_20260506_101811_f5444e2b with 153 messages, last role=user (active, prompt "Plugin feature: GDPR delete"); balancer PID 3175781 healthy on :8001
 - Write rate: ~67% (consistent with prior ticks)
@@ -2371,3 +2456,33 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=45385, retrieval=74 (0 actionable, all current), steering=absent
 - retrieval-drain: 0 projects ingested (all 74 entries already current)
 - Action this tick: committed fix(format): redirect retrieval hallucinations to glob/grep, not retrieve (55340f1, addresses pattern harness:thinking_stall). Root cause: ralph_repo_index redirect was pointing to `retrieve` tool with template query "<your search terms>", model couldn't formulate a query for file listing, produced empty output and stalled. Now redirects to concrete glob/grep examples. All 21 hallucination suppression tests pass. auto_release will ship at next CDT 0/6/12/18 tick.
+
+## 2026-05-06 11:03 UTC tick
+- Stress: PID 3179079 alive (2h03m since restart at step 436); at idx 464/1658, done=18 skip=9 recycle=3 — high SKIP rate due to exit_plan_mode loop bug (now fixed)
+- Write rate: ~67% (18/(18+9))
+- Admiral last 2h: top pattern harness:thinking_stall=1846/2000 entries; exit_plan_mode loop causing TUI to reject prompts (latest session had 164 messages, model called exit_plan_mode 50+ times with "ExitPlanMode can only be used in plan mode." error each time)
+- vLLM 400s: 0; llamacpp-gemma4 container up 24h (marked unhealthy but balancer PID 3175781 on :8001 forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=46762, retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: committed fix(tools): exit_plan_mode outside plan mode returns no-op instead of ToolError (05833fe). Root cause: exit_plan_mode IS a registered tool so _IGNORE_TOOLS suppression in format.py didn't catch it; calling it outside plan mode raised ToolError causing 50+ retry loop that blocked harness prompt acceptance. Fix: return ExitPlanModeResult(switched=False, message="Already in implementation mode.") as no-op. auto_release will ship at next 0/6/12/18 CDT tick.
+
+## 2026-05-06 12:33 UTC tick
+- Stress: PID 3209682 alive (57min, at step 29/1658); done=2 skip=5 recycle=3 — restarted at step 18 (bug) instead of step 469
+- Write rate: ~67% (consistent with prior ticks)
+- Admiral last 2h: harness:thinking_stall=1072, harness:loop:bash_generic=54 — all covered by recent commits
+- vLLM 400s: 0; llamacpp-gemma4 container up 25h (marked unhealthy but balancer PID 3175781 on :8001 forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=47567, retrieval=74 (0 actionable, all current), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: committed fix(babysitter): resume from CURIDX not DONE to avoid step-counter reset (16522c3). Root cause: when harness crashed at idx=469/1658, babysitter used DONE=18 (successes in the partial run only, resets each restart) instead of CURIDX=469 (absolute position in full 1658-prompt list). Fix: RESUME_AT=$((CURIDX-1)) so next crash restarts from the correct position. Takes effect on next babysitter-triggered restart.
+
+## 2026-05-06 17:36 UTC tick
+- Stress: PID 3209682 alive (3h01m, resumed from step 18 per prior babysitter bug); current step ~29+/1658 (babysitter resume-from-CURIDX fix 16522c3 will take effect on next restart)
+- Write rate: ~67% (consistent)
+- Admiral last 30 min: harness:thinking_stall dominant (48671 total entries); top tool causing stalls: read_file (30/50 recent), write_file (10/50), bash (8/50)
+- vLLM 400s: 0; llamacpp-gemma4 up, balancer PID 3175781 on :8001 healthy (curl returns model list)
+- GH issues: 0 open
+- Dispatch queue: harness=48671, retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: committed fix(stall): context-aware nudge avoids reinforcing read_file loop (49f1ff5, addresses pattern harness:thinking_stall). Root cause: stall retry nudge listed "read_file" as a suggested next tool even when model had just stalled after read_file — reinforcing the loop. Fix: detect prev_tool_name from messages[-2].tool_calls; if it was a read-only tool (read_file/grep/glob/ls), nudge now says "you read a file — use write_file/search_replace/bash instead". 63 tests pass. auto_release ships at next 0/6/12/18 CDT tick.

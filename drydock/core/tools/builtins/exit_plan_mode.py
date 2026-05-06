@@ -66,7 +66,10 @@ class ExitPlanMode(
             raise ToolError("ExitPlanMode requires an agent manager context.")
 
         if ctx.agent_manager.active_profile.name != BuiltinAgentName.PLAN:
-            raise ToolError("ExitPlanMode can only be used in plan mode.")
+            # Model called exit_plan_mode outside plan mode (Gemma 4 hallucinates this).
+            # Return a no-op success so the model moves on instead of retrying.
+            yield ExitPlanModeResult(switched=False, message="Already in implementation mode.")
+            return
 
         if ctx.user_input_callback is None:
             raise ToolError("ExitPlanMode requires an interactive UI.")

@@ -786,14 +786,29 @@ class Bash(
                             f"rewrite the file with the corrected content. "
                             f"Do NOT re-run this sed command unchanged.]"
                         )
+                    elif bool(_re.search(
+                        r'(?:^|\|)\s*(?:ls\b|find\b|tree\b)', args.command
+                    )) and stdout.strip():
+                        notice = (
+                            f"[NOTICE: this is the #{entry['count']}th identical "
+                            f"run of `{cmd_preview}` — the directory listing is "
+                            f"stable and you have already seen it. "
+                            f"Re-running will not reveal new files. "
+                            f"Make a decision based on what you already know: "
+                            f"either create the missing file with write_file, "
+                            f"read an existing file with read_file, or move on "
+                            f"to the next task step. "
+                            f"Do NOT re-run this listing command.]"
+                        )
                     else:
                         notice = (
-                            f"[NOTICE: this is the #{entry['count']} identical "
+                            f"[NOTICE: this is the #{entry['count']}th identical "
                             f"run of `{cmd_preview}` with byte-identical "
                             f"output and rc={returncode}. Re-running will not "
-                            f"change anything — you must EDIT SOURCE CODE to "
-                            f"change this output. Previous stdout first 300 "
-                            f"chars:\n{stdout[:300]}]"
+                            f"change anything. "
+                            f"Make a decision based on the output you already have "
+                            f"and move to the next task step. "
+                            f"Previous stdout first 300 chars:\n{stdout[:300]}]"
                         )
                     yield self._build_result(
                         command=args.command,

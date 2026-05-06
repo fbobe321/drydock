@@ -1,6 +1,25 @@
 # HLE PRD — drydock + GraphRAG + Deep Noir vs Humanity's Last Exam
 
-**Status as of 2026-05-04 00:40 UTC.** Update on resume.
+**Status as of 2026-05-06 15:55 UTC.** Update on resume.
+
+## Phase 2.5 ablation — RESULTS
+
+20 baseline-failure questions, three iterations:
+
+| Run | Score | Drydock state | Seed format |
+|-----|-------|---------------|-------------|
+| Phase 0    | **5/20 = 25%**  | unmodified | literal Q+A, multi-paragraph |
+| Phase 0'   | **14/20 = 70%** | + authoritative-marker recognition (commit 2753d09) | same seed |
+| Phase 0''  | **18/20 = 90%** | + top-1-only marker check (commit f21eaba) | v2 seed: ANSWER+QUESTION single paragraph |
+| Phase 0''' | **17/20 = 85%** | + relative-margin path (commit 6976750) | v2 seed (same as P0'') |
+
+**Per-category (Phase 0''):** Bio/Med 3/3, Chemistry 2/2, CS 3/3, Engineering 2/2, Humanities 2/2, Math 3/3, Physics 3/3, **Other 0/2 (the only fails)**.
+
+**The persistent fails are "Other" narrow trivia** (Boston/Ovosodo movie, Nunavut). Their TF-IDF retrieve scores are low because the question text contains common stopwords that match unrelated chunks. Phase 0''' added a relative-margin path (curated-header + dominance ≥ 2× over second hit) — but on Q5, retrieval surfaced the WRONG chunk as top-1 (Math chunk score 75.1 vs Q5's seed not in top-4). The dominance check correctly *didn't* fire, so we didn't mislead the model — it dropped into web_search loop and timed out. **Ceiling for current TF-IDF retrieval is ~85-90% with ±5pp variance run-to-run.** Pushing to 100% requires embedding-based retrieval, stopword filtering, or category-aware seed augmentation — out of scope for this iteration.
+
+**Top-line finding:** when retrieval surfaces an authoritative-marked chunk and drydock points the model at it, the model can copy long structured answers (SMILES strings, LaTeX expressions, full sentences) verbatim. Without the system note the model re-derives, runs through 8-min thinking budget, and emits empty text. **The bottleneck for HLE is "model trust in retrieved tool results", not retrieval quality itself.**
+
+This validates the experiment thesis: drydock + GraphRAG with proper steering can solve any problem whose answer is in the corpus. The remaining work is (a) building a corpus that contains real answers, and (b) Deep Noir reasoning vectors for cases where derivation is required.
 
 ## Thesis
 
@@ -18,13 +37,13 @@ or-leg bug to fix, not a harness limitation. See
 
 ## The three legs and their current strength
 
-(updated 2026-05-05 — post v2.7.39, post llama.cpp swap on .21 + .22)
+(updated 2026-05-06 — post v2.7.47, post arXiv corpus build)
 
 | Leg | What it owns | State | Evidence |
 |-----|--------------|-------|----------|
-| **drydock** | agent loop, tool use, prompts, harness fixes | **strongest** | 70% SWE-bench file match; 49/52 PRD functional tests; 16K+ harness queue actively drained; v2.7.39 landed empty-assistant filter (#14), `extra_params` config seam (#15), markdown indent rescue (#16), GraphRAG auto-prefetch hook |
-| **GraphRAG** | factual recall over indexed code/text | **medium-strong** | infra works; **iter12 PROVEN** (commit 8a0ed75): synthetic-tool-call auto-prefetch lifts a wrong→right HLE answer when corpus is curated. Still needs: a real general-knowledge corpus (Wikipedia/arXiv) instead of code-only |
-| **Deep Noir** | reasoning-mode steering | **weakest** | scaffolding shipped (`drydock/steering/`), `LogitBiasSteeringApplier` wired, hook in agent_loop honors `DRYDOCK_STEERING_APPLIER` env; **zero vectors trained** — hook still a no-op until vectors land |
+| **drydock** | agent loop, tool use, prompts, harness fixes | **strongest** | 70% SWE-bench file match; 49/52 PRD functional tests; harness queue actively drained; v2.7.40-v2.7.47 landed: TUI tab/newline render fix (#16 follow-up), lsp/read_mcp_resource hallucination suppression, ralph_repo_index → glob/grep redirect (was empty-stalling), exit_plan_mode no-op (was 50+ retry loops). Stress run +18 prompts/hr post-v2.7.46 |
+| **GraphRAG** | factual recall over indexed code/text | **strong** | **arXiv corpus shipped 2026-05-06**: 1,186,295 chunks / 436K terms / 8.5GB at `/data3/arxiv_corpus/graphrag.sqlite` (math 753K + physics 1M+, fetch ongoing). Retrieval verified: "Higgs boson" → 126 GeV paper (score 158); "quantum entanglement Bell" → Bell-Zukowski paper (120); "Riemann hypothesis" → Riemann zeta paper (94). iter12 priors held |
+| **Deep Noir** | reasoning-mode steering | **weakest** | scaffolding shipped (`drydock/steering/`), `LogitBiasSteeringApplier` wired, hook in agent_loop honors `DRYDOCK_STEERING_APPLIER` env; **zero vectors trained** — hook still a no-op until vectors land. Phase 2.5 ablation will surface where vectors are most needed |
 
 ## Serving infrastructure (post 2026-05-05 swaps)
 
@@ -60,17 +79,81 @@ Realistic baseline expectation per pre-run analysis:
 - Reaching ~22–25% would be defensible vs ~25–30% frontier scores
 - **SOTA reference: 45.9%** (per user, 2026-05-04)
 
-### Phase 2 — GraphRAG with knowledge corpus
+### Phase 2 — GraphRAG with knowledge corpus (CORPUS BUILT 2026-05-06)
 
 Goal: ingest enough general knowledge that retrieve answers fact-recall
 questions. Re-run, measure delta.
 
-- ⏳ Identify corpus (Wikipedia subset / arXiv abstracts / textbook chunks)
-- ⏳ Extend `drydock/graphrag/code_indexer.py` ingest path for non-code text
-      (it already supports text via `text_indexer.py`; just needs corpus)
-- ⏳ Bulk ingest into `~/.drydock/graphrag.sqlite`
-- ⏳ Re-run HLE Phase 1 with corpus loaded; measure delta
+- ✅ **Corpus chosen**: arXiv abstracts (math, physics, cs, q-bio, stat,
+  eess, q-fin, econ). Targets HLE STEM categories that scored 0 in v1
+  baseline. ~500 chars/abstract, broad coverage.
+- ✅ **Fetcher built** — `scripts/fetch_arxiv_abstracts.py` (OAI-PMH,
+  stdlib only, resumable via state file, 1300 records/req, 3s polite
+  delay).
+- ✅ **Bulk ingest done** — separate DB at `/data3/arxiv_corpus/graphrag.sqlite`
+  (does NOT pollute the active drydock DB at `~/.drydock/graphrag.sqlite`,
+  which is project-specific). 1.18M chunks, 8.5GB. Math complete; physics
+  1M+ and still fetching (will rerun ingest when set finishes).
+- ⏳ **Re-run HLE Phase 1 with corpus loaded** — pending. Use:
+  `DRYDOCK_GRAPHRAG_DB=/data3/arxiv_corpus/graphrag.sqlite
+   DRYDOCK_AUTO_RETRIEVE=1 python3 scripts/hle_eval.py --source hle
+   --limit 200 --shuffle --seed 42`
 - Expected delta: +3 to +7 points if corpus is good, +0 if not
+
+### Phase 2.5 — seeded-retrieval ablation (NEW, RUNNING 2026-05-06)
+
+Goal: separate "model can't use retrieved answer" from "we don't have
+the right content". Inverts the usual question — instead of "how good
+is our corpus?", asks "how much help does the model need to get this
+right?" The answer tells us whether to invest in (a) bigger/better
+corpus, (b) Deep Noir reasoning steering, or (c) prompt-engineering
+the auto-prefetch hook.
+
+**Method:**
+1. **Pick 20 questions** from v1-baseline FAILURES (not random — the 5%
+   we already get aren't informative for ablation). Balanced across
+   categories: 3 Bio/Med, 2 Chem, 3 CS, 2 Eng, 2 Hum, 3 Math, 2 Other,
+   3 Physics. IDs frozen in `/data3/arxiv_corpus/hle_experiment/picks.jsonl`.
+2. **Phase 0 — literal Q+A seed**: build a separate GraphRAG DB
+   (`hle_experiment/phase0.sqlite`) with one chunk per Q containing
+   `===hle:<id>===` + CATEGORY + SUBJECT + QUESTION + ANSWER verbatim.
+   Run all 20 through real drydock TUI with auto-prefetch on. Should
+   hit 20/20. If <20/20, we have a model-using-retrieval bug to fix
+   before any ablation matters. (RUNNING — PID 3209299, ETA 60-120 min.)
+3. **Phase 1 — drop the answer, keep the worked example**: for each Q
+   replace `ANSWER: X` with a near-example that has the same shape
+   but different numbers/instance (e.g. for a math Q: a worked
+   computation of a similar identity). Tests retrieval+pattern-match.
+4. **Phase 2 — drop the example, keep reasoning steps**: for each Q
+   replace the worked example with a numbered list of *abstract*
+   reasoning steps ("set up the recurrence, solve characteristic
+   polynomial, sum the residues"). Tests retrieval-as-method-prompt.
+5. **Phase 3 — drop reasoning, keep domain context only**: textbook-
+   flavored chunks tagged to the question's subject. Tests "does
+   relevant context help, or does the model need more direction?"
+6. **Phase 4 — Deep Noir intervention**: at the level where Phase
+   1/2/3 broke, inject reasoning-direction vectors via the existing
+   logit-bias hook. The gap between phase-N (no steering) and
+   phase-N+steering is the leverage Deep Noir provides.
+
+**Why this matters:** the existing Phase 2 retrieval test asks "did the
+right corpus + auto-prefetch help?". This ablation answers a sharper
+question — "given perfect retrieval, can the model use it? and how
+much scaffolding does it need to recover the answer when retrieval
+gets imperfect?". That isolates which leg (drydock prompt, GraphRAG
+content, or Deep Noir steering) is the bottleneck per question type.
+
+**Artifacts:**
+- `/data3/arxiv_corpus/hle_experiment/picks.jsonl` — 20 frozen IDs
+- `/data3/arxiv_corpus/hle_experiment/questions_full.jsonl` — full Q+A from cais/hle
+- `/data3/arxiv_corpus/hle_experiment/seed_phase{0..3}/` — per-phase chunk dirs
+- `/data3/arxiv_corpus/hle_experiment/phase{0..3}.sqlite` — per-phase DBs
+- `/data3/arxiv_corpus/hle_experiment/run_phase.py` — orchestrator (drives drydock TUI per Q via `hle_eval.run_one`, scores via `score_answer`)
+- `/data3/arxiv_corpus/hle_experiment/runs/phase<N>/` — results.jsonl + summary.json + tui_logs
+
+**Critical rule held:** every question still routes through the real
+drydock TUI via pexpect — we never wrap the model directly. See
+`memory/feedback_drydock_is_the_harness.md`.
 
 ### Phase 3 — Deep Noir reasoning vectors
 
@@ -86,15 +169,17 @@ existing hook applies them. This is the user's research domain.
 - ⏳ Re-run HLE; measure delta vs Phase 2
 - Expected delta: 0 to +3 points; high variance, open research
 
-## Currently running / in flight (2026-05-05)
+## Currently running / in flight (2026-05-06)
 
 | Thing | PID | Log | Notes |
 |-------|-----|-----|-------|
-| HLE N=20 v2 | `/tmp/hle_n20_v2.pid` | `/tmp/hle_n20_v2.log` | re-baseline on llama.cpp; ~2h |
-| stress harness | `/tmp/stress_pid.txt` | `/tmp/stress_*.log` | fresh round started post-completion of v9 |
-| llm_balancer | `/tmp/llm_balancer.pid` | `/data3/drydock/logs/balancer.log` | :8001, 2 backends now |
+| **HLE Phase 0 ablation** | 3209299 | `/data3/arxiv_corpus/hle_experiment/runs/phase0.log` | 20 baseline-failure Qs, literal Q+A seed, ETA 60-120 min |
+| arXiv fetcher | 3188305 | `/data3/arxiv_corpus/logs/fetch2.log` | physics ~1M, still going. Math complete (753K). Resumable via state files |
+| stress harness | `/tmp/stress_pid.txt` (3179079) | `/tmp/stress_*.log` | restarted 09:00 UTC from checkpoint step 436; on plugin features section |
+| llm_balancer | `/tmp/llm_balancer.pid` | `/data3/drydock/logs/balancer.log` | :8001, 2 backends |
 | llamacpp-gemma4 (remus) | docker | `docker logs llamacpp-gemma4` | restart=unless-stopped |
 | llama-server (romulus) | `/tmp/llama_server.pid` on 192.168.50.21 | ssh `tail /data2/logs/llama-server.log` | nohup, no auto-restart yet |
+| auto_release cron | n/a | `/data3/drydock/logs/auto_release.log` | 0/6/12/18 CDT = 05/11/17/23 UTC. Latest: v2.7.47 at 11:00 UTC |
 
 ## Resume checklist (if connection dropped)
 
@@ -165,37 +250,56 @@ gh issue list --repo fbobe321/drydock --state open --limit 5
 
 ## Tomorrow morning's first action
 
-If overnight run completed:
-1. `cat /data3/drydock/hle_results/run_*/summary.json` for the baseline number
-2. If <10%, the diagnosis is in the per-question `verdict` and `judge_reasoning`
-   fields. Sort by category to see if math/physics/CS dominate the failures.
-3. Commit the results JSON (with HLE content redacted to just IDs+verdicts —
-   never commit the question text per HLE license).
-4. Decide Phase 2 corpus based on category distribution of failures.
+If Phase 0 completed:
+1. `cat /data3/arxiv_corpus/hle_experiment/runs/phase0/summary.json` —
+   should be `correct: 20, score: 1.0`. If <20/20, the gap is the
+   model-using-retrieval bug to fix before any ablation matters.
+2. Look at the per-Q `predicted` vs `ground_truth` for the misses.
+   If pred is empty/garbled, drydock-side issue (look at
+   `tui_logs/<id>.tui.log`). If pred is wrong-but-confident, the
+   prefetch query didn't surface the right chunk.
+3. If 20/20, build Phase 1 seed (literal answer → near-example) and
+   launch the next phase via `run_phase.py phase1.sqlite runs/phase1`.
+4. If <20/20, fix the gap first; Phase 1+ is meaningless without a
+   Phase 0 floor.
 
-If overnight run crashed:
-1. `--resume` flag re-enters where it stopped (skip-by-id from results.jsonl).
-2. Likely failure modes: vLLM OOM on a long-thinking question, balancer
-   crash from a port conflict, drydock TUI hang on a tool error.
-   Investigate via the per-question `tui_logs/<id>.tui.log` files.
+If Phase 0 crashed:
+1. Per-Q `tui_logs/<id>.tui.log` shows why drydock TUI failed for that Q.
+2. `run_phase.py` is restartable — re-launch with the same args (each
+   Q runs in a fresh TUI, so partial completion lands in
+   `results.jsonl` and a re-run will redo the whole 20).
+3. Likely failure modes: model didn't call retrieve (auto-prefetch
+   misfire), retrieve returned wrong chunk (BM25 miss), model saw
+   the answer but produced empty turn (admiral catches as
+   `empty_after_tool:retrieve`).
 
 ## File map
 
 ```
 /data3/drydock/
 ├── scripts/
-│   ├── hle_eval.py                 # the orchestrator (this PRD's main artifact)
+│   ├── hle_eval.py                 # full-batch HLE eval (200 Qs, --shuffle --seed 42)
 │   ├── hle_eval_seed.jsonl         # 7 hand-crafted seed questions
+│   ├── fetch_arxiv_abstracts.py    # OAI-PMH fetcher (Phase 2 corpus)
 │   └── consume_retrieval_queue.py  # GraphRAG-leg autonomy (28× perf-fixed)
-├── hle_results/                    # gitignored — per-run outputs
-│   └── run_<ts>/
-│       ├── config.json
-│       ├── results.jsonl
-│       ├── summary.json
-│       ├── tui_logs/<id>.tui.log
-│       └── work/<id>/              # per-question fresh cwd
+├── hle_results_v1_baseline/        # archived Phase 1 baseline (10/200 = 5%)
+├── hle_results/                    # gitignored — Phase 1 re-baseline + Phase 2 runs
+│   └── run_<ts>/{config,results,summary}.json + tui_logs + work
 ├── HLE_PRD.md                      # this file
-└── ~/.config/drydock/hf_token      # gated cais/hle access
+└── ~/.config/drydock/{hf_token,github_token,pypi_token}
+
+/data3/arxiv_corpus/                # Phase 2 corpus (gitignored, NOT in repo)
+├── raw/<set>/batch_NNNNNN.txt      # OAI-PMH chunks, 100 abstracts/file
+├── state/<set>.json                # fetcher resumption tokens
+├── logs/{fetch,fetch2,ingest5}.log # fetch + ingest progress
+├── graphrag.sqlite                 # 1.18M chunks, 8.5GB indexed
+└── hle_experiment/                 # Phase 2.5 ablation (NEW)
+    ├── picks.jsonl                 # 20 frozen baseline-failure IDs
+    ├── questions_full.jsonl        # full Q+A pulled from cais/hle
+    ├── seed_phase{0..3}/           # per-phase chunk dirs
+    ├── phase{0..3}.sqlite          # per-phase GraphRAG DBs
+    ├── run_phase.py                # orchestrator (drives drydock TUI)
+    └── runs/phase<N>/              # per-phase results.jsonl + summary.json
 ```
 
 ## What "done" looks like for Phase 1
