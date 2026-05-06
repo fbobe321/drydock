@@ -83,8 +83,11 @@ def bootstrap_config_files() -> None:
                 if info is not None:
                     patch_config_for_local(default, info)
                     rprint(
-                        f"[green]Detected {info.label} at {info.api_base} — "
-                        f"using model '{info.model_name}'.[/]"
+                        f"[green]Auto-detected {info.label} at "
+                        f"{info.api_base}[/]\n"
+                        f"  Using model: [cyan]{info.model_name}[/]\n"
+                        f"  To use a different LLM, run [cyan]drydock --setup[/] "
+                        f"or edit [cyan]{config_file}[/]"
                     )
             except Exception as e:  # detection must never break first launch
                 logger.debug("local-LLM detection failed: %s", e)

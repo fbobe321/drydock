@@ -57,6 +57,27 @@ class BackendError(RuntimeError):
         if self.status == HTTPStatus.TOO_MANY_REQUESTS:
             return "Rate limit exceeded. Please wait a moment before trying again."
 
+        # Network error (no HTTP status). The default verbose format is
+        # confusing for a "LLM unreachable" scenario — surface a clear,
+        # actionable line at the top.
+        if self.status is None and self.reason:
+            reason_lc = self.reason.lower()
+            is_network_error = any(s in reason_lc for s in (
+                "connect", "timed out", "timeout", "network",
+                "name or service not known", "no route to host",
+                "connection refused", "broken pipe", "connection reset",
+            ))
+            if is_network_error:
+                hint = (
+                    f"Cannot reach LLM at {self.endpoint}. "
+                    f"Reason: {self.reason}\n"
+                    f"  • Verify the LLM server is running\n"
+                    f"  • Check the api_base in your config "
+                    f"(~/.drydock/config.toml [[providers]] section)\n"
+                    f"  • If using a remote server, confirm network access"
+                )
+                return hint
+
         rid = self.headers.get("x-request-id") or self.headers.get("request-id")
         status_label = (
             f"{self.status} {HTTPStatus(self.status).phrase}" if self.status else "N/A"

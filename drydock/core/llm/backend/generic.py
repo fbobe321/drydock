@@ -279,7 +279,9 @@ class GenericBackend:
     async def __aenter__(self) -> GenericBackend:
         if self._client is None:
             self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self._timeout),
+                timeout=httpx.Timeout(
+                    self._timeout, connect=10.0, write=15.0, pool=15.0
+                ),
                 limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
             )
         return self
@@ -297,7 +299,9 @@ class GenericBackend:
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self._timeout),
+                timeout=httpx.Timeout(
+                    self._timeout, connect=10.0, write=15.0, pool=15.0
+                ),
                 limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
             )
             self._owns_client = True
