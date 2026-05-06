@@ -18,7 +18,10 @@ class OnboardingApp(App[str | None]):
     CSS_PATH = "onboarding.tcss"
 
     def on_mount(self) -> None:
-        self.theme = "textual-ansi"
+        try:
+            self.theme = "textual-ansi"
+        except Exception:
+            pass  # Textual 8.2.5+ may not register textual-ansi
 
         self.install_screen(WelcomeScreen(), "welcome")
         self.install_screen(ChoiceScreen(), "choice")

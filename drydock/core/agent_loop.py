@@ -1035,6 +1035,8 @@ class AgentLoop:
                 prev_tool_name == "write_file"
                 and "empty path" in _prev_tool_result
             )
+            # Detect if prior tool was a hallucinated/suppressed tool call.
+            _prev_was_hallucinated = "does not exist — do not call it again" in _prev_tool_result
             if _stall_attempt == 0:
                 if _prev_write_path_error:
                     note = (
@@ -1042,6 +1044,13 @@ class AgentLoop:
                         "Retry write_file RIGHT NOW with the correct path. "
                         "Example: write_file(path='package/module.py', content='...'). "
                         "Do NOT send an empty response — call write_file with a path."
+                    )
+                elif _prev_was_hallucinated:
+                    note = (
+                        f"The tool '{prev_tool_name}' does not exist — stop calling it. "
+                        "Call glob(pattern='**/*.py') NOW to list project files, "
+                        "or grep(pattern='...') to search content. "
+                        "Do NOT send an empty response."
                     )
                 elif _prev_was_read:
                     note = (
@@ -1051,8 +1060,8 @@ class AgentLoop:
                     )
                 else:
                     note = (
-                        "Continue working. Use a tool (read_file, "
-                        "write_file, search_replace, bash) or state "
+                        "Continue working. Use a tool (read_file, write_file, "
+                        "search_replace, bash, glob, grep) or state "
                         "your plan in text."
                     )
             elif _stall_attempt == 1:
@@ -1066,7 +1075,7 @@ class AgentLoop:
                 else:
                     note = (
                         "You sent an empty response. Call a tool now "
-                        "(write_file, search_replace, bash, read_file) "
+                        "(write_file, search_replace, bash, read_file, glob) "
                         "OR explicitly say you are done with this task."
                     )
             else:

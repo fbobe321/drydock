@@ -46,7 +46,11 @@ class AnsiHighlightTheme(HighlightTheme):
 
 class AnsiMarkdownFence(MarkdownFence):
     @classmethod
-    def highlight(cls, code: str, language: str) -> Content:
+    def highlight(cls, code: str, language: str, **kwargs: object) -> Content:
+        # Textual 8.2.5+ passes additional kwargs (e.g. `ansi=`) that
+        # earlier versions didn't. Accept and ignore them — our
+        # AnsiHighlightTheme already produces ansi-coded output, so the
+        # framework's `ansi` hint is redundant for this subclass.
         return highlight(code, language=language or None, theme=AnsiHighlightTheme)
 
 

@@ -1,5 +1,15 @@
 # Drydock Trip Log
 
+## 2026-05-06 23:33 UTC tick
+- Stress: PID 3209682 alive (tool_agent stress), at 243/1658; stress_shakedown.log not present (output in /tmp/stress_2000_v10.log.current); current session (233106) on image_to_ascii prompts, no admiral stalls detected post-fix
+- Write rate: not sampled this tick
+- Admiral last 30 min: classify_pulse at 23:30Z found 2 new signals (1 thinking_stall, 1 hallucinated_name false positive from trip_log); 32 signals from admiral_history all pre-fix (evidence timestamps 13:35–22:00 UTC, all before 255eb4b at 23:04 UTC); stall rate significantly reduced
+- vLLM 400s: 0; gemma4 container up 36h (unhealthy health check but functional); balancer PID 3175781 healthy on :8001
+- GH issues: 1 open (#18 Windows install — fixed in 2b0a5cb + 1de5d8a, shipped in v2.7.49)
+- Dispatch queue: harness=52609 (all pre-fix entries), retrieval=74 (0 actionable — all already ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all already current)
+- Action this tick: no fix committed. Fix 255eb4b (hallucinated-tool-aware stall nudge + glob in tool list) committed at 23:04 UTC, installed version still 2.7.50 (pre-fix); auto_release will deploy v2.7.51 at next 0/6/12/18 CDT tick. Infrastructure healthy, no new actionable patterns.
+
 ## 2026-05-07 00:35 UTC tick
 - Stress: PID 3209682 alive (tool_agent stress, --resume-from-step 18); llm_balancer PID 3175781 healthy on :8001; gemma4 container up; vLLM 400s: 0
 - Write rate: not sampled this tick
@@ -2599,3 +2609,13 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=51254, retrieval=74 (0 actionable, all ingested), steering=absent
 - retrieval-drain: 0 projects ingested (all 74 already current)
 - Action this tick: committed fix(write_file): actionable error + stall nudge for missing path argument (3c8228f, addresses pattern harness:thinking_stall). Root cause: write_file called with empty path raises terse "Path cannot be empty" ToolError, then model stalls with empty response. Fix: (1) improved ToolError lists cwd package dirs + retry example so model can immediately construct correct path; (2) stall nudge detects write_file empty-path error in tool result and injects targeted "retry write_file with correct path" message instead of generic "Continue working". 43 loop-detection tests pass. auto_release ships at next 0/6/12/18 CDT tick.
+
+## 2026-05-06 23:10 UTC tick
+- Stress: running (PID 3209682, stress_shakedown.py tool_agent --resume-from-step 18, alive 16+ hours)
+- Write rate: N/A (no progress file)
+- Admiral last 30 min: 46 bash_generic + 612 thinking_stall entries (21:00–23:00 UTC window)
+- vLLM 400s: 0; llamacpp-gemma4 healthy; balancer PID 3175781 healthy on :8001
+- GH issues: 1 open (#18 Windows install — already fixed by python-dotenv drop in 2b0a5cb + textual-ansi fix 1de5d8a, both shipped in v2.7.49)
+- Dispatch queue: harness=52507, retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: committed fix(stall): hallucinated-tool-aware nudge + add glob to tool list (255eb4b, addresses pattern harness:thinking_stall). Root cause: when model calls hallucinated tool (ralph_repo_index etc.), suppressed result says "call glob NOW" but generic stall nudge listed write_file/bash/read_file without glob — conflicting signals caused continued stalls. Fix adds hallucinated-tool detection (via "does not exist — do not call it again" in prior result) and injects directed glob/grep nudge; also adds glob to all generic nudge tool lists. 63 tests pass. auto_release ships at next 0/6/12/18 CDT tick.

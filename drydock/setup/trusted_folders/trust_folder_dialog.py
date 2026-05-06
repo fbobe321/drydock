@@ -151,7 +151,12 @@ class TrustFolderApp(App):
         self._quit_without_saving = False
 
     def on_mount(self) -> None:
-        self.theme = "textual-ansi"
+        # Tolerate missing textual-ansi theme (Textual 8.2.5+ may not
+        # register it). See same handling in DrydockApp.on_mount.
+        try:
+            self.theme = "textual-ansi"
+        except Exception:
+            pass
 
     def compose(self) -> ComposeResult:
         yield TrustFolderDialog(self.folder_path)
