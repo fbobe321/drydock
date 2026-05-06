@@ -19,7 +19,51 @@ import pytest
 from drydock.cli.textual_ui.widgets.messages import (
     AssistantMessage,
     _break_walls_of_text,
+    _preserve_line_breaks,
 )
+
+
+class TestTabIndentedBlocks:
+    """Regression: tab→2-space conversion combined with the paragraph-break
+    pass was inserting blank lines between every tab-indented line, jumbling
+    git-status output and similar tab-indented blocks."""
+
+    def test_tab_indented_block_stays_contiguous(self):
+        text = (
+            "Here's git status:\n\n"
+            "\tdeleted:    foo.py\n"
+            "\tdeleted:    bar.py\n"
+            "\tnew file:   baz.py\n\n"
+            "That's all."
+        )
+        out = _preserve_line_breaks(text)
+        assert "  deleted:    foo.py\n  deleted:    bar.py" in out
+        assert "  deleted:    bar.py\n  new file:   baz.py" in out
+
+    def test_list_with_tab_continuation_stays_tight(self):
+        text = "Steps:\n- Foo\n\tsubdetail\n- Bar"
+        out = _preserve_line_breaks(text)
+        assert "- Foo\n  subdetail\n- Bar" in out
+
+    def test_numbered_list_with_indented_continuation(self):
+        text = "Steps:\n1. Do foo\n   detail line\n2. Do bar"
+        out = _preserve_line_breaks(text)
+        assert "1. Do foo\n   detail line\n2. Do bar" in out
+
+    def test_python_indented_block_preserved(self):
+        text = "Here:\n    def foo():\n        return 1\nDone."
+        out = _preserve_line_breaks(text)
+        assert "    def foo():\n        return 1" in out
+
+    def test_prose_then_list_still_gets_paragraph_break(self):
+        text = "Here are the items.\n- First\n- Second"
+        out = _preserve_line_breaks(text)
+        assert "Here are the items.\n\n- First" in out
+
+    def test_two_normal_paragraphs_still_break(self):
+        text = "First sentence here.\nSecond sentence here."
+        out = _preserve_line_breaks(text)
+        assert "here.\n\nSecond" in out
 
 
 class TestBreakWallsOfText:

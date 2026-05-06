@@ -134,7 +134,7 @@ _INLINE_ASTERISK_BULLET_RE = re.compile(r"(?<=[a-zA-Z.!?\)]) (?=\* [A-Za-z][A-Za
 # this line is indented (3+ spaces) without starting a new bullet/number.
 # CommonMark requires the indent to render as part of the parent item.
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d{1,3}\.)\s")
-_CONTINUATION_INDENT_RE = re.compile(r"^   +\S")
+_CONTINUATION_INDENT_RE = re.compile(r"^  +\S")
 
 
 def _sentence_chunks(text: str, group: int = 2) -> str:
@@ -272,6 +272,20 @@ def _preserve_line_breaks(text: str) -> str:
         if (_CONTINUATION_INDENT_RE.match(line)
                 and _CONTINUATION_INDENT_RE.match(nxt)
                 and not _LIST_ITEM_RE.match(nxt)):
+            continue
+        # Continuation indent → list item: stay in tight-list mode.
+        # Inserting a blank line would convert to a loose list (extra
+        # spacing) AND in some renderers terminates the list entirely,
+        # turning subsequent items into separate one-item lists.
+        if (_CONTINUATION_INDENT_RE.match(line)
+                and _LIST_ITEM_RE.match(nxt)):
+            continue
+        # Two consecutive indented lines (any whitespace prefix on both)
+        # belong together as a contiguous block — preformatted/code/git
+        # status output, tab-indented sub-bullets converted to 2-space,
+        # etc. A blank line between them turns each line into its own
+        # paragraph, which is exactly the "tab+newline jumble" users see.
+        if (line[:1] in (" ", "\t") and nxt[:1] in (" ", "\t")):
             continue
         # Insert blank line for paragraph break.
         out.append("")

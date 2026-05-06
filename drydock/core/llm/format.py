@@ -353,9 +353,14 @@ class APIToolFormatHandler:
             # mini_db fresh build (called ralph_repo_index 5 times).
             "ralph_repo_index", "repo_index", "index_repo",
             "list_mcp_resources", "list_resources", "search_resources",
+            "read_mcp_resource", "read_resource", "get_resource",
             # Observed in stress run 2026-05-02: model hallucinates ralph_file_summary
             # after receiving tool results, causing empty_after_tool stalls.
             "ralph_file_summary", "file_summary", "repo_summary",
+            # Observed 2026-05-06 stress run: model invents `lsp` (language
+            # server) and `read_mcp_resource` after running out of obvious
+            # exploration tools. Suppress to break the empty_after_tool stall.
+            "lsp", "lsp_definition", "lsp_references",
         }
         # Subset of _IGNORE_TOOLS that are retrieval-flavored hallucinations.
         # When `retrieve` is registered, redirect the model there instead of
