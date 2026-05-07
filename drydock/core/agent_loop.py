@@ -1061,6 +1061,17 @@ class AgentLoop:
                     or "nothing added to commit" in _prev_tool_result
                 )
             )
+            # Detect bash that returned a successful git commit output.
+            # Signature: "[branch hash] message\n N file(s) changed".
+            # Without this, the model stalls after commit, gets "Continue working",
+            # then re-commits — wastes a round and adds a confusing duplicate commit.
+            import re as _re
+            _prev_bash_commit_succeeded = (
+                prev_tool_name in ("bash", "run_command")
+                and bool(_re.search(r"\[[\w/]+ [0-9a-f]{4,}\]", _prev_tool_result))
+                and "file" in _prev_tool_result
+                and "changed" in _prev_tool_result
+            )
             if _stall_attempt == 0:
                 if _prev_write_path_error:
                     note = (
@@ -1093,6 +1104,12 @@ class AgentLoop:
                         "The git working tree is clean — your commit already succeeded. "
                         "The task is COMPLETE. Respond with a short summary of what you did "
                         "and stop. Do NOT run another git commit or git add."
+                    )
+                elif _prev_bash_commit_succeeded:
+                    note = (
+                        "Your git commit succeeded. The task is COMPLETE. "
+                        "Respond with a short summary of what you changed and stop. "
+                        "Do NOT run git add or git commit again."
                     )
                 else:
                     note = (

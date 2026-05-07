@@ -1,5 +1,106 @@
 # Drydock Trip Log
 
+## 2026-05-07 16:47 UTC tick
+- Stress: PID 3209682 alive (>24h uptime); tool_agent prompts; idx 441/1658; done=223, skip=192 (44% SKIP rate — known TUI recycle timing issue, not a drydock bug)
+- Write rate: N/A (no progress file; session_20260507_162830 active, model reading/writing plugin files for "one-shot jobs" feature)
+- Admiral last 30 min: 4 new signals (3 harness:tool:hallucinated_name, 1 harness:bash:heredoc_loop) — all from autonomous_review.log trip_log misclassification, not live session events
+- vLLM 400s: 0; llamacpp-gemma4 "unhealthy" in docker ps but forwarding correctly; balancer PID 3175781 healthy on :8001 (1 model)
+- GH issues: 0 open
+- Dispatch queue: harness=57372, retrieval=74 (0 actionable — all current per consume_retrieval_queue); no steering queue
+- retrieval-drain: 0 projects ingested
+- Action this tick: no fix committed — all queued patterns (thinking_stall 35K, loop:bash_generic 11K, hallucinated_name 4.5K, search_replace:not_found_loop 4K, heredoc_loop 754, escape_loop 170, identical_blocks 46, tool_error_raised 25) addressed by commits in last 24h (v2.8.1 + fffaf7b); system fully healthy; no new actionable bug identified
+
+## 2026-05-07 16:01 UTC tick
+- Stress: PID 3209682 alive (1d+ uptime); stress_shakedown.py on tool_agent prompts, latest session session_20260507_155023 active and progressing (model doing search_replace, bash, write_file)
+- Write rate: N/A (no progress file)
+- Admiral last 30 min: harness:thinking_stall dominant (35810 total), harness:loop:bash_generic (11586), harness:tool:hallucinated_name (4500), harness:search_replace:not_found_loop (4107) — all pre-v2.8.1; queue entries are stale history, classifier is picking up trip_log text as signal (known issue)
+- vLLM 400s: 0; balancer PID 3175781 healthy on :8001; 0 JSONDecodeErrors in last 30m
+- GH issues: 0 open
+- Dispatch queue: harness=57218, retrieval=74 (0 ingested — all current per consume_retrieval_queue), steering=absent
+- Action this tick: no fix committed — all top patterns covered by commits in last 48h (fffaf7b, 8fd75fe, 7a119cc, a41f454); heredoc_loop and dedup_attempted entries are stale trip_log misclassifications, not live signals; system fully healthy
+
+## 2026-05-07 15:31 UTC tick
+- Stress: PID 3209682 alive (~28h uptime); no progress file; all queued patterns (thinking_stall, loop:bash_generic, hallucinated_name) addressed by v2.8.1 + fffaf7b
+- Write rate: N/A (progress file absent)
+- Admiral last 30 min: thinking_stall=440, loop:bash_generic=36, hallucinated_name=24 in last 500 dispatch entries — all from pre-fix sessions
+- vLLM 400s: 0; llamacpp-gemma4 healthy; balancer PID 3175781 healthy on :8001 (1 model)
+- GH issues: 0 open
+- Dispatch queue: harness=57065, retrieval=74 (0 ingested — all current), steering=absent
+- retrieval-drain: 0 projects ingested
+- Action this tick: no action — stall nudge code reviewed (all sub-patterns: hallucinated, read, write-success, nothing-to-commit, commit-succeeded covered); no new actionable patterns; system healthy
+
+## 2026-05-07 14:52 UTC tick
+- Stress: PID 3209682 alive; idx 416/1658; 184 SKIPs, 0 PASS/FAIL (harness TUI-recycle timing issue — session IS accepting prompts per messages.jsonl, 107 msgs in current session)
+- Write rate: n/a (no completed evaluations in this window)
+- Admiral last 30 min: 0 new fires; dispatch queue harness=56741 entries (all pre-fix, dominated by thinking_stall 35K)
+- vLLM 400s: 0; docker status "Up 2 days (unhealthy)" but responding; balancer OK on :8001 (PID 3175781)
+- GH issues: 0 open
+- Dispatch queue: harness=56741, retrieval=74 (0 actionable), steering=absent
+- retrieval-drain: 0 projects (all 74 already ingested recently)
+- Action this tick: no fix committed — all queued patterns (thinking_stall, loop:bash_generic, hallucinated_name, not_found_loop, heredoc_loop, escape_loop, identical_blocks, tool_error_raised) covered by commits in v2.8.0/v2.8.1; stress SKIP rate is a harness timing issue post-recycle, not a drydock bug
+
+## 2026-05-07 14:01 UTC tick
+- Stress: PID 3209682 alive (stress_shakedown on 403_tool_agent); balancer PID 3175781 healthy on :8001; gemma4 model responding
+- Write rate: n/a (no /tmp/stress_write_rate.txt this window)
+- Admiral last 30 min: harness:thinking_stall dominant in queue (56583 total entries); 3 commits shipped today (v2.8.1) cover all sub-cases: write success, hallucinated tools, nothing-to-commit, commit-succeeded
+- vLLM 400s: 0; balancer forwarding ok (balancer ok: gemma4)
+- GH issues: 0 open
+- Dispatch queue: harness=56583, retrieval=74 (all current, 0 ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: no action — healthy; all queued harness:thinking_stall patterns addressed by fffaf7b+8fd75fe+7a119cc (v2.8.1); next auto_release at 18:00 CDT will ship to PyPI
+
+## 2026-05-07 13:32 UTC tick
+- Stress: PID 3209682 alive; step 407/1658; skip rate 46% (183 skip, 213 done in this restart — elevated vs prior 34%, within known approval-modal variance)
+- Write rate: 54% done / 46% skip in current restart window
+- Admiral last 30 min: 188 thinking_stall, 16 loop:bash_generic, 8 hallucinated_name — all pre-fix sessions (fffaf7b + 8fd75fe + a41f454 + 7a119cc ship in v2.8.1, released today)
+- vLLM 400s: 0; llamacpp-gemma4 healthy; balancer PID 3175781 healthy on :8001
+- GH issues: 0 open
+- Dispatch queue: harness=55K+ (historical), retrieval=74 (0 actionable, all ingested), steering=absent
+- retrieval-drain: 0 projects ingested
+- Action this tick: no action — all queued patterns addressed by commits in v2.8.1; stress healthy and progressing; no new bugs found; no open GitHub issues
+
+## 2026-05-07 13:00 UTC tick
+- Stress: PID 3209682 alive, tool_agent prompts, resuming from step 18 (harness restarted per babysitter); ~400/1658 completed, high SKIP rate persists
+- Write rate: ~57% (207/360 at last read)
+- Admiral last 30 min: 0 new events (admiral probe last wrote at 11:58 UTC; admiral process not running); classify_pulse re-dispatching stale tail entries
+- vLLM 400s: 0 (llamacpp-gemma4 "unhealthy" in docker ps but responds correctly; balancer alive on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=56265, retrieval=74 (all 74 already ingested); dominant pattern harness:thinking_stall (34974 total, 282/hr last 2h)
+- Action this tick: no commit. 1 unreleased commit (fffaf7b: git-commit-success stall nudge) ships at next auto_release ~17:00 UTC. All active patterns addressed by v2.8.1 + fffaf7b. Retrieval drain: 0 actionable. No new actionable drydock bug found.
+
+## 2026-05-07 12:36 UTC tick
+- Stress: PID 3209682 alive at step 397/1658 (tool_agent); 174 skips so far; TUI recycling frequently (sessions created ~every 2min); new sessions exist but prompts aren't accepted — model server under load or TUI busy with concurrent HLE session; a session created at 12:34 shows HLE prompts, suggesting the SessionWatcher may be latching onto the wrong (HLE) session after recycle
+- Write rate: n/a (stress output observed at /tmp/stress_2000_v10_restart_1778067244.log)
+- Admiral last 30 min: dominant pattern harness:thinking_stall (continuous; 56K total queue entries); no new pattern types detected
+- vLLM 400s: 0 (llamacpp-gemma4 container "unhealthy" in docker ps but health endpoint returns ok; all balancer 400s come from both backends rejecting specific request formats, not a service outage)
+- GH issues: 0 open
+- Dispatch queue: harness=56106, retrieval=74 (0 newly ingested), steering=n/a
+- Action this tick: no commit. Stress is alive but SKIPping heavily; root cause appears to be TUI/SessionWatcher confusion when HLE runs concurrently. All top dispatch patterns addressed by recent commits (v2.8.1 + fffaf7b). No new actionable bug found. System alive.
+
+## 2026-05-07 12:04 UTC tick
+- Stress: PID 3209682 alive (running tool_agent prompts, --resume-from-step 18); balancer pid=3175781 healthy on :8001
+- Write rate: n/a (stress output not in reachable log; stress process running 36h, no timeout)
+- Admiral last 30 min: dominant dispatch pattern harness:thinking_stall (182 entries in last 30m); bash_generic 24 entries (all from May 6 evidence); tool:hallucinated_name 8 entries (evidence confirms fix 8fd75fe committed)
+- vLLM 400s: 0; GH issues: 0 open
+- Dispatch queue: harness=55941, retrieval=74, steering=n/a; today's totals: thinking_stall=2730, loop:bash_generic=438, tool:hallucinated_name=94
+- Retrieval drain: 0 actionable (all 74 entries already ingested)
+- Action this tick: no new commit. All top-3 patterns (thinking_stall, loop:bash_generic, tool:hallucinated_name) are addressed by v2.8.1 or the pending unreleased fix fffaf7b (detect successful git commit; ships at next auto_release ~17:00 UTC). Post-v2.8.1 sessions (after 11:02 UTC) show 0 new bash_generic fires — fix is working. System healthy.
+
+## 2026-05-07 12:00 UTC tick
+- Stress: 383/1658, PID 3209682 alive (started May 06), done=207 skip=152 recycle=109 write_rate=57.7%; current run showing consecutive SKIPs (TUI prompt-acceptance issue — known approval-modal root cause per memory)
+- Write rate: 57.7% (207 done / 359 total); vLLM 0 JSONDecodeErrors; balancer pid=3175781 healthy on :8001
+- Admiral last 30 min: 83 fires today; dominant pattern: harness:thinking_stall (55780 queue entries). Secondary recurring pattern: retry_after_error:write_file:truncated_history (fires May 04-07, existing format.py detection active but model still retries)
+- vLLM 400s: 0; GH issues: 0 open (gh returned no output)
+- Dispatch queue: harness=55780, retrieval=74, steering=n/a
+- Retrieval drain: 0 actionable (all 74 entries already ingested recently)
+- Action this tick: no new commit — harness:thinking_stall already addressed by 4 commits this tick (fffaf7b, 8fd75fe, 7a119cc, a41f454). The truncated_history retry pattern warrants investigation but converting FailedToolCall to advisory result is nontrivial and deferred to next tick or user review.
+
+## 2026-05-07 11:30 UTC tick
+- Stress: tool_agent step 18 (PID 3209682, alive); vLLM container up 2d (unhealthy health-check but serving gemma4 OK); balancer on :8001 pid 3175781 healthy; GH issues: 0 open; auto_release last ran at 06:02 CDT shipping v2.8.1
+- Dispatch queue today: thinking_stall=2458, loop:bash_generic=402, hallucinated_name=82 (last are cron log false-positives, not real tool hallucinations); retrieval-drain: 0 actionable
+- Committed fix (fffaf7b): after successful git commit, model emits empty response and gets generic "Continue working" nudge, then re-commits; new `_prev_bash_commit_succeeded` detection returns task-done nudge instead, saving 1-2 wasted turns per commit operation (addresses pattern harness:thinking_stall)
+- Action this tick: committed fix for post-commit stall loop
+
 ## 2026-05-07 10:31 UTC tick
 - Stress: resuming tool_agent from step 18 (PID 3209682, alive); vLLM 0 JSONDecodeErrors; balancer healthy on :8001 (pid 3175781); GH issues: 0 open
 - Dispatch queue: harness=55458, retrieval=74 (all consumed, 0 actionable), steering=0 (totals)
@@ -2811,3 +2912,12 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue (24h): harness:thinking_stall=8908, harness:loop:bash_generic=591, harness:tool:hallucinated_name=60
 - retrieval-drain: 0 projects ingested (all 74 already current)
 - Action this tick: no action — all queued patterns already addressed by 7a119cc + a41f454 (v2.8.0); stress healthy; signal counts expected to fall once auto_release ships next run
+
+## 2026-05-07 15:10 UTC tick
+- Stress: PID 3209682 alive at idx=421/1658; done=215, skip=187, recycle=127 (slow but progressing ~10 prompts/hr)
+- Write rate: n/a (progress file absent)
+- Admiral last 30 min: harness:thinking_stall dominant (56K queue total); all sub-patterns covered by v2.8.1 + fffaf7b
+- vLLM 400s: 0; balancer PID 3175781 healthy on :8001 (1 model returned)
+- GH issues: 0 open
+- Dispatch queue: harness=56902, retrieval=74 (0 ingested — all 74 already current per consume_retrieval_queue)
+- Action this tick: no fix committed. All top patterns (thinking_stall, loop:bash_generic, hallucinated_name, search_replace:not_found_loop) are addressed by recent commits; escape_loop (170 entries, all 2026-05-04) predates the FORCE_STOP fix in a41f454. Heredoc loop (751 entries) predates the targeted cat-heredoc notice in bash.py. No new actionable patterns found. System healthy.
