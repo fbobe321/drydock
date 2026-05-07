@@ -83,6 +83,13 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--setup", action="store_true", help="Setup API key and exit")
     parser.add_argument(
+        "--fix-windows-path",
+        action="store_true",
+        help="Add the per-user Python Scripts directory to user PATH on Windows "
+        "(no-op on Linux/macOS). Useful when `pip install --user drydock-cli` "
+        "warned that drydock.exe is not on PATH.",
+    )
+    parser.add_argument(
         "--doctor",
         action="store_true",
         help="Check ~/.drydock/config.toml for drift vs. package defaults and exit",
@@ -185,6 +192,10 @@ def check_and_resolve_trusted_folder() -> None:
 
 def main() -> None:
     args = parse_arguments()
+
+    if getattr(args, "fix_windows_path", False):
+        from drydock.cli.fix_windows_path import fix_windows_path
+        sys.exit(fix_windows_path())
 
     if getattr(args, "doctor", False):
         from drydock.core.config.doctor import run_doctor

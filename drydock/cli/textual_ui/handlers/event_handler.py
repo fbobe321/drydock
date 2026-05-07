@@ -76,12 +76,14 @@ class EventHandler:
                     loading_widget.set_status(
                         f"\u2693 {get_state_term('reason')}"
                     )
+                    loading_widget.add_streamed_chars(len(event.content or ""))
                 await self._handle_reasoning_message(event)
             case AssistantEvent():
                 if loading_widget:
                     loading_widget.set_status(
                         f"\u2693 {get_state_term('reason')}"
                     )
+                    loading_widget.add_streamed_chars(len(event.content or ""))
                 await self._handle_assistant_message(event)
             case ToolCallEvent():
                 # Finalize assistant content stream (user-visible text) but

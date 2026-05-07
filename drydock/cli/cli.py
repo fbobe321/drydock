@@ -65,6 +65,15 @@ def load_config_or_exit() -> DrydockConfig:
 def bootstrap_config_files() -> None:
     mgr = get_harness_files_manager()
     config_file = mgr.user_config_file
+    if config_file.exists():
+        # Forward-migrate existing configs: add any new schema keys
+        # (e.g. context_window, auto_compact_threshold) that drydock has
+        # introduced since the file was first written. Safe and idempotent.
+        try:
+            from drydock.core.config.migrate import migrate_user_config
+            migrate_user_config(config_file)
+        except Exception as e:  # migration must never break startup
+            logger.debug("config migration failed: %s", e)
     if not config_file.exists():
         try:
             config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -88,6 +97,20 @@ def bootstrap_config_files() -> None:
                         f"  Using model: [cyan]{info.model_name}[/]\n"
                         f"  To use a different LLM, run [cyan]drydock --setup[/] "
                         f"or edit [cyan]{config_file}[/]"
+                    )
+                else:
+                    # No local server answering — default config already
+                    # points at llama.cpp on http://127.0.0.1:8000/v1 with
+                    # active_model="local". Tell the user so they know what
+                    # endpoint drydock will try, and how to point it
+                    # elsewhere if needed.
+                    rprint(
+                        "[yellow]No local LLM server detected.[/]\n"
+                        "  Defaulting to [cyan]llama.cpp at "
+                        "http://127.0.0.1:8000/v1[/] (OpenAI-compatible).\n"
+                        "  Start a server on that port, run "
+                        "[cyan]drydock --setup[/], or edit "
+                        f"[cyan]{config_file}[/] to use a different URL."
                     )
             except Exception as e:  # detection must never break first launch
                 logger.debug("local-LLM detection failed: %s", e)

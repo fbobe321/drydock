@@ -169,6 +169,43 @@ uv tool install drydock-cli
 > trace back to missing vLLM flags (`--tool-call-parser gemma4`,
 > `--enable-auto-tool-choice`) or temperature/thinking config drift.
 
+### Windows: `drydock` not found after install
+
+Pip on Windows often warns:
+
+```
+WARNING: The scripts drydock.exe and drydock-acp.exe are installed in
+'C:\Users\<you>\AppData\Roaming\Python\Python3xx\Scripts' which is not on PATH.
+```
+
+This is a generic `pip install --user` warning, not a drydock bug — Windows
+doesn't add the per-user scripts directory to `PATH` by default. Three
+workarounds, in increasing convenience:
+
+**Option A — invoke without the shim (always works):**
+```powershell
+python -m drydock
+```
+
+**Option B — install in a venv (recommended):**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install drydock-cli
+drydock
+```
+
+**Option C — add the user-scripts directory to PATH once.** Drydock ships
+a one-shot helper:
+```powershell
+python -m drydock --fix-windows-path
+```
+This appends `%APPDATA%\Python\Python3xx\Scripts` to your **user** `PATH`
+environment variable (no admin required, no system PATH touched). Open a
+fresh PowerShell session and `drydock` will resolve. To do it manually:
+**System Properties → Environment Variables → User variables → Path → Edit
+→ New →** paste the directory the warning printed.
+
 ## Quick Start
 
 ```bash

@@ -26,13 +26,17 @@ from dataclasses import dataclass
 
 
 # (label, api_base) — order matters: try most-likely first.
-# We try llama-server first (per the upstream PRD draft's recommended
-# Q3_K_M setup), then Ollama (largest install base of the four), then
-# vLLM (drydock's own dev stack), then LM Studio.
+# Drydock's documented default is llama.cpp on port 8000 (matches the
+# Q3_K_M startup recipe in CLAUDE.md and start_gemma4.sh). Probe that
+# first, then fall back to llama-server's own upstream default (8080),
+# Ollama, then LM Studio. Note: vLLM also commonly runs on 8000, so a
+# vLLM box with an OpenAI-compat /v1 surface will be picked up by the
+# first probe and labeled "llama.cpp" — harmless, both speak the same
+# protocol from drydock's perspective.
 _CANDIDATE_ENDPOINTS: list[tuple[str, str]] = [
+    ("llama.cpp", "http://127.0.0.1:8000/v1"),
     ("llama.cpp", "http://127.0.0.1:8080/v1"),
     ("Ollama",    "http://127.0.0.1:11434/v1"),
-    ("vLLM",      "http://127.0.0.1:8000/v1"),
     ("LM Studio", "http://127.0.0.1:1234/v1"),
 ]
 

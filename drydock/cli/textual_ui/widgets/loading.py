@@ -28,6 +28,19 @@ def _format_elapsed(seconds: int) -> str:
     return f"{hours}h{mins}m{secs}s"
 
 
+# Rough chars-per-token ratio for English + code. Good enough for a
+# liveness indicator — never used for billing or context-window math.
+_CHARS_PER_TOKEN = 4
+
+
+def _format_tokens(n_tokens: int) -> str:
+    if n_tokens < 1000:  # noqa: PLR2004
+        return f"{n_tokens} tokens"
+    if n_tokens < 10_000:  # noqa: PLR2004
+        return f"{n_tokens / 1000:.1f}k tokens"
+    return f"{n_tokens // 1000}k tokens"
+
+
 class LoadingWidget(SpinnerMixin, Static):
     TARGET_COLORS = ("#0077B6", "#0096C7", "#00B4D8", "#48CAE4", "#90E0EF")
     SPINNER_TYPE = SpinnerType.WAVE
@@ -81,6 +94,12 @@ class LoadingWidget(SpinnerMixin, Static):
         self._paused_total: float = 0.0
         self._pause_start: float | None = None
         self._last_status_change: float = 0.0
+        # Streaming-liveness counter. Counts characters (cheap) and
+        # converts to an estimated token count for display so the user
+        # can see the LLM is actively producing output even when the
+        # elapsed-seconds tick is too coarse to feel "alive."
+        self._streamed_chars: int = 0
+        self._last_displayed_tokens: int = -1
 
     def _get_easter_egg(self) -> str | None:
         EASTER_EGG_PROBABILITY = 0.10
@@ -113,6 +132,10 @@ class LoadingWidget(SpinnerMixin, Static):
         if self._pause_start is not None:
             self._paused_total += time() - self._pause_start
             self._pause_start = None
+
+    def add_streamed_chars(self, n: int) -> None:
+        if n > 0:
+            self._streamed_chars += n
 
     def set_status(self, status: str) -> None:
         # Throttle status word changes to prevent flicker
@@ -194,11 +217,18 @@ class LoadingWidget(SpinnerMixin, Static):
                 time() - self._pause_start if self._pause_start else 0
             )
             elapsed = int(time() - self.start_time - paused)
-            if elapsed != self._last_elapsed:
+            tokens = self._streamed_chars // _CHARS_PER_TOKEN
+            if elapsed != self._last_elapsed or tokens != self._last_displayed_tokens:
                 self._last_elapsed = elapsed
-                self.hint_widget.update(
-                    f"({_format_elapsed(elapsed)} esc to interrupt)"
-                )
+                self._last_displayed_tokens = tokens
+                if tokens > 0:
+                    hint = (
+                        f"({_format_elapsed(elapsed)} ↓ "
+                        f"{_format_tokens(tokens)} · esc to interrupt)"
+                    )
+                else:
+                    hint = f"({_format_elapsed(elapsed)} esc to interrupt)"
+                self.hint_widget.update(hint)
 
 
 @contextmanager

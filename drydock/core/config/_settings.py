@@ -280,7 +280,7 @@ DEFAULT_PROVIDERS = [
     ),
     ProviderConfig(
         name="llamacpp",
-        api_base="http://127.0.0.1:8080/v1",
+        api_base="http://127.0.0.1:8000/v1",
         api_key_env_var="",  # NOTE: if you wish to use --api-key in llama-server, change this value
     ),
 ]
@@ -311,7 +311,7 @@ DEFAULT_MODELS = [
 
 
 class DrydockConfig(BaseSettings):
-    active_model: str = "devstral-2"
+    active_model: str = "local"
     vim_keybindings: bool = False
     disable_welcome_banner_animation: bool = False
     autocopy_to_clipboard: bool = True
