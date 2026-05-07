@@ -183,19 +183,22 @@ class TestExactRepeatDetection:
         assert al._check_tool_call_repetition() is None
 
     def test_warning_at_threshold(self):
+        # Use write_file (not bash) — bash has a tighter 3-consecutive FORCE_STOP
+        # that fires before the generic WARNING_THRESHOLD=4.
         al = _make_agent()
-        args = '{"command":"ls -ltr"}'
+        args = '{"path":"foo.py","content":"x"}'
         for _ in range(REPEAT_WARNING_THRESHOLD):
-            _add_tool_call(al, "bash", args)
+            _add_tool_call(al, "write_file", args)
         result = al._check_tool_call_repetition()
         assert result is not None
         assert "WARNING" in result
 
     def test_below_threshold_returns_none(self):
+        # Use write_file with different paths — same path triggers Check 5 at 3
+        # (single-file rewrite), and bash has a 3-consecutive FORCE_STOP.
         al = _make_agent()
-        args = '{"command":"ls -ltr"}'
-        for _ in range(REPEAT_WARNING_THRESHOLD - 1):
-            _add_tool_call(al, "bash", args)
+        for i in range(REPEAT_WARNING_THRESHOLD - 1):
+            _add_tool_call(al, "write_file", f'{{"path":"file{i}.py","content":"x"}}')
         assert al._check_tool_call_repetition() is None
 
     def test_force_stop_at_threshold(self):
@@ -367,6 +370,24 @@ class TestBashExplorationLoop:
         assert result == "FORCE_STOP"
         assert getattr(al, "_hot_tool_path", None) == ("bash", cmd)
 
+    def test_3_consecutive_identical_bash_triggers(self):
+        """3 consecutive identical bash commands → FORCE_STOP (consecutive check)."""
+        al = _make_agent()
+        cmd = 'python3 -c "import re; match = re.match(r\'([^=!<>]+)(==|!=)\', \'age>25\')"'
+        for _ in range(3):
+            _add_tool_call(al, "bash", json.dumps({"command": cmd}))
+        result = al._check_tool_call_repetition()
+        assert result == "FORCE_STOP"
+
+    def test_2_consecutive_identical_bash_no_force_stop(self):
+        """2 identical bash commands should not fire FORCE_STOP."""
+        al = _make_agent()
+        cmd = "python3 app.py"
+        for _ in range(2):
+            _add_tool_call(al, "bash", json.dumps({"command": cmd}))
+        result = al._check_tool_call_repetition()
+        assert result != "FORCE_STOP"
+
     def test_5_identical_bash_triggers(self):
         """5 identical bash calls in a row → FORCE_STOP."""
         al = _make_agent()
@@ -383,8 +404,8 @@ class TestBashExplorationLoop:
         for _ in range(4):
             _add_tool_call(al, "bash", json.dumps({"command": cmd}))
         result = al._check_tool_call_repetition()
-        # Should not trigger the bash-exploration check
-        assert result != "FORCE_STOP"
+        # 4 consecutive should still trigger the new consecutive check
+        assert result == "FORCE_STOP"
 
     def test_varied_bash_no_trigger(self):
         """Different bash commands should not trigger."""

@@ -1038,13 +1038,28 @@ class AgentLoop:
                 and "empty path" in _prev_tool_result
             )
             # Detect if prior tool was a hallucinated/suppressed tool call.
-            _prev_was_hallucinated = "does not exist — do not call it again" in _prev_tool_result
+            # Check against the live tool registry — the "does not exist" string
+            # is only in the system note, not the tool result, so string matching fails.
+            _prev_was_hallucinated = (
+                prev_tool_name is not None
+                and prev_tool_name not in self.tool_manager.available_tools
+            )
             # Detect successful write (no error keywords in result).
             _prev_write_success = (
                 _prev_was_write
                 and not _prev_write_path_error
                 and "Error" not in _prev_tool_result
                 and "error" not in _prev_tool_result[:50]
+            )
+            # Detect bash that returned "nothing to commit" / "working tree clean"
+            # → model is done; stall nudge should say so, not "continue working".
+            _prev_bash_nothing_to_commit = (
+                prev_tool_name in ("bash", "run_command")
+                and (
+                    "nothing to commit" in _prev_tool_result
+                    or "working tree clean" in _prev_tool_result
+                    or "nothing added to commit" in _prev_tool_result
+                )
             )
             if _stall_attempt == 0:
                 if _prev_write_path_error:
@@ -1072,6 +1087,12 @@ class AgentLoop:
                         "You wrote a file successfully. Continue to the NEXT step: "
                         "write the next file in your plan, or run bash to test what "
                         "you have built so far. Do NOT re-read files you just wrote."
+                    )
+                elif _prev_bash_nothing_to_commit:
+                    note = (
+                        "The git working tree is clean — your commit already succeeded. "
+                        "The task is COMPLETE. Respond with a short summary of what you did "
+                        "and stop. Do NOT run another git commit or git add."
                     )
                 else:
                     note = (
@@ -2675,6 +2696,13 @@ class AgentLoop:
                             pass
             if _total_tc >= 20:
                 break
+        # Consecutive check: 3+ identical bash commands in a row → FORCE_STOP.
+        # The admiral nudges at 3 consecutive identical calls; without a hard
+        # stop here the model runs 2–4 more before the 5-total check below fires.
+        # (_bash_cmds is newest-first, so [0][1][2] = last 3 in order)
+        if len(_bash_cmds) >= 3 and _bash_cmds[0] == _bash_cmds[1] == _bash_cmds[2]:
+            self._hot_tool_path = ("bash", _bash_cmds[0])
+            return "FORCE_STOP"
         if len(_bash_cmds) >= 5:
             from collections import Counter as _Counter
             _cmd_counts = _Counter(_bash_cmds)
