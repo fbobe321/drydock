@@ -1,5 +1,55 @@
 # Drydock Trip Log
 
+## 2026-05-07 03:03 UTC tick
+- Stress: 280/1658 (PID 3209682 alive, 15h27m elapsed); done=164, skip=97 (~37% skip rate — approval modal, known); balancer OK, vLLM 400s=0
+- Write rate: ~63% (164 done of 261 non-skip)
+- Admiral last 30 min: dominant patterns: thinking_stall (166/200 recent dispatches), bash_generic (30/200); harness total=53413, retrieval=74 (0 actionable)
+- vLLM 400s: 0; llamacpp-gemma4 healthy; balancer PID 3175781 on :8001
+- GH issues: 0 open
+- Dispatch queue: harness=53413, retrieval=74 (0 actionable), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: committed fix(stall): targeted nudge after successful write_file/search_replace (7243bff, addresses pattern harness:thinking_stall). Root cause: write_file/search_replace stalls fell through to generic "Continue working" nudge that unhelpfully listed read_file as a suggestion — backward motion. Fix adds _prev_write_success detection (write_file or search_replace, no error in result) → injects "You wrote a file. Continue to the NEXT step: write the next file or run bash to test." Dispatch data shows 454 write_file stalls vs 460 read_file stalls in last 2000 harness entries. 63 tests pass.
+
+## 2026-05-07 03:05 UTC tick
+- Stress: idx=270/1658 (PID 3209682 alive, 14h30m elapsed); done=163, skip=88, recycle=68; skip rate ~33% (approval modal root cause, unchanged)
+- Write rate: ~61% (163 done of 251 non-skip)
+- Admiral last 30 min: 4 new thinking_stall + 4 bash_generic entries in queue since prior tick; dominant patterns: thinking_stall (32458), loop:bash_generic (11142) — both addressed by 255eb4b / f60841c
+- vLLM 400s: 0 (last 30m); balancer PID 3175781 healthy on :8001; gemma4 Docker up
+- GH issues: 0 open
+- Dispatch queue: harness=53287 (+126 since prior tick), retrieval=74 (0 actionable)
+- retrieval-drain: 0 projects ingested (all current)
+- Action this tick: no new fix — all queued patterns addressed by recent commits; no new drydock bugs found; stress progressing at ~27 steps/hour, on track
+
+## 2026-05-07 02:30 UTC tick
+- Stress: PID 3209682 alive (tool_agent stress, step ~270/1658, 14h elapsed); done=163, skip=88, recycle=68; skip rate ~33% (approval modal root cause, known)
+- Write rate: ~60% (163 done of 251 attempted); consistent with prior ticks
+- Admiral last 30 min: dispatch queue harness=53161 total; most-fired patterns: thinking_stall (32353), loop:bash_generic (11124), tool:hallucinated_name (4362) — all addressed by recent commits (255eb4b, 3c8228f)
+- vLLM 400s: 0 (last 30m); Docker gemma4 up 39h (unhealthy flag, functional); balancer PID 3175781 healthy on :8001
+- GH issues: 0 open
+- Dispatch queue: harness=53161, retrieval=74 (0 actionable, all current), steering=absent
+- retrieval-drain: 0 projects ingested (all 74 already current)
+- Action this tick: no new fix — graphrag stopword fix (f60841c) was committed by the 21:00 UTC tick; nothing new actionable in dispatch queue; all queued patterns addressed by v2.7.51/52 commits. auto_release will ship f60841c at next 0/6/12/18 CDT tick.
+
+## 2026-05-07 00:34 UTC tick
+- Stress: PID 3209682 alive (tool_agent stress, step 253/1658); nearly 100% SKIP rate since step 20 — root cause identified: `403_tool_agent` was missing from `~/.drydock/trusted_folders.toml`, so every TUI recycle showed the Trust dialog which blocked chat input; harness's `child.before` check for "Trust this folder" wasn't catching it post-match
+- Write rate: effectively 0% this tick (all SKIPs); recovery expected after next recycle (~2 min from fix)
+- Admiral last 30 min: harness:thinking_stall (multiple evidence entries, all pre-fix 255eb4b); harness:loop:bash_generic (nudges already firing via admiral)
+- vLLM 400s: 0; llamacpp-gemma4 up 37h (unhealthy healthcheck but functional via balancer); balancer PID 3175781 healthy on :8001
+- GH issues: 0 open (gh returned blank — #18 was closed last tick)
+- Dispatch queue: harness=52823 (+108 since last tick, all thinking_stall/loop:bash_generic), retrieval=74 (0 actionable — all already ingested)
+- retrieval-drain: 0 projects ingested (all already current)
+- Action this tick: added `/data3/drydock_test_projects/403_tool_agent` to trusted_folders.toml (config-only fix, no commit); next TUI recycle will spawn without Trust dialog and SKIPs should drop back to baseline ~31%
+
+## 2026-05-07 00:10 UTC tick
+- Stress: PID 3209682 alive (tool_agent stress, step 248/1658); latest session at 19:01 CDT, currently between sessions; ~230 prompts attempted, 71 SKIPs (~31% SKIP rate from TUI approval-modal issue, expected); TUI-recycle recovery working
+- Write rate: ~69% non-skip
+- Admiral last 30 min: loop:bash_generic pattern firing (12 total entries, admiral nudges already covering via canned+opus); thinking_stall addressed in 255eb4b; no new unaddressed pattern classes
+- vLLM 400s: 0; balancer OK (gemma4 on :8001)
+- GH issues: 1 open (#18 Windows install) — CLOSED this tick; all fixes shipped in v2.7.49 (Textual theme fallback, python-dotenv dropped); left closing comment
+- Dispatch queue: harness=52715, retrieval=74 (0 actionable — all recently ingested), steering=absent
+- retrieval-drain: 0 projects ingested (all already current)
+- Action this tick: closed GH #18 with closing comment; loop:bash_generic already handled by admiral nudges, no source fix needed; infrastructure healthy
+
 ## 2026-05-06 23:33 UTC tick
 - Stress: PID 3209682 alive (tool_agent stress), at 243/1658; stress_shakedown.log not present (output in /tmp/stress_2000_v10.log.current); current session (233106) on image_to_ascii prompts, no admiral stalls detected post-fix
 - Write rate: not sampled this tick
@@ -2619,3 +2669,13 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=52507, retrieval=74 (0 actionable, all ingested), steering=absent
 - retrieval-drain: 0 projects ingested (all 74 already current)
 - Action this tick: committed fix(stall): hallucinated-tool-aware nudge + add glob to tool list (255eb4b, addresses pattern harness:thinking_stall). Root cause: when model calls hallucinated tool (ralph_repo_index etc.), suppressed result says "call glob NOW" but generic stall nudge listed write_file/bash/read_file without glob — conflicting signals caused continued stalls. Fix adds hallucinated-tool detection (via "does not exist — do not call it again" in prior result) and injects directed glob/grep nudge; also adds glob to all generic nudge tool lists. 63 tests pass. auto_release ships at next 0/6/12/18 CDT tick.
+
+## 2026-05-07 01:32 UTC tick
+- Stress: 265/1658, step ~14h running; write rate 66% (158 done, 80 skip); skip rate stable at ~34% (known approval modal issue — project_tui_skip_root_cause.md)
+- vLLM 400s: 0 (last 1h); Docker container up 38h (unhealthy flag but functional)
+- llm_balancer: PID 3175781, healthy on :8001
+- Admiral last 30 min: 36 signals (30 thinking_stall, 6 loop:bash_generic) — all from pre-fix sessions
+- GH issues: 0 open
+- Dispatch queue: harness=53047 (historical pre-fix), retrieval=74 (0 actionable, all ingested)
+- retrieval-drain: 0 projects ingested
+- Action this tick: no action — all queued patterns already addressed by 255eb4b (v2.7.51); stress healthy; no new bugs found

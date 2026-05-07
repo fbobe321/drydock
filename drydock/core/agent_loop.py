@@ -1026,7 +1026,9 @@ class AgentLoop:
                         and assistant_msg.tool_calls):
                     prev_tool_name = assistant_msg.tool_calls[-1].function.name if assistant_msg.tool_calls[-1].function else None
             _readonly_tools = {"read_file", "grep", "glob", "ls", "pwd"}
+            _write_tools = {"write_file", "search_replace"}
             _prev_was_read = prev_tool_name in _readonly_tools
+            _prev_was_write = prev_tool_name in _write_tools
             # Detect if prior write_file failed due to missing path argument.
             _prev_tool_result = ""
             if prev_role == Role.tool and self.messages:
@@ -1037,6 +1039,13 @@ class AgentLoop:
             )
             # Detect if prior tool was a hallucinated/suppressed tool call.
             _prev_was_hallucinated = "does not exist — do not call it again" in _prev_tool_result
+            # Detect successful write (no error keywords in result).
+            _prev_write_success = (
+                _prev_was_write
+                and not _prev_write_path_error
+                and "Error" not in _prev_tool_result
+                and "error" not in _prev_tool_result[:50]
+            )
             if _stall_attempt == 0:
                 if _prev_write_path_error:
                     note = (
@@ -1058,9 +1067,15 @@ class AgentLoop:
                         f"Now use write_file, search_replace, or bash "
                         f"to make changes — do NOT call read_file again."
                     )
+                elif _prev_write_success:
+                    note = (
+                        "You wrote a file successfully. Continue to the NEXT step: "
+                        "write the next file in your plan, or run bash to test what "
+                        "you have built so far. Do NOT re-read files you just wrote."
+                    )
                 else:
                     note = (
-                        "Continue working. Use a tool (read_file, write_file, "
+                        "Continue working. Use a tool (write_file, "
                         "search_replace, bash, glob, grep) or state "
                         "your plan in text."
                     )
@@ -3051,7 +3066,13 @@ class AgentLoop:
                           "Ground truth:", "Correct answer:")
         CURATED_HEADER_RE = _re.compile(r"^===[a-z][a-z0-9_-]*:\S+===")
         AUTHORITATIVE_SCORE = 100.0  # absolute high-confidence bar
-        DOMINANCE_SCORE = 30.0       # relative path floor (well above 8.0 noise)
+        # Relative-margin path floor. Lowered to 15 (was 30) after the
+        # stopword filter (storage._tokenize_query) reduced absolute
+        # scores across the board — narrow questions like "Nunavut"
+        # legitimately score 20-30 with dominance 5-10× over runners-up.
+        # The dominance ratio is the real false-positive guard, not the
+        # absolute floor.
+        DOMINANCE_SCORE = 15.0       # relative path floor (well above 8.0 noise)
         DOMINANCE_RATIO = 2.0        # top must beat second by this much
         top_chunk = chunks[0] if chunks else ""
         top_score = float(getattr(good_hits[0], "score", 0))

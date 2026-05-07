@@ -91,6 +91,29 @@ CREATE TABLE IF NOT EXISTS meta (
 _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_']*")
 _MIN_TOKEN_LEN = 2
 
+# English stopwords. Filtered at query time only — the index keeps them
+# (DF math benefits from knowing they exist) but query scoring ignores
+# them so a short narrow-trivia question like "In the 1997 movie X..."
+# doesn't get scored on "in", "the", "movie" which match almost every
+# chunk in any corpus and drown out the actual signal token (X).
+# Diagnosed by HLE Phase 0 ablation: Q5 (Ovosodo→Boston) and Q12
+# (Nunavut) failed because BM25 surfaced unrelated chunks as top-1.
+_STOPWORDS = frozenset({
+    "a", "an", "and", "are", "as", "at", "be", "been", "but", "by",
+    "can", "could", "did", "do", "does", "don't", "for", "from", "had",
+    "has", "have", "he", "her", "here", "hers", "him", "his", "how",
+    "i", "if", "in", "into", "is", "it", "its", "just", "may", "me",
+    "might", "my", "no", "nor", "not", "now", "of", "on", "or", "our",
+    "out", "she", "should", "so", "some", "such", "than", "that",
+    "the", "their", "theirs", "them", "then", "there", "these", "they",
+    "this", "those", "through", "to", "too", "us", "was", "we", "were",
+    "what", "when", "where", "which", "while", "who", "whom", "why",
+    "will", "with", "would", "you", "your", "yours",
+    # HLE-prompt-template wrappers (always present, never useful)
+    "answer", "answers", "question", "choice", "choices", "give",
+    "following", "options", "option",
+})
+
 
 def _tokenize(text: str) -> list[str]:
     return [
@@ -98,6 +121,14 @@ def _tokenize(text: str) -> list[str]:
         for t in _TOKEN_RE.findall(text)
         if len(t) >= _MIN_TOKEN_LEN
     ]
+
+
+def _tokenize_query(text: str) -> list[str]:
+    """Query-side tokenizer: drops English stopwords + HLE-prompt-template
+    boilerplate that match every chunk uselessly. Index-side tokenizer
+    (`_tokenize`) keeps stopwords because DF accounting still needs them
+    when computing IDF for chunk content."""
+    return [t for t in _tokenize(text) if t not in _STOPWORDS]
 
 
 class Index:
@@ -300,7 +331,16 @@ class Index:
         )
 
     def _retrieve_text(self, query: str, limit: int) -> list[TextHit]:
-        q_tokens = _tokenize(query)
+        # Drop stopwords from the query so a short narrow question
+        # ("In the 1997 movie Ovosodo, where does Tommaso move?") doesn't
+        # score every chunk on "in/the/movie/where" before the rare
+        # signal token ("Ovosodo") gets a chance to dominate. Index
+        # side keeps stopwords for accurate IDF accounting.
+        q_tokens = _tokenize_query(query)
+        if not q_tokens:
+            # Fall back to full token set if stopword filter ate the
+            # whole query (paranoid: query might be all stopwords).
+            q_tokens = _tokenize(query)
         if not q_tokens:
             return []
 
