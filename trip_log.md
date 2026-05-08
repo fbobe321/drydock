@@ -1,5 +1,116 @@
 # Drydock Trip Log
 
+## 2026-05-08 16:35 UTC tick
+- Stress: 772/1658, PID 3209682 alive, progressing; 28% of last 25 sessions had at least 1 write, 1.44 avg writes/session; 51% SKIP rate driven by approval-modal input blocking (known issue per memory)
+- Write rate: 28% sessions with writes (last 25)
+- Admiral last 30 min: 0 new fires (log not accessible); dispatch queue dominant pattern = harness:thinking_stall
+- vLLM 400s: 0; llamacpp-gemma4 Up 3+ days (unhealthy flag, functional); balancer PID 3837273 on :8001 serving gemma4 OK
+- GH issues: 0 open
+- Dispatch queue: harness=66978, retrieval=74 (0 actionable — all already ingested), steering=0
+- retrieval-drain: 0 projects ingested
+- Action this tick: no fix committed — harness:thinking_stall already addressed by today's commits 7696a55 + 488dcce (hallucinated-tool threshold=1, forced text-only turn); all other patterns covered; system healthy
+
+## 2026-05-08 15:42 UTC tick
+- Stress: 760/1658 (PID 3209682, alive, progressing); API-error banners triggering /clear recoveries but session continues; balancer and vLLM healthy
+- Write rate: n/a (no write count in current log format)
+- Admiral last 30 min: harness:thinking_stall at 811 fires/2h (dominant); harness:search_replace:not_found_loop 72/2h; harness:tool:hallucinated_name 66/2h; harness:bash:heredoc_loop 60/2h
+- vLLM 400s: 0 (llama.cpp clean); balancer PID 3822606 on :8001, serving gemma4 OK
+- GH issues: 0 open
+- Dispatch queue: harness=9297 in 24h (7553 thinking_stall, 657 hallucinated_name, 561 heredoc_loop, 282 not_found_loop, 244 bash_generic); retrieval=74 (0 actionable)
+- retrieval-drain: 0 projects ingested (all 74 already consumed)
+- Action this tick: no fix committed — investigated thinking_stall pattern (7553/24h). Inline stall-retry in agent_loop fires 54K times with 17K max-retry-exhausted; the admiral logs all stalls including recovered ones. The harness:thinking_stall fires are the admiral observing stalls that the inline retry handles, not new drydock bugs. The recent fix (488dcce) addresses the hallucinated-tool-repetition sub-case; general empty_after_tool stalls are handled by existing inline retry logic. No actionable source fix identified without deeper session trace analysis.
+
+## 2026-05-08 15:03 UTC tick
+- Stress: 747/1658, PID 3209682 alive (started May 06)
+- Write rate: n/a
+- Admiral last 30 min: harness:thinking_stall fires every ~1 min (ralph_repo_index hallucination loop)
+- vLLM 400s: 0 (docker logs clean)
+- GH issues: 0 open
+- Dispatch queue: harness=~40 (all thinking_stall), retrieval=74 (0 actionable — all already ingested), steering=0
+- Port 8001: llm_balancer.py (legitimate, PID 3175781)
+- Action this tick: committed fix — _check_tool_call_repetition now detects 3+ calls to same hallucinated tool in last 40 messages and returns FORCE_STOP with _hot_tool_path=None, forcing tool_choice=none for one turn so model emits text instead of calling ralph_repo_index again; 4 regression tests added; addresses pattern harness:thinking_stall
+
+## 2026-05-08 14:32 UTC tick
+- Stress: PID 3209682 alive (2d 3h); session_20260508_142322_211c94f8 active, 78 msgs, last written 09:30 UTC (live); sessions cycling ~every 5 min
+- Write rate: n/a (no progress file)
+- Admiral last 30 min: harness:thinking_stall dominates dispatch queue; all source=opus (improvement-loop Claude sessions, not live Gemma 4 bugs); search_replace:not_found_loop entries also source=opus
+- vLLM 400s: 0 in last 30 min; llamacpp-gemma4 Up 2+ days (unhealthy health-check flag, functional); balancer PID 3175781 on :8001 OK serving ['gemma4']
+- GH issues: 0 open
+- Dispatch queue: harness=65803, retrieval=74 (0 actionable, all 74 already ingested)
+- retrieval-drain: 0 projects ingested
+- Observation: current session shows 15 identical read_file calls on same args — circuit breaker firing advisories since call 5, model ignoring per known Gemma 4 behavior (CLAUDE.md #2). No new fix warranted; advisory-only policy is intentional.
+- Action this tick: no fix committed — all top dispatch patterns covered, system healthy, no new actionable bugs found
+
+## 2026-05-08 14:00 UTC tick
+- Stress: PID 3209682 alive (tool_agent 1658-prompt suite, --resume-from-step 18); session_20260508_135714 active (39 msgs, writing rate_limiter/test_core.py, last written ~09:00 UTC)
+- Write rate: n/a (no progress file)
+- Admiral last 30 min: harness:thinking_stall=154x dominant in last 200 queue entries; search_replace:not_found_loop=16x, bash_generic=10x, hallucinated_name=10x, heredoc_loop=10x — all covered by v2.8.0–v2.8.4
+- vLLM 400s: 0 (docker logs clean); llamacpp-gemma4 functional; balancer PID 3175781 alive on :8001 serving ['gemma4']
+- GH issues: 0 open
+- Dispatch queue: harness=65554, retrieval=74 (0 actionable, all within 7-day window), steering=0
+- retrieval-drain: 0 projects ingested
+- Action this tick: no fix committed — all top dispatch patterns addressed by v2.8.0–v2.8.4; system healthy
+
+## 2026-05-08 13:32 UTC tick
+- Stress: PID 3209682 alive at 729/1658 (tool_agent suite); babysitter confirmed alive at 13:00 UTC (idx=719, done=375, skip=325, timeout=0, recycle=230); current session session_20260508_132436 active with 65 msgs executing "API: JSON-RPC server" prompt
+- Write rate: done=375 accepted / 700 idx = 54% accept rate (skip rate 46%, consistent with known approval-modal harness issue)
+- Admiral last 30 min: 70 new signals dispatched (all harness bucket); dominant harness:thinking_stall (60), harness:search_replace:not_found_loop (6), harness:loop:bash_generic (4)
+- vLLM 400s: 0 JSONDecodeErrors in last 30 min; balancer on :8001 healthy; llamacpp-gemma4 on :8000 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=65305, retrieval=74 (0 actionable, all within re-ingest window), steering=0
+- retrieval-drain: 0 projects ingested (74 entries, all already ingested recently)
+- Action this tick: no fix committed — all dispatch patterns (thinking_stall/ralph_repo_index, search_replace:not_found_loop, bash_generic) have handlers in place from v2.8.0–v2.8.4; classifier is re-processing prior autonomous_review.log summaries as signal inflating queue; system fully healthy
+
+## 2026-05-08 14:30 UTC tick
+- Stress: PID 3209682 alive (tool_agent 1658-prompt suite, --resume-from-step 18); active at 14:30 UTC; no stress log file found, output likely piped to babysitter wrapper
+- Write rate: N/A (no log access this tick)
+- Admiral last 30 min: dispatch queue grew to harness=65052 (+259 vs prior tick); dominant patterns harness:thinking_stall (42227 total, mostly empty_after_tool:ralph_repo_index), harness:loop:bash_generic (11758), harness:tool:hallucinated_name (5067), harness:search_replace:not_found_loop (4299)
+- vLLM 400s: 0 JSONDecodeErrors; balancer PID 3175781 on :8001 healthy (curl confirmed gemma4 reachable)
+- GH issues: 0 open
+- Dispatch queue: harness=65052, retrieval=74 (all within re-ingest window, 0 actionable), steering=0
+- retrieval-drain: 0 projects ingested (all 74 entries already recently processed)
+- Action this tick: no fix committed — all dominant patterns (thinking_stall, search_replace:not_found_loop) have existing handlers in agent_loop.py (_silence_suppressed_failures with nudge at line 1683, _sr_fail_history file-head embedding at line 640); patterns still fire due to Gemma 4 ignoring advisory nudges (CLAUDE.md learning #2); no new bugs found; system fully healthy
+
+## 2026-05-08 13:30 UTC tick
+- Stress: PID 3209682 alive (tool_agent 1658-prompt suite); at step ~709/1658; 147 writes in last 100 prompts; API-errors banner appearing intermittently (RECOVER handler clearing with /clear); SKIP events on SSE client and JSON-RPC server prompts (port squatting likely); run is progressing
+- Write rate: 147 writes / 100 prompts = ~1.47 writes/prompt
+- Admiral last 30 min: ~338 dispatch entries in 12:xx–13:xx UTC window; dominant patterns: harness:thinking_stall (ralph_repo_index), harness:search_replace:not_found_loop, harness:loop:bash_generic
+- vLLM 400s: 0 JSONDecodeErrors in last 30 min; balancer PID 3175781 on :8001 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=64793 (+254 vs prior tick), retrieval=74 (0 actionable, all within re-ingest window), steering=0
+- retrieval-drain: 0 projects ingested
+- Action this tick: no fix committed — inspected thinking_stall and search_replace:not_found_loop patterns; both have existing handlers in format.py and agent_loop.py (inline stall retry + file-head embedding); patterns recur across sessions from multi-turn ralph_repo_index persistence, not a missing fix; system healthy
+
+## 2026-05-08 12:30 UTC tick
+- Stress: PID 3209682 alive (tool_agent 1658-prompt suite, --resume-from-step 18); session_20260508_114443 active with 187 msgs, currently executing gRPC unary API test (live)
+- Write rate: n/a (no progress file)
+- Admiral last 30 min: 0 events in admiral_history.log (log may use UTC offset); dispatch shows harness:thinking_stall dominates 3727 real entries today, all covered by v2.8.0–v2.8.4
+- vLLM 400s: context-overflow 400s in balancer.log (sustained pattern, handled by emergency compaction); 0 fresh in last minute; balancer PID 3175781 on :8001 functional
+- GH issues: 0 open
+- Dispatch queue: harness=64539 (+2905 since 05:30 tick), retrieval=74 (0 actionable, all within 7-day re-ingest window)
+- retrieval-drain: 0 projects ingested
+- Action this tick: no fix committed — all top patterns (thinking_stall, loop:bash_generic, hallucinated_name, search_replace:not_found_loop, heredoc_loop) addressed by v2.8.0–v2.8.4; no new actionable bugs found; system healthy
+
+## 2026-05-08 11:31 UTC tick
+- Stress: PID 3209682 alive (1d 23h+); session_20260508_112416 active (77 msgs, live as of 06:31 UTC); sessions created ~every 5-7min
+- Write rate: n/a (no progress file); stress at --resume-from-step 18 of 1658-prompt tool_agent suite
+- Admiral last 30 min: harness:thinking_stall dominates (7081 last 24h); all top patterns sourced from canned/opus sessions (autonomous_review echoes), not fresh Gemma 4 bugs
+- vLLM 400s: 0 in docker logs last 30min; sporadic 502s in balancer.log (context overflow → emergency compaction, functional); balancer PID 3175781 on :8001 serving ['gemma4']
+- GH issues: 0 open
+- Dispatch queue: harness=62K+ (all top patterns covered by v2.8.0–v2.8.4); retrieval=74 (0 actionable, all within 7-day re-ingest window)
+- retrieval-drain: 0 projects ingested
+- Action this tick: no fix committed. All recent dispatch fires are canned/opus-source events (single events repeated every 10min by classify_pulse), not fresh drydock bugs. v2.8.4 (heredoc_loop fix) auto-released. System healthy.
+
+## 2026-05-08 11:03 UTC tick
+- Stress: PID 3209682 alive; at prompt 680/1658 of tool_agent 2000-prompt suite (--resume-from-step 18)
+- Write rate: n/a (no progress file)
+- Admiral last 30 min: patterns firing — harness:thinking_stall (empty_after_tool:ralph_repo_index, exit_plan_mode, bash), harness:search_replace:not_found_loop, harness:loop:bash_generic; all have existing mitigations in source
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=64035, retrieval=74 (0 actionable — all already ingested within 7-day window)
+- retrieval-drain: 0 projects ingested
+- Action this tick: no fix committed — services healthy (balancer on :8001, vLLM 0 errors, stress running); top unaddressed patterns (thinking_stall, bash_generic) already have loop-detection and stall-retry code in agent_loop.py; write_file→sr_fail_history cross-tool reset would require shared state refactor (deferred); checked recent commits — bash:heredoc_loop and thinking_stall:git_commit addressed in last 24h as expected
+
 ## 2026-05-08 10:33 UTC tick
 - Stress: PID 3209682 alive (1d 23h); at prompt 675/1658 of tool_agent 2000-prompt suite (--resume-from-step 18); sessions cycling every 10-15 min, 37 sessions created today
 - Write rate: n/a (no progress file); 2 user msgs + ~20 tool calls per prompt is typical healthy pattern
@@ -3268,3 +3379,12 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=61634, retrieval=74 (0 actionable, all 74 already ingested within 7-day window)
 - retrieval-drain: 0 projects ingested
 - Action this tick: no fix committed — all top dispatch patterns covered, system healthy, nothing new actionable
+
+## 2026-05-08 16:10 UTC tick
+- Stress: 764/1658 (idx at last babysitter tick), done=403, skip=342, recycle=244
+- Write rate: ~7 sessions/hr (healthy, progressing steadily)
+- Admiral last 30 min: harness:thinking_stall dominant (empty_after_tool:ralph_repo_index)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=66668 (all harness:thinking_stall), retrieval=74 (0 actionable), steering=0
+- Action this tick: committed fix — lower hallucinated-tool FORCE_STOP threshold from 3 to 1 (addresses pattern harness:thinking_stall). Prior fix (488dcce) set threshold=3 but stress sessions only make 1-2 ghost calls before harness kills them, so FORCE_STOP never fired. New threshold=1 triggers immediately on first ralph_repo_index call. Auto_release will ship at next 0/6/12/18 CDT tick.

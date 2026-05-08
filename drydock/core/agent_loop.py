@@ -2632,6 +2632,31 @@ class AgentLoop:
     def _check_tool_call_repetition(self) -> str | None:
         """Check if recent tool calls are repeating. Returns 'FORCE_STOP', 'WARNING', or None."""
 
+        # Early check: hallucinated tool called in last 40 messages.
+        # The stall nudge already tells the model "this tool doesn't exist" but
+        # Gemma 4 / Opus ignore it and loop.  Force text-only for one turn so
+        # the model must write content instead of calling the ghost tool again.
+        # Threshold=1: sessions typically only make 1-2 ghost calls before
+        # timing out, so the old threshold=3 never triggered in practice.
+        if hasattr(self, "tool_manager") and self.tool_manager:
+            _avail = self.tool_manager.available_tools
+            _hall_names: list[str] = []
+            for _hm in reversed(self.messages[-40:]):
+                if _hm.role == Role.assistant and _hm.tool_calls:
+                    for _htc in _hm.tool_calls:
+                        if _htc.function and _htc.function.name:
+                            if _htc.function.name not in _avail:
+                                _hall_names.append(_htc.function.name)
+                if len(_hall_names) >= 10:
+                    break
+            if _hall_names:
+                from collections import Counter as _HCtr
+                _top_h, _top_h_cnt = _HCtr(_hall_names).most_common(1)[0]
+                if _top_h_cnt >= 1:
+                    # _hot_tool_path=None → FORCE_STOP handler sets tool_choice=none
+                    self._hot_tool_path = None
+                    return "FORCE_STOP"
+
         # Early check: search_replace with the same file + old_string twice
         # in a row.  This is the #1 user-pain loop — the model retries an
         # edit that already succeeded or that keeps failing with the same
