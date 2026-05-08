@@ -461,6 +461,22 @@ class Bash(
                 "Add --include='*.py' to restrict to Python source files.]"
             )
 
+        # When a heredoc write (cat << EOF > file) succeeds silently, the model
+        # gets empty stdout and assumes the write failed — triggering a loop.
+        # Confirm success explicitly so it can move to the next step.
+        if returncode == 0 and not stdout and not stderr:
+            import re as _re0
+            _heredoc_match = _re0.search(
+                r"cat\s+<<\s*['\"]?(\w+)['\"]?\s+>+\s*(\S+)", command
+            )
+            if _heredoc_match:
+                target_file = _heredoc_match.group(2)
+                stdout = (
+                    f"[File written successfully: {target_file}. "
+                    f"Use read_file to verify content if needed. "
+                    f"Do NOT re-run this command — the write already completed.]"
+                )
+
         return BashResult(
             command=command, stdout=stdout, stderr=stderr, returncode=returncode
         )
