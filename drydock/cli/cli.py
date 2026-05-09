@@ -75,49 +75,71 @@ def bootstrap_config_files() -> None:
         except Exception as e:  # migration must never break startup
             logger.debug("config migration failed: %s", e)
     if not config_file.exists():
+        # Try auto-detecting a running local LLM first. Saves the user a
+        # setup screen if they already have llama.cpp / Ollama / vLLM /
+        # LM Studio listening on a known port.
+        detected_info = None
         try:
-            config_file.parent.mkdir(parents=True, exist_ok=True)
-            default = DrydockConfig.create_default()
-            # Auto-detect a running local LLM server (llama.cpp, Ollama,
-            # vLLM, LM Studio). If found, point the default config at it
-            # and set local as the active model — so a fresh install with
-            # a local server already running starts up without demanding
-            # a Mistral API key.
-            try:
-                from drydock.core.config.local_detect import (
-                    detect_local_llm,
-                    patch_config_for_local,
-                )
-                info = detect_local_llm()
-                if info is not None:
-                    patch_config_for_local(default, info)
-                    rprint(
-                        f"[green]Auto-detected {info.label} at "
-                        f"{info.api_base}[/]\n"
-                        f"  Using model: [cyan]{info.model_name}[/]\n"
-                        f"  To use a different LLM, run [cyan]drydock --setup[/] "
-                        f"or edit [cyan]{config_file}[/]"
-                    )
-                else:
-                    # No local server answering — default config already
-                    # points at llama.cpp on http://127.0.0.1:8000/v1 with
-                    # active_model="local". Tell the user so they know what
-                    # endpoint drydock will try, and how to point it
-                    # elsewhere if needed.
-                    rprint(
-                        "[yellow]No local LLM server detected.[/]\n"
-                        "  Defaulting to [cyan]llama.cpp at "
-                        "http://127.0.0.1:8000/v1[/] (OpenAI-compatible).\n"
-                        "  Start a server on that port, run "
-                        "[cyan]drydock --setup[/], or edit "
-                        f"[cyan]{config_file}[/] to use a different URL."
-                    )
-            except Exception as e:  # detection must never break first launch
-                logger.debug("local-LLM detection failed: %s", e)
-            with config_file.open("wb") as f:
-                tomli_w.dump(default, f)
+            from drydock.core.config.local_detect import detect_local_llm
+            detected_info = detect_local_llm()
         except Exception as e:
-            rprint(f"[yellow]Could not create default config file: {e}[/]")
+            logger.debug("local-LLM detection failed: %s", e)
+
+        if detected_info is not None:
+            # Detected — write a config patched to point at the live
+            # server with no user interaction required.
+            try:
+                config_file.parent.mkdir(parents=True, exist_ok=True)
+                default = DrydockConfig.create_default()
+                from drydock.core.config.local_detect import patch_config_for_local
+                patch_config_for_local(default, detected_info)
+                rprint(
+                    f"[green]Auto-detected {detected_info.label} at "
+                    f"{detected_info.api_base}[/]\n"
+                    f"  Using model: [cyan]{detected_info.model_name}[/]\n"
+                    f"  To use a different LLM, run [cyan]drydock --setup[/] "
+                    f"or edit [cyan]{config_file}[/]"
+                )
+                with config_file.open("wb") as f:
+                    tomli_w.dump(default, f)
+            except Exception as e:
+                rprint(f"[yellow]Could not create default config file: {e}[/]")
+        else:
+            # No local server answering. Run the onboarding flow so the
+            # user can choose between (a) Mistral API key, (b) point
+            # drydock at a custom local URL via LocalModelScreen. Don't
+            # silently write a config pointing at a port nothing is
+            # listening on — that surprises users who run drydock
+            # without knowing they need to start a model server first.
+            rprint(
+                "[yellow]No local LLM server detected on the usual ports "
+                "(llama.cpp:8000/8080, Ollama:11434, LM Studio:1234).[/]\n"
+                "  Launching setup so you can point drydock at your "
+                "model server."
+            )
+            try:
+                from drydock.setup.onboarding import run_onboarding
+                run_onboarding()
+            except SystemExit:
+                raise  # onboarding cancelled — let the exit propagate
+            except Exception as e:
+                # Onboarding failed for some reason (e.g. no TTY in CI).
+                # Fall back to writing the defaults so drydock can at
+                # least try to start, and tell the user what to fix.
+                logger.debug("onboarding failed: %s", e)
+                try:
+                    config_file.parent.mkdir(parents=True, exist_ok=True)
+                    default = DrydockConfig.create_default()
+                    with config_file.open("wb") as f:
+                        tomli_w.dump(default, f)
+                    rprint(
+                        f"[yellow]Setup failed ({e}). Wrote default config "
+                        f"pointing at http://127.0.0.1:8000/v1.[/]\n"
+                        f"  Edit [cyan]{config_file}[/] or run "
+                        "[cyan]drydock --setup[/] to fix."
+                    )
+                except Exception as ee:
+                    rprint(f"[yellow]Could not create default config file: {ee}[/]")
 
     history_file = HISTORY_FILE.path
     if not history_file.exists():

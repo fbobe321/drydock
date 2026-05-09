@@ -26,7 +26,14 @@ import urllib.request
 
 BACKENDS = [
     "http://localhost:8000",
-    "http://192.168.50.21:8000",
+    # 192.168.50.21:8000 (romulus) PAUSED 2026-05-09 — its llama.cpp
+    # build reports `b1-e77056f` which is well below the b3000+ that
+    # the article-recommended Gemma 4 inference fixes shipped in. We
+    # suspect intermittent jumbled-text output (random character
+    # insertions like "contaiens"/"folloiwng") originates from this
+    # backend. Re-add this line and rebuild romulus once it's on a
+    # current llama.cpp build (b9000+ to match remus's docker image).
+    # "http://192.168.50.21:8000",
     # 192.168.50.19:8080 (Jetson) was probed for inclusion 2026-05-05
     # but its /v1/chat/completions endpoint times out after 90s with
     # no response (only /v1/models returns, and in Ollama-style schema

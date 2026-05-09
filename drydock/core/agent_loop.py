@@ -868,6 +868,50 @@ class AgentLoop:
                           or "400 bad request" in error_str.lower()
                           or "status: 400" in error_str.lower()):
                         # Context limit or malformed request — aggressive recovery
+                        # Step 0 (added 2026-05-09): if the error looks like a
+                        # malformed tool call (most common 400 cause that ISN'T
+                        # context-overflow), drop the offending assistant
+                        # message + its orphaned tool-result follow-ups so the
+                        # retry doesn't re-send the same bad payload. Without
+                        # this, drydock would re-send the same broken
+                        # tool_call N times until MAX_API_ERRORS gave up,
+                        # leaving the user with a sticky banner that only
+                        # /clear or session-restart could clear.
+                        dropped_bad_tool_call = False
+                        bad_call_indicators = (
+                            "tool_call", "tool call", "function call",
+                            "function.arguments", "arguments",
+                            "invalid json", "json decode", "schema",
+                            "validation error", "tool_use", "function name",
+                        )
+                        if any(ind in error_str.lower() for ind in bad_call_indicators):
+                            try:
+                                # Walk backward to the most recent assistant
+                                # message with tool_calls — that's the payload
+                                # vLLM rejected.
+                                bad_idx = None
+                                for i in range(len(self.messages) - 1, -1, -1):
+                                    m = self.messages[i]
+                                    if m.role == Role.assistant and getattr(m, "tool_calls", None):
+                                        bad_idx = i
+                                        break
+                                if bad_idx is not None:
+                                    # Drop the bad assistant message PLUS any
+                                    # tool-role messages that followed it (they
+                                    # reference tool_call_ids that no longer
+                                    # exist; sending them alone is also a 400).
+                                    new_msgs = list(self.messages[:bad_idx])
+                                    self.messages.reset(new_msgs)
+                                    dropped_bad_tool_call = True
+                                    logger.info(
+                                        "Auto-recovery: dropped bad tool-call "
+                                        "message (idx=%d) and %d follow-ups",
+                                        bad_idx, len(self.messages) - bad_idx
+                                        if hasattr(self, "messages") else 0,
+                                    )
+                            except Exception as drop_err:
+                                logger.debug("bad-tool-call drop failed: %s", drop_err)
+
                         try:
                             # First try: truncate old messages
                             for i, msg in enumerate(self.messages):
@@ -897,7 +941,17 @@ class AgentLoop:
                                 logger.info("Emergency reset: kept first user + last 5 messages")
                         except Exception:
                             pass
-                        error_text = "Context compacted due to API error. Continue with your task."
+                        if dropped_bad_tool_call:
+                            error_text = (
+                                "Your last tool call was rejected by the "
+                                "server (likely malformed arguments). "
+                                "Try a simpler form, or use a different tool."
+                            )
+                        else:
+                            error_text = (
+                                "Context compacted due to API error. "
+                                "Continue with your task."
+                            )
                     else:
                         error_text = f"API error occurred: {e}. Please continue with your task."
                     self._inject_system_note(error_text)
@@ -1025,7 +1079,8 @@ class AgentLoop:
                 if (assistant_msg.role == Role.assistant
                         and assistant_msg.tool_calls):
                     prev_tool_name = assistant_msg.tool_calls[-1].function.name if assistant_msg.tool_calls[-1].function else None
-            _readonly_tools = {"read_file", "grep", "glob", "ls", "pwd"}
+            _readonly_tools = {"read_file", "grep", "glob", "ls", "pwd",
+                               "ralph_repo_index", "retrieve", "search_files"}
             _write_tools = {"write_file", "search_replace"}
             _prev_was_read = prev_tool_name in _readonly_tools
             _prev_was_write = prev_tool_name in _write_tools
@@ -2822,17 +2877,22 @@ class AgentLoop:
         ):
             return "FORCE_STOP"
 
-        # Check 1a: Same TOOL NAME repeated ≥8 consecutively, regardless
-        # of args. Catches the "write_file with missing/corrupted args 36
-        # times in a row" pathology where each sig differs (path is
-        # missing or garbled differently each call) but the model is
-        # clearly stuck hammering the same tool.
+        # Check 1a: Same TOOL NAME repeated consecutively, regardless of args.
+        # Catches the "write_file with missing/corrupted args 36 times in a row"
+        # pathology where each sig differs but the model is clearly stuck.
+        # Threshold is lower for exploration/indexing tools (ralph_repo_index,
+        # read_file, glob, grep) that should never need 4+ consecutive calls —
+        # each call after the first is a stall-recovery loop, not progress.
+        # Write/shell tools keep the higher threshold (8) since they legitimately
+        # appear many times in sequence when building multi-file projects.
         # Record a hot-combo on the stuck tool with an empty-path marker
         # so the per-tool mute in _chat will remove it for 1 turn.
-        if len(tool_names) >= 8:
-            last8 = tool_names[-8:]
-            if all(n == last8[-1] for n in last8):
-                self._hot_tool_path = (last8[-1], "<stuck>")
+        _productive_tools = {"write_file", "search_replace", "bash", "run_command"}
+        _check_1a_threshold = 8 if (tool_names and tool_names[-1] in _productive_tools) else 4
+        if len(tool_names) >= _check_1a_threshold:
+            last_n = tool_names[-_check_1a_threshold:]
+            if all(n == last_n[-1] for n in last_n):
+                self._hot_tool_path = (last_n[-1], "<stuck>")
                 return "FORCE_STOP"
 
         # Check 1c: High recent-error fraction. If ≥6 of last 10 tool

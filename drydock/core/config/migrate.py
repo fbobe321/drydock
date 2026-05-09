@@ -72,6 +72,7 @@ def migrate_user_config(config_file: Path) -> None:
         return
 
     added: list[str] = []
+    fixed: list[str] = []
     models = data.get("models")
     if isinstance(models, list):
         for model in models:
@@ -86,8 +87,17 @@ def migrate_user_config(config_file: Path) -> None:
                 window = model.get("context_window") or _default_window_for(provider)
                 model["auto_compact_threshold"] = _default_compact_threshold_for(window)
                 added.append(f"models.{label}.auto_compact_threshold")
+            # llamacpp models written by v2.8.3–v2.8.5 used the
+            # OpenAI-style `frequency_penalty`. llama.cpp's actual
+            # repetition knob is `repeat_penalty` — rename it so the
+            # server accepts the value instead of silently ignoring it.
+            if "llamacpp" in provider.lower():
+                extra = model.get("extra_params")
+                if isinstance(extra, dict) and "frequency_penalty" in extra and "repeat_penalty" not in extra:
+                    extra["repeat_penalty"] = extra.pop("frequency_penalty")
+                    fixed.append(f"models.{label}.extra_params: frequency_penalty → repeat_penalty")
 
-    if not added:
+    if not added and not fixed:
         return
 
     try:
@@ -97,8 +107,9 @@ def migrate_user_config(config_file: Path) -> None:
         logger.warning("config migration: cannot write %s: %s", config_file, e)
         return
 
+    changes = added + fixed
     rprint(
-        f"[cyan]Drydock config migrated: added {len(added)} new "
-        f"key(s) to {config_file}[/]\n  "
-        + "\n  ".join(added)
+        f"[cyan]Drydock config migrated: {len(changes)} change(s) to "
+        f"{config_file}[/]\n  "
+        + "\n  ".join(changes)
     )

@@ -301,11 +301,39 @@ DEFAULT_MODELS = [
         output_price=0.3,
     ),
     ModelConfig(
-        name="devstral",
+        # Default local model is Gemma 4 — the recommended setup per
+        # CLAUDE.md (`start_gemma4.sh`). The `name` here is the model id
+        # the OpenAI-compatible server reports; for `start_gemma4.sh` +
+        # vLLM that's literally "gemma4". The local_detect probe will
+        # overwrite this at first launch with whatever the running
+        # server actually reports, so a user running a different
+        # local model (e.g. llama-3, mistral-small) gets matched up
+        # automatically.
+        name="gemma4",
         provider="llamacpp",
         alias="local",
         input_price=0.0,
         output_price=0.0,
+        # Gemma 4 anti-loop sampling recipe (see CLAUDE.md). Temperature
+        # MUST be 1.0 — lower values reinforce loops on quantized GGUF.
+        # The other knobs prevent the model from getting stuck on
+        # repeated tokens.
+        temperature=1.0,
+        # llama-server article recipe is `-c 32768`. Match it so
+        # auto_compact_threshold gets clamped to 28K (32K - 4K headroom)
+        # and the server doesn't return empty/garbage on context overflow.
+        context_window=32_768,
+        auto_compact_threshold=28_000,
+        # llama.cpp uses `repeat_penalty` (its native knob), not the
+        # OpenAI-style `frequency_penalty`. `temperature=1.0` is the
+        # top-level field above; the other three sampling params live
+        # here and get forwarded as extra_sampling to the server.
+        extra_params={
+            "top_k": 40,
+            "top_p": 0.95,
+            "repeat_penalty": 1.1,
+            "max_tokens": 2048,
+        },
     ),
 ]
 

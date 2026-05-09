@@ -140,6 +140,8 @@ def patch_config_for_local(
                     extra = model.setdefault("extra_params", {})
                     extra.setdefault("top_k", 40)
                     extra.setdefault("top_p", 0.95)
-                    extra.setdefault("frequency_penalty", 1.1)
+                    # llama.cpp's native repetition knob, not the
+                    # OpenAI-style frequency_penalty.
+                    extra.setdefault("repeat_penalty", 1.1)
                     extra.setdefault("max_tokens", 2048)
                 break
