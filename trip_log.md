@@ -1,5 +1,101 @@
 # Drydock Trip Log
 
+## 2026-05-09 16:35 UTC tick
+- Stress: ~1091/1658; PID 3875067 alive (20h34m runtime); done=128, skip=150, recycle=92 at last babysitter tick; skip rate elevated (~59% in last 30 prompts per admiral) due to approval-modal blocking (known, see project_tui_skip_root_cause.md) — not a new bug
+- Write rate: 128/(128+150) ≈ 46% completion on accepted prompts; doc-task batch (1089–1091) all SKIPped (approval modal from prior bash/write tools blocks input)
+- Admiral last 30 min: retry-spike (124%, 36 retries in 29 prompts), skip-cluster (17 SKIPs in 29 prompts), thinking_stall (empty_after_tool:read_file, ralph_repo_index), struggle:none — all handled by existing interventions; tui-recycle-requested 4 times in 30 min (harness auto-recovers)
+- vLLM 400s: 0; balancer PID 3944578 on :8001 serving llamacpp-gemma4 (vLLM Docker "unhealthy" is cosmetic/false alarm); 0 open GH issues
+- Dispatch queue: harness=80715, retrieval=74 (0 actionable, all within 7-day window); no steering queue
+- retrieval-drain: 0 projects ingested
+- Action this tick: no action — system healthy; all top patterns already addressed (thinking_stall nudge live, bash_generic nudge live, grep:unescaped_pattern fixed in b3922fa/v2.8.7); deep-noir M1 skeleton (8c7a863, 95c39f7, a5e2166) staged for next auto_release at 12:00 CDT (~30 min); no new actionable drydock bugs found
+
+## 2026-05-09 16:02 UTC tick
+- Stress: 1086/1658; PID 3875067 alive (20h30m runtime); log last updated 10:59 CDT; progressing normally with SKIP/done mix from approval-modal blocking (known issue)
+- Write rate: ~0% for doc prompts (expected — no file writes for doc tasks); prior rate ~31% for code prompts
+- Admiral last 30 min: harness:thinking_stall (empty_after_tool:bash, read_file, ralph_repo_index at 12:29–15:57Z); harness:loop:bash_generic (1 fire at 13:54Z); all intercepted by admiral
+- vLLM 400s: 0; llamacpp-gemma4 container up (health check "unhealthy" is known false alarm); balancer PID 3944578 on :8001 forwarding to gemma4 confirmed
+- GH issues: 0 open
+- Dispatch queue: harness=80365, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — system healthy; all top patterns (thinking_stall, bash_generic, search_replace:not_found_loop) have existing mitigations in v2.8.7; deep-noir M1 skeleton (8c7a863) pending auto_release at 12:00 CDT; no new actionable bugs found
+
+## 2026-05-09 15:30 UTC tick
+- Stress: PID 3875067 alive (resumed from step 807/1658), tool_agent suite; progressing normally
+- Write rate: N/A (no progress log accessible)
+- Admiral last 30 min: thinking_stall and bash_generic continuing to fire (existing handlers active)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001; gemma4 container up
+- GH issues: 0 open
+- Dispatch queue: harness=80008, retrieval=74 (0 actionable, all within 7-day window)
+- retrieval-drain: 0 projects ingested
+- Action this tick: no action — system healthy; all top patterns (thinking_stall → 2cfa973/aeae8bb, grep:unescaped_pattern → b3922fa) addressed; lsp stall (33 queue entries) not yet systemic; deep-noir M1 skeleton committed, pending auto_release at 18:00/00:00 CDT
+
+## 2026-05-09 15:03 UTC tick
+- Stress: PID 3875067 alive (19h32m runtime, resumed from step 807); stress progressing on tool_agent 2000-prompt suite; no log accessible to count exact step, but PID alive and running
+- Write rate: N/A (no accessible progress log this tick)
+- Admiral last 30 min: harness:thinking_stall still dominant (694 entries since noon — all patterns have existing handlers in v2.8.7); harness:search_replace:not_found_loop (38 entries since noon, retry_after_error sub-type, no new fix warranted); harness:loop:bash_generic (54 entries, admiral nudge firing)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001; gemma4 container Up (docker "unhealthy" cosmetic); 0 open GH issues
+- Dispatch queue: harness=79655, retrieval=74 (0 actionable — all within 7-day window); no steering queue
+- retrieval-drain: 0 projects ingested
+- Action this tick: no action — system healthy; grep:unescaped_pattern fix (b3922fa) confirmed deployed in v2.8.7 (installed version has re.escape logic); all other top patterns (thinking_stall, bash_generic, search_replace:not_found_loop) already addressed in v2.8.x; deep-noir M1 skeleton (8c7a863) syntax-clean; stress harness alive
+
+## 2026-05-09 14:50 UTC tick
+- Stress: PID 3875067 alive, step ~1065/1658; elevated SKIP rate (140 SKIPs in current log segment) due to known TUI approval-modal / prompt-not-accepted issue; FORCE-RESET recycles running normally; write rate ~16% on recent sample
+- Balancer: PID 3944578 healthy on :8001 (gemma4 forwarding confirmed); vLLM gemma4 container Up 4 days (docker "unhealthy" cosmetic); 0 vLLM 400s last 30min; 0 open GH issues
+- Dispatch queue: harness=79322, retrieval=74 (0 actionable — all ingested within 7-day window)
+- retrieval-drain: 0 projects ingested (all already current)
+- Top dispatch patterns: harness:grep:unescaped_pattern (ADDRESSED by b3922fa, deployed in v2.8.7 at 06:02 CDT); harness:thinking_stall (ADDRESSED by 2cfa973/aeae8bb in v2.8.5-v2.8.7); harness:loop:bash_generic (confidence 0.6, admiral nudge already firing, no source fix needed)
+- Action this tick: no action — all high-confidence queued patterns addressed within last 24h; system healthy; deep-noir skeleton commits (a5e2166, 95c39f7, 8c7a863) pending next auto_release at noon CDT
+
+## 2026-05-09 14:10 UTC tick
+- Stress: PID 3875067 alive, step ~1059/1658, elevated SKIP rate (consecutive TUI-not-accept SKIPs with FORCE-RESET recycles), known approval-modal issue per tui_skip_root_cause memory — not a source bug; babysitter last_complete done=757 skip=35 timeout=0
+- Balancer: PID 3944578 healthy on :8001; vLLM gemma4 Up 4 days (docker "unhealthy" cosmetic — /health returns ok); 0 vLLM 400s last 30min; 0 open GH issues
+- Dispatch queue: harness=78989, retrieval=74 (0 actionable); steering=none
+- Latest 100 harness entries: grep:unescaped_pattern=58 (pre-fix events, b3922fa effective), thinking_stall=36, loop:bash_generic=4, sr:not_found=2; all have existing mitigations; new observation: empty_after_tool:lsp fires (classified as thinking_stall) — lsp not in _readonly_tools set so gets generic stall nudge and threshold=8 instead of 5; one-off event, not yet systemic
+- Retrieval drain: 0 projects ingested (all within 7-day window)
+- Action this tick: no fix committed — all active patterns have existing mitigations; system healthy
+
+## 2026-05-09 13:50 UTC tick
+- Stress: PID 3875067 alive (tool_agent session active); llm_balancer on :8001 healthy; vLLM gemma4 Up 4 days (unhealthy flag but responding); 0 new vLLM 400s in last 30min; 0 open GH issues
+- Dispatch queue: harness=78663 total (thinking_stall=51745, loop:bash=12154, hallucinated_name=6164, sr:not_found=4780, grep:unescaped=1805); retrieval=74 (0 actionable); steering=0
+- Last 2h dominant patterns: grep:unescaped_pattern=708, thinking_stall=394, hallucinated_name=84, bash_generic=30, sr:not_found=24
+- Investigated grep:unescaped_pattern (708 fires/2h despite b3922fa fix): classifier is mislabeling retry_after_error:grep:NOTE as grep:unescaped_pattern — actual issue is model ignoring circuit-breaker NOTE and calling grep 34+ times; _circuit_breaker_check fires advisory-only, FORCE_STOP fires at 8 repeats via _check_tool_call_repetition but only mutes for 1 turn; model loops back after each text turn. No fix committed — fix would require escalating FORCE_STOP persistence past 1 turn for the grep case, which risks CLAUDE.md's "advisory not blocking" rule; leaving for user review.
+- Action this tick: investigated grep loop root cause; no commit; retrieval-drain: 0 projects ingested
+
+## 2026-05-09 13:10 UTC tick
+- Stress: ~1028+/1658; PID 3875067 alive (active at turn 34, 13:03 UTC); SKIP rate still elevated (known approval-modal issue); multiple tui-recycles triggered by admiral (~12 skips/31 prompts threshold)
+- Write rate: N/A (stress mid-session)
+- Admiral last 30 min: dominant post-fix patterns are thinking_stall (36 post-13:00 UTC) and hallucinated_name (7 post-13:00 UTC); both have existing handlers; new pattern observed: loop:lsp (symbols action on ini_to_json/core.py called 3+ times, session 12:33 UTC) — lsp tool exists but not in readonly threshold set; admiral's check-1a fires at 3 calls; not yet systemic
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001; stress turns completing 5-15s each (normal throughput)
+- GH issues: 0 open
+- Dispatch queue: harness=78345 total (dominated by pre-fix events — grep:unescaped_pattern fix b3922fa confirmed effective: 0 post-09:03 UTC events); retrieval=74 entries (0 actionable); steering absent
+- Action this tick: no fix committed — all top patterns have existing mitigations; lsp loop is one-off/non-systemic; retrieval drain ran (0 new projects, all within 7-day window); system healthy
+
+## 2026-05-09 12:35 UTC tick
+- Stress: 1028/1658; PID 3875067 alive; current log shows 57.7% SKIP rate (127/220) — elevated vs prior ticks; API-errors banner appearing intermittently causing RECOVER cycles; stress still progressing through recycles
+- Write rate: estimated ~42% on non-SKIP turns (consistent with prior)
+- Admiral last 30 min: harness:thinking_stall dominant in dispatch queue (51529 total); harness:loop:bash_generic (12142 total); both have existing admiral nudges and loop-detection at threshold 8; 4 thinking_stall fixes shipped in last 24h
+- vLLM 400s: 0; balancer OK on :8001 (PID 3944578 confirmed llm_balancer.py); docker llamacpp-gemma4 "unhealthy" is cosmetic health-check misconfiguration (checks :8080 but service runs on :8000); API responding normally
+- GH issues: 0 open
+- Dispatch queue: harness=78027, retrieval=74 (0 actionable, all within 7-day window); steering queue absent; retrieval-drain: 0 projects ingested
+- Action this tick: no action — top dispatch patterns (thinking_stall, bash_generic, search_replace:not_found_loop) all have existing mitigations in source; search_replace already embeds file head on failure; high SKIP rate is known approval-modal issue (tui_skip_root_cause); no new actionable bugs found
+
+## 2026-05-09 12:00 UTC tick
+- Stress: 1015/1658; PID 3875067 alive (~16.5h runtime since restart at step 807); done=88, skip=120, recycle=71 in current log — ~42% write rate on completed prompts (higher than earlier segments due to successful "done" runs mixed in); most SKIPs remain approval-modal blocking (tui_skip_root_cause.md)
+- Write rate: 88 done / (88+120) completed = ~42% (improving vs prior ticks)
+- Admiral last 30 min: harness:grep:unescaped_pattern dominant in recent queue (all from sessions before b3922fa shipped); harness:thinking_stall (2 fresh entries at 09:14Z); no new patterns beyond known queue
+- vLLM 400s: 0; balancer OK on :8001 gemma4-only (romulus still paused per 820a557); docker status "unhealthy" is cosmetic false-alarm
+- GH issues: 0 open
+- Dispatch queue: harness=77423, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — all top dispatch patterns (thinking_stall, grep:unescaped_pattern, hallucinated_name, bash_generic, search_replace:not_found) already addressed by commits within 24h (b3922fa, 2cfa973); system healthy; stress progressing
+
+## 2026-05-09 11:02 UTC tick
+- Stress: 1011/1658, PID 3875067 alive; 3 total writes, 125 SKIPs in current log segment; TUI showing "Sailing" on long bash tests (memory_benchmark.py 10000 etc.), harness correctly fires FORCE-RESET on 2 consecutive SKIPs; progressing through "Test:..." prompt block
+- Write rate: 3 writes / ~200 steps (low — expected; this block is all test-runner prompts, not write prompts)
+- Admiral last 30 min: harness:loop:bash_generic entries have source=canned confirming drydock loop detection already fires; harness:thinking_stall quiet; no new unhandled patterns
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy (curl v1/models OK); gemma4 docker up 4d (unhealthy health-check but API responds fine)
+- GH issues: 0 open (gh returned empty)
+- Dispatch queue: harness=77135, retrieval=74 (drain ran: 0 actionable — all within 7-day window)
+- Action this tick: no fix committed — grep:unescaped_pattern (b3922fa) and thinking_stall fixes (2cfa973/aeae8bb) already shipped; bash_generic loop handled by source=canned path; all services healthy; no new actionable drydock source bugs found
+
 ## 2026-05-09 10:50 UTC tick
 - Stress: 1004/1658, PID 3875067 alive; accepted=82, skipped=111, timed_out=0 in current log segment; skip rate ~57.5% (consistent with tui_skip_root_cause.md approval-modal issue); run progressing
 - Write rate: N/A (skip-heavy batch, no write_rate field in stats)
@@ -3727,3 +3823,13 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=76473, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
 - Action this tick: no action — both top dispatch patterns already addressed by commits within 24h (grep:unescaped_pattern → b3922fa; thinking_stall → 2cfa973/aeae8bb); balancer and vLLM healthy; stress progressing normally
+
+## 2026-05-09 12:07 UTC tick
+- Stress: step ~1020/1658; PID 3875067 alive (16h30m runtime); consistent SKIP/done mix per approval-modal blocking (known issue)
+- Write rate: ~31% (same as prior ticks)
+- Admiral last 30 min: harness:thinking_stall (latest: empty_after_tool:read_file + ralph_repo_index at 10:04–11:57Z, source=opus/canned); harness:grep:unescaped_pattern (last seen 08:33Z — now fixed); harness:loop:bash_generic (10:27Z, canned)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001 (gemma4 only, romulus still paused); no JSONDecodeErrors
+- GH issues: 0 open
+- Dispatch queue: harness=77713, retrieval=74 (0 actionable, all within 7-day window)
+- retrieval-drain: 0 projects ingested (all 74 already ingested)
+- Action this tick: no action — all top dispatch patterns (grep:unescaped_pattern → b3922fa, thinking_stall → 2cfa973/aeae8bb) addressed within last 24h; remaining patterns (hallucinated_name, bash_generic, search_replace:not_found_loop) have existing fixes in v2.8.x; system healthy
