@@ -585,11 +585,32 @@ class Bash(
                             _hd_lines = sum(1 for _ in _hdf)
                     except Exception:
                         pass
-                    stdout = (
-                        f"[File written: {_hd_path} ({_hd_lines} lines, "
-                        f"{_hd_size} bytes). "
-                        f"The file is on disk — do not re-run this command.]"
+                    # Track per-file heredoc write count across the session.
+                    # The identical-command hash check misses loops where the
+                    # model slightly varies the heredoc body each iteration
+                    # (different content → different command text → hash miss).
+                    _hd_file_state = self.state.__dict__.setdefault(
+                        "_heredoc_file_count", {}
                     )
+                    _hd_file_state[_hd_path] = _hd_file_state.get(_hd_path, 0) + 1
+                    _hd_count = _hd_file_state[_hd_path]
+                    if _hd_count >= 3:
+                        stdout = (
+                            f"[LOOP-BREAKER: {_hd_path} has been written via "
+                            f"cat-heredoc {_hd_count} times this session "
+                            f"({_hd_lines} lines, {_hd_size} bytes on disk). "
+                            f"Repeating the heredoc will NOT fix bugs in the content. "
+                            f"Instead: read_file the file, find what is wrong, then "
+                            f"fix it with search_replace (for targeted edits) or "
+                            f"write_file (for a full rewrite). "
+                            f"Do NOT cat-heredoc this file again.]"
+                        )
+                    else:
+                        stdout = (
+                            f"[File written: {_hd_path} ({_hd_lines} lines, "
+                            f"{_hd_size} bytes). "
+                            f"The file is on disk — do not re-run this command.]"
+                        )
 
             # Mechanical loop-breaker (ADVISORY ONLY — never raise
             # ToolError; see feedback_no_tool_errors_for_loop_detection.md).

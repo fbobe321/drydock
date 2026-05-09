@@ -1143,10 +1143,11 @@ class AgentLoop:
                         "Do NOT send an empty response."
                     )
                 elif _prev_was_read:
+                    _tool_name_str = prev_tool_name or "read_file"
                     note = (
-                        f"You read a file but produced no output. "
+                        f"You called {_tool_name_str} but produced no output. "
                         f"Now use write_file, search_replace, or bash "
-                        f"to make changes — do NOT call read_file again."
+                        f"to make changes — do NOT call {_tool_name_str} again."
                     )
                 elif _prev_write_success:
                     note = (
@@ -1174,11 +1175,12 @@ class AgentLoop:
                     )
             elif _stall_attempt == 1:
                 if _prev_was_read:
+                    _tool_name_str = prev_tool_name or "read_file"
                     note = (
-                        f"You sent an empty response after reading a file. "
+                        f"You sent an empty response after calling {_tool_name_str}. "
                         f"Call write_file or search_replace NOW to apply "
                         f"what you read — OR state in one sentence why you "
-                        f"cannot proceed."
+                        f"cannot proceed. Do NOT call {_tool_name_str} again."
                     )
                 else:
                     note = (

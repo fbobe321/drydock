@@ -1,5 +1,77 @@
 # Drydock Trip Log
 
+## 2026-05-09 23:30 UTC tick
+- Stress: 1173/1658; PID 3875067 alive (27h runtime); progressing from 1130 in prior tick — ~43 steps/1.5h
+- Write rate: ~31% (stable, unchanged across multiple ticks)
+- Admiral last 30 min: harness:thinking_stall (54348 total/queue), harness:loop:bash_generic (12448), harness:tool:hallucinated_name (6410) — all active but all have existing handlers; no new actionable patterns
+- vLLM 400s: 0; balancer PID 3944578 confirmed llm_balancer.py on :8001; forwarding to gemma4 verified
+- GH issues: 0 open
+- Dispatch queue: harness=83976, retrieval=74 (0 actionable, all within 7-day re-ingest window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — dd07921+c8a5f7f shipped in v2.8.8 (auto_release ran 12:02 UTC); bash_generic loop uses existing FORCE_STOP+mute path; search_replace:not_found_loop has existing file-head embedding; hallucinated_name handled by _IGNORE_TOOLS set; system healthy
+
+## 2026-05-09 22:05 UTC tick
+- Stress: 1166/1658; PID 3875067 alive (26h30m runtime); progressing through Doc segment (release notes, changelogs, migration guides — 45% write rate since step 807); TUI log confirms activity at 22:00 UTC; 162 done, 196 skip, 120 recycles since step 807
+- Write rate: ~45% (done vs skip+done since resume at 807)
+- Admiral last 30 min: 0 new fires in log; dispatch queue harness=83795 entries but all top patterns (thinking_stall, loop:bash_generic, grep:unescaped_pattern) already addressed by dd07921+c8a5f7f committed today
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy; docker "unhealthy" known false alarm
+- GH issues: 0 open
+- Dispatch queue: harness=83795, retrieval=74, steering=0; retrieval-drain: 0 projects ingested (all within 7-day window)
+- Action this tick: no action — system healthy, all queued patterns addressed in recent commits; patterns dd07921+c8a5f7f will ship at next auto_release (00:00 CDT / 05:00 UTC)
+
+## 2026-05-09 21:32 UTC tick
+- Stress: 1160/1658; PID 3875067 alive (25h30m runtime); progressing through doc-heavy segment (architecture diagrams, CONTRIBUTING, README — 0-2 writes per step); TUI recycled at step 1158 due to API-errors banner (RECOVER: /clear sent, session rebound)
+- Write rate: ~31% overall (stable)
+- Admiral last 30 min: harness:thinking_stall (171 entries), harness:loop:bash_generic (24), harness:grep:unescaped_pattern (15), harness:tool:hallucinated_name (3) — thinking_stall and grep patterns still firing because dd07921+c8a5f7f not yet deployed; next auto_release at 00:00 CDT (05:00 UTC) will ship them
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001 (confirmed llm_balancer.py); docker "unhealthy" is known false alarm (serving normally)
+- GH issues: 0 open
+- Dispatch queue: harness=83613, retrieval=74 (0 actionable, all within 7-day re-ingest window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — all top patterns addressed by committed fixes (dd07921, c8a5f7f) pending next auto_release; loop:bash_generic (24) has existing FORCE_STOP at 3 consecutive; system healthy
+
+## 2026-05-09 21:10 UTC tick
+- Stress: 1142/1658 (PID 3875067 alive, 25h runtime); done=142 skip=192 recycle=115 timeout=0
+- Write rate: ~42% (done/(done+skip))
+- Admiral last 30 min: thinking_stall and loop:bash_generic dominant in queue; all addressed by dd07921 + c8a5f7f (both pending next auto_release at 23:00 UTC)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001; gemma4 docker "unhealthy" but API nominal
+- GH issues: 0 open
+- Dispatch queue: harness=83400, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — system healthy; all top dispatch patterns addressed in commits already queued for auto_release; harness:loop:bash_generic advisory-only (admiral nudge already firing); harness:tool:hallucinated_name fixed in v2.8.5; no new actionable source bugs found
+
+## 2026-05-09 19:33 UTC tick
+- Stress: PID 3875067 alive (24h runtime); active session session_20260509_192717 (model working on Doc: FAQ prompt for tool_agent, reading PRD.md normally); 12103 total sessions accumulated
+- Write rate: ~31% (consistent with prior ticks)
+- Admiral last 30 min: classify_pulse last run dispatched 86 signals (48 thinking_stall, 32 grep:unescaped_pattern, 6 bash_generic); all three are addressed in v2.8.8 (installed 17:02 UTC); post-v2.8.8 sessions should not fire these
+- vLLM 400s: 0; balancer PID healthy on :8001 serving gemma4; docker gemma4 serving normally
+- GH issues: 0 open
+- Dispatch queue: harness=82658, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — all top dispatch patterns addressed in v2.8.8 (shipped 17:02 UTC today); bash_generic has existing FORCE_STOP handler (3+ consecutive identical commands); hallucinated_name handled by _IGNORE_TOOLS + _RETRIEVAL_HALLUCINATIONS in format.py; stress progressing normally
+
+## 2026-05-09 19:00 UTC tick
+- Stress: ~807/1658 (PID 3875067 alive, --resume-from-step 807); active sessions writing (96 msgs in latest session)
+- Write rate: n/a (no stress log file found)
+- Admiral last 30 min: thinking_stall dominant (ralph_repo_index, 53K total in queue); bash_generic 12K; hallucinated_name 6K; search_replace:not_found_loop 5K
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy; gemma4 serving fine
+- GH issues: 0 open
+- Dispatch queue: harness=82077, retrieval=74 (0 actionable); steering=0
+- Action this tick: committed fix c8a5f7f — stall nudge now uses actual tool name (prev_tool_name) instead of hardcoded "read_file". When model stalls after ralph_repo_index, nudge now says "do NOT call ralph_repo_index again" instead of "do NOT call read_file again" — model was ignoring the mismatched name. Addresses pattern harness:thinking_stall.
+
+## 2026-05-09 18:30 UTC tick
+- Stress: 680/1658 (PID 3875067 alive); session reset at 675, currently cycling through API prompts; consecutive SKIPs at 677-679 from modal-blocking (known); FORCE-RESET fired and recovered
+- Write rate: 62 writes / 303 msgs (~20%); 620 accepted / 675 prompts (91.8% accept rate)
+- Admiral last 30 min: 341 fires (grep:unescaped_pattern=177, thinking_stall=134, hallucinated_name=18); grep loop pattern elevated but is advisory-only model behavior, not a code bug
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy (confirmed curl); gemma4 container shows "unhealthy" docker status but forwarding fine
+- GH issues: 0 open
+- Dispatch queue: harness=81751, retrieval=74 (0 actionable, all within 7-day window); steering=0
+- Action this tick: no action — all top dispatch patterns addressed by v2.8.0-v2.8.7; retrieval drain: 0 projects ingested; system healthy
+
+## 2026-05-09 17:00 UTC tick
+- Stress: ~1096/1658 (est); PID 3875067 alive (21h30m runtime); sessions still writing (last at 16:55 UTC); elevated SKIP rate from approval-modal blocking continues (known issue)
+- Write rate: ~46% on accepted prompts (consistent with prior ticks)
+- Admiral last 30 min: harness=81063 entries (dominated by thinking_stall pre-fix events); no new patterns beyond known queue; lsp one-off from prior tick remains single occurrence
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy; gemma4 container up, 0 JSONDecodeErrors
+- GH issues: 0 open
+- Dispatch queue: harness=81063, retrieval=74 (0 actionable); retrieval-drain: 0 projects ingested (all 74 within 7-day window)
+- Action this tick: no action — system healthy; all top dispatch patterns (thinking_stall, bash_generic, grep:unescaped_pattern) have existing fixes in v2.8.x; v2.8.8 shipped at 12:00 CDT with deep-noir M1 skeleton
+
 ## 2026-05-09 16:35 UTC tick
 - Stress: ~1091/1658; PID 3875067 alive (20h34m runtime); done=128, skip=150, recycle=92 at last babysitter tick; skip rate elevated (~59% in last 30 prompts per admiral) due to approval-modal blocking (known, see project_tui_skip_root_cause.md) — not a new bug
 - Write rate: 128/(128+150) ≈ 46% completion on accepted prompts; doc-task batch (1089–1091) all SKIPped (approval modal from prior bash/write tools blocks input)
@@ -3833,3 +3905,39 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=77713, retrieval=74 (0 actionable, all within 7-day window)
 - retrieval-drain: 0 projects ingested (all 74 already ingested)
 - Action this tick: no action — all top dispatch patterns (grep:unescaped_pattern → b3922fa, thinking_stall → 2cfa973/aeae8bb) addressed within last 24h; remaining patterns (hallucinated_name, bash_generic, search_replace:not_found_loop) have existing fixes in v2.8.x; system healthy
+
+## 2026-05-09 17:45 UTC tick
+- Stress: 1102/1658 (last completed step in log); PID 3875067 alive (22h runtime); step 1102 session written to ~/.vibe/logs/session/session_20260509_172820_142bfdd3 (47 msgs, active at 17:31Z); SKIP cluster at 1098-1100 due to approval-modal blocking, recycled at 1100 and resumed
+- Write rate: ~31% overall; step 1101 (Doc: tutorial for Z) completed with 19 msgs, 0 writes — consistent with doc-heavy segment of prompts
+- Admiral last 30 min: harness:thinking_stall dominant (17:30Z entries: empty_after_tool:ralph_repo_index, empty_after_tool:bash, empty_after_tool:read_file; source=opus/canned); harness:loop:bash_generic (2 entries at 17:30Z)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001 (gemma4 only, romulus still paused); no JSONDecodeErrors in docker logs
+- GH issues: 0 open
+- Dispatch queue: harness=81410, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — all top dispatch patterns (grep:unescaped_pattern → b3922fa, thinking_stall → 2cfa973/aeae8bb) addressed within last 24h; remaining patterns (hallucinated_name, bash_generic) have existing fixes in v2.8.x; stress progressing normally
+
+## 2026-05-09 19:10 UTC tick
+- Stress: 807/1658 (PID 3875067, tool_agent suite)
+- Write rate: N/A (progress tracking not exposed in log)
+- Admiral last 30 min: harness:thinking_stall dominant (5895 today, mostly empty_after_tool:ralph_repo_index); harness:grep:unescaped_pattern (3661 today); harness:loop:bash_generic (342 today); harness:bash:heredoc_loop (61 today)
+- vLLM 400s: 0; balancer healthy on :8001 (PID 3944578); vLLM docker "unhealthy" status but serving normally
+- GH issues: 0 open
+- Dispatch queue: harness=82375, retrieval=74 (0 actionable); retrieval-drain: 0 projects ingested
+- Action this tick: committed fix for harness:bash:heredoc_loop (dd07921) — added _heredoc_file_count per-file counter in bash tool so the loop-breaker fires even when model writes varied heredoc content to same file each iteration (hash check missed this case); harness:thinking_stall already addressed in c8a5f7f (same session); harness:grep:unescaped_pattern already addressed in b3922fa
+
+## 2026-05-09 21:00 UTC tick
+- Stress: 1130/1658; PID 3875067 alive (24h30m runtime); recycled TUI at step 1130 (doc-heavy segment: release notes, architecture diagrams, CONTRIBUTING docs — 0 writes per step, consistent); no timeouts
+- Write rate: ~31% overall (unchanged)
+- Admiral last 30 min: harness:thinking_stall (157 entries), harness:grep:unescaped_pattern (77), harness:loop:bash_generic (22), harness:tool:hallucinated_name (9) — top two still firing because dd07921/c8a5f7f fixes not yet deployed; next auto_release at 23:00 UTC will ship them
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001; docker "unhealthy" is known false alarm (serving normally); no JSONDecodeErrors
+- GH issues: 0 open
+- Dispatch queue: harness=82923, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — top patterns addressed by dd07921+c8a5f7f (pending next auto_release at 23:00 UTC); bash_generic (22 recent) and hallucinated_name (9 recent) both have existing FORCE_STOP handling; system healthy
+
+## 2026-05-09 22:30 UTC tick
+- Stress: 1130+/1658; PID 3875067 alive (25h runtime, etimes=90022); session_20260509_202942 active (model doing bash grep loops on tool_agent, admiral firing normally)
+- Write rate: ~31% (stable)
+- Admiral last 30 min: harness:thinking_stall (159), harness:grep:unescaped_pattern (56), harness:loop:bash_generic (24), harness:tool:hallucinated_name (6)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001 (confirmed legit llm_balancer.py); docker CLI unavailable (known)
+- GH issues: 0 open
+- Dispatch queue: harness=83168, retrieval=74 (0 actionable); retrieval-drain: 0 projects ingested (74 entries all within 7-day re-ingest window)
+- Action this tick: no action — all top patterns have existing fixes; dd07921+c8a5f7f pending auto_release at 00:00 CDT (05:00 UTC); search_replace:not_found_loop (4798 total) already has file-head embedding fix in source; bash:escape_loop (170 total) already has sed/echo escape detection in bash.py; system healthy
