@@ -1,5 +1,71 @@
 # Drydock Trip Log
 
+## 2026-05-09 10:50 UTC tick
+- Stress: 1004/1658, PID 3875067 alive; accepted=82, skipped=111, timed_out=0 in current log segment; skip rate ~57.5% (consistent with tui_skip_root_cause.md approval-modal issue); run progressing
+- Write rate: N/A (skip-heavy batch, no write_rate field in stats)
+- Admiral last 30 min: harness:thinking_stall still dominant (10:04–10:07 UTC entries with source=opus, ralph_repo_index stall); prior commits 2cfa973/aeae8bb/7696a55 address this; also harness:loop:bash_generic 3 hits (ls loop on plugins/, nudge already fired); all patterns have countermeasures
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy; gemma4 docker up (romulus paused)
+- GH issues: 0 open
+- Dispatch queue: harness≈66K+ (thinking_stall 51K dominant), retrieval=74 (drain ran: 0 actionable — all ingested within 7-day window)
+- Action this tick: no fix committed — grep:unescaped_pattern fix (b3922fa) already shipped today; all other top dispatch patterns covered by existing commits; system healthy
+
+## 2026-05-09 09:00 UTC tick
+- Stress: 965/1658, PID 3875067 alive; done=55, skip=103 in current log segment; skip rate ~65% consistent with known approval-modal blocking issue (tui_skip_root_cause.md); run active and progressing
+- Write rate: N/A (skip-heavy batch)
+- Admiral last 30 min: new dispatch entries are harness:grep:unescaped_pattern (38 hits, all today) — advisory circuit breaker fires at count≥5 returning NOTE, FORCE_STOP via Check 1a fires at 4 consecutive grep calls; already handled. All other top patterns (thinking_stall 50K, bash_generic 12K, hallucinated_name 6K, search_replace:not_found_loop 4.7K) addressed by v2.8.0–v2.8.6 commits.
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy; docker gemma4 up (romulus backend paused per 820a557)
+- GH issues: 0 open
+- Dispatch queue: harness=75532, retrieval=74 (all 74 already ingested in 7-day window — drain ran 0 actionable), steering=N/A
+- Action this tick: no fix committed — all dispatch patterns covered by prior commits; bash:escape_loop (170 hits) already handled in bash.py:740–797; tool_error_raised (25 hits, from 2026-05-03 only) fixed by 9bdd8a3; system healthy, no new actionable source bugs found
+
+## 2026-05-09 08:35 UTC tick
+- Stress: 955/1658, PID 3875067 alive (13h05m), done=47 / skip=100 / timeout=0 / recycle=55; last 4h rate: 29 done / 27 skip (52% accept rate — improving vs earlier skip-heavy batch)
+- Write rate: ~52% accept rate in last 4h (steps 899–955); cumulative 47 done / 148 steps since step 807 restart = 32%
+- Admiral last 30 min: today's stalls — ralph_repo_index (567, addressed 2cfa973), write_file (186, inline stall handler fires _prev_write_success path), bash (148), read_file (114); all patterns have existing countermeasures
+- vLLM 400s: 0; balancer on :8001 healthy; docker gemma4 up
+- GH issues: 0 open
+- Dispatch queue: harness=75325, retrieval=74 (all retrieval already ingested within 7-day window)
+- Action this tick: no fix committed — investigated top 5 dispatch patterns; thinking_stall sub-cases (write_file/bash/read_file stalls) are handled by inline retry in agent_loop.py lines 1130–1174; ralph_repo_index stall addressed in v2.8.5/v2.8.6 (commits 2cfa973, aeae8bb, 7696a55, 488dcce); hallucinated_name/search_replace patterns have prior fixes; retrieval drain ran (0 actionable); no new source bugs identified
+
+## 2026-05-09 07:04 UTC tick
+- Stress: 941/1658, PID 3875067 alive (11h34m), done=40 / skip=93 / timeout=0 (30% accept rate; skip-heavy batch continues with SSE/WebSocket/API/benchmark prompts)
+- Write rate: ~30% (done/total = 40/133 this restart session from step 807)
+- Admiral last 30 min: harness:thinking_stall dominant (50293 total queue); harness:loop:bash_generic (12056 total, addressed by a41f454); harness:tool:hallucinated_name (5891, addressed by 488dcce+7696a55); harness:search_replace:not_found_loop (4702 total, last event 05:39 UTC today)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=74952, retrieval=74 (0 actionable — all within 7-day re-ingest window)
+- Action this tick: no fix committed — all top dispatch patterns verified as already addressed: bash_generic (a41f454 FORCE_STOP at 3 consecutive), hallucinated_name (488dcce/7696a55), search_replace:not_found_loop (file-head embedding already in place at count=1 in search_replace.py lines 638–654); thinking_stall still dominant but recent commits 2cfa973+aeae8bb address ralph_repo_index/bash/grep stall sources; balancer healthy (gemma4 via :8001 confirmed)
+
+## 2026-05-09 06:30 UTC tick
+- Stress: 920/1658 (step counter from live log), PID 3875067 active, TUI recycling normally; ~55% accept rate in last 200 prompts (17 done / 14 SKIP) — ongoing approval-modal SKIP pattern (known, tui_skip_root_cause.md)
+- Write rate: ~55% of accepted prompts (SKIP-excluded)
+- Admiral last 30 min: pattern classify_pulse shows 74,513 harness entries; no new admiral-fired events visible in log tail
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=74513, retrieval=74, steering=N/A
+- Action this tick: no fix committed — `harness:search_replace:not_found_loop` (latest queue entry, 05:39 UTC) already addressed by commits 444e4a5 + 516d0c6 (first-failure file head embedding already in search_replace.py lines 639–654); retrieval drain 0 actionable (all 74 entries within 7-day re-ingest window); system healthy
+
+## 2026-05-09 05:31 UTC tick
+- Stress: PID 3875067 alive (10h elapsed since 19:31 UTC restart); step counter not visible but TUI sessions cycling (latest session_20260509_051316 active)
+- Write rate: ~1 DONE per 27 min since restart (mass-SKIP continues due to known approval-modal blocking — tui_skip_root_cause.md)
+- Admiral last 30 min: harness:thinking_stall dominant (62 fires, all source=canned/opus); bash_generic (2 fires) — all patterns already addressed by v2.8.0–v2.8.6
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy (llm_balancer.py confirmed); gemma4 serving cleanly
+- GH issues: 0 open
+- Dispatch queue: harness=74289, retrieval=74 (0 actionable, all within 7-day window)
+- retrieval-drain: 0 projects ingested (all 74 already ingested)
+- Pattern review: thinking_stall (49738), bash_generic (12038), hallucinated_name (5828), search_replace:not_found_loop (4684), heredoc_loop (1537), escape_loop (170), identical_blocks (46) — all have prior fixes in v2.7.x–v2.8.x commits; no new actionable pattern found
+- Action this tick: no fix committed — system healthy, all top dispatch patterns addressed; balancer PID changed since last tick (3873081→3944578, cron restart, confirmed llm_balancer.py)
+
+## 2026-05-09 05:01 UTC tick
+- Stress: PID 3875067 alive; segment v115 just COMPLETED 201/201 prompts, 198 accepted / 3 skipped / 0 timed_out (98.5% acceptance rate, 165 min); harness now cycling to next segment
+- Write rate: 6 file writes in segment v115 (build-adjacent prompts); acceptance rate dramatically improved over previous run's near-0% SKIP cascade
+- Admiral last 30 min: harness:thinking_stall dominant (178/200 recent queue entries), hallucinated_name (14), bash_generic (6), heredoc_loop (2) — all addressed by v2.8.0–v2.8.5
+- vLLM 400s: 0; balancer PID 3944578 on :8001 healthy (confirmed llm_balancer.py); gemma4 serving cleanly
+- GH issues: 0 open
+- Dispatch queue: harness=74067, retrieval=74 (0 actionable, all within 7-day window); no steering queue
+- retrieval-drain: 0 projects ingested (all 74 already ingested)
+- Action this tick: no fix committed — segment v115 completed with 98.5% acceptance (vs 0% in prior day's runs), indicating the approval-modal SKIP cascade has resolved; system healthy; all top dispatch patterns already addressed in v2.8.0–v2.8.5
+
 ## 2026-05-09 04:34 UTC tick
 - Stress: 907/1658; PID 3875067 alive (9h elapsed), done=23, skip=77, writes=6 since step 807 resume; run is progressing (steps 904-907 just completed in the last few minutes, step 907 got +1 write); SKIP rate ~77% consistent with known approval-modal blocking in "Test:" prompt range (tui_skip_root_cause.md)
 - Write rate: 6 file writes since restart (~1 per 15 steps in this range); test-style prompts ("Test: idempotency/rollback/golden/fuzz") produce fewer writes than build prompts
@@ -3623,3 +3689,41 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=72901, retrieval=74 (0 actionable, all within 7-day window)
 - retrieval-drain: 0 projects ingested
 - Action this tick: committed 820a557 — pause romulus backend in llm_balancer.py (llama.cpp b1-e77056f, suspected source of jumbled-text insertions; re-add after romulus reaches b9000+)
+
+## 2026-05-09 07:38 UTC tick
+- Stress: 949/1658; PID 3875067 alive (12h08m since restart at step 807); done=~7, skip=98 (latest segment shows near-100% SKIP — approval-modal blocking, known issue per tui_skip_root_cause.md)
+- Write rate: ~0% in current segment (all SKIPs); log_size growing (model IS running sessions, just not accepting prompts via pexpect)
+- Admiral last 30 min: harness:thinking_stall (2326 in last 6h — source=canned echoes), bash_generic loop (82, all canned from prior sessions), heredoc_loop (39, canned), search_replace:not_found_loop (24, addressed by v2.8.x)
+- vLLM 400s: 0; balancer OK on :8001 (gemma4 only — romulus paused since 820a557); llamacpp-gemma4 Up 3 days
+- GH issues: 0 open
+- Dispatch queue: harness=75140, retrieval=74 (0 actionable, all within 7-day window); no steering queue
+- retrieval-drain: 0 projects ingested (all 74 already ingested)
+- Action this tick: no fix committed — all top dispatch patterns (thinking_stall, bash_generic, heredoc_loop, search_replace:not_found_loop, hallucinated_name) already addressed by v2.8.0–v2.8.6; pure-SKIP stress segment is known approval-modal blocking issue (not a drydock source bug); system otherwise healthy
+
+## 2026-05-09 09:31 UTC tick
+- Stress: 993/1658; PID 3875067 alive (+16 prompts since 09:03 tick); step output shows mix of done and SKIP still consistent with approval-modal blocking pattern; no harness stall
+- Write rate: N/A (stress on tool_agent suite)
+- Admiral last 30 min: harness:thinking_stall dominant (50943 total queue entries, last 09:30Z); harness:loop:bash_generic (12086), harness:tool:hallucinated_name (5996), harness:search_replace:not_found_loop (4732) — all have existing fixes in v2.8.x commits
+- vLLM 400s: 0; balancer OK on :8001 (gemma4 only, romulus paused); no JSONDecodeErrors in docker logs
+- GH issues: 0 open
+- Dispatch queue: harness=76161, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — grep:unescaped_pattern fix (b3922fa) shipped at 09:03 tick; all other top dispatch patterns (thinking_stall, bash_generic, hallucinated_name, search_replace:not_found) already addressed by v2.8.0–v2.8.6; system healthy
+
+## 2026-05-09 09:03 UTC tick
+- Stress: 977/1658 (stress PID 3875067 healthy, watcher running)
+- Write rate: N/A (stress on tool_agent suite, not write-rate metric)
+- Admiral last 30 min: harness:grep:unescaped_pattern top today (212 entries, 36 calls per session)
+- vLLM 400s: 0; balancer healthy on :8001 (pid 3944578)
+- GH issues: 0 open
+- Dispatch queue: harness=~75340 total; top unaddressed pattern today = grep:unescaped_pattern; retrieval=74 (0 actionable)
+- retrieval-drain: 0 projects ingested (all within 7-day window)
+- Action this tick: committed fix for harness:grep:unescaped_pattern — grep tool now auto-escapes invalid regex and returns a NOTE in the result instead of raising ToolError (which caused 36-call retry loops); fix in b3922fa, auto_release will ship at next 0/6/12/18 CDT tick
+
+## 2026-05-09 10:30 UTC tick
+- Stress: 998/1658; PID 3875067 alive (14:29h runtime); done=80, skip=110, recycle=64, timeout=0; ~31% write rate for completed prompts; consistent with prior ticks
+- Write rate: ~31% (80 done / 254 completed = done+skip+recycle)
+- Admiral last 30 min: harness:thinking_stall (2 fresh entries at 09:14Z); harness:grep:unescaped_pattern (36 entries through 08:33Z, now fixed); no new patterns beyond known queue
+- vLLM 400s: 0 in docker logs; balancer 502s are context-overflow recovery events (handled by f0db01f), not failures; direct completion test passes; Docker status "unhealthy" is a false-alarm from health check
+- GH issues: 0 open
+- Dispatch queue: harness=76473, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — both top dispatch patterns already addressed by commits within 24h (grep:unescaped_pattern → b3922fa; thinking_stall → 2cfa973/aeae8bb); balancer and vLLM healthy; stress progressing normally

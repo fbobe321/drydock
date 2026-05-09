@@ -118,28 +118,36 @@ class Grep(
         self, args: GrepArgs, ctx: InvokeContext | None = None
     ) -> AsyncGenerator[ToolStreamEvent | GrepResult, None]:
         backend = self._detect_backend()
+        args, regex_note = self._coerce_pattern(args)
         self._validate_args(args)
 
         exclude_patterns = self._collect_exclude_patterns()
         cmd = self._build_command(args, exclude_patterns, backend)
         stdout = await self._execute_search(cmd)
 
-        yield self._parse_output(
+        result = self._parse_output(
             stdout, args.max_matches or self.config.default_max_matches
         )
+        if regex_note:
+            result.matches = regex_note + result.matches
+        yield result
+
+    def _coerce_pattern(self, args: GrepArgs) -> tuple[GrepArgs, str]:
+        """Auto-escape invalid regex to avoid ToolError loops; return note if coerced."""
+        try:
+            _re.compile(args.pattern)
+            return args, ""
+        except _re.error:
+            escaped = _re.escape(args.pattern)
+            note = (
+                f"NOTE: '{args.pattern}' is not valid regex; searching as literal text"
+                f" (pattern='{escaped}').\n"
+            )
+            return args.model_copy(update={"pattern": escaped}), note
 
     def _validate_args(self, args: GrepArgs) -> None:
         if not args.pattern.strip():
             raise ToolError("Empty search pattern provided.")
-
-        try:
-            _re.compile(args.pattern)
-        except _re.error as regex_err:
-            escaped = _re.escape(args.pattern)
-            raise ToolError(
-                f"Invalid regex pattern: {regex_err}\n"
-                f"To search for this as literal text, use pattern={escaped!r}"
-            ) from None
 
         path_obj = Path(args.path).expanduser()
         if not path_obj.is_absolute():
