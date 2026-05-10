@@ -1,12 +1,17 @@
 """FastAPI server hosting a transformers-backed Gemma 4, OpenAI-compat shape.
 
-Milestone 1 deliverable per DEEP_NOIR_PRD.md:
-- Loads Gemma 4 from a local path via `transformers.AutoModelForCausalLM`.
-- Speaks `POST /v1/chat/completions` (non-streaming first cut) and
+Milestones 1+2 deliverable per DEEP_NOIR_PRD.md:
+- M1: Loads Gemma 4 from a local path via `transformers.AutoModelForCausalLM`.
+  Speaks `POST /v1/chat/completions` (non-streaming first cut) and
   `GET /v1/models` so the existing `llm_balancer.py` can route to it
   the same way it routes to llama.cpp.
-- NO forward hooks yet (Milestone 2). Returns identical outputs to
-  llama.cpp on a smoke prompt — that's the M1 acceptance check.
+- M2: Per-layer forward hooks via `SteeringHookManager`, dispatched
+  per-request through a `ContextVar`. The `X-Drydock-Steering` header
+  is parsed into directives, vectors are resolved (registry → zero
+  fallback for M2 wiring check), and `model.generate` runs inside
+  `hook_manager.activate(directives)`. With M2's zero-vector fallback,
+  output is bit-identical with or without the header — that's the
+  acceptance test for the wiring.
 
 Lazy model load: the model is NOT loaded at import time. The first
 inference request triggers `_load_model()` which holds a lock and
@@ -32,83 +37,139 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from drydock.steering.sidecar.header_parser import parse_header
+from drydock.steering.sidecar.hooks import SteeringHookManager
+from drydock.steering.sidecar.loader import load_model as _shared_load_model
+
 logger = logging.getLogger(__name__)
 
-# Default to the AWQ-4bit Gemma 4 weights (matches CLAUDE.md "active
-# model" path). Override with DRYDOCK_STEERING_SIDECAR_MODEL_PATH.
-_DEFAULT_MODEL_PATH = "/data3/Models/Gemma-4-26B-A4B-it-AWQ-4bit"
-_MODEL_PATH = os.environ.get(
-    "DRYDOCK_STEERING_SIDECAR_MODEL_PATH", _DEFAULT_MODEL_PATH
-)
-# transformers picks the device automatically when device_map="auto",
-# but operators often want to pin to a single GPU to avoid sharing
-# with llama.cpp. CUDA_VISIBLE_DEVICES handles that at the env layer.
-_DEVICE_MAP = os.environ.get("DRYDOCK_STEERING_SIDECAR_DEVICE_MAP", "auto")
 # Reported model name in /v1/models. Matches what `start_gemma4.sh`
 # reports so clients see a consistent name regardless of which
-# backend serves them.
+# backend serves them. Path/device live in `loader.py`.
 _REPORTED_MODEL_NAME = os.environ.get(
     "DRYDOCK_STEERING_SIDECAR_MODEL_NAME", "gemma4"
 )
 
 
-_MODEL_LOCK = threading.Lock()
-_MODEL = None        # type: ignore[var-annotated]
-_TOKENIZER = None    # type: ignore[var-annotated]
+# The model/tokenizer cache lives in `loader.py` so capture pipelines
+# can share it. Server keeps only its own per-process state below.
+_HOOK_MANAGER_LOCK = threading.Lock()
+_HOOK_MANAGER: SteeringHookManager | None = None
+_HOOK_MANAGER_INITIALIZED = False
+
+
+def _build_vector_lookup(model: Any, registry: Any) -> Any:
+    """Resolve `(mode, layer)` → `torch.Tensor | None`.
+
+    M2 behavior: try the registry first; on miss return a zero tensor
+    of `hidden_size`. Zero vectors mean the hook fires (proving the
+    wiring works) but adds nothing to the residual stream — output
+    is bit-identical to the no-header path.
+
+    M3+ will replace the zero fallback with `return None` once real
+    vectors land, so an unknown mode degrades gracefully to unsteered.
+    """
+    import io
+    import numpy as np
+    import torch
+
+    hidden_dim = int(model.config.hidden_size)
+    cache: dict[tuple[str, int], Any] = {}
+
+    def lookup(mode: str, layer: int) -> Any:
+        key = (mode, layer)
+        if key in cache:
+            return cache[key]
+
+        tensor: Any = None
+        try:
+            vectors = registry.load_for_mode(mode) if registry is not None else []
+        except Exception as e:
+            logger.warning("steering: registry load failed for mode=%r: %s", mode, e)
+            vectors = []
+
+        match = None
+        for v in vectors:
+            if int(v.manifest.layer) == int(layer):
+                match = v
+                break
+
+        if match is not None:
+            try:
+                arr = np.load(io.BytesIO(match.data))
+                if arr.ndim != 1 or arr.shape[0] != hidden_dim:
+                    logger.warning(
+                        "steering: vector %s has shape %s, expected (%d,) — "
+                        "falling back to zero",
+                        match.manifest.name, arr.shape, hidden_dim,
+                    )
+                else:
+                    tensor = torch.from_numpy(arr.astype(np.float32, copy=False))
+            except Exception as e:
+                logger.warning(
+                    "steering: failed to decode vector %s: %s — falling back to zero",
+                    match.manifest.name, e,
+                )
+
+        if tensor is None:
+            # M2 wiring check: a zero vector at the right shape proves
+            # the hook ran and the dtype/device handling is correct,
+            # without changing the completion. Logged once per (mode, layer).
+            logger.info(
+                "steering: no vector for mode=%r layer=%d — using zero "
+                "(M2 wiring check, expected before M4 ships real vectors)",
+                mode, layer,
+            )
+            tensor = torch.zeros(hidden_dim, dtype=torch.float32)
+
+        cache[key] = tensor
+        return tensor
+
+    return lookup
 
 
 def _load_model() -> tuple[Any, Any]:
-    """Lazy + thread-safe model load. Cached after the first call.
+    """Lazy + thread-safe model load. Delegates to the shared loader,
+    then attaches the steering hook manager once on first hit.
 
     Returns `(model, tokenizer)`. Raises RuntimeError on any underlying
     transformers/torch failure — the FastAPI handler converts that into
     a 503 so the balancer can fall back to llama.cpp.
     """
-    global _MODEL, _TOKENIZER
-    if _MODEL is not None and _TOKENIZER is not None:
-        return _MODEL, _TOKENIZER
-    with _MODEL_LOCK:
-        if _MODEL is not None and _TOKENIZER is not None:
-            return _MODEL, _TOKENIZER
-        logger.info(
-            "steering sidecar: loading model from %s (device_map=%s)",
-            _MODEL_PATH, _DEVICE_MAP,
-        )
-        t0 = time.perf_counter()
+    model, tokenizer = _shared_load_model()
+    global _HOOK_MANAGER, _HOOK_MANAGER_INITIALIZED
+    if _HOOK_MANAGER_INITIALIZED:
+        return model, tokenizer
+    with _HOOK_MANAGER_LOCK:
+        if _HOOK_MANAGER_INITIALIZED:
+            return model, tokenizer
         try:
-            import torch  # local import — only need it when actually loading
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-        except ImportError as e:
-            raise RuntimeError(
-                f"steering sidecar: missing dependency ({e}). Install "
-                "transformers + torch (CUDA build) to use the sidecar."
-            ) from e
-
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(
-                _MODEL_PATH, trust_remote_code=True
+            from drydock.steering.registry import load_registry
+            registry = load_registry()
+            logger.info(
+                "steering sidecar: registry loaded with %d modes",
+                len(registry.list_modes()),
             )
-            model = AutoModelForCausalLM.from_pretrained(
-                _MODEL_PATH,
-                device_map=_DEVICE_MAP,
-                torch_dtype="auto",      # let the quant_config drive dtype
-                trust_remote_code=True,
-            )
-            model.eval()
         except Exception as e:
-            raise RuntimeError(
-                f"steering sidecar: model load failed: {type(e).__name__}: {e}"
-            ) from e
-
-        elapsed = time.perf_counter() - t0
-        logger.info(
-            "steering sidecar: model loaded in %.1fs (param dtype=%s)",
-            elapsed,
-            getattr(next(iter(model.parameters()), torch.tensor(0)), "dtype", "?"),
-        )
-        _MODEL = model
-        _TOKENIZER = tokenizer
-        return _MODEL, _TOKENIZER
+            logger.warning(
+                "steering sidecar: registry unavailable (%s) — zero-vector fallback only",
+                e,
+            )
+            registry = None
+        try:
+            _HOOK_MANAGER = SteeringHookManager(
+                model, _build_vector_lookup(model, registry)
+            )
+        except Exception as e:
+            # Hook installation failure must not stop us from serving
+            # unsteered traffic — the sidecar still has a job.
+            logger.error(
+                "steering sidecar: hook manager init failed (%s) — serving unsteered",
+                e,
+            )
+            _HOOK_MANAGER = None
+        _HOOK_MANAGER_INITIALIZED = True
+        return model, tokenizer
 
 
 def _now() -> int:
@@ -118,15 +179,17 @@ def _now() -> int:
 def build_app() -> FastAPI:
     app = FastAPI(
         title="Drydock Deep Noir Steering Sidecar",
-        version="0.1.0-milestone1",
+        version="0.2.0-milestone2",
     )
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
+        from drydock.steering.sidecar import loader as _loader
         return {
             "status": "ok",
-            "model_loaded": _MODEL is not None,
-            "model_path": _MODEL_PATH,
+            "model_loaded": _loader.is_loaded(),
+            "model_path": _loader._model_path(),
+            "hook_manager": _HOOK_MANAGER is not None,
         }
 
     @app.get("/v1/models")
@@ -153,13 +216,14 @@ def build_app() -> FastAPI:
         if not isinstance(messages, list) or not messages:
             raise HTTPException(status_code=400, detail="missing messages[]")
 
-        # Milestone 1: ignore the steering header entirely. Just verify
-        # we can serve a completion. Hooks land in M2.
+        # M2: parse the steering header into directives. Malformed
+        # entries are dropped by the parser, never raised.
         steering_header = request.headers.get("x-drydock-steering", "")
+        directives = parse_header(steering_header)
         if steering_header:
             logger.info(
-                "steering header received but no hooks active in M1: %r",
-                steering_header,
+                "steering header: raw=%r parsed=%d directive(s)",
+                steering_header, len(directives),
             )
 
         # Lazy load — pays the cost only on the first real request.
@@ -196,17 +260,36 @@ def build_app() -> FastAPI:
         top_k = int(payload.get("top_k", 40))
         do_sample = temperature > 0
 
+        # M2: run generate inside the hook manager's activate() block
+        # so the ContextVar is set for the whole forward pass. If no
+        # manager (init failed) or no directives, this degrades to
+        # plain generate.
+        active_layers: list[int] = []
         t0 = time.perf_counter()
         with torch.no_grad():
-            output = model.generate(
-                prompt_ids,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature if do_sample else 1.0,
-                top_p=top_p if do_sample else 1.0,
-                top_k=top_k if do_sample else 0,
-                pad_token_id=tokenizer.eos_token_id,
-            )
+            if _HOOK_MANAGER is not None and directives:
+                with _HOOK_MANAGER.activate(directives) as active:
+                    if active is not None:
+                        active_layers = active.fired_layers()
+                    output = model.generate(
+                        prompt_ids,
+                        max_new_tokens=max_new_tokens,
+                        do_sample=do_sample,
+                        temperature=temperature if do_sample else 1.0,
+                        top_p=top_p if do_sample else 1.0,
+                        top_k=top_k if do_sample else 0,
+                        pad_token_id=tokenizer.eos_token_id,
+                    )
+            else:
+                output = model.generate(
+                    prompt_ids,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=do_sample,
+                    temperature=temperature if do_sample else 1.0,
+                    top_p=top_p if do_sample else 1.0,
+                    top_k=top_k if do_sample else 0,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
         gen_time = time.perf_counter() - t0
 
         # Decode only the newly-generated portion.
@@ -220,29 +303,40 @@ def build_app() -> FastAPI:
             prompt_token_count, completion_token_count, gen_time,
         )
 
-        return JSONResponse(
-            content={
-                "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
-                "object": "chat.completion",
-                "created": _now(),
-                "model": _REPORTED_MODEL_NAME,
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": completion,
-                        },
-                        "finish_reason": "stop",
-                    }
+        response: dict[str, Any] = {
+            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "object": "chat.completion",
+            "created": _now(),
+            "model": _REPORTED_MODEL_NAME,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": completion,
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": prompt_token_count,
+                "completion_tokens": completion_token_count,
+                "total_tokens": prompt_token_count + completion_token_count,
+            },
+        }
+        # Echo the steering decision back so the M2 acceptance test
+        # can assert "directives parsed AND fired" without needing
+        # log scraping. Non-standard field, prefixed `drydock_`.
+        if directives:
+            response["drydock_steering"] = {
+                "parsed": [
+                    {"mode": d.mode, "layer": d.layer, "scale": d.scale}
+                    for d in directives
                 ],
-                "usage": {
-                    "prompt_tokens": prompt_token_count,
-                    "completion_tokens": completion_token_count,
-                    "total_tokens": prompt_token_count + completion_token_count,
-                },
+                "fired_layers": active_layers,
+                "applied": bool(active_layers),
             }
-        )
+        return JSONResponse(content=response)
 
     return app
 

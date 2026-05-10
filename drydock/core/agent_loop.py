@@ -1081,7 +1081,7 @@ class AgentLoop:
                     prev_tool_name = assistant_msg.tool_calls[-1].function.name if assistant_msg.tool_calls[-1].function else None
             _readonly_tools = {"read_file", "grep", "glob", "ls", "pwd",
                                "ralph_repo_index", "ralph_file_summary",
-                               "retrieve", "search_files"}
+                               "retrieve", "search_files", "lsp"}
             _write_tools = {"write_file", "search_replace"}
             _prev_was_read = prev_tool_name in _readonly_tools
             _prev_was_write = prev_tool_name in _write_tools

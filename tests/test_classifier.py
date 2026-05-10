@@ -51,6 +51,33 @@ def test_harness_grep_unescaped_pattern():
     assert _bucket(signals, "harness:grep:unescaped_pattern") == Bucket.HARNESS
 
 
+def test_harness_grep_repeated_call_loop_classified_separately():
+    """The 'this exact call to grep has been made N times' admiral text
+    must NOT be classified as harness:grep:unescaped_pattern (it isn't
+    an invalid regex — the model is just looping on a valid grep).
+    Pre-2026-05-10 the rule conflated the two and produced thousands
+    of false-positive unescaped_pattern fires."""
+    signals = classify_text(
+        "retry_after_error:grep:NOTE: this exact call to `grep` has been made 34 times"
+    )
+    # Loop-rule fires…
+    assert _bucket(signals, "harness:grep:repeated_call_loop") == Bucket.HARNESS
+    # …and the invalid-regex rule does NOT fire on this text.
+    assert (
+        _bucket(signals, "harness:grep:unescaped_pattern") is None
+    ), "loop signal must not be misclassified as unescaped_pattern"
+
+
+def test_harness_grep_repeated_call_loop_matches_match_text():
+    """Admiral also writes the canned message with the matched-line
+    fragment as the error head. Both shapes must hit the loop rule."""
+    signals = classify_text(
+        "retry_after_error:grep:matches: ./.tool_agent_memory/default.json:20"
+    )
+    assert _bucket(signals, "harness:grep:repeated_call_loop") == Bucket.HARNESS
+    assert _bucket(signals, "harness:grep:unescaped_pattern") is None
+
+
 def test_harness_hallucinated_tool():
     signals = classify_text(
         "[error] unknown tool: ralph_repo_index"

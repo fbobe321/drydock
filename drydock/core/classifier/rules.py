@@ -63,9 +63,29 @@ RULES: tuple[ClassificationRule, ...] = (
         bucket=Bucket.HARNESS,
         suggested_action="Add escape-sequence-loop detection in bash hint generator.",
     ),
+    # ORDER MATTERS: the repeated-call loop has to match BEFORE the
+    # invalid-regex rule below, because admiral's loop intervention
+    # text contains the substring "retry_after_error:grep" too —
+    # without this split, valid greps that just looped were getting
+    # mis-classified as unescaped_pattern (4k+ false positives in
+    # the dispatch queue, observed 2026-05-10).
+    ClassificationRule(
+        pattern_id="harness:grep:repeated_call_loop",
+        regex=_r(
+            r"retry_after_error[:\s]*grep[:\s]*"
+            r".*\b(this\s+exact\s+call\s+to\s+`?grep`?\s+has\s+been\s+made"
+            r"|matches[:\s]|same\s+arguments\s+that\s+errored)"
+        ),
+        bucket=Bucket.HARNESS,
+        suggested_action="Add per-call dedup hint to grep tool result on Nth identical call; reuse search_replace dedup pattern.",
+        confidence=0.85,
+    ),
     ClassificationRule(
         pattern_id="harness:grep:unescaped_pattern",
-        regex=_r(r"(grep:\s+Unmatched|retry_after_error[:\s]*grep|grep.*invalid\s+regex)"),
+        # Only true invalid-regex signals — the engine error text or an
+        # explicit "invalid regex" mention. Bare `retry_after_error:grep`
+        # without one of those signals goes to the loop rule above.
+        regex=_r(r"(grep:\s+Unmatched|grep.*invalid\s+regex|grep:.*Unbalanced|grep:.*Trailing\s+backslash)"),
         bucket=Bucket.HARNESS,
         suggested_action="Validate regex in grep tool early; suggest re.escape() literal.",
     ),

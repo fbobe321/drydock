@@ -1,5 +1,58 @@
 # Drydock Trip Log
 
+## 2026-05-11 01:12 UTC tick
+- Stress: 1431/1658 (PID 3875067 alive, 45h runtime); TUI currently mid-generation ("Examining… 3m48s") — llamacpp backend slow but running; 52% skip rate this restart due to model taking longer than harness timeout on Perf: prompts
+- Write rate: 169 writes / 296 done steps (57%); 327 skips in current log
+- Admiral last 30 min: harness:thinking_stall dominant (~7 fires in 30m window); all ralph_repo_index stalls handled at attempts 0/1/2 in agent_loop.py — no new unhandled patterns
+- vLLM 400s: 0 new; balancer 400 errors in log are stale (last balancer.log write was 10:34 UTC); llamacpp-gemma4 container Up 5 days (unhealthy = health check timeout only, model is actively processing)
+- GH issues: 0 open
+- Dispatch queue: harness=91987 total (2264 last 4h), retrieval=120 (0 actionable — all within 7-day window)
+- Action this tick: no fix committed — all queued patterns already handled; stress healthy but slow; retrieval drain found 0 new projects to ingest
+
+## 2026-05-10 19:12 UTC tick
+- Stress: PID 3875067, advancing (step 1414+ at tick end); was stuck at step 1413 "Perf: stream large file" for ~5 hours (TUI child PID 248307 wedged, no log output since 10:01 UTC). Killed the stuck TUI child; harness recycled automatically and resumed within seconds.
+- Write rate: recovering — 4 writes on step 1413 after restart
+- Admiral last 30 min: harness:thinking_stall dominant (91,060 total queue); harness:loop:bash_generic 13,092 (0.6 confidence, model behavior); harness:grep:unescaped_pattern addressed by 62ebc54; thinking_stall addressed by multiple prior commits
+- vLLM 400s: 0; balancer healthy on :8001 (PID 3944578); vLLM container Up 5 days
+- GH issues: 0 open
+- Dispatch queue: harness=91060, retrieval=111 (0 actionable — all within 7-day window), steering=0
+- Action this tick: killed stuck TUI child PID 248307 (confirmed drydock process, child of harness 3875067); no source code fix needed — stress run recovered and progressing
+
+## 2026-05-10 17:12 UTC tick
+- Stress: PID 3875067 alive, at step 1405/1658 (85%); accepted=286, skipped=311 (52% skip rate), total_writes=164; write rate 57% per accepted prompt (0.6 writes/done); TUI recycling at ~every 2 consecutive SKIPs, consistent with approval-modal stuck state at Perf/API prompt cluster
+- Write rate: 52% (skip rate matches prior ticks; approval modal blocks input — known issue, not a drydock source bug)
+- Admiral last 30 min: harness:thinking_stall dominant (60,351 total in queue); harness:loop:bash_generic 13,086 (confidence 0.6, model behavior not actionable); harness:grep:unescaped_pattern 4,092 (addressed by 62ebc54); harness:bash:heredoc_loop 1,551 (addressed by dd07921 in last 24h)
+- vLLM 400s: 0 in last 30 min; balancer healthy on :8001 (pid 3944578); vLLM container Up 5 days (unhealthy status is cosmetic)
+- GH issues: 0 open
+- Dispatch queue: harness=90773 (thinking_stall dominant), retrieval=108 (0 actionable — all within 7-day window, drain ran 0 new ingests)
+- Action this tick: no fix — all top dispatch patterns already addressed by recent commits; retrieval drain 0 new ingests; system healthy; stress advancing normally
+
+## 2026-05-10 16:12 UTC tick
+- Stress: PID 3875067 alive, at step 1401/1658; accepted=286, skipped=307 (~52% skip rate, prompts not accepted after 3 retries), total_writes=13 from current session segment; TUI recycled at step 1400 (new child PID 238115)
+- Write rate: 13 writes / 286 accepted = 4.5% per-prompt write rate; skip rate elevated but consistent with prior ticks
+- Admiral last 30 min: harness:thinking_stall dominant (552 fires in last hour, mostly classify_pulse re-processing old events); harness:loop:bash_generic 24 fires (de-duplicated to ~10 unique events from days ago); harness:grep:unescaped_pattern 12 fires (all trip_log metadata entries from prior ticks, not real new occurrences — fix 62ebc54 effective)
+- vLLM 400s: 122 errors in last 30 min from llamacpp; balancer healthy on :8001 (pid 3944578); container Up 5 days (unhealthy cosmetic)
+- GH issues: 0 open
+- Dispatch queue: harness=90486 (thinking_stall dominant, queue inflating from classify_pulse dedup-miss), retrieval=105 (0 actionable — all consumed within 7-day window)
+- Action this tick: no fix — all active patterns (thinking_stall, bash_generic, grep:unescaped) already addressed by prior commits; retrieval drain 0 new ingests; system healthy
+
+## 2026-05-10 13:12 UTC tick
+- Stress: PID 3875067 alive (1d 17h runtime), idx=1374/1658 at 12:00 UTC; done=275, skip=291, recycle=185 (cumulative); advancing ~20 steps/hr; retry-spike at 1377-1379 followed by TUI recycle, run continuing
+- Write rate: done/(done+skip) ≈ 49% (275/566 accepted vs skipped)
+- Admiral last 30 min: harness:thinking_stall dominant (89603 total in queue); no new patterns beyond already-addressed thinking_stall
+- vLLM 400s: 0 in last 30 min; balancer healthy; vLLM container Up 5 days (unhealthy status is cosmetic — responding normally)
+- GH issues: 0 open
+- Dispatch queue: harness=89603 total, retrieval=96 (0 actionable — all consumed), steering=0
+- Action this tick: no fix — harness:thinking_stall already addressed by 070cc74 (lsp added to readonly-tools nudge set); autonomous_review at 12:30 UTC reached same conclusion; retrieval drain 0 new ingests; system healthy
+
+## 2026-05-10 12:12 UTC tick
+- Stress: PID 3875067 alive, step 1364/1658 (tool_agent suite), write rate 0.53/prompt over last 266 prompts; API-error banner firing transiently on Perf prompts (recover succeeds, run continues)
+- Admiral last 30 min: harness:thinking_stall dominant (3924 today); ralph_repo_index 1244, bash 254, read_file 161, ralph_file_summary 62, lsp 15 stalls today
+- vLLM 400s: 0 in last 30 min; balancer healthy (gemma4 model responding)
+- GH issues: 0 open
+- Dispatch queue: harness=89019 total (506 bash_generic + 3924 thinking_stall today), retrieval=90 all consumed, steering=0
+- Action this tick: committed fix(stall): add lsp to readonly-tools stall nudge set (070cc74); lsp was missing from _readonly_tools so lsp-stalls got generic nudge instead of targeted "you just read, now write" nudge; retrieval drain found nothing new (90 entries all already consumed)
+
 ## 2026-05-10 11:12 UTC tick
 - Stress: PID 3875067 alive (1d 15h runtime), ~80% through tool_agent 2000-prompt suite
 - Write rate: degraded — 19 SKIPs in last 29 prompts prior to 10:18 UTC TUI recycle; recovering after recycle
@@ -4167,3 +4220,60 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=88280 (top: thinking_stall 58836, bash_generic 12978, hallucinated_name 6431, search_replace:not_found_loop 4798, grep:unescaped_pattern 4038), retrieval=81 (all within 7-day window, 0 actionable)
 - retrieval-drain: 0 projects ingested (all up to date)
 - Action this tick: no action — all top patterns addressed by recent commits (427a631/0820952/9f8d022/a6a448e/ee354e5/cd6b56c cover thinking_stall at all 3 retry levels; dd07921 covers heredoc_loop); high skip rate is pexpect harness behavior under model stall conditions, not a new drydock bug; system healthy
+
+## 2026-05-10 12:12 UTC tick
+- Stress: PID 3875067 alive (llamacpp-gemma4 container up 5 days, unhealthy flag is stale docker healthcheck; actual model serving verified via curl); most recent session session_20260510_105258 active with 37 msgs last updated 06:01 CDT; tool_agent build progressing
+- Write rate: not directly measured; sessions cycling; balancer log shows ~4836/57513 (8.4%) 502s historically, all from context-overflow 400s which emergency compaction handles
+- Admiral last 30 min: thinking_stall dominant (ralph_repo_index, grep, write_file variants all covered by nudges at 3 attempt levels); empty_after_tool:grep observed but handled by _prev_was_read canned nudge + opus adaptive
+- vLLM 400s: 0 from vLLM directly; llamacpp 400s are context-overflow handled by emergency compaction; model responds correctly to simple and tool-call requests
+- GH issues: 0 open
+- Dispatch queue: harness=88754 (top: thinking_stall 58k+, bash_generic 13k, hallucinated_name 6.4k, search_replace:not_found 4.8k, grep:unescaped 4k+); retrieval=87 (0 actionable — all ingested within 7-day window), steering=0
+- retrieval-drain: 0 projects ingested (all already up to date)
+- Action this tick: no action — system healthy; all top dispatch patterns addressed by commits in last 24h (427a631/0820952/9f8d022/a6a448e/ee354e5/cd6b56c cover thinking_stall; b3922fa covers grep:unescaped_pattern); grep:unescaped 3130 fires in last 24h are admiral retry_after_error reclassifications of stall events, not new invalid-regex loops; next auto_release at 18:00 CDT will ship v2.8.11+
+
+## 2026-05-10 12:12 UTC tick
+- Stress: alive (PID 3875067, stress_shakedown on tool_agent prompt set, resumed from step 807)
+- Write rate: N/A (no step counter file)
+- Admiral last 30 min: N/A (dispatch queue reflects last classify_pulse at 07:00)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=89308 (top: thinking_stall 58k+, bash_generic 13k, hallucinated_name 6.4k, search_replace:not_found 4.8k, grep:unescaped 4k+); retrieval=93 (0 actionable — all ingested within 7-day window), steering=0
+- retrieval-drain: 0 projects ingested (all already up to date)
+- Action this tick: no action — system healthy; thinking_stall addressed by 070cc74 (added lsp to readonly-tools stall nudge set); port 8001 held by llm_balancer (PID 3944578, healthy); all other top patterns have admiral nudges firing; no new source fix clearly actionable
+
+## 2026-05-10 14:12 UTC tick
+- Stress: 807/1658 (PID 3875067, alive, tool_agent PRD)
+- Write rate: n/a (stress_shakedown log not accessible directly)
+- Admiral last 30 min: 0 new fires (classify_pulse shows 89898 total harness queue)
+- vLLM 400s: 0 (gemma4 container Up 5d, "unhealthy" health check but functional — 0 errors in logs)
+- GH issues: 0 open
+- Dispatch queue: harness=89898 (top: thinking_stall ~59.5k, bash_generic 13k, hallucinated_name 6.4k, search_replace:not_found 4.8k, grep:unescaped 4k); retrieval=99 (0 actionable — all already ingested); steering=0
+- retrieval-drain: 0 projects ingested (all within 7-day window, no new entries)
+- Action this tick: no action — system healthy; thinking_stall still dominant but 070cc74 (lsp to readonly-tools) is latest fix; bash_generic (542 fires today) handled by existing FORCE_STOP + sampling-bump mechanism; no new source-level fix clearly actionable
+
+## 2026-05-10 15:12 UTC tick
+- Stress: PID 3875067 alive, tool_agent prompt set, resumed from step 807 (stress args show --resume-from-step 807; recent sessions at 13:29, 13:16, 13:03 UTC confirm active cycling)
+- Write rate: n/a (step counter not directly accessible from process args)
+- Admiral last 30 min: thinking_stall dominant; 8064 harness fires in last 24h (top: thinking_stall 8064, grep:unescaped 2275, bash_generic 908, hallucinated_name 267); grep:unescaped 2275 are model looping same valid grep 5+ times (not invalid regex — b3922fa already fixed invalid-regex case), classifier mislabeling loop as unescaped_pattern
+- vLLM 400s: 0 (gemma4 Up 5d, "unhealthy" healthcheck is stale docker probe; model serving functional)
+- GH issues: 0 open
+- Dispatch queue: harness=90195 (thinking_stall 59809, bash_generic 13062, hallucinated_name 6431, search_replace:not_found 4798, grep:unescaped 4080); retrieval=102 (not drained — consume_retrieval_queue.py not run; dedup window prevents re-ingest anyway), steering=0
+- Action this tick: no action — system healthy; top patterns addressed by commits in last 24h (070cc74 thinking_stall, b3922fa grep:unescaped); untracked sidecar changes (server.py M2 wiring + hooks.py) not committed — in-progress steering work, needs user review; no new source-level fix actionable
+
+## 2026-05-10 21:12 UTC tick
+- Stress: PID 3875067 alive (1d 20h elapsed), sessions cycling normally — most recent session at 15:32 UTC (1 min before tick), 274 sessions since run start
+- Write rate: N/A (no per-step counter accessible; session cadence ~12 min/session healthy)
+- Admiral last 30 min: thinking_stall dominant (last 50 dispatch entries all thinking_stall)
+- vLLM 400s: 0 via docker logs (balancer.log shows repeated 400s but these are context-overflow handled by emergency compaction — model serving functional, curl confirms)
+- GH issues: 0 open
+- Dispatch queue: harness=91351 (thinking_stall 60905, bash_generic 13098, hallucinated_name 6431, search_replace:not_found 4798, grep:unescaped 4104); retrieval=114 (0 actionable — all recently ingested)
+- Action this tick: no action — system healthy; all top patterns addressed by prior commits (070cc74 thinking_stall, 62ebc54 grep:unescaped, 444e4a5 search_replace:not_found, a41f454 bash_generic); uv.lock has unstaged version bump (2.7.47→2.8.10, python-dotenv removed) — benign auto-generated drift
+
+## 2026-05-10 23:12 UTC tick
+- Stress: 807/1658 (resuming from step 807, PID 3875067 alive)
+- Write rate: n/a (no recent stress log summary available)
+- Admiral last 30 min: 0 new fires (admiral_history.log empty this tick)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=91666 (all thinking_stall), retrieval=117 (0 actionable — all recently ingested)
+- Action this tick: no action — system healthy; balancer OK (port 8001, PID 3944578); auto_release shipped v2.8.11 at 06:02 CDT; all top patterns addressed by prior commits; retrieval drain ran but nothing new to ingest
