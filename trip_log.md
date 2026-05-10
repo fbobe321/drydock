@@ -1,5 +1,80 @@
 # Drydock Trip Log
 
+## 2026-05-10 03:32 UTC tick
+- Stress: PID 3875067 alive (resume-from-step 807/1658, 32h+ runtime); new TUI child PID 115006 just spawned at 22:29 CDT; harness actively recycling sessions (12146 total sessions)
+- Write rate: strained — admiral reports 91% retry rate and 14+ SKIP clusters in last 35 prompts; TUI recycle mechanism firing correctly
+- Admiral last 30 min: high skip/retry pattern; last fires at 03:29 UTC (bootstrap after recycle); dominant patterns: thinking_stall, loop:bash_generic
+- vLLM 400s: balancer showing 4905 total 502 errors (context overflow), balancer healthy on :8001 forwarding to gemma4 OK
+- GH issues: 0 open
+- Dispatch queue: harness=85708 (thinking_stall dominant, bash_generic secondary), retrieval=74 (0 actionable, all within 7-day window)
+- retrieval-drain: 0 projects ingested (all up to date)
+- Action this tick: no fix committed — ee354e5+cd6b56c (bash stall nudges + ralph_file_summary to readonly-tools) already address all top dispatch queue patterns and are pending next auto_release at 00:00 CDT (06:00 UTC); no new unaddressed patterns found
+
+## 2026-05-10 02:47 UTC tick
+- Stress: PID 3875067 alive (resume-from-step 807, running since May 8, 45+ hr runtime); recent sessions cycling through "Doc:" single-letter prompts; harness advancing
+- Write rate: N/A (stress sessions in Doc prompt segment)
+- Admiral last 30 min: harness:thinking_stall dominant (6,962 in last 24h); harness:grep:unescaped_pattern 3,981 (fix b3922fa in v2.8.6 deployed, queue entries are historical); loop:bash_generic 660
+- vLLM 400s: 0; llm_balancer PID 3944578 healthy on :8001 (gemma4 OK)
+- GH issues: 0 open
+- Dispatch queue: harness=85,384 (956 classifier batches), retrieval=74 (0 actionable, all within 7-day window)
+- Retrieval-drain: 0 projects ingested (74 entries all already ingested recently)
+- Action this tick: no fix committed — all top patterns (thinking_stall, grep:unescaped_pattern, heredoc_loop) addressed by commits ee354e5/cd6b56c/c8a5f7f/dd07921/b3922fa in last 24h; search_replace:not_found_loop at 114/24h, HARD-STOP logic already handles it; system healthy
+
+## 2026-05-10 01:32 UTC tick
+- Stress: PID 3875067 alive; current cycle at ~680/1658 (stress_2000 log tail); harness proceeding through API prompt segment; watcher active
+- Write rate: N/A (log-based estimate not available this tick)
+- Admiral last 30 min: harness:thinking_stall dominant; harness:loop:bash_generic secondary; all patterns have existing nudge coverage
+- vLLM 400s: 0; llm_balancer PID 3944578 healthy on :8001; no port squatters
+- GH issues: 0 open
+- Dispatch queue: harness=85,052, retrieval=74 (0 actionable; all within 7-day re-ingest window); steering=0
+- Retrieval-drain: 0 projects ingested (74 entries all already ingested recently)
+- Action this tick: no action — system healthy; recent commits cd6b56c + c8a5f7f already address dominant harness:thinking_stall pattern; harness:loop:bash_generic covered by existing FORCE_STOP + admiral nudges; no new actionable drydock bugs found
+
+## 2026-05-10 01:30 UTC tick
+- Stress: 1197/1658 (done=166, skip=223, recycle=134); PID 3875067 alive (30h runtime); high skip rate in "Doc:" prompt segment (single-letter shortcuts confuse model, causes bash loops → TUI approval modal stall → harness skips); harness is recycling TUI correctly and advancing
+- Write rate: all recent steps skipped (Doc segment, model inherently loops on ambiguous prompts)
+- Admiral last 30 min: harness:thinking_stall (55,104 cumulative); harness:loop:bash_generic (12,574); harness:tool:hallucinated_name (6,425); harness:search_replace:not_found_loop (4,798)
+- vLLM 400s: 0; llm_balancer PID 3944578 healthy on :8001; vLLM model count=1
+- GH issues: 0 open
+- Dispatch queue: harness=84,888, retrieval=74 (0 actionable); retrieval-drain: 0 projects ingested
+- Action this tick: no action — system healthy; recent commits cd6b56c + c8a5f7f address dominant thinking_stall pattern; bash_generic covered by existing FORCE_STOP + admiral; no new actionable drydock bugs found
+
+## 2026-05-10 01:05 UTC tick
+- Stress: active; PID 3875067 alive (29h runtime, etimes=104563, resume-from-step 807); latest session session_20260510_002909_d671f1bd started 19:30 local; harness cycling normally
+- Write rate: N/A (not exposed in live log)
+- Admiral last 30 min: harness:thinking_stall dominant (54,976 cumulative); harness:loop:bash_generic (12,544); harness:tool:hallucinated_name (6,422); harness:search_replace:not_found_loop (4,798); harness:grep:unescaped_pattern (3,969)
+- vLLM 400s: 0; llm_balancer PID 3944578 healthy on :8001 (confirmed legit); docker serving gemma4 normally
+- GH issues: 0 open
+- Dispatch queue: harness=84,724, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — system healthy; 1 unreleased commit cd6b56c (ralph_file_summary stall nudge) pending next auto_release; all major patterns (thinking_stall, grep:unescaped_pattern, search_replace:not_found_loop, hallucinated_name) addressed by commits in last 48h; bash_generic (12K) handled by existing FORCE_STOP + admiral, inherent model limitation
+
+## 2026-05-10 00:04 UTC tick
+- Stress: 1189/1658 (stress_2000_v10, log updated 1 min ago); PID 3875067 (stress_shakedown.py, 28.5h runtime from step 807) also alive
+- Write rate: not recalculated (doc-heavy segment ongoing — architecture diagrams, release notes, changelog entries driving high SKIP rate)
+- Admiral last 30 min: harness:thinking_stall dominant (54K cumulative), harness:loop:bash_generic (12K), harness:tool:hallucinated_name (6.4K), harness:search_replace:not_found_loop (4.8K); all covered by existing fixes
+- vLLM 400s: 0; llm_balancer PID 3944578 confirmed healthy on :8001 (not an orphan); no :8001 squatting
+- GH issues: 0 open
+- Dispatch queue: harness=84547, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: no action — all patterns addressed by commits from last 24h (cd6b56c, c8a5f7f, b3922fa, dd07921); ralph_repo_index is top stall trigger (29K queue) but already in _readonly_tools since prior fix; system healthy
+
+## 2026-05-09 23:33 UTC tick
+- Stress: 1183/1658; PID 3875067 alive; done=165, skip=205, recycle=125 (babysitter shows step 1183 active)
+- Write rate: ~44.6% (165/370 non-timeout prompts written)
+- Admiral last 30 min: 0 fires (classify_pulse log empty for this window)
+- vLLM 400s: 0; llm_balancer PID 3944578 healthy on :8001 (confirmed legit)
+- GH issues: 0 open
+- Dispatch queue: harness=84359, retrieval=74 (0 actionable); retrieval-drain: 0 ingested (all within 7-day window)
+- Action this tick: no action — all queued patterns (harness:thinking_stall, harness:loop:bash_generic) addressed by recent commits cd6b56c + c8a5f7f + 2cfa973; TUI showing "Queued: 4 pending" indicating multi-prompt queue buildup during doc-heavy segment, not a drydock source bug; system healthy
+
+## 2026-05-09 23:03 UTC tick
+- Stress: 1178+/1658; PID 3875067 alive (27.5h runtime); 165 done, 205 skip, 125 recycles since step 807 resume; doc-heavy segment (architecture diagrams, release notes) causing high SKIP rate from prompt-acceptance retries
+- Write rate: ~31% overall (stable)
+- Admiral last 30 min: harness:thinking_stall dominant (86/100 recent queue entries), harness:loop:bash_generic (12/100), hallucinated_name (1), grep:unescaped_pattern (1)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001 (confirmed llm_balancer.py); docker status unknown (CLI unavailable)
+- GH issues: 0 open
+- Dispatch queue: harness=84167, retrieval=74 (0 actionable, all within 7-day window); retrieval-drain: 0 projects ingested
+- Action this tick: committed fix cd6b56c — added ralph_file_summary to _readonly_tools set in stall handler (addresses pattern harness:thinking_stall); stalls after ralph_file_summary were getting generic "Continue working" nudge instead of the specific "you called {tool} but produced no output" message
+
 ## 2026-05-09 23:30 UTC tick
 - Stress: 1173/1658; PID 3875067 alive (27h runtime); progressing from 1130 in prior tick — ~43 steps/1.5h
 - Write rate: ~31% (stable, unchanged across multiple ticks)
@@ -3941,3 +4016,41 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=83168, retrieval=74 (0 actionable); retrieval-drain: 0 projects ingested (74 entries all within 7-day re-ingest window)
 - Action this tick: no action — all top patterns have existing fixes; dd07921+c8a5f7f pending auto_release at 00:00 CDT (05:00 UTC); search_replace:not_found_loop (4798 total) already has file-head embedding fix in source; bash:escape_loop (170 total) already has sed/echo escape detection in bash.py; system healthy
+
+## 2026-05-10 02:30 UTC tick
+- Stress: 1218/1658 (actively running, PID 3875067)
+- Write rate: N/A (no report-every line visible in current log slice)
+- Admiral last 30 min: harness:thinking_stall dominant (55364 total queue), harness:loop:bash_generic (12634), harness:tool:hallucinated_name (6431), harness:search_replace:not_found_loop (4798)
+- vLLM 400s: 0; balancer OK on :8001; docker gemma4 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=55364+, retrieval=74 (0 actionable, all within re-ingest window), steering=0
+- Action this tick: committed ee354e5 fix(stall): add specific bash stall nudges for error and output cases (addresses pattern harness:thinking_stall) — empty_after_tool:bash::source=canned was falling through to generic 'Continue working'; new _prev_bash_had_error and _prev_bash_had_output branches give the model concrete direction. Auto_release will ship at next 0/6/12/18 CDT tick.
+
+## 2026-05-10 04:03 UTC tick
+- Stress: 1230/1658 (wedged — harness alive PID 3875067, TUI child 110424 alive since 22:03 CDT, log stale 5+ hours since 22:01 CDT)
+- Write rate: 0 new writes observed (183 accepted / 235 skipped total at last progress report, prompt 1225)
+- Admiral last 30 min: not measurable (admiral_history.log not updated)
+- vLLM 400s: 0
+- GH issues: gh unavailable this tick
+- Dispatch queue: harness=85546 entries (2 patterns: thinking_stall 42 fires addressed in 24h commits, bash_generic 8 fires advisory), retrieval=74 entries (all already ingested), steering=0
+- retrieval-drain: 0 projects ingested (all up to date)
+- Action this tick: no fix committed — harness is alive but wedged (TUI child spawned at 22:03 created session_20260510_030327 with only 3 messages then stalled; babysitter cannot restart a live harness; watcher PIDs 3875068+110078 are running but recycle signals haven't unblocked it). harness:thinking_stall pattern was already addressed in today's commits (ee354e5, cd6b56c); harness:loop:bash_generic is low-confidence (0.6) with admiral nudge already firing — no source fix warranted.
+
+## 2026-05-10 04:30 UTC tick
+- Stress: 1253/1658 prompts (idx), done=200, skip=245, timeout=0, recycle=148; PID 3875067 alive (1d 8h runtime)
+- Write rate: not directly measured this tick
+- Admiral last 30 min: harness:thinking_stall dominant (55,902 total queue entries); ralph_repo_index accounts for 30,357 (54% of all stalls)
+- vLLM 400s: 0 in last 30 min
+- GH issues: 0 open
+- Dispatch queue: harness=68686 entries (multiple patterns), retrieval=74 (all already ingested), steering=0
+- Action this tick: committed fix for ralph_repo_index stall nudge (addresses pattern harness:thinking_stall) — prev generic nudge said "make changes" which is wrong after repo-indexing; new nudge tells model to write TEXT answer or call read_file; retrieval-drain: 0 projects ingested (all already ingested recently)
+
+## 2026-05-10 04:31 UTC tick
+- Stress: PID 3875067 alive (33h runtime, resume-from 807/1658); current prompt "Perf: batch DB writes"; TUI child PID 125661 alive (128s), session_20260510_042832 active with 33 messages, last updated 04:30 UTC
+- Write rate: not directly measured; sessions cycling normally (12152 total)
+- Admiral last 30 min: harness:thinking_stall (137 fires, all ralph_repo_index/bash), harness:loop:bash_generic (24), harness:grep:unescaped_pattern (3)
+- vLLM 400s: 0; balancer PID 3944578 healthy on :8001 (confirmed llm_balancer.py); docker gemma4 serving normally
+- GH issues: 0 open (gh returned no results)
+- Dispatch queue: harness=86034 (top: thinking_stall 56039, bash_generic 12758, hallucinated_name 6431), retrieval=74 (0 actionable — all within 7-day window), steering=0
+- retrieval-drain: 0 projects ingested (all already up to date)
+- Action this tick: no action — all recent patterns addressed by a6a448e/ee354e5/cd6b56c (thinking_stall nudges for ralph_repo_index/bash); auto_release ships at ~05:00 UTC; system healthy
