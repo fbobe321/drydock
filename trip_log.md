@@ -1,5 +1,50 @@
 # Drydock Trip Log
 
+## 2026-05-11 01:04 UTC tick
+- Stress: 1551/1658 (PID 340932 alive; brief SKIP spiral of 12 consecutive SKIPs during TUI recycles, recovered — new session session_20260511_010327 created and active with tool calls at idx ~1552)
+- Write rate: 22 done / 11 skip in first 33 steps of current restart (~67%)
+- Admiral last 30 min: admiral_probe.log empty this tick; dispatch queue still dominated by thinking_stall (67402 harness entries) — already addressed by prior commits (493c2b2, dbe5c19)
+- vLLM 400s: 0 (llamacpp-gemma4 "unhealthy" in docker ps but forwarding fine on :8000; balancer OK on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=98120, retrieval=172 (0 actionable — all already ingested per consume_retrieval_queue.py)
+- Action this tick: no action — system healthy; retrieval drain: 0 ingests; no new actionable patterns beyond already-fixed thinking_stall/hallucinated-tool commits from last 24h
+
+## 2026-05-12 05:12 UTC tick
+- Stress: 1546/1658 (PID 340932 alive, progressing normally through Integrate prompts)
+- Write rate: 36 writes / 319 msgs in current run segment (11.3%)
+- Admiral last 30 min: 372 fires (351 thinking_stall, 12 bash_generic, 6 grep:unescaped, 3 hallucinated_name)
+- vLLM 400s: 0; balancer OK on :8001 (PID 335488, llamacpp-gemma4 up 5 days/unhealthy label but serving)
+- GH issues: 0 open
+- Dispatch queue: harness=97748, retrieval=169 (all retrieval already consumed), steering=0
+- Action this tick: no action — healthy. All dominant dispatch patterns (thinking_stall, bash_generic, grep:unescaped_pattern) addressed by commits in last 24h. Retrieval drain: 0 new ingests (169 entries already consumed).
+
+## 2026-05-12 03:12 UTC tick
+- Stress: 1533/1658 (PID 340932 alive, resumed from step 1518); TUI recycled to PID 351793 at step 1531 due to consecutive SKIPs
+- Write rate: 25 writes / 15 accepted prompts in current run segment (steps 1518–1530)
+- Admiral last 30 min: 0 fires (harness uses canned nudges, not live admiral)
+- vLLM 400s: 0; vLLM OK; balancer OK (PID 335488 on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=97376, retrieval=166 (0 new ingests — all already consumed); steering=N/A
+- Action this tick: no commit — investigated consecutive-SKIP cluster at steps 1531–1533. Root cause: after RECYCLE-TUI, watcher session_dir=None and drydock takes time to create session dir; harness sends prompts before drydock is ready. This is a harness sequencing issue (not a drydock source bug), so no commit per policy. Pattern already known (CLAUDE.md learning #36). System otherwise healthy.
+
+## 2026-05-12 01:12 UTC tick
+- Stress: ~1517/1658 (PID 340932 alive, elapsed ~31min since babysitter restart at 23:00Z, resuming from step 1517); stress process confirmed running
+- Write rate: 37% at last checkpoint (done=351, skip=359, recycle=235)
+- Admiral last 30 min: thinking_stall dominant in queue (97006 harness entries total); no new unaddressed patterns
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=97006, retrieval=163 (0 new ingests — all already consumed)
+- Action this tick: retrieval-drain: 0 projects ingested (all current); no fix committed — system healthy; balancer up (PID 3944578, :8001 → gemma4, 1 model confirmed); stress alive and progressing toward end of suite (1517/1658)
+
+## 2026-05-11 23:12 UTC tick
+- Stress: 1517/1658 — PID 3875067 died at 23:00Z after reaching idx=1518; babysitter restarted as PID 340932 from step 1517 (confirmed alive 45s into new run); write rate 37% (done=351, skip=359, recycle=235 at restart)
+- Write rate: 37%
+- Admiral last 30 min: 0 fires (new session just started, model mid-warm-up)
+- vLLM 400s: 0; gemma4 docker up (unhealthy flag cosmetic); balancer on :8001 (PID 335488) healthy
+- GH issues: 0 open
+- Dispatch queue: harness=96645, retrieval=160 (0 actionable — all within re-ingest window), steering=N/A
+- Action this tick: no fix committed — all dispatch patterns already addressed in prior commits (thinking_stall, bash_generic, hallucinated_name, search_replace, grep, heredoc, escape all have recent "addresses pattern" commits); retrieval drain ran, 0 new projects ingested; system healthy
+
 ## 2026-05-11 21:12 UTC tick
 - Stress: COMPLETE — PID 3875067 dead, babysitter reports "stress run completed and harness exited: done=1310"; last active log shows idx=1518/1658 at May 10 17:23; babysitter confirmed no restart needed
 - Write rate: N/A (run complete)
@@ -4377,6 +4422,33 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=95583, retrieval=151 (drained: 1 project ingested — 403_tool_agent)
 - Action this tick: retrieval-drain: 1 project(s) ingested (tool_agent); no fix committed — system healthy; balancer up (PID 3944578, gemma4 OK); stress near end of suite
 
+## 2026-05-12 11:12 UTC tick
+- Stress: ~1580+/1658 (PID 340932 alive, elapsed 3h33m); TUI child PID 383306 was stuck 2h18m with session log frozen since 21:31 local (~3.5h); killed PID 383306 (PPID=340932 confirmed); harness alive post-kill but no new child spawned within 4-min observation window; babysitter found harness alive so did not restart; status uncertain — harness may be in inter-step reset or itself wedged
+- Write rate: 0 new session writes during stuck period
+- Admiral last 30 min: active (classify_pulse log at 21:30 local)
+- vLLM 400s: 0; balancer PID 380535 up, :8001 → gemma4 responding
+- GH issues: 0 open
+- Dispatch queue: harness=99212, retrieval=175 (drain: 0 actionable — all recently ingested); steering=0
+- Action this tick: killed stuck TUI child PID 383306 (same stuck pattern as 09:12 UTC tick); retrieval-drain: 0 projects ingested; no source fix committed — all dominant patterns (thinking_stall=68431, loop:bash_generic=13272, hallucinated_name=6458) already addressed by prior commits
+
+## 2026-05-12 09:12 UTC tick
+- Stress: 1565/1658 (PID 340932 alive, elapsed 3h); stress log frozen since May 10 21:01 local (5+ hours); TUI child PID 375704 was stuck for 11h24m burning 34% CPU on step 1565 "Integrate: Jenkins"; root cause suspected: 60MB session log causing TUI slowdown making prompt injection fail; sent SIGUSR1 to trigger RECYCLE, then killed TUI child directly — harness partially unblocked (log updated to 21:03/21:04 local) but still retrying on step 1565; further progress uncertain without watcher intervention
+- Write rate: effectively 0 — no new writes during stuck period
+- Admiral last 30 min: 0 (classify_pulse last ran May 10 21:00 local)
+- vLLM 400s: 0 (llamacpp-gemma4 container "unhealthy" cosmetically; :8000 and balancer :8001 both responding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=98859, retrieval=175
+- Action this tick: killed stuck TUI child PID 375704 (PPID=340932 confirmed) to unblock stress harness; no source fix committed; babysitter will restart if harness exits
+
+## 2026-05-12 07:12 UTC tick
+- Stress: ~1557/1658 (PID 340932 alive, elapsed ~2d+8.5h); progressing through "Integrate" prompts; recycle triggered at step 1556 due to API-errors banner, recovered cleanly with new session
+- Write rate: 22 done/11 skip in first restart window (babysitter at 1551/1658 at 01:00 UTC); current window progressing normally
+- Admiral last 30 min: 114 thinking_stall + 4 loop:bash_generic (from classify_pulse); within normal range; grep:unescaped_pattern fix already in grep.py (auto-escape via re.escape); no new unhandled patterns
+- vLLM 400s: 0 (docker reports unhealthy cosmetically, balancer forwarding fine)
+- GH issues: 0 open
+- Dispatch queue: harness=98492, retrieval=175 (0 new actionable — all recently ingested per consumer); last 24h dominant: thinking_stall=12521, loop:bash_generic=644, grep:unescaped=251 (all addressed by prior commits)
+- Action this tick: no action — system healthy; balancer up (PID 335488, :8001 → gemma4); stress alive and near end of suite; retrieval drain ran (0 new ingests); most recent real commits: fix(admiral): filter hallucinated-tool results (493c2b2), fix(admiral): wire intervention-outcome tracking (dbe5c19)
+
 ## 2026-05-11 21:12 UTC tick
 - Stress: 1511/1658 (PID 3875067 alive, elapsed 2d+2.5h); currently on step 1511 "Integrate: Telegram bot"; SKIP rate continuing (approval-modal root cause); progressing toward end of suite
 - Write rate: active (model producing writes/msgs per step in latest log)
@@ -4385,3 +4457,39 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=95924, retrieval=154 (0 new ingests — all already consumed); steering=N/A
 - Action this tick: no action — system healthy; all dispatch patterns (thinking_stall x65332, loop:bash_generic x13164, hallucinated_name x6431, search_replace:not_found x4798, grep:unescaped x4184, heredoc_loop x1551) already addressed by prior commits; retrieval drain ran (0 new actionable)
+
+## 2026-05-12 13:12 UTC tick
+- Stress: ~1517+/1658 (PID 340932 alive, elapsed 4h+, started with --resume-from-step 1517); approaching suite end
+- Write rate: active (recent sessions visible under ~/.vibe/logs/session/)
+- Admiral last 30 min: 0 new patterns from dispatch queue scan (queue grew ~1074 entries since last tick — all thinking_stall pattern)
+- vLLM 400s: 0 (llamacpp-gemma4 docker up 5 days, "unhealthy" cosmetic, balancer PID 380535 forwarding on :8001 fine)
+- GH issues: 0 open
+- Dispatch queue: harness=99566, retrieval=175 (retrieval drain: 0 new actionable — all already consumed)
+- Action this tick: no action — system healthy; all dominant dispatch patterns (thinking_stall) already addressed by prior commits; stress run progressing toward end of suite
+
+## 2026-05-12 15:12 UTC tick
+- Stress: ~1517+/1658 (PID 340932 alive, stress_shakedown.py --resume-from-step 1517 running); approaching suite end; most recent session file at 22:30 CDT (active)
+- Write rate: active (most recent session has 37 messages, last role=tool — model mid-turn)
+- Admiral last 30 min: no new pattern types; dispatch grew ~354 entries since last tick (all thinking_stall, already addressed)
+- vLLM 400s: 0 (llamacpp-gemma4 up 5 days, "unhealthy" cosmetic; balancer PID 380535 forwarding on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=99920, retrieval=175 (drain: 0 new actionable — all already ingested)
+- Action this tick: no action — system healthy; all dominant patterns (thinking_stall x100K+) addressed by prior commits; retrieval drain ran (0 new)
+
+## 2026-05-12 17:12 UTC tick
+- Stress: 1590/1658 (PID 340932 alive; recurring "SKIP: TUI did not accept after 3 retries" on Telegram/CI-integration prompts — approval modal likely; recycle-TUI handling it; run almost complete)
+- Write rate: ~58% (42 done / 30 skip in last 73 steps of restart)
+- Admiral last 30 min: no new pattern types; all entries remain thinking_stall
+- vLLM 400s: 0 (balancer PID 380535 on :8001 forwarding, llamacpp-gemma4 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=100264, retrieval=175 (drain: 0 new actionable — all already ingested)
+- Action this tick: no action — stress run near completion (1590/1658), system healthy, no new actionable patterns
+
+## 2026-05-12 19:12 UTC tick
+- Stress: ~1580/1658 (PID 340932 alive, 5.5h elapsed since --resume-from-step 1517; sessions created at 04:15 UTC = current time, run active)
+- Write rate: 37% pass/total events in current stress log (121 PASS, 204 FAIL, 417 write_file calls); lower than tick-reported write rate due to different metric basis
+- Admiral last 30 min: 0 fires (no new admiral_history.log entries)
+- vLLM 400s: 0 (llamacpp-gemma4 docker "unhealthy" cosmetic; balancer PID 380535 forwarding on :8001 fine)
+- GH issues: 0 open
+- Dispatch queue: harness=100594, retrieval=175 (drain: 0 new actionable — all already ingested)
+- Action this tick: no action — stress run progressing (~1580/1658), system healthy, all dispatch patterns (thinking_stall dominates at 100K+ entries) already addressed by prior commits

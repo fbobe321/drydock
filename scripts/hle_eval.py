@@ -249,6 +249,35 @@ def _question_prompt(q: dict) -> str:
     )
 
 
+def _send_prompt_as_paste(child, text: str) -> None:
+    """Send a one-shot prompt to the TUI as a bracketed paste, then Enter.
+
+    Why not `sk.type_message`: it sends char-by-char at 10ms/char, which
+    on a ~1500-char HLE prompt takes ~15s and races the Textual input
+    handler. In real captured sessions we observed 13 stray `\\n` chars
+    injected mid-word (`'Answer th\\n\\n...\\n\\nis question'`) — the
+    model then reads garbage and either bails or grinds in tool-call
+    loops without ever emitting `FINAL ANSWER:`. Bracketed paste
+    (xterm convention also recognised by Textual >=0.40) tells the
+    receiving widget "this is a single literal block — do not interpret
+    embedded chars as keypresses or trigger paste-detection logic."
+
+    Sequence:
+      ESC [ 2 0 0 ~  <text-with-newlines-stripped>  ESC [ 2 0 1 ~  <Enter>
+
+    Newlines inside the prompt are stripped because Textual's Input
+    widget commits on Enter regardless of paste markers. HLE prompts
+    are a single line by construction (`_question_prompt`), so this is
+    a no-op for the supported case.
+    """
+    safe_text = text.replace("\r", " ").replace("\n", " ")
+    PASTE_START = "\x1b[200~"
+    PASTE_END = "\x1b[201~"
+    child.send(PASTE_START + safe_text + PASTE_END)
+    time.sleep(0.3)  # let the widget commit the paste
+    child.send("\r")
+
+
 def _extract_answer(messages: list[dict]) -> str:
     """Pull the FINAL ANSWER line out of the last assistant message that
     has text content. Falls back to the full last assistant content if no
@@ -306,7 +335,7 @@ def run_one(q: dict, sk, run_dir: Path) -> dict:
         pass
 
     watcher = sk.SessionWatcher(cwd, since=start)
-    sk.type_message(child, _question_prompt(q))
+    _send_prompt_as_paste(child, _question_prompt(q))
     time.sleep(1)
 
     # Wait for session dir to appear

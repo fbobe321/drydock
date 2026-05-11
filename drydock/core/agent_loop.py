@@ -278,13 +278,16 @@ class AgentLoop:
             logger.debug("Admiral tuning apply failed: %s", _e)
 
         # Admiral Phase 3a: record session metrics on interpreter exit.
+        # Use the live `session_id` (set above and matching the on-disk
+        # session dir) — NOT a fresh uuid. Findings recorded against a
+        # phantom uuid never resolved to a session log, so M5's offline
+        # Deep Noir loop couldn't extract pairs from them.
         try:
-            import atexit, uuid as _uuid
+            import atexit
             from drydock.admiral import metrics as _admiral_metrics
-            self._admiral_session_id = str(_uuid.uuid4())
             atexit.register(
                 lambda al=self: _admiral_metrics.record(
-                    _admiral_metrics.collect(al, al._admiral_session_id, outcome="unknown")
+                    _admiral_metrics.collect(al, al.session_id, outcome="unknown")
                 )
             )
         except Exception as _e:

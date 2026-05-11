@@ -58,6 +58,24 @@ def _tool_result_errored(m: LLMMessage) -> bool:
     return any(marker in content for marker in _TOOL_ERROR_MARKERS)
 
 
+def _is_hallucinated_tool_result(m: LLMMessage) -> bool:
+    """A hallucinated-tool result has the format produced by
+    `_silence_suppressed_failures` in agent_loop.py: the content is
+    wrapped in `<tool_error>...</tool_error>` and includes the redirect
+    string "does not exist". When we see this, we know:
+      - the model invented a tool name (ralph_repo_index, exit_plan_mode, ...)
+      - format.py routed it to suppressed_failures + redirect message
+      - drydock injected a system note pointing at real tools
+    The empty turn that follows is a *different* failure mode than
+    empty-after-real-tool — the recovery is already wired and the
+    fire just adds noise to admiral_state.
+    """
+    if m.role is not Role.tool:
+        return False
+    raw = str(getattr(m, "content", "") or "")
+    return "<tool_error>" in raw and "does not exist" in raw
+
+
 def detect_empty_after_tool(
     messages: Sequence[LLMMessage],
 ) -> Optional[Finding]:
@@ -68,6 +86,13 @@ def detect_empty_after_tool(
     drydock filler `_ensure_assistant_after_tools` (agent_loop.py:3006) inserts
     "Previous turn ended; awaiting your next instruction." — a user-facing
     sign that the model's thinking channel produced nothing usable.
+
+    Hallucinated-tool results (e.g. `ralph_repo_index`) are EXCLUDED:
+    `_silence_suppressed_failures` already injects a system note redirecting
+    the model to real tools, and the empty turn that follows is a separate
+    failure mode whose recovery is wired elsewhere. Pre-filter, this code
+    fired 318 times against `ralph_repo_index` alone — drowning out the
+    real signal (`empty_after_tool:bash` at 150 fires).
 
     Admiral intervention should:
       (a) inject a directive asking the model to summarize the tool output
@@ -89,6 +114,10 @@ def detect_empty_after_tool(
     tool_calls = getattr(last, "tool_calls", None) or []
     prev = messages[last_assistant_idx - 1]
     if prev.role is not Role.tool:
+        return None
+
+    # Skip hallucinated-tool results: separate failure mode, separate fix.
+    if _is_hallucinated_tool_result(prev):
         return None
 
     # Two ways this fires:

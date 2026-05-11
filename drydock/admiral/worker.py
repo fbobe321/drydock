@@ -30,6 +30,12 @@ POLL_INTERVAL_SEC = 5.0
 DEDUP_WINDOW_SEC = 60.0
 MAX_OPUS_PER_SESSION = opus_escalator.MAX_ESCALATIONS_PER_SESSION
 
+# Intervention-outcome window: per persistence.py docstring, "same code
+# re-firing within 10 turns after an intervention = failed." A turn is
+# one assistant message; we count messages (any role) as a proxy because
+# a re-fire necessarily comes after at least 1 assistant turn.
+INTERVENTION_FAIL_WINDOW_TURNS = 10
+
 
 class AdmiralWorker:
     """Async task that supervises one AgentLoop.
@@ -45,6 +51,10 @@ class AdmiralWorker:
         self._recent_findings: dict[str, float] = {}  # code -> timestamp
         self._opus_calls_used: int = 0
         self._in_flight: set[str] = set()  # codes currently being escalated
+        # Pending interventions awaiting outcome classification.
+        # code -> message-count at apply time. On re-fire within
+        # INTERVENTION_FAIL_WINDOW_TURNS messages → failed; otherwise → unstuck.
+        self._pending_interventions: dict[str, int] = {}
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -79,8 +89,21 @@ class AdmiralWorker:
             code: ts for code, ts in self._recent_findings.items()
             if now - ts < DEDUP_WINDOW_SEC
         }
+
+        # Resolve any pending interventions whose fail-window has elapsed
+        # without a re-fire — those count as `unstuck=True`.
+        msg_count_now = len(self.agent_loop.messages)
+        self._resolve_elapsed_interventions(msg_count_now)
+
         findings = detectors.run_all(list(self.agent_loop.messages))
         for f in findings:
+            # Re-fire while a prior intervention is still inside its
+            # fail window → that intervention failed.
+            applied_at = self._pending_interventions.get(f.code)
+            if applied_at is not None and (msg_count_now - applied_at) <= INTERVENTION_FAIL_WINDOW_TURNS:
+                self._record_outcome(f.code, unstuck=False)
+                self._pending_interventions.pop(f.code, None)
+
             last = self._recent_findings.get(f.code)
             if last is not None and (now - last) < DEDUP_WINDOW_SEC:
                 continue
@@ -92,6 +115,29 @@ class AdmiralWorker:
                 self._handle_finding(f), name=f"admiral-handle:{f.code[:32]}"
             )
 
+    def _resolve_elapsed_interventions(self, msg_count_now: int) -> None:
+        """Mark interventions as `unstuck=True` if their fail window
+        elapsed without the same code re-firing."""
+        elapsed: list[str] = []
+        for code, applied_at in self._pending_interventions.items():
+            if (msg_count_now - applied_at) > INTERVENTION_FAIL_WINDOW_TURNS:
+                elapsed.append(code)
+        for code in elapsed:
+            self._record_outcome(code, unstuck=True)
+            self._pending_interventions.pop(code, None)
+
+    def _record_outcome(self, code: str, *, unstuck: bool) -> None:
+        """Persist the intervention outcome — never raise (Admiral must
+        not crash drydock). Logs both outcomes to history for visibility."""
+        try:
+            persistence.record_intervention_outcome(code, unstuck=unstuck)
+            history.append(
+                "intervention-outcome",
+                f"{code} :: {'unstuck' if unstuck else 'failed'}",
+            )
+        except Exception as e:
+            logger.debug("record_intervention_outcome failed: %s", e)
+
     async def _handle_finding(self, finding: Finding) -> None:
         """Escalation ladder: local LLM → Opus → canned directive.
 
@@ -101,8 +147,12 @@ class AdmiralWorker:
         proposal in the background.
         """
         try:
-            # Record for Phase 3b promotion criteria.
-            session_id = getattr(self.agent_loop, "_admiral_session_id", "")
+            # Record for Phase 3b promotion criteria. Use the live
+            # `session_id` (matches the on-disk session log dir) so
+            # M5/Deep Noir can extract contrastive pairs from the dir.
+            # Pre-fix this read `_admiral_session_id`, a phantom uuid
+            # that never resolved to anything on disk.
+            session_id = getattr(self.agent_loop, "session_id", "")
             persistence.record_finding(finding.code, session_id)
 
             directive, source = await self._resolve_directive(finding)
@@ -112,6 +162,11 @@ class AdmiralWorker:
             )
             finding_with_text = type(finding)(code=finding.code, directive=directive)
             interventions.apply(self.agent_loop, finding_with_text)
+
+            # Watch for re-fires within the fail window to classify this
+            # intervention's outcome. Without this, prompt_failed stays at
+            # 0 forever and Phase 3b promotion criteria never trigger.
+            self._pending_interventions[finding.code] = len(self.agent_loop.messages)
 
             # Phase 3b: if same finding qualifies and proposer is enabled,
             # kick off a code-proposal draft in the background.
