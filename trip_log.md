@@ -1,5 +1,77 @@
 # Drydock Trip Log
 
+## 2026-05-11 09:30 UTC tick
+- Stress: 1658/1658 COMPLETE (run finished normally; PID 340932 gone; no new stress batch started)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 up, balancer PID 380535 on :8001 forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=103694, retrieval=175 (drain: 0 actionable — all already ingested)
+- Action this tick: no action — system idle post-cycle completion, all dominant dispatch patterns (thinking_stall) already addressed in prior commits
+
+## 2026-05-11 09:00 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 dead — run finished normally at ~09:00 UTC; done=88 skip=53 timeout=0 recycle=42)
+- Write rate: 5.3% (88 accepted / 1658 prompts total cycle)
+- Admiral last 30 min: 0 fires (run complete, no active session)
+- vLLM 400s: 0; balancer on :8001 healthy (PID 380535 confirmed llm_balancer.py); llamacpp-gemma4 up (docker unhealthy status is health-check noise, API responds correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=103391, retrieval=175 (drain: 0 ingested — all already consumed); steering=0
+- Action this tick: no fix committed — stress run completed full 1658/1658 cycle; retrieval drain returned 0 actionable; harness:thinking_stall dominant in queue but already handled in agent_loop.py ~line 1072; all services healthy; no new drydock bugs found
+
+## 2026-05-11 08:30 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 dead — run finished normally; accepted=88, skipped=53, timeouts=0, elapsed=555m)
+- Write rate: 5.3% (88 accepted / 1658 prompts; note: "accepted" here counts net new file writes, not TUI interactions)
+- Admiral last 30 min: 0 fires (stress-alert:complete logged at 08:15, retry-spike alert at 08:08 was final burst before completion)
+- vLLM 400s: 0; balancer on :8001 healthy, gemma4 up
+- GH issues: 0 open
+- Dispatch queue: harness=103088, retrieval=175 (drain: 0 ingested — all 175 entries already consumed); steering=N/A
+- Action this tick: no fix committed — stress run completed 1658/1658; retrieval queue fully drained; no new drydock bugs found; harness:thinking_stall pattern remains dominant in queue but already addressed in source; system idle pending next stress batch
+
+## 2026-05-11 08:00 UTC tick
+- Stress: 1652/1658 (PID 340932 alive; done=82 skip=52 this restart; 99.6% complete — final stretch)
+- Write rate: ~61% (82 done / 134 resolved attempts this restart)
+- Admiral last 30 min: 0 new fires (admiral_history.log quiet; harness:thinking_stall still dominant in queue but all recent outcomes via source=opus/canned)
+- vLLM 400s: 0; balancer on :8001 confirmed healthy; gemma4 up (unhealthy status from docker healthcheck, not actual model failure)
+- GH issues: 0 open
+- Dispatch queue: harness=102784, retrieval=175, steering=N/A; retrieval drain: 0 ingested (all already done)
+- Action this tick: no fix committed — stress run at 99.6% completion, all services healthy, thinking_stall pattern already addressed in source; no new actionable bugs found
+
+## 2026-05-11 07:00 UTC tick
+- Stress: 1635/1658 at last babysitter tick (PID 340932 alive; done=70 skip=47 recycle=35; 98.6% complete)
+- Write rate: ~60% (70 done / 117 resolved attempts)
+- Admiral last 30 min: thinking_stall pattern dominant; all resolved ("unstuck" per queue); no new patterns
+- vLLM 400s: 0; balancer OK on :8001 (gemma4 confirmed)
+- GH issues: 0 open
+- Dispatch queue: harness=102169, retrieval=175, steering=N/A; retrieval drain: 0 ingested (all already done)
+- Action this tick: no fix committed — system healthy, stress nearly done, all patterns already addressed in source
+
+## 2026-05-11 06:02 UTC tick
+- Stress: 1620/1658 (PID 340932 alive, stress_shakedown running; near completion)
+- Write rate: ~60% based on recent done/skip ratio (last batch: +26 msgs, +4 writes)
+- Admiral last 30 min: ~20 fires (thinking_stall pattern dominant in harness queue)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=101570, retrieval=175 (retrieval drain: 0 ingested, all already done)
+- Action this tick: no fix committed — existing thinking_stall handling in agent_loop.py is comprehensive (grep/read/write/bash all have specific nudges); stress run progressing normally; system healthy
+
+## 2026-05-11 05:31 UTC tick
+- Stress: 1604/1658 at 05:00 UTC babysitter tick (PID 340932 alive; done=49 skip=37 recycle=25; run near end)
+- Write rate: ~56% (49 done / 87 resolved attempts this restart)
+- Admiral last 30 min: dispatch queue harness=101255 entries, all thinking_stall — addressed by prior commits; no new patterns
+- vLLM 400s: 0; balancer OK on :8001 (gemma4 forwarding confirmed)
+- GH issues: 0 open
+- Dispatch queue: harness=101255, retrieval=175 (0 actionable, all already ingested)
+- Action this tick: no action — healthy; retrieval drain: 0 new ingests; stress at 97% with no intervention needed
+
+## 2026-05-11 05:01 UTC tick
+- Stress: 1604/1658 (PID 340932 alive, etime ~6h; done=49 skip=37 timeout=0 recycle=25 — 43% skip rate due to TUI-not-accepting, known approval-modal issue)
+- Write rate: 49 done / 87 attempts = ~56% success rate this restart (babysitter ticked 05:00 UTC, 1 min ago)
+- Admiral last 30 min: dispatch queue dominated by thinking_stall (100930 harness entries, unchanged pattern) — already addressed by prior commits
+- vLLM 400s: 0 (container "unhealthy" health check but forwarding fine on :8000; balancer OK on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=100930, retrieval=175 (0 actionable — all already ingested)
+- Action this tick: no action — system healthy; retrieval drain: 0 new ingests; stress near end of run (54 steps remaining); no new actionable patterns beyond already-fixed admiral commits
+
 ## 2026-05-11 01:04 UTC tick
 - Stress: 1551/1658 (PID 340932 alive; brief SKIP spiral of 12 consecutive SKIPs during TUI recycles, recovered — new session session_20260511_010327 created and active with tool calls at idx ~1552)
 - Write rate: 22 done / 11 skip in first 33 steps of current restart (~67%)
@@ -4493,3 +4565,39 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=100594, retrieval=175 (drain: 0 new actionable — all already ingested)
 - Action this tick: no action — stress run progressing (~1580/1658), system healthy, all dispatch patterns (thinking_stall dominates at 100K+ entries) already addressed by prior commits
+
+## 2026-05-11 06:30 UTC tick
+- Stress: 1517/1658 (resuming at step 1517, PID 340932 alive, elapsed 7h30m)
+- Write rate: ~56% (from prior tick estimate)
+- Admiral last 30 min: 0 fires (no new active sessions)
+- vLLM 400s: 0 (llamacpp-gemma4 "unhealthy" label cosmetic; balancer PID 380535 forwarding on :8001 correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=101873, retrieval=175 (drain: 0 new — all already ingested)
+- Action this tick: no action — system healthy, stress near completion, thinking_stall dispatch pattern (101K entries) already addressed by prior commits
+
+## 2026-05-11 07:30 UTC tick
+- Stress: 1645/1658 (nearly complete, 43 skips — TUI prompt-acceptance retries)
+- Write rate: ~15 writes per last 20 prompts
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 "unhealthy" health-check label cosmetic; balancer serving correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=102472, retrieval=175 (drain: 0 actionable — all already ingested)
+- Action this tick: no action — system healthy. Dominant dispatch patterns (thinking_stall 71K, bash_generic 13K, hallucinated_name 6K, search_replace:not_found 5K) all addressed by prior commits. Stress run 13 steps from completion.
+
+## 2026-05-11 10:00 UTC tick
+- Stress: 1658/1658 COMPLETE (run finished; PID 340932 gone; no new batch started)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=103997, retrieval=175 (drain: 0 actionable — all already ingested)
+- Action this tick: no action — system idle post-cycle, dominant thinking_stall pattern (103K entries) already addressed by prior commits, no new actionable patterns
+
+## 2026-05-11 10:30 UTC tick
+- Stress: 1658/1658 COMPLETE (run finished at ~09:00 UTC; babysitter confirmed done=88 skip=53 recycle=42; no restart needed)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; docker logs error is cosmetic — llamacpp container absent, gemma4 serving fine)
+- GH issues: 0 open
+- Dispatch queue: harness=103997 (104K, bloated by duplicates — fixed), retrieval=175 (drain: 0 actionable — all already ingested)
+- Action this tick: committed fix bd8201a — classify_pulse.sh was re-scanning last 500 lines of admiral_history.log every 10 min without cross-run dedup, causing 76x duplicate entries (13,464 bash_generic records from 177 unique evidence strings). Switched to incremental line-count tracking per source file (~/.drydock/dispatch/.last_pos_<slug>). Initialized position files to current EOF so next tick starts clean. Auto-release will ship at next 0/6/12/18 CDT tick.
