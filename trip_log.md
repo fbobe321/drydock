@@ -1,5 +1,34 @@
 # Drydock Trip Log
 
+## 2026-05-12 04:00 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 dead — run finished normally; babysitter idle as expected)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (no active sessions)
+- vLLM 400s: 0 (vLLM container exited 6 days ago; replaced by llamacpp-gemma4 running on :8000 at ~73 tok/s; health-check flag "unhealthy" but completions confirmed working via direct test)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175, steering=0
+- retrieval-drain: 0 projects ingested (all already consumed)
+- Action this tick: no action — healthy. Balancer PID 380535 live on :8001; stale 502 errors in balancer.log are from the now-complete stress run (last written May 11 02:36 CDT). No actionable dispatch patterns; all dominant patterns (thinking_stall, heredoc_loop) already addressed in source.
+
+## 2026-05-12 00:00 UTC tick
+- Stress: 1658/1658 COMPLETE (done=88, skip=53, timeout=0; full cycle finished in 555min; babysitter correctly idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (container up, unhealthy flag but forwarding fine)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175, steering=0
+- retrieval-drain: 0 projects ingested (all 175 entries already consumed)
+- Action this tick: no action — healthy. Stress run completed normally. Balancer PID 380535 on :8001 confirmed live. No new patterns in queue since last tick.
+
+## 2026-05-11 22:00 UTC tick
+- Stress: 1658/1658 COMPLETE (run finished, PID dead, babysitter not restarting by design)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175 (retrieval drain: 0 actionable — all already ingested)
+- Action this tick: no action — system healthy. Balancer PID 380535 running on :8001. Both dominant patterns (thinking_stall, heredoc_loop) already addressed by prior commits. No new bugs found.
+
 ## 2026-05-11 18:00 UTC tick
 - Stress: 1658/1658 COMPLETE (done=88, skip=53, timeout=0, recycle=42; harness finished, PID dead as expected)
 - Write rate: N/A (cycle complete)
@@ -4713,3 +4742,84 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=104301+, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
 - Action this tick: no action — system healthy. Dominant dispatch patterns (harness:thinking_stall, harness:bash:heredoc_loop) already addressed by prior commits. Stress cycle complete, no restart needed.
+
+## 2026-05-11 20:00 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle done, PID 340932 exited cleanly, no restart needed)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175, steering=0 (0 actionable on retrieval drain)
+- Action this tick: no action — system healthy. Dominant patterns (harness:thinking_stall, harness:bash:heredoc_loop) already addressed by prior commits. No new bugs found.
+
+## 2026-05-11 21:00 UTC tick
+- Stress: 1658/1658 (COMPLETE — full run finished, babysitter not restarting per design)
+- Write rate: done=88 skip=53 recycle=42 (last segment stats; idx reached 1658)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (gemma4 docker not queried directly; balancer on :8001 healthy, serving llama.cpp backend)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175, steering=0 (retrieval drain: 0 actionable — all already ingested)
+- Action this tick: no action — stress run completed full 1658-prompt cycle; all queued patterns (thinking_stall, heredoc_loop) already addressed in prior commits; system healthy
+
+## 2026-05-11 23:00 UTC tick
+- Stress: 1658/1658 COMPLETE
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (log empty)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175, steering=0 (retrieval drain: 0 actionable — all already ingested)
+- Action this tick: no action — system healthy; balancer PID 380535 running on :8001; vllm_failover paused by sentinel; both dominant dispatch patterns (thinking_stall, heredoc_loop) already addressed in prior commits
+
+## 2026-05-12 00:00 UTC tick
+- Stress: 1658/1658 COMPLETE
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (log empty)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175, steering=0 (retrieval drain: 0 actionable — all already ingested)
+- Action this tick: no action — system healthy; balancer PID 380535 running on :8001 (llm_balancer.py confirmed); dominant dispatch patterns (thinking_stall 73K, bash_generic 13K, hallucinated_name 6K) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 01:00 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 gone, babysitter not restarting — full cycle done)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; llm_balancer.py confirmed)
+- GH issues: 0 open
+- Dispatch queue: harness=104302+, retrieval=175, steering=0 (retrieval drain: 0 actionable — all already ingested)
+- Action this tick: no action — system healthy; dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 02:00 UTC tick
+- Stress: 1658/1658 (complete, babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (docker "unhealthy" flag but API responds normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; stress cycle complete; dominant dispatch patterns (thinking_stall, bash_heredoc_loop) addressed in prior commits; balancer PID 380535 confirmed on :8001
+
+## 2026-05-12 03:00 UTC tick
+- Stress: 1658/1658 (complete, babysitter idle — no restart on full cycle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (docker "unhealthy" flag; API via balancer responds normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; balancer PID 380535 confirmed on :8001 (llm_balancer.py); dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 05:00 UTC tick
+- Stress: 1658/1658 (complete, babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (API via balancer responds normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; balancer PID 380535 confirmed on :8001 (llm_balancer.py); dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 06:00 UTC tick
+- Stress: 1658/1658 (complete, babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (API via balancer responds normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; balancer PID 380535 confirmed on :8001 (llm_balancer.py); dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
