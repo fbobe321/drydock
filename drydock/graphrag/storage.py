@@ -33,11 +33,15 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterable, Iterator
 
+import json
+from datetime import datetime, timezone
+
 from drydock.graphrag.code_indexer import SymbolRecord, index_path as index_code
 from drydock.graphrag.retriever import (
     RetrievalResult,
     SymbolHit,
     TextHit,
+    WorkedExampleHit,
 )
 from drydock.graphrag.text_indexer import TextChunk, index_path as index_text
 
@@ -84,6 +88,47 @@ CREATE TABLE IF NOT EXISTS text_df (
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+-- "Second brain" payload: previously-solved problems with full reasoning
+-- chains. The model retrieves these alongside flat-chunk text so it sees
+-- not just facts but how analogous problems were worked through.
+CREATE TABLE IF NOT EXISTS worked_examples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    problem_text TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
+    subject TEXT NOT NULL DEFAULT '',
+    -- JSON-encoded list[str]; ordered first→last reasoning step
+    reasoning_json TEXT NOT NULL DEFAULT '[]',
+    final_answer TEXT NOT NULL DEFAULT '',
+    -- Provenance: "manual", "hle:<qid>", "session:<sid>", etc.
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL,
+    -- Dedup key: same problem text + same source = single canonical row.
+    UNIQUE(problem_text, source)
+);
+CREATE INDEX IF NOT EXISTS idx_worked_examples_category
+    ON worked_examples(category);
+CREATE INDEX IF NOT EXISTS idx_worked_examples_source
+    ON worked_examples(source);
+
+-- TF-IDF on the *problem statement only* (not the reasoning chain). We
+-- want a query like "Gauss-Bonnet coupling holographic D3/D7" to match
+-- problems that share that physical setup, not problems whose answer
+-- chains happen to mention "Gauss" downstream.
+CREATE TABLE IF NOT EXISTS worked_example_terms (
+    example_id INTEGER NOT NULL,
+    term TEXT NOT NULL,
+    tf INTEGER NOT NULL,
+    PRIMARY KEY (example_id, term),
+    FOREIGN KEY (example_id) REFERENCES worked_examples(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_worked_example_terms_term
+    ON worked_example_terms(term);
+
+CREATE TABLE IF NOT EXISTS worked_example_df (
+    term TEXT PRIMARY KEY,
+    df INTEGER NOT NULL
 );
 """
 
@@ -316,6 +361,7 @@ class Index:
         *,
         symbol_limit: int = 5,
         text_limit: int = 5,
+        worked_example_limit: int = 3,
     ) -> RetrievalResult:
         symbols: list[SymbolHit] = []
         # Heuristic: if the query is one or two CamelCase / snake_case
@@ -325,9 +371,11 @@ class Index:
             for tok in tokens[:1]:
                 symbols.extend(self.find_symbol(tok)[:symbol_limit])
         text = self._retrieve_text(query, text_limit)
+        examples = self._retrieve_worked_examples(query, worked_example_limit)
         return RetrievalResult(
             symbols=symbols[:symbol_limit],
             text=text,
+            worked_examples=examples,
         )
 
     def _retrieve_text(self, query: str, limit: int) -> list[TextHit]:
@@ -428,6 +476,182 @@ class Index:
         return out
 
     # ------------------------------------------------------------------
+    # Worked examples ("second brain")
+    # ------------------------------------------------------------------
+
+    def ingest_worked_example(
+        self,
+        *,
+        problem_text: str,
+        reasoning_steps: list[str],
+        final_answer: str,
+        category: str = "",
+        subject: str = "",
+        source: str = "manual",
+    ) -> int:
+        """Insert a single worked example. Returns the row id (or the
+        existing id if (problem_text, source) already in the table).
+
+        TF-IDF tokens are computed from `problem_text` only — the
+        reasoning chain isn't searched, since we want similarity on the
+        problem statement, not on the answer text."""
+        if not problem_text.strip():
+            raise ValueError("problem_text cannot be empty")
+        if not isinstance(reasoning_steps, list):
+            raise TypeError("reasoning_steps must be a list[str]")
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with self._connect() as cx:
+            cur = cx.execute(
+                """INSERT OR IGNORE INTO worked_examples
+                   (problem_text, category, subject, reasoning_json,
+                    final_answer, source, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    problem_text,
+                    category,
+                    subject,
+                    json.dumps(list(reasoning_steps)),
+                    final_answer,
+                    source,
+                    now,
+                ),
+            )
+            if cur.rowcount == 0:
+                # Already present — return the existing id.
+                row = cx.execute(
+                    "SELECT id FROM worked_examples WHERE problem_text = ? AND source = ?",
+                    (problem_text, source),
+                ).fetchone()
+                return int(row[0]) if row else -1
+            example_id = int(cur.lastrowid)
+            tokens = _tokenize(problem_text)
+            term_freq = Counter(tokens)
+            for term, tf in term_freq.items():
+                cx.execute(
+                    """INSERT INTO worked_example_terms
+                       (example_id, term, tf) VALUES (?, ?, ?)""",
+                    (example_id, term, tf),
+                )
+            self._recompute_worked_df(cx)
+        return example_id
+
+    def _recompute_worked_df(self, cx: sqlite3.Connection) -> None:
+        cx.execute("DELETE FROM worked_example_df")
+        cx.execute(
+            """INSERT INTO worked_example_df(term, df)
+               SELECT term, COUNT(DISTINCT example_id) FROM worked_example_terms
+               GROUP BY term"""
+        )
+
+    def list_worked_examples(self, *, limit: int = 50) -> list[WorkedExampleHit]:
+        """Return all worked examples (most recent first), with score=0.0."""
+        with self._connect() as cx:
+            rows = cx.execute(
+                """SELECT problem_text, category, subject, reasoning_json,
+                          final_answer, source, id
+                   FROM worked_examples
+                   ORDER BY created_at DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [self._row_to_worked_example(r, score=0.0) for r in rows]
+
+    def _retrieve_worked_examples(
+        self, query: str, limit: int
+    ) -> list[WorkedExampleHit]:
+        if limit <= 0:
+            return []
+        q_tokens = _tokenize_query(query)
+        if not q_tokens:
+            q_tokens = _tokenize(query)
+        if not q_tokens:
+            return []
+
+        with self._connect() as cx:
+            n_row = cx.execute(
+                "SELECT COUNT(*) FROM worked_examples"
+            ).fetchone()
+            n = int(n_row[0]) if n_row else 0
+            if n == 0:
+                return []
+
+            placeholders = ",".join("?" for _ in q_tokens)
+            df_rows = cx.execute(
+                f"SELECT term, df FROM worked_example_df WHERE term IN ({placeholders})",
+                tuple(q_tokens),
+            ).fetchall()
+            df = {term: cnt for term, cnt in df_rows}
+            if not df:
+                return []
+
+            q_idf = {
+                term: math.log((n + 1) / (df.get(term, 0) + 1)) + 1.0
+                for term in q_tokens
+            }
+
+            cand_rows = cx.execute(
+                f"""SELECT DISTINCT example_id FROM worked_example_terms
+                    WHERE term IN ({placeholders})""",
+                tuple(q_tokens),
+            ).fetchall()
+            cand_ids = [r[0] for r in cand_rows]
+            if not cand_ids:
+                return []
+
+            scored: list[tuple[int, float]] = []
+            for eid in cand_ids:
+                rows = cx.execute(
+                    "SELECT term, tf FROM worked_example_terms WHERE example_id = ?",
+                    (eid,),
+                ).fetchall()
+                tf_map = {term: tf for term, tf in rows}
+                score = sum(
+                    tf_map.get(term, 0) * q_idf.get(term, 0.0)
+                    for term in q_tokens
+                )
+                if score > 0:
+                    scored.append((eid, score))
+            scored.sort(key=lambda x: x[1], reverse=True)
+            top = scored[:limit]
+            if not top:
+                return []
+
+            ids_clause = ",".join("?" for _ in top)
+            rows = cx.execute(
+                f"""SELECT problem_text, category, subject, reasoning_json,
+                           final_answer, source, id
+                    FROM worked_examples WHERE id IN ({ids_clause})""",
+                tuple(eid for eid, _ in top),
+            ).fetchall()
+
+        score_by_id = dict(top)
+        out: list[WorkedExampleHit] = []
+        for r in rows:
+            eid = int(r[6])
+            out.append(self._row_to_worked_example(r, score=score_by_id.get(eid, 0.0)))
+        # Re-sort because the IN clause doesn't preserve scoring order.
+        out.sort(key=lambda h: h.score, reverse=True)
+        return out
+
+    @staticmethod
+    def _row_to_worked_example(row: tuple, *, score: float) -> WorkedExampleHit:
+        problem_text, category, subject, reasoning_json, final_answer, source, eid = row
+        try:
+            steps = tuple(json.loads(reasoning_json))
+        except (json.JSONDecodeError, TypeError):
+            steps = ()
+        return WorkedExampleHit(
+            problem_text=problem_text,
+            category=category or "",
+            subject=subject or "",
+            reasoning_steps=steps,
+            final_answer=final_answer or "",
+            source=source or "manual",
+            score=float(score),
+            citation_id=f"worked_example:{eid}",
+        )
+
+    # ------------------------------------------------------------------
     # Stats / admin
     # ------------------------------------------------------------------
 
@@ -436,4 +660,12 @@ class Index:
             symbols = cx.execute("SELECT COUNT(*) FROM symbols").fetchone()[0]
             chunks = cx.execute("SELECT COUNT(*) FROM text_chunks").fetchone()[0]
             terms = cx.execute("SELECT COUNT(*) FROM text_df").fetchone()[0]
-        return {"symbols": symbols, "chunks": chunks, "unique_terms": terms}
+            worked = cx.execute(
+                "SELECT COUNT(*) FROM worked_examples"
+            ).fetchone()[0]
+        return {
+            "symbols": symbols,
+            "chunks": chunks,
+            "unique_terms": terms,
+            "worked_examples": worked,
+        }

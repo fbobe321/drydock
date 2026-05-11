@@ -1,5 +1,80 @@
 # Drydock Trip Log
 
+## 2026-05-11 18:00 UTC tick
+- Stress: 1658/1658 COMPLETE (done=88, skip=53, timeout=0, recycle=42; harness finished, PID dead as expected)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104302 (bulk pre-fix duplicates from classify_pulse bug; incremental scanner fix landed bd8201a), retrieval=175 (0 actionable — all ingested)
+- Action this tick: no action — healthy. Both queued patterns (harness:thinking_stall nudge, harness:bash:heredoc_loop detection) already implemented in agent_loop.py and bash.py respectively. Balancer running (PID 380535). Watchdog pause flag present (user-set).
+
+
+## 2026-05-11 17:00 UTC tick
+- Stress: 1658/1658 COMPLETE (babysitter silent — no restart since idx>=1658; stress done)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (no active sessions)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (drain: 0 actionable — all ingested), steering=N/A
+- Retrieval drain: 0 projects ingested (all entries already consumed)
+- Action this tick: no action — healthy. Balancer PID 380535 on :8001 OK. All queued patterns (harness:thinking_stall, harness:bash:heredoc_loop) verified implemented in agent_loop.py + bash.py; no new fix needed.
+
+## 2026-05-11 16:00 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle ended cleanly, stress PID 340932 dead, no new batch)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (no active sessions)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104301 (stable since dedup fix bd8201a), retrieval=175 (drain: 0 actionable — all already ingested), steering=N/A
+- Retrieval drain: 0 projects ingested (all 175 entries already consumed)
+- Action this tick: no action — healthy. Balancer PID 380535 on :8001 serving gemma4. All queued patterns (harness:thinking_stall, harness:bash:heredoc_loop) already addressed by prior commits.
+
+## 2026-05-11 15:00 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle ended; babysitter correctly not restarting — progress == total)
+- Write rate: 5.3% (88/1658 accepted)
+- Admiral last 30 min: 0 fires (no active sessions)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (all ingested), steering=0
+- Action this tick: no action — healthy. Fresh dispatch entries are thinking_stall (19) and heredoc_loop (1), both already addressed in source. balancer PID 380535 on :8001 confirmed alive.
+
+## 2026-05-11 14:00 UTC tick
+- Stress: 1658/1658 COMPLETE (run ended; no new batch started)
+- Write rate: N/A (idle post-cycle)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; llamacpp-gemma4 "unhealthy" label cosmetic)
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (drain: 0 actionable — all already ingested)
+- Action this tick: no action — system healthy. All queued patterns (thinking_stall, heredoc_loop) already addressed by prior commits.
+
+## 2026-05-11 13:50 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle ended cleanly, no restart needed)
+- Write rate: N/A (idle post-cycle)
+- Admiral last 30 min: 0 fires (no active sessions)
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; docker gemma4 "unhealthy" label cosmetic)
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (drain: 0 actionable — all already ingested), steering=N/A
+- Action this tick: no action — system idle post-cycle. All major queued patterns (thinking_stall, hallucinated_name, search_replace:not_found_loop, heredoc_loop) addressed by prior commits. Stress PID 340932 dead (expected — cycle completed). No new drydock bugs found.
+
+## 2026-05-11 12:32 UTC tick
+- Stress: 1658/1658 COMPLETE (stress_2000_v10 ended cleanly; 88 accepted, 53 skipped, 555min elapsed; harness not restarted — cycle complete)
+- Write rate: 5.3% (88/1658 accepted prompts)
+- Admiral last 30 min: 0 fires (admiral_history.log only has bootstrap entry)
+- vLLM 400s: 0 (balancer :8001 healthy, docker gemma4 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104301 (mostly bloat from pre-fix duplicates), retrieval=175 (drain: 0 actionable — all already ingested recently)
+- Action this tick: no action — system idle post-cycle, all queued patterns previously addressed, no new bugs found
+
+## 2026-05-11 11:00 UTC tick
+- Stress: new cycle started at 24/201 (babysitter auto-restarted after 1658/1658 cycle completed ~09:00 UTC)
+- Write rate: N/A (new run, too early to measure)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; gemma4 docker fine)
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (drain: 0 actionable — all already ingested)
+- Action this tick: no action — top dispatch patterns (thinking_stall 467, loop:bash_generic 20, grep:unescaped_pattern 8) all already addressed in source (heredoc detection confirmed in bash.py lines 464-606, loop detection wired). New stress cycle running normally.
+
 ## 2026-05-11 09:30 UTC tick
 - Stress: 1658/1658 COMPLETE (run finished normally; PID 340932 gone; no new stress batch started)
 - Write rate: N/A (cycle complete)
@@ -4601,3 +4676,40 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=103997 (104K, bloated by duplicates — fixed), retrieval=175 (drain: 0 actionable — all already ingested)
 - Action this tick: committed fix bd8201a — classify_pulse.sh was re-scanning last 500 lines of admiral_history.log every 10 min without cross-run dedup, causing 76x duplicate entries (13,464 bash_generic records from 177 unique evidence strings). Switched to incremental line-count tracking per source file (~/.drydock/dispatch/.last_pos_<slug>). Initialized position files to current EOF so next tick starts clean. Auto-release will ship at next 0/6/12/18 CDT tick.
+
+## 2026-05-11 11:30 UTC tick
+- Stress: 1658/1658 COMPLETE (no new batch; run ended cleanly)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (drain: 0 actionable — all already ingested); new entries since last tick are timing_stall + heredoc_loop, both already addressed by prior commits
+- Action this tick: no action — system idle post-cycle, all queued patterns addressed, no fresh bugs found
+
+## 2026-05-11 12:00 UTC tick
+- Stress: 1658/1658 COMPLETE (run ended; harness not restarted — no pending batch)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; docker gemma4 "unhealthy" label cosmetic)
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (drain: 0 actionable — all already ingested); new entries since last tick are harness:bash:heredoc_loop (false positive — classifier picked up bd8201a commit text from autonomous_review.log, not a real heredoc in session) and more harness:thinking_stall; both already addressed by prior commits
+- Action this tick: no action — system idle post-cycle, all queued patterns addressed, heredoc handling in bash.py already provides write_file redirect nudge (lines 790-800), no new drydock bugs found
+
+## 2026-05-11 13:32 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle ended cleanly at ~09:00 UTC, babysitter confirmed no restart needed)
+- Write rate: 5.3% (88/1658 accepted)
+- Admiral last 30 min: 0 fires (stress run idle, no active sessions)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104301, retrieval=175 (all already ingested), steering=0
+- Retrieval drain: 0 projects ingested (all 175 entries already consumed)
+- Action this tick: no action — healthy. Queued patterns (harness:thinking_stall, harness:bash:heredoc_loop) already addressed in source. GraphRAG Phase 2 (iterative retrieve nudge) deferred to user review on return.
+
+## 2026-05-11 19:00 UTC tick
+- Stress: 1658/1658 COMPLETE (run ended cleanly, no new batch)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; docker gemma4 "unhealthy" label cosmetic)
+- GH issues: 0 open
+- Dispatch queue: harness=104301+, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy. Dominant dispatch patterns (harness:thinking_stall, harness:bash:heredoc_loop) already addressed by prior commits. Stress cycle complete, no restart needed.

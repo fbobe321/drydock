@@ -61,17 +61,56 @@ class TextHit:
         return f"{head}\n{body}"
 
 
+@dataclass(frozen=True)
+class WorkedExampleHit:
+    """A previously-solved problem with its full reasoning chain.
+
+    The "second brain" payload — when the model retrieves this, it sees
+    not just facts but how a similar problem was worked through:
+    intermediate steps, mistakes corrected, the final answer. Closer to
+    how a human reasons by analogy than flat-chunk retrieval.
+    """
+    problem_text: str         # the original problem statement
+    category: str             # e.g. "Physics", "Math" — coarse domain
+    subject: str              # finer subdomain, e.g. "holographic-models"
+    reasoning_steps: tuple[str, ...]   # ordered: first step → last step
+    final_answer: str
+    source: str               # where it came from: "hle:<id>", "manual", "session:<sid>"
+    score: float              # backend-defined; higher == more relevant
+    citation_id: str = ""
+
+    def format(self) -> str:
+        head = (
+            f"[worked example] {self.category}"
+            + (f" / {self.subject}" if self.subject else "")
+            + f" (score={self.score:.3f}) source={self.source}"
+        )
+        body_lines = [head, "Problem:", "  " + self.problem_text.strip()[:500]]
+        if self.reasoning_steps:
+            body_lines.append("Reasoning:")
+            for i, step in enumerate(self.reasoning_steps, 1):
+                body_lines.append(f"  {i}. {step.strip()[:300]}")
+        body_lines.append(f"Answer: {self.final_answer.strip()[:200]}")
+        return "\n".join(body_lines)
+
+
 @dataclass
 class RetrievalResult:
-    """Output of a retrieve() call. Either or both lists may be empty."""
+    """Output of a retrieve() call. Any subset of lists may be empty."""
     symbols: list[SymbolHit] = field(default_factory=list)
     text: list[TextHit] = field(default_factory=list)
+    worked_examples: list[WorkedExampleHit] = field(default_factory=list)
 
     def is_empty(self) -> bool:
-        return not self.symbols and not self.text
+        return not self.symbols and not self.text and not self.worked_examples
 
     def format(self) -> str:
         sections: list[str] = []
+        # Worked examples first — they're the highest-signal payload when
+        # they match. The model's prompt-attention is biased to the start.
+        if self.worked_examples:
+            sections.append("=== WORKED EXAMPLES ===")
+            sections.extend(h.format() for h in self.worked_examples)
         if self.symbols:
             sections.append("=== SYMBOLS ===")
             sections.extend(h.format() for h in self.symbols)
