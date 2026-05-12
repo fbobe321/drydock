@@ -80,6 +80,9 @@ A sovereign AI system that:
 - Learns customer-specific knowledge
 - Performs coding and reasoning tasks autonomously
 - Self-diagnoses failures (Admiral) and self-improves (MetaHarness, evaluator)
+- **Operates with engineered curiosity** — actively detects its own gaps,
+  retrieves before asserting, ingests unfamiliar context, and treats
+  surprise as signal worth chasing rather than noise to suppress
 - Improves continuously without phoning home
 
 ---
@@ -363,6 +366,99 @@ Already partially shipped — the system already self-observes.
 
 ---
 
+## 5.7 Curiosity Layer — engineered intellectual drive
+
+GraphRAG, Deep Noir, and the HLE benchmark together expose a structural
+weakness in Gemma 4 and most small local models: they answer from prior
+when they should retrieve, plateau on familiar patterns, and treat
+"unknown" as something to guess past rather than something to investigate.
+The Curiosity Layer is a first-class drydock directive — both a guiding
+principle in the system prompt and a concrete subsystem — that converts
+that weakness into a feedback loop.
+
+**Operating definition (carries into the system prompt):**
+
+> Curiosity is an inquisitive, often insatiable desire to understand the
+> unknown — from everyday questions to scientific discovery. In drydock
+> this means: when you notice a gap, you close it; when you encounter
+> something unfamiliar, you investigate before asserting; when you have
+> spare cycles, you explore the corpus rather than idle.
+
+**Behaviors required of the agent (enforced via prompt + Deep Noir vector
+candidate + tool wiring):**
+
+1. **Retrieve before answering on unfamiliar terms.** Any user message
+   containing a named entity, paper title, identifier, API, or symbol
+   not present in recent context triggers an automatic `retrieve` call
+   against GraphRAG before the first content token. Low-confidence
+   retrieval triggers a second pass against the arXiv corpus
+   (`/data3/arxiv_corpus/graphrag.sqlite`) instead of falling back to
+   `web_search`. Fixes the failure mode logged in
+   `project_graphrag_underused.md` (Gemma 4 defaults to web_search on
+   general-knowledge HLE questions).
+2. **Treat surprise as signal, not noise.** When the model's own
+   probability estimate disagrees with retrieved evidence, with a tool
+   result, or with an HLE judge verdict, the disagreement is logged to
+   the curiosity queue (`~/.drydock/dispatch/curiosity.jsonl`) and
+   surfaces in the next overnight `autonomous_review` tick as a
+   candidate for: GraphRAG ingest, prompt refinement, Deep Noir vector
+   training data, or LoRA candidate.
+3. **Investigate before asking.** When the user request is
+   under-specified, the agent first reads the project (Glob + Read on
+   plausible files, `retrieve` against GraphRAG) and proposes a
+   concrete interpretation. `ask_user_question` only fires after at
+   least one investigation pass — never as a first move on ambiguity.
+4. **Explore on idle.** When drydock is idle for > N minutes and the
+   classifier dispatch queues are non-empty, the agent runs a single
+   exploratory cycle: pick the highest-priority pattern, ingest fresh
+   logs into GraphRAG, generate one hypothesis, log to
+   `~/.drydock/curiosity_log.md`. Bounded by a tokens-per-day budget
+   so curiosity does not starve user work.
+5. **Open mindset on conflict.** When new evidence contradicts a
+   previously asserted answer, the agent prefers the new evidence and
+   issues a correction in the same turn. Extends the existing
+   "Retrieval vs. Prior" guidance in §10 into an active rule.
+
+**Curiosity subsystem deliverables (Phase 3, alongside Deep Noir):**
+
+- `drydock.curiosity` module — gap detector, surprise scorer, dispatch
+  writer. Reuses classifier infrastructure from §5.6.
+- `~/.drydock/dispatch/curiosity.jsonl` queue + consumer wired into
+  `autonomous_review.sh`.
+- System-prompt section embedding the five behaviors above, kept short
+  enough for Gemma 4's 20-line prompt budget (`gemma4.md`).
+- Deep Noir vector candidate: "exploration" mode — bias toward retrieval,
+  hypothesis enumeration, and reading-before-writing. Trained from
+  curiosity-log traces once Deep Noir vector training lands.
+- HLE/eval integration: every HLE failure where the judge reasoning
+  contains "no answer extracted" or "incorrect prior" is auto-enqueued
+  as a curiosity item — the eval becomes a growth signal, not just
+  a scoreboard.
+
+**Anti-patterns explicitly forbidden:**
+
+- Curiosity does **not** mean asking the user more questions. The
+  default is to investigate, not interrogate.
+- Curiosity does **not** override the "advisory-only" rule. Exploration
+  cycles never block user work; they consume idle cycles only.
+- Curiosity must **not** become rumination — the tokens-per-day budget
+  exists specifically to prevent endless exploration loops on a single
+  unfamiliar term.
+
+**Acceptance criteria:**
+
+- `retrieve` is called on ≥ 80 % of HLE questions before any content
+  token (measured via execution traces, Phase 3).
+- `~/.drydock/dispatch/curiosity.jsonl` accumulates ≥ 10 items per
+  active week without operator priming.
+- `autonomous_review` ships ≥ 1 prompt/AGENTS.md/vector update per week
+  that originated from a curiosity-queue item (not a stress-run signal).
+- HLE general-knowledge category score lifts measurably vs. the
+  May 2026 baseline (1/20 = 5 %, 18/20 "empty"); target ≥ 25 %
+  in Phase 3, ≥ 40 % in Phase 4.
+
+---
+
 # 6. Adaptive Failure Logic
 
 ```text
@@ -383,6 +479,18 @@ If loops detected:
    → loop-break sampling (temp+0.3/0.5, freq_pen 0.4–0.7, fresh seed)
    → planner reset + diversity strategy
    → only escalates to FORCE_STOP on pure no-op duplicates
+
+If unfamiliar term / named entity / identifier in user input:
+   → mandatory retrieve pass (GraphRAG, then arXiv corpus)
+   → web_search only after both local retrievers return low confidence
+
+If model output contradicts retrieved evidence / tool result / judge verdict:
+   → log to ~/.drydock/dispatch/curiosity.jsonl
+   → autonomous_review picks it up next tick as ingest / prompt / vector candidate
+
+If idle > N minutes AND classifier queues non-empty:
+   → one exploratory cycle (bounded by tokens-per-day budget)
+   → ingest, hypothesis, curiosity_log entry — never a user-visible action
 ```
 
 All logic is **advisory-first**. Hard stops are reserved for objectively useless
@@ -551,6 +659,9 @@ mitigates several of the failure classes already in `MODEL_SHORTCOMINGS.md`.
 | Customer cloud dependency             | −70 %  | Brand promise, qualitative |
 | Task completion rate (interactive)    | +35 %  | Current shakedown baseline |
 | SWE-bench file match                  | maintain ≥70 % | 70 % current        |
+| `retrieve` calls before content (HLE) | ≥80 %  | <5 % observed May 2026     |
+| Curiosity-queue items shipped / week  | ≥1     | 0 — queue not built yet    |
+| HLE general-knowledge score           | ≥25 % Phase 3, ≥40 % Phase 4 | 5 % (1/20 May 2026) |
 
 Metrics with "TBD" baselines are explicitly required to be **measured** before
 Phase 2 begins, not estimated.

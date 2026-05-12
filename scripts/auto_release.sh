@@ -159,26 +159,40 @@ git tag "v$NEW_VERSION" 2>/dev/null || true
 # just a "N commits" placeholder. Pull each meaningful commit subject
 # (skip Bump/Auto-release/Daily sync chatter) and the highest step from
 # the most recent stress run.
+# Filter out cron-only noise (trip log ticks, version bumps, sync commits).
+# `chore(log): trip log tick` is the hourly heartbeat commit and should
+# never appear in release notes — it caused noisy Telegram pings when no
+# real work shipped between releases.
 COMMIT_SUMMARIES=$(git log "$LAST_TAG"..HEAD --pretty=format:'%s' 2>/dev/null \
-    | grep -vE '^(Bump version|v[0-9]+\.[0-9]+\.[0-9]+:|Daily sync|Auto-release)' \
+    | grep -vE '^(Bump version|v[0-9]+\.[0-9]+\.[0-9]+:|Daily sync|Auto-release|chore\(log\): trip log tick)' \
     | head -5)
+# If after filtering there's nothing real to announce, skip the release
+# entirely. Better to wait for the next 6-hour tick than to publish a
+# "release" containing only bot heartbeat noise.
 if [ -z "$COMMIT_SUMMARIES" ]; then
-    COMMIT_SUMMARIES="Auto-release: $COMMITS_SINCE commits since $LAST_TAG"
+    echo "[$(date)] No substantive commits since $LAST_TAG (only filtered noise) — skipping release"
+    # Roll back the version bump so the next real commit picks up at this number.
+    sed -i "s/version = \"$NEW_VERSION\"/version = \"$CURRENT\"/" "$DRYDOCK/pyproject.toml"
+    exit 0
 fi
 NOTIFY_BODY="$COMMIT_SUMMARIES"
 
 # Append previous stress run progress (matches publish_to_pypi.sh).
+# Only when the run is still in flight — once it reaches TOTAL/TOTAL the
+# signal is stale (the harness exits and the log freezes), so repeating
+# "1658/1658 steps before stopping" across every subsequent release is
+# misleading.
 LAST_STRESS_LOG=$(ls -1t /tmp/stress_2000_*.log 2>/dev/null | head -1)
 if [ -n "$LAST_STRESS_LOG" ]; then
     STRESS_MAX=$(grep -oE '^\[ *[0-9]+/[0-9]+\]' "$LAST_STRESS_LOG" 2>/dev/null \
         | tr -d '[] ' | awk -F/ '{print $1}' | sort -n | tail -1)
     STRESS_TOTAL=$(grep -oE '^\[ *[0-9]+/[0-9]+\]' "$LAST_STRESS_LOG" 2>/dev/null \
         | tr -d '[] ' | awk -F/ '{print $2}' | head -1)
-    if [ -n "$STRESS_MAX" ] && [ -n "$STRESS_TOTAL" ]; then
+    if [ -n "$STRESS_MAX" ] && [ -n "$STRESS_TOTAL" ] && [ "$STRESS_MAX" -lt "$STRESS_TOTAL" ]; then
         STRESS_LOG_NAME=$(basename "$LAST_STRESS_LOG")
         NOTIFY_BODY="${NOTIFY_BODY}
 
-Previous stress run (${STRESS_LOG_NAME}) reached ${STRESS_MAX}/${STRESS_TOTAL} steps before stopping."
+Stress run (${STRESS_LOG_NAME}) at ${STRESS_MAX}/${STRESS_TOTAL} steps."
     fi
 fi
 

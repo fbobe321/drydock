@@ -229,7 +229,7 @@ First run creates a config at `~/.drydock/config.toml` and prompts for your prov
 - **Loop Detection**: Advisory-only detection that nudges the model away from repetitive actions without blocking.
 - **Conda/Pip Support**: Auto-approves `pip install`, `conda install`, `pytest`, and other dev commands.
 - **Bundled Skills**: Ships with skills like `create-presentation` for PowerPoint generation.
-- **MCP Support**: Connect Model Context Protocol servers for extended capabilities.
+- **MCP Support**: Connect Model Context Protocol servers via the `/mcp` slash command or `~/.drydock/config.toml`. See [MCP Servers](#mcp-servers).
 - **Safety First**: Tool execution approval with `--dangerously-skip-permissions` for full auto-approve.
 
 ### Built-in Agents
@@ -324,13 +324,61 @@ DryDock discovers skills from:
 
 ### MCP Servers
 
+DryDock can connect to any Model Context Protocol server. Tools from a server `foo` show up as `foo__<tool_name>` in the agent's tool list. Two ways to add one:
+
+#### Option A — `/mcp` slash command (recommended)
+
+Inside the TUI:
+
+```
+/mcp                                                       # list configured servers + usage
+/mcp examples                                              # ready-to-paste examples
+/mcp add stdio fetch_server uvx mcp-server-fetch
+/mcp add stdio filesystem npx -y @modelcontextprotocol/server-filesystem /data
+/mcp add http weather https://mcp.example.com
+/mcp add streamable-http myapi https://api.example.com/mcp
+/mcp remove fetch_server
+```
+
+The command writes to `~/.drydock/config.toml`. Restart DryDock to load new servers.
+
+#### Option B — edit `~/.drydock/config.toml` directly
+
+Use this for advanced fields (auth headers, env-var API keys, custom timeouts, `sampling_enabled`). Three transports: `stdio`, `http`, `streamable-http`.
+
 ```toml
 [[mcp_servers]]
 name = "fetch_server"
 transport = "stdio"
 command = "uvx"
 args = ["mcp-server-fetch"]
+
+[[mcp_servers]]
+name = "filesystem"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
+env = { LOG_LEVEL = "info" }
+startup_timeout_sec = 10.0
+tool_timeout_sec = 60.0
+sampling_enabled = true
+
+[[mcp_servers]]
+name = "github"
+transport = "streamable-http"
+url = "https://api.githubcopilot.com/mcp"
+api_key_env = "GITHUB_TOKEN"                # reads token from this env var
+api_key_header = "Authorization"
+api_key_format = "Bearer {token}"
+
+[[mcp_servers]]
+name = "weather"
+transport = "http"
+url = "https://mcp.weather.example.com"
+headers = { "X-Tenant" = "drydock" }
 ```
+
+Verify a server loaded by running `/help` inside the TUI and checking for `<name>__*` prefixed tools. Server errors show up in `~/.drydock/logs/`.
 
 ## Testing
 

@@ -34,7 +34,12 @@ def _vllm_available() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(not _vllm_available(), reason="vLLM not running")
+pytestmark = [
+    pytest.mark.skipif(not _vllm_available(), reason="vLLM not running"),
+    # Real LLM round-trip; global 10s pytest timeout is far too tight.
+    # 300s covers Gemma 4 thinking + queue wait under heavy contention.
+    pytest.mark.timeout(300),
+]
 
 
 def _config(tmp_path: Path) -> DrydockConfig:

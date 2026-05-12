@@ -616,3 +616,74 @@ class TestHallucinatedToolLoop:
             _add_tool_call(al, "ghost_tool", '{}')
         al._check_tool_call_repetition()
         assert al._hot_tool_path is None
+
+
+# ============================================================================
+# Mid-turn user injection (Claude Code "type while busy" feature)
+# ============================================================================
+
+class TestUserInjection:
+    """`queue_user_injection` + `_drain_user_injections` fold a queued user
+    message into the last tool result as a SYSTEM note. This is the bridge
+    between the TUI submit-while-busy path and the agent loop."""
+
+    def _make(self) -> AgentLoop:
+        al = _make_agent()
+        al._pending_user_injections = []
+        return al
+
+    def test_queue_appends_to_pending_list(self):
+        al = self._make()
+        al.queue_user_injection("also add a CLI flag for verbose mode")
+        assert al._pending_user_injections == [
+            "also add a CLI flag for verbose mode"
+        ]
+
+    def test_queue_strips_and_drops_empty(self):
+        al = self._make()
+        al.queue_user_injection("   ")
+        al.queue_user_injection("")
+        al.queue_user_injection("  real message  ")
+        assert al._pending_user_injections == ["real message"]
+
+    def test_drain_folds_into_last_tool_result(self):
+        al = self._make()
+        _add_tool_call(al, "read_file", '{"path": "foo.py"}')
+        original_tool_result = al.messages[-1].content
+        al.queue_user_injection("also rename foo to bar")
+        al._drain_user_injections()
+        assert al._pending_user_injections == []
+        # The injection landed on the last tool result, not as a new
+        # user-after-tool message (which vLLM/Mistral reject).
+        assert al.messages[-1].role == Role.tool
+        last_content = al.messages[-1].content or ""
+        assert original_tool_result in last_content
+        assert "USER (typed while you were working" in last_content
+        assert "also rename foo to bar" in last_content
+
+    def test_drain_no_messages_is_noop(self):
+        al = self._make()
+        # Empty queue, empty history — no crash, no message creation.
+        al._drain_user_injections()
+        assert len(al.messages) == 0
+
+    def test_drain_multiple_injections_in_order(self):
+        al = self._make()
+        _add_tool_call(al, "grep", '{"pattern": "foo"}')
+        al.queue_user_injection("first follow-up")
+        al.queue_user_injection("second follow-up")
+        al._drain_user_injections()
+        content = al.messages[-1].content or ""
+        assert "first follow-up" in content
+        assert "second follow-up" in content
+        assert content.index("first follow-up") < content.index("second follow-up")
+
+    def test_idempotent_drain(self):
+        al = self._make()
+        _add_tool_call(al, "bash", '{"command": "ls"}')
+        al.queue_user_injection("test injection")
+        al._drain_user_injections()
+        snapshot = al.messages[-1].content
+        # Second drain with empty queue must not duplicate.
+        al._drain_user_injections()
+        assert al.messages[-1].content == snapshot

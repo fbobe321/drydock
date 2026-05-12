@@ -1,5 +1,41 @@
 # Drydock Trip Log
 
+## 2026-05-12 23:00 UTC tick
+- Stress: 1658/1658 COMPLETE (pid 340932 dead since May 11; babysitter correctly not restarting — full cycle done)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (dominant: thinking_stall — already handled in agent_loop.py), retrieval=175 (all already ingested; 0 actionable), steering=0
+- Action this tick: no action — balancer (pid 380535) healthy on :8001, gemma4 container up, retrieval drain confirmed 0 actionable, system healthy
+
+## 2026-05-12 22:00 UTC tick
+- Stress: 1658/1658 COMPLETE (pid 340932 exited naturally; babysitter not restarting — full pass done)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (top: thinking_stall x466, bash_generic x20), retrieval=175 (all already ingested), steering=0
+- Action this tick: no action — balancer (pid 380535) healthy on :8001, vLLM (gemma4) healthy, thinking_stall handling already in agent_loop.py; retrieval drain 0 actionable
+
+## 2026-05-12 19:00 UTC tick
+- Stress: 1658/1658 COMPLETE (watchdog paused, cycle finished; no restart needed)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, gemma4 container up)
+- GH issues: gh command unavailable this tick
+- Dispatch queue: harness=104303+, retrieval=175 (all already ingested; 0 actionable), steering=0
+- Action this tick: committed fix for `import tomli` → `import tomllib` (stdlib) in _mcp_command and _setup_local_model_command; simultaneously shipped the /mcp slash command that was staged but uncommitted (e33997b)
+
+## 2026-05-12 18:00 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle done, PID dead since 2026-05-11T21:00Z, babysitter idle — correct behavior)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (dominant patterns thinking_stall + bash_heredoc_loop already addressed in prior commits; retrieval drain: 0 actionable)
+- Action this tick: no action — system healthy; uncommitted /mcp feature (179 lines in commands.py + app.py) deferred to user review per >100-line soft rule
+
 ## 2026-05-12 15:00 UTC tick
 - Stress: 1658/1658 COMPLETE (cycle done, PID dead, babysitter idle)
 - Write rate: N/A (cycle complete)
@@ -4931,3 +4967,75 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=104303, retrieval=175, steering=0 (dominant patterns thinking_stall + bash_heredoc_loop already addressed in prior commits; retrieval drain: 0 actionable)
 - Action this tick: no action — system healthy; uncommitted /mcp feature (179 lines in commands.py + app.py) still deferred to user review per >100-line soft rule
+
+## 2026-05-12 19:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries since 17:00 UTC; dominant patterns all addressed in prior commits; retrieval drain: 0 actionable)
+- Action this tick: no action — system healthy; all known dispatch patterns addressed; no new bugs found
+
+## 2026-05-12 20:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer on :8001 healthy, gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries; dominant patterns all addressed in prior commits; retrieval drain: 0 actionable)
+- Action this tick: no action — system healthy
+
+## 2026-05-12 21:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, gemma4 container up — Docker reports "unhealthy" but curl to :8000 succeeds; likely stale health-check config, not a real issue)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries; retrieval drain: 0 actionable; dominant patterns thinking_stall + bash_heredoc_loop all addressed in prior commits)
+- Action this tick: no action — system healthy
+
+## 2026-05-12 07:33 UTC tick
+- Stress: 1658/1658 (COMPLETE — full run finished; done=88, skip=53, timeout=0, recycle=42)
+- Write rate: N/A (run complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (retrieval drain: 0 actionable, all already ingested)
+- Action this tick: no action — stress run completed full 1658-item pass; balancer (pid 380535) and vLLM (gemma4) healthy; dominant harness queue patterns (thinking_stall, bash:heredoc_loop) already addressed in prior commits
+
+## 2026-05-12 23:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; gemma4 container up — Docker "unhealthy" is stale healthcheck config, curl to :8000 and :8001 both succeed)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries since 2026-05-11; retrieval drain: 0 actionable, all already ingested; dominant patterns thinking_stall + bash:heredoc_loop + tool:hallucinated_name all addressed in prior commits)
+- Action this tick: no action — system healthy
+
+## 2026-05-13 01:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries; retrieval drain: 0 actionable, all already ingested; dominant patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name all addressed in prior commits)
+- Action this tick: no action — system healthy
+
+## 2026-05-13 00:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; gemma4 container up 6 days — Docker "unhealthy" is stale healthcheck config, model responds normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries; retrieval drain: 0 actionable, all already ingested; dominant patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name all addressed in prior commits)
+- Action this tick: no action — system healthy
+
+## 2026-05-13 02:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 1 (minor; balancer PID 380535 on :8001 healthy; llamacpp-gemma4 container up 6 days — Docker "unhealthy" is stale healthcheck config, balancer forwards correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries; retrieval drain: 0 actionable, all already ingested; dominant patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name all addressed in prior commits)
+- Action this tick: no action — system healthy

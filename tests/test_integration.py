@@ -48,10 +48,18 @@ def _vllm_available() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _vllm_available(),
-    reason="vLLM not running at localhost:8000"
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not _vllm_available(),
+        reason="vLLM not running at localhost:8000",
+    ),
+    # Real LLM round-trip; the global pytest timeout (10s) is far too tight.
+    # Each test makes ≥1 real call to vLLM. Under heavy GPU contention from
+    # concurrent eval/stress runs a single round-trip routinely exceeds 2
+    # minutes (Gemma 4 thinking + queue wait). 300s covers that worst case
+    # while still catching a genuine hang.
+    pytest.mark.timeout(300),
+]
 
 
 # ============================================================================

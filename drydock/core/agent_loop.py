@@ -224,6 +224,15 @@ class AgentLoop:
         self._empty_responses: int = 0
         self._successful_test_runs: int = 0
 
+        # Mid-turn user injections (the Claude Code "type while busy" feature).
+        # The TUI calls `queue_user_injection()` whenever the user submits a
+        # message while the agent is mid-task. The per-turn loop drains this
+        # at the top of each iteration and folds the text into context as a
+        # SYSTEM note attached to the last tool result (the only ordering that
+        # vLLM/Mistral accept after a tool turn). No locking needed — Textual's
+        # event loop is single-threaded asyncio, same loop the agent runs on.
+        self._pending_user_injections: list[str] = []
+
         # Shared read-file state — used by write_file / search_replace to
         # enforce Read-before-Write (per Claude Code's tool contract) and
         # by read_file to dedup unchanged-mtime re-reads. Keyed by resolved
@@ -304,6 +313,38 @@ class AgentLoop:
     @property
     def auto_approve(self) -> bool:
         return self.config.auto_approve
+
+    def queue_user_injection(self, text: str) -> None:
+        """Queue a user message to be folded into context at the next turn boundary.
+
+        Called by the TUI when the user submits a message while the agent is
+        already running. The injection is drained at the top of the next
+        per-turn iteration in `act()` and surfaced to the model as a SYSTEM
+        note on the last tool result so message ordering stays valid for
+        vLLM/Mistral.
+        """
+        cleaned = (text or "").strip()
+        if cleaned:
+            self._pending_user_injections.append(cleaned)
+
+    def _drain_user_injections(self) -> None:
+        """Pull any queued user messages into the current turn's context.
+
+        Folds them onto the last tool result via the same safe path as
+        `_inject_system_note` — never appends a fresh user-after-tool
+        message, which vLLM/Mistral reject.
+        """
+        if not self._pending_user_injections:
+            return
+        # Snapshot + clear so a concurrent queue append doesn't double-fire.
+        injections = self._pending_user_injections
+        self._pending_user_injections = []
+        for text in injections:
+            note = (
+                f"USER (typed while you were working — fold this into "
+                f"the current task; do not start over):\n{text}"
+            )
+            self._inject_system_note(note)
 
     def set_tool_permission(
         self, tool_name: str, permission: ToolPermission, save_permanently: bool = False
@@ -738,6 +779,10 @@ class AgentLoop:
             _prompt_start = time.perf_counter()
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
+                # Drain any user messages typed while the agent was working.
+                # Done BEFORE the turn counter increments and BEFORE middleware
+                # runs so the new context is visible to both.
+                self._drain_user_injections()
                 # Loop protection: prevent infinite tool-call loops
                 tool_turns += 1
                 _wt0 = time.perf_counter()
@@ -2999,12 +3044,16 @@ class AgentLoop:
         # appear many times in sequence when building multi-file projects.
         # Record a hot-combo on the stuck tool with an empty-path marker
         # so the per-tool mute in _chat will remove it for 1 turn.
-        _productive_tools = {"write_file", "search_replace", "bash", "run_command"}
-        _check_1a_threshold = 8 if (tool_names and tool_names[-1] in _productive_tools) else 4
-        if len(tool_names) >= _check_1a_threshold:
-            last_n = tool_names[-_check_1a_threshold:]
-            if all(n == last_n[-1] for n in last_n):
-                self._hot_tool_path = (last_n[-1], "<stuck>")
+        # Uniform threshold=8. The autonomous_review fix that lowered this to
+        # 4 for exploration tools (grep/read_file/glob) addressed a misattributed
+        # `harness:thinking_stall` signal — that pattern is about post-thinking
+        # empty messages, handled by the empty-message nudge elsewhere — and the
+        # lowered threshold broke loop_detection regression tests (4 different
+        # greps or read_files is legitimate investigation, not a stuck loop).
+        if len(tool_names) >= 8:
+            last8 = tool_names[-8:]
+            if all(n == last8[-1] for n in last8):
+                self._hot_tool_path = (last8[-1], "<stuck>")
                 return "FORCE_STOP"
 
         # Check 1c: High recent-error fraction. If ≥6 of last 10 tool
