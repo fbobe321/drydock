@@ -83,13 +83,13 @@ class ListMcpResources(
                         tasks.append(list_resources_http(
                             srv.url,
                             headers=srv.headers,
-                            startup_timeout_sec=srv.startup_timeout_seconds,
+                            startup_timeout_sec=srv.startup_timeout_sec,
                         ))
                     elif isinstance(srv, MCPStdio):
                         tasks.append(list_resources_stdio(
                             srv.command,
                             env=srv.env,
-                            startup_timeout_sec=srv.startup_timeout_seconds,
+                            startup_timeout_sec=srv.startup_timeout_sec,
                         ))
 
                 if tasks:
@@ -167,13 +167,13 @@ class ReadMcpResource(
                     content = await read_resource_http(
                         srv.url, args.uri,
                         headers=srv.headers,
-                        startup_timeout_sec=srv.startup_timeout_seconds,
+                        startup_timeout_sec=srv.startup_timeout_sec,
                     )
                 elif isinstance(srv, MCPStdio):
                     content = await read_resource_stdio(
                         srv.command, args.uri,
                         env=srv.env,
-                        startup_timeout_sec=srv.startup_timeout_seconds,
+                        startup_timeout_sec=srv.startup_timeout_sec,
                     )
                 else:
                     continue
