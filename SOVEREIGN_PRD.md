@@ -457,6 +457,73 @@ candidate + tool wiring):**
   May 2026 baseline (1/20 = 5 %, 18/20 "empty"); target ≥ 25 %
   in Phase 3, ≥ 40 % in Phase 4.
 
+**Implementation plan (tiered for ROI per engineering hour):**
+
+### Tier 1 — prompt-level + signal plumbing — *shipped 2026-05-12 (v2.8.20)*
+
+The cheapest, highest-leverage cut. Lands the §5.7 directive as
+observable model behavior and starts populating the queue immediately
+without waiting on consumer infrastructure.
+
+- ✅ `drydock.curiosity` module — `CuriosityItem` + `CuriosityKind`
+  enum, append-only JSONL queue at `~/.drydock/dispatch/curiosity.jsonl`
+  with 7-day fingerprint dedup, `detect_gaps()` heuristic extractor for
+  unfamiliar-term candidates, `score_surprise()` across three evidence
+  kinds (judge_verdict, retrieve, tool_result)
+- ✅ Prompt directive in `gemma4.md` — six lines telling the model its
+  default posture is "investigate, then assert": first tool call on a
+  named-thing user message is `retrieve`, prefer evidence on conflict,
+  investigate before asking for clarification
+- ✅ HLE → curiosity feedback loop — `scripts/hle_eval.py` enqueues a
+  `CuriosityItem` on every NO outcome (kind=`HLE_FAILURE`, high
+  confidence when `method=empty` — the GraphRAG-underused failure
+  mode), so every eval run produces ≥10 learning signals
+- ✅ 26 unit tests in `tests/test_curiosity.py` added to the deploy gate
+
+### Tier 2 — consumer side + forcing function — *next week*
+
+The prompt rule alone gets the model to retrieve more, but Gemma 4 will
+still default to prior under context pressure (per
+`project_graphrag_underused.md`). Tier 2 closes that gap and starts
+shipping fixes from the queue.
+
+- ▢ `agent_loop.py` first-turn hook — call `detect_gaps(user_msg)`
+  before the first LLM call; if any candidates returned, automatically
+  invoke `retrieve` on the top 2–3 and inject results onto the user
+  message as `[CURIOSITY PREFETCH]` context. Forces evidence into the
+  window before the model can answer from prior. ~40 lines.
+- ▢ `autonomous_review.sh` curiosity consumer — read
+  `~/.drydock/dispatch/curiosity.jsonl`, pick highest-confidence
+  unconsumed item, generate a fix proposal (AGENTS.md hint / prompt
+  rule / GraphRAG ingest plan), commit with subject prefix
+  `addresses curiosity:<fingerprint>:`. Mirrors the existing harness
+  bucket consumer. ~80 lines.
+- ▢ Surprise-on-tool-result scoring inside `_handle_tool_response` —
+  when `score_surprise()` exceeds threshold, enqueue an
+  `EVIDENCE_CONFLICT` item automatically. Catches confident-but-wrong
+  claims without operator priming.
+- ▢ HLE re-run with the tier-1 prompt to measure adherence — the
+  `retrieve called on ≥80% of HLE Q` criterion needs an actual
+  measurement to confirm the prompt rule moves the needle.
+
+### Tier 3 — Phase 3 proper — *after Deep Noir vectors land*
+
+The advanced layer that depends on infrastructure not yet in place.
+
+- ▢ Deep Noir "exploration" mode vector candidate — train from
+  curiosity-log traces (retrieve calls, hypothesis enumeration,
+  reading-before-writing). Becomes the steerable behavioral prior
+  for curiosity once `drydock.steering` has real vectors.
+- ▢ Idle-cycle exploration worker — when drydock is idle > N minutes
+  and the classifier dispatch queues are non-empty, run one bounded
+  exploratory cycle (pick highest-priority pattern, ingest fresh logs,
+  generate hypothesis, log to `~/.drydock/curiosity_log.md`). Bounded
+  by a tokens-per-day budget so curiosity does not starve user work.
+- ▢ Frustration / surprise detection across the full session, not
+  just single turns — when the operator repeatedly redirects on the
+  same topic, treat it as a high-confidence curiosity signal even if
+  no individual turn tripped the per-turn detectors.
+
 ---
 
 # 6. Adaptive Failure Logic

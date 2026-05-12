@@ -687,3 +687,132 @@ class TestUserInjection:
         # Second drain with empty queue must not duplicate.
         al._drain_user_injections()
         assert al.messages[-1].content == snapshot
+
+
+# ============================================================================
+# Agent-loop curiosity hooks (SOVEREIGN_PRD §5.7 tier-2 integration)
+# ============================================================================
+
+class TestAgentLoopCuriosityHooks:
+    """`_log_curiosity_gaps` and `_maybe_log_surprise` bridge the curiosity
+    module into the live agent loop. These tests pin the integration
+    points so a future refactor can't silently break the §5.7 producers."""
+
+    def _make_with_session(self) -> AgentLoop:
+        al = _make_agent()
+        al.session_id = "test-session-abc"
+        return al
+
+    def test_log_curiosity_gaps_writes_to_queue(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(
+            "DRYDOCK_CURIOSITY_QUEUE", str(tmp_path / "c.jsonl")
+        )
+        al = self._make_with_session()
+        al._log_curiosity_gaps("Investigate the MCP server config and GraphRAG corpus.")
+        # Should have enqueued at least one UNKNOWN_TERM item (MCP or GraphRAG).
+        from drydock.curiosity import read_recent
+        items = read_recent(limit=10)
+        assert items, "expected at least one curiosity item"
+        assert all(i["kind"] == "unknown_term" for i in items)
+        terms = {i["term"] for i in items}
+        assert "MCP" in terms or any("GraphRAG" in t for t in terms)
+
+    def test_log_curiosity_gaps_silent_on_empty(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(
+            "DRYDOCK_CURIOSITY_QUEUE", str(tmp_path / "c.jsonl")
+        )
+        al = self._make_with_session()
+        # Empty / boring input → no gaps, no enqueue.
+        al._log_curiosity_gaps("fix the bug")
+        from drydock.curiosity import read_recent
+        assert read_recent() == []
+
+    def test_log_curiosity_gaps_handles_empty_msg(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(
+            "DRYDOCK_CURIOSITY_QUEUE", str(tmp_path / "c.jsonl")
+        )
+        al = self._make_with_session()
+        # Must not raise on empty/None.
+        al._log_curiosity_gaps("")
+        al._log_curiosity_gaps(None)  # type: ignore[arg-type]
+
+    def test_log_curiosity_gaps_session_tagged(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(
+            "DRYDOCK_CURIOSITY_QUEUE", str(tmp_path / "c.jsonl")
+        )
+        al = self._make_with_session()
+        al._log_curiosity_gaps("Question about the FAISS index.")
+        from drydock.curiosity import read_recent
+        items = read_recent(limit=10)
+        assert items
+        assert items[0]["source"] == "session:test-session-abc"
+
+    def test_maybe_log_surprise_confident_wrong_enqueues(
+        self, tmp_path, monkeypatch
+    ):
+        """Confident assertion + tool error → EVIDENCE_CONFLICT enqueued."""
+        monkeypatch.setenv(
+            "DRYDOCK_CURIOSITY_QUEUE", str(tmp_path / "c.jsonl")
+        )
+        al = self._make_with_session()
+        # Plant a confident assistant assertion.
+        al.messages.append(LLMMessage(
+            role=Role.assistant,
+            content="All tests pass and the code works correctly.",
+        ))
+
+        # Simulate the tool_call object _handle_tool_response receives.
+        from types import SimpleNamespace
+        tool_call = SimpleNamespace(
+            function=SimpleNamespace(name="bash", arguments="{}")
+        )
+        tool_text = (
+            "<tool_error>\nTraceback (most recent call last):\n"
+            "AssertionError: 1 != 2"
+        )
+        al._maybe_log_surprise(tool_call, tool_text)
+        from drydock.curiosity import read_recent
+        items = read_recent(limit=5)
+        assert items, "expected EVIDENCE_CONFLICT enqueued"
+        assert items[0]["kind"] == "evidence_conflict"
+        assert "bash" in items[0]["term"]
+
+    def test_maybe_log_surprise_no_assertion_silent(
+        self, tmp_path, monkeypatch
+    ):
+        """If there's no prior assistant content, nothing to compare → no enqueue."""
+        monkeypatch.setenv(
+            "DRYDOCK_CURIOSITY_QUEUE", str(tmp_path / "c.jsonl")
+        )
+        al = self._make_with_session()
+        from types import SimpleNamespace
+        tool_call = SimpleNamespace(
+            function=SimpleNamespace(name="grep", arguments="{}")
+        )
+        al._maybe_log_surprise(tool_call, "<tool_error>\nTraceback: ...")
+        from drydock.curiosity import read_recent
+        assert read_recent() == []
+
+    def test_maybe_log_surprise_below_threshold_skips(
+        self, tmp_path, monkeypatch
+    ):
+        """Generic tool error without a confident claim → score < threshold → skip."""
+        monkeypatch.setenv(
+            "DRYDOCK_CURIOSITY_QUEUE", str(tmp_path / "c.jsonl")
+        )
+        al = self._make_with_session()
+        # Tentative phrasing, no "passes/correct/works" markers.
+        al.messages.append(LLMMessage(
+            role=Role.assistant,
+            content="Running the tests now to see what happens.",
+        ))
+        from types import SimpleNamespace
+        tool_call = SimpleNamespace(
+            function=SimpleNamespace(name="bash", arguments="{}")
+        )
+        al._maybe_log_surprise(
+            tool_call, "<tool_error>\nTraceback: failure on row 3"
+        )
+        from drydock.curiosity import read_recent
+        # Some surprise present, but below 0.6 → not enqueued.
+        assert read_recent() == []

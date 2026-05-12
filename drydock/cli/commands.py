@@ -134,6 +134,13 @@ class CommandRegistry:
                             "/mcp remove <name> | /mcp examples).",
                 handler="_mcp_command",
             ),
+            "curiosity": Command(
+                aliases=frozenset(["/curiosity"]),
+                description="Inspect the curiosity learning queue "
+                            "(usage: /curiosity | /curiosity top | "
+                            "/curiosity stats | /curiosity consume <id>).",
+                handler="_curiosity_command",
+            ),
         }
 
         for command in excluded_commands:

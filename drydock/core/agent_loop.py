@@ -747,14 +747,28 @@ class AgentLoop:
         # as a system note BEFORE the first LLM call. Zero behavior change
         # when the index has nothing relevant; pure lift when it does.
         #
-        # Env-gated via DRYDOCK_AUTO_RETRIEVE so existing workflows are
-        # unaffected. Set to "1" or "true" to enable.
-        if os.environ.get("DRYDOCK_AUTO_RETRIEVE", "").strip().lower() in ("1", "true", "yes"):
+        # SOVEREIGN_PRD §5.7 acceptance #1: "retrieve called on ≥80% of HLE
+        # questions before any content token". Default ON now — the
+        # prefetch is a no-op when no GraphRAG db exists (early return),
+        # so users without a corpus are unaffected. Opt out with
+        # DRYDOCK_AUTO_RETRIEVE=0.
+        if os.environ.get("DRYDOCK_AUTO_RETRIEVE", "1").strip().lower() not in ("0", "false", "no"):
             logger.warning("[AUTO-RETRIEVE] hook entry, query=%r", (user_msg or "")[:80])
             try:
                 self._auto_prefetch_retrieve(user_msg)
             except Exception as _e:
                 logger.warning("auto-prefetch retrieve failed (skipped): %s", _e, exc_info=True)
+
+        # === CURIOSITY GAP LOGGING ===
+        # SOVEREIGN_PRD §5.7 tier-2: extract candidate unfamiliar terms from
+        # the user message and enqueue UNKNOWN_TERM curiosity items. The
+        # queue is dedup'd by fingerprint over 7 days so the same recurring
+        # term doesn't flood it. Disabled by setting DRYDOCK_CURIOSITY=0.
+        if os.environ.get("DRYDOCK_CURIOSITY", "1").strip().lower() not in ("0", "false", "no"):
+            try:
+                self._log_curiosity_gaps(user_msg)
+            except Exception as _e:
+                logger.warning("curiosity gap logging failed (skipped): %s", _e)
 
         try:
             should_break_loop = False
@@ -1964,6 +1978,65 @@ class AgentLoop:
             decision=decision,
             result=result,
         )
+
+        # === CURIOSITY: SURPRISE-ON-TOOL-RESULT ===
+        # SOVEREIGN_PRD §5.7: when a tool result contradicts a confident
+        # assertion the model just made (e.g., "All tests pass" right before
+        # a Traceback), score the surprise and enqueue an EVIDENCE_CONFLICT
+        # item for autonomous_review. Gated by DRYDOCK_CURIOSITY=1 (default).
+        if status == "failure" and os.environ.get(
+            "DRYDOCK_CURIOSITY", "1"
+        ).strip().lower() not in ("0", "false", "no"):
+            try:
+                self._maybe_log_surprise(tool_call, text)
+            except Exception as _e:
+                logger.debug("surprise scoring skipped: %s", _e)
+
+    def _maybe_log_surprise(self, tool_call: Any, tool_text: str) -> None:
+        """Score the last assistant assertion against this tool result;
+        enqueue an EVIDENCE_CONFLICT curiosity item if surprise is high."""
+        try:
+            from drydock.curiosity import (
+                CuriosityItem, CuriosityKind, enqueue, score_surprise,
+            )
+            from drydock.curiosity.surprise import SURPRISE_THRESHOLD
+        except Exception:
+            return
+
+        # Walk backward to find the most recent assistant CONTENT (not a
+        # bare tool-call message). That's the assertion to compare against.
+        prior_assertion = ""
+        for msg in reversed(self.messages):
+            if msg.role == Role.assistant and (msg.content or "").strip():
+                prior_assertion = (msg.content or "").strip()
+                break
+        if not prior_assertion:
+            return
+
+        score = score_surprise(prior_assertion, tool_text, kind="tool_result")
+        if score < SURPRISE_THRESHOLD:
+            return
+
+        tool_name = ""
+        try:
+            tool_name = getattr(tool_call.function, "name", "") or ""
+        except Exception:
+            pass
+
+        enqueue(CuriosityItem(
+            kind=CuriosityKind.EVIDENCE_CONFLICT,
+            term=f"{tool_name} contradicted assistant claim",
+            context=(
+                f"Assistant said: {prior_assertion[:200]}\n"
+                f"Tool {tool_name} returned: {tool_text[:200]}"
+            ),
+            source=f"session:{getattr(self, 'session_id', '?')}",
+            suggested_action=(
+                "Investigate whether this is a recurring model bias; "
+                "consider a one-line AGENTS.md hint or sharpened prompt rule."
+            ),
+            confidence=float(score),
+        ))
 
     # _build_repetition_nudge REMOVED (2026-04-13): advisory nudges had
     # 0% effect on Gemma 4 — fired 4 times while model made 8 identical
@@ -3208,6 +3281,38 @@ class AgentLoop:
                     return f"WARNING|{last_tool}"
 
         return None
+
+    def _log_curiosity_gaps(self, user_msg: str) -> None:
+        """Detect unfamiliar-term candidates in the user message and enqueue
+        them as UNKNOWN_TERM curiosity items.
+
+        Best-effort: any exception is caught at the call site so a curiosity
+        failure never breaks a real user turn. Dedup is handled inside the
+        queue (7-day fingerprint window), so calling this on every user
+        message is safe.
+        """
+        try:
+            from drydock.curiosity import (
+                CuriosityItem, CuriosityKind, detect_gaps, enqueue,
+            )
+        except Exception:
+            return  # module not installed (e.g. minimal test env)
+        gaps = detect_gaps(user_msg or "")
+        if not gaps:
+            return
+        session_src = f"session:{getattr(self, 'session_id', '?')}"
+        for term in gaps:
+            enqueue(CuriosityItem(
+                kind=CuriosityKind.UNKNOWN_TERM,
+                term=term,
+                context=(user_msg or "")[:300],
+                source=session_src,
+                suggested_action=(
+                    "Check whether the project's GraphRAG corpus covers "
+                    f"`{term[:80]}`; if not, ingest the relevant path."
+                ),
+                confidence=0.7,
+            ))
 
     def _auto_prefetch_retrieve(self, user_msg: str) -> None:
         """Auto-fetch relevant chunks from GraphRAG and inject as system note.

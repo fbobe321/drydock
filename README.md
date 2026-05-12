@@ -230,6 +230,7 @@ First run creates a config at `~/.drydock/config.toml` and prompts for your prov
 - **Conda/Pip Support**: Auto-approves `pip install`, `conda install`, `pytest`, and other dev commands.
 - **Bundled Skills**: Ships with skills like `create-presentation` for PowerPoint generation.
 - **MCP Support**: Connect Model Context Protocol servers via the `/mcp` slash command or `~/.drydock/config.toml`. See [MCP Servers](#mcp-servers).
+- **Curiosity Layer**: Engineered intellectual drive (SOVEREIGN_PRD §5.7). Auto-prefetches GraphRAG evidence before the first LLM turn so models retrieve before asserting; detects unfamiliar terms in every user message and enqueues them as learning signals; surfaces a learning queue via `/curiosity`; HLE failures and tool-result surprises automatically feed the queue. `autonomous_review` consumes top items per tick to ship corpus/prompt updates.
 - **Safety First**: Tool execution approval with `--dangerously-skip-permissions` for full auto-approve.
 
 ### Built-in Agents
@@ -379,6 +380,34 @@ headers = { "X-Tenant" = "drydock" }
 ```
 
 Verify a server loaded by running `/help` inside the TUI and checking for `<name>__*` prefixed tools. Server errors show up in `~/.drydock/logs/`.
+
+### Curiosity Layer
+
+DryDock has an engineered curiosity subsystem (SOVEREIGN_PRD §5.7) that turns "investigate before asserting" from a prompt suggestion into a structural feature:
+
+- **Auto-retrieve before first turn**: when a project has a GraphRAG index at `~/.drydock/graphrag.sqlite`, every user message triggers a retrieve pass; high-quality hits get injected as a synthetic tool result before the LLM sees the message. Opt out with `DRYDOCK_AUTO_RETRIEVE=0`.
+- **Gap detection**: every user message also runs through a heuristic that extracts candidate unfamiliar terms (paper titles, library names, dotted identifiers, ALL-CAPS acronyms, snake_case symbols, versioned packages, filesystem paths). Each becomes an `UNKNOWN_TERM` entry in the learning queue.
+- **Surprise scoring**: when a tool result contradicts a confident assistant claim (e.g. "all tests pass" right before a Traceback), the conflict is logged as `EVIDENCE_CONFLICT` for review.
+- **HLE feedback**: every failed HLE answer auto-enqueues an `HLE_FAILURE` item — the eval becomes a learning signal, not just a scoreboard.
+
+Inspect from the TUI:
+
+```
+/curiosity            # counts by kind: HLE_FAILURE, EVIDENCE_CONFLICT, UNKNOWN_TERM, IDLE_EXPLORATION
+/curiosity top 5      # top 5 highest-priority pending items
+/curiosity consume <fingerprint>   # mark an item handled
+```
+
+Or from the shell:
+
+```
+python -m drydock.curiosity stats
+python -m drydock.curiosity top --limit 10
+```
+
+The queue lives at `~/.drydock/dispatch/curiosity.jsonl`. `autonomous_review` (cron-launched every 30 min) reads the top items and ships corpus ingests, prompt rules, or AGENTS.md hints from them, tagging commits with `addresses curiosity:<id>:`.
+
+Disable the entire layer with `DRYDOCK_CURIOSITY=0`.
 
 ## Testing
 

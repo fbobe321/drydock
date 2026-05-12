@@ -1658,6 +1658,112 @@ class DrydockApp(App):  # noqa: PLR0904
             "remove <name> | examples}`"
         ))
 
+    async def _curiosity_command(self, args: str = "") -> None:
+        """Inspect the curiosity learning queue (SOVEREIGN_PRD §5.7)."""
+        try:
+            from drydock.curiosity.queue import queue_path, read_recent
+            from drydock.curiosity.__main__ import (
+                _KIND_PRIORITY, _load_consumed,
+            )
+        except Exception as e:
+            await self._mount_and_scroll(
+                UserCommandMessage(f"Curiosity module unavailable: {e}")
+            )
+            return
+
+        parts = args.strip().split(None, 1)
+        sub = parts[0].lower() if parts else "stats"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        consumed = _load_consumed()
+        items = list(reversed(read_recent(limit=10_000)))
+        pending = [i for i in items if i.get("id") not in consumed]
+
+        if sub in ("", "stats", "status"):
+            if not items:
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"### Curiosity queue\n\n_Empty._\n\n"
+                    f"Queue: `{queue_path()}`\n\n"
+                    "Items land here when the agent detects unfamiliar terms "
+                    "(SOVEREIGN_PRD §5.7), when tool results contradict the "
+                    "model's assertions, or when an HLE answer scores NO. "
+                    "`autonomous_review` consumes the top items per tick."
+                ))
+                return
+            by_kind: dict[str, dict[str, int]] = {}
+            for it in items:
+                k = it.get("kind", "?")
+                b = by_kind.setdefault(k, {"total": 0, "pending": 0})
+                b["total"] += 1
+                if it.get("id") not in consumed:
+                    b["pending"] += 1
+            lines = [
+                "### Curiosity queue",
+                "",
+                f"Queue: `{queue_path()}`",
+                f"Total: **{len(items)}** items "
+                f"({len(pending)} pending, {len(consumed)} consumed)",
+                "",
+                "| kind | total | pending |",
+                "|---|---:|---:|",
+            ]
+            for k in sorted(by_kind, key=lambda x: _KIND_PRIORITY.get(x, 99)):
+                b = by_kind[k]
+                lines.append(f"| `{k}` | {b['total']} | {b['pending']} |")
+            lines.append("")
+            lines.append("`/curiosity top` for the highest-priority pending items.")
+            await self._mount_and_scroll(UserCommandMessage("\n".join(lines)))
+            return
+
+        if sub == "top":
+            limit = 5
+            if rest.isdigit():
+                limit = max(1, min(20, int(rest)))
+            ranked = sorted(pending, key=lambda x: (
+                _KIND_PRIORITY.get(x.get("kind", ""), 99),
+                -float(x.get("confidence", 0.0)),
+                x.get("ts", ""),
+            ))[:limit]
+            if not ranked:
+                await self._mount_and_scroll(UserCommandMessage(
+                    "_No pending curiosity items._"
+                ))
+                return
+            lines = [f"### Top {len(ranked)} pending curiosity items", ""]
+            for i, it in enumerate(ranked, 1):
+                term = it.get("term", "")[:140]
+                ctx = it.get("context", "")[:200].replace("\n", " ")
+                fp = it.get("id", "?")
+                kind = it.get("kind", "?")
+                conf = it.get("confidence", 0.0)
+                lines.append(
+                    f"**{i}. `{kind}`** · conf={conf} · `{fp}`"
+                )
+                lines.append(f"- term: {term}")
+                if ctx:
+                    lines.append(f"- context: {ctx}")
+                lines.append("")
+            await self._mount_and_scroll(UserCommandMessage("\n".join(lines)))
+            return
+
+        if sub == "consume":
+            if not rest:
+                await self._mount_and_scroll(UserCommandMessage(
+                    "Usage: `/curiosity consume <fingerprint>`"
+                ))
+                return
+            consumed.add(rest)
+            from drydock.curiosity.__main__ import _save_consumed
+            _save_consumed(consumed)
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Marked `{rest}` consumed. Total: {len(consumed)}."
+            ))
+            return
+
+        await self._mount_and_scroll(UserCommandMessage(
+            "Usage: `/curiosity {stats | top [N] | consume <id>}`"
+        ))
+
     async def _admiral_apply_command(self, args: str = "") -> None:
         """Merge an Admiral-staged proposal branch into main."""
         import subprocess

@@ -16,6 +16,14 @@ without them.
     - This is non-source-fix work: it reads `~/.drydock/dispatch/retrieval.jsonl`, finds the affected project for each entry, and ingests it into GraphRAG so the retrieve tool can answer cross-package symbol queries on the next session.
     - Idempotent + dedup'd via `~/.drydock/dispatch/.retrieval_consumed.json` (7-day re-ingest window). Cheap, ~20s per project.
     - If it ingests anything, note it in the trip_log line as `retrieval-drain: N project(s) ingested`.
+2b. **Drain the CURIOSITY queue** (SOVEREIGN_PRD §5.7 — learning signals, not failure signals): `/home/bobef/miniconda3/bin/python3 -m drydock.curiosity top --limit 3`
+    - Each entry has `kind` (priority order: `hle_failure` > `evidence_conflict` > `unknown_term` > `idle_exploration`), `term`, `context`, `suggested_action`, and a fingerprint `id`.
+    - Pick at most **one** item per tick and act on it. The action depends on kind:
+      - `hle_failure` with method=empty → corpus gap. If the topic could plausibly be in `/data3/arxiv_corpus/` or its retrieve index, ingest a relevant slice; otherwise add a one-line prompt rule to `drydock/core/prompts/gemma4.md` covering the failure pattern.
+      - `unknown_term` → if the term is a real library/API/symbol the project depends on, run `python -m drydock.graphrag ingest <relevant path>`; if it's purely general knowledge with no project hook, leave it (the §5.7 prompt rule already tells the model to retrieve before asserting).
+      - `evidence_conflict` → spot-check; if it points at a real model bias, add a one-line AGENTS.md hint or sharpen `gemma4.md`.
+    - **After acting**, mark consumed: `python -m drydock.curiosity consume <id>` and prepend `addresses curiosity:<id>:` to the commit subject so future ticks dedupe.
+    - If nothing actionable, just note `curiosity-queue: N pending, no action this tick` in the trip log.
 3. Run the STATUS COMMANDS block from resume.md to check stress run health.
 4. Scan for new failure patterns NOT in the dispatch queue:
    - Has the stress harness died? (PID in `/tmp/stress_pid.txt`)
@@ -40,7 +48,7 @@ without them.
 - Admiral last 30 min: N fires
 - vLLM 400s: N
 - GH issues: N open
-- Dispatch queue: harness=N, retrieval=N, steering=N (totals)
+- Dispatch queue: harness=N, retrieval=N, steering=N, curiosity=N pending (totals)
 - Action this tick: <"committed fix X (addresses pattern P)" | "investigated Y, no fix needed" | "no action — healthy">
 ```
 

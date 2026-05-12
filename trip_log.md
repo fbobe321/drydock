@@ -1,5 +1,106 @@
 # Drydock Trip Log
 
+## 2026-05-12 16:32 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (no admiral_history.log)
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; llamacpp-gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (0 actionable, all ingested), steering=0, curiosity=66 pending (consumed 3 historical hle_failure items — 828b..., fc47..., 8473... — all "no answer extracted" blanks already fixed by 4fd23ed/d16b0cd)
+- Action this tick: no new bugs — consumed 3 stale curiosity items covered by prior commits; retrieval drain: 0 actionable
+
+## 2026-05-12 16:05 UTC tick
+- Stress: 1658/1658 (complete — full cycle done, PID 340932 dead; babysitter confirmed no restart needed)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (gemma4 container healthy; balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (thinking_stall dominated, already addressed), retrieval=175 (0 actionable), steering=0, curiosity=82 pending (13 consumed lifetime)
+- curiosity-drain: consumed 3 pre-fix blank-prediction items (e479f97d, 62f4ccfe, 9947dd59 — all method=empty from run_1778548195 at 2026-05-12T11:38Z, before 4fd23ed fix; pattern already covered)
+- retrieval-drain: 175 entries, 0 actionable (all already ingested)
+- Action this tick: no code fix — consumed 3 pre-fix curiosity items; all systems healthy; no new HLE run yet to validate 4fd23ed improvement
+
+## 2026-05-12 15:31 UTC tick
+- Stress: 1658/1658 (complete — cycle finished; PID 340932 dead, no restart needed)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (no active stress sessions)
+- vLLM 400s: 0 (gemma4 container up 7 days; balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (thinking_stall dominated — already addressed), retrieval=0 actionable, steering=0, curiosity=72 unconsumed
+- curiosity-drain: consumed 3 backfilled Math/empty-prediction items (d690e0ce, 9b9caf77, 91991126 — all from 2026-05-12T11:38:18Z backfill, pre-4fd23ed fix; now 10 total consumed)
+- retrieval-drain: 0 actionable (all 175 entries already ingested)
+- Action this tick: no code fix — consumed 3 curiosity items (covered by existing 4fd23ed prompt rule); all systems healthy
+
+## 2026-05-12 14:31 UTC tick
+- Stress: 1658/1658 (complete — STRESS RUN COMPLETE at 555min, 88 accepted / 53 skipped / 0 timeout; no restart needed)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (0 actionable, all ingested), steering=0, curiosity=82 pending
+- curiosity-drain: consumed 45b95066ca216ce5 (blank HLE prediction, Bio/Med — already covered by 4fd23ed prompt rule); 2 remaining blank-prediction entries also already addressed
+- retrieval-drain: 0 actionable
+- Action this tick: no code fix — all systems healthy, stress run cycle complete
+
+## 2026-05-12 14:05 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0, curiosity=2 pending (blanks #2/#3 same pattern as already-fixed a711a9b98ca739ae)
+- retrieval-drain: 0 actionable, all already ingested
+- curiosity-queue: consumed a711a9b98ca739ae (blank HLE prediction, Physics — duplicate of pattern addressed in 4fd23ed); 2 remaining are same root cause (blank Bio+Math), fix already in gemma4.md:5
+- Action this tick: no new fix needed — system healthy, prompt rule for blank predictions already shipped
+
+## 2026-05-12 13:31 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; llamacpp-gemma4 responding normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0, curiosity=78 pending (3 consumed this tick — all blank-prediction HLE failures, same pattern as 4fd23ed, deduped)
+- Action this tick: consumed 3 curiosity items (121c9c4acc660bbe, 10ca6ac7f5fe839a, 71c6ebcea621e308) — all blank HLE predictions already covered by existing gemma4.md "Answer: <value>" rule; retrieval drain: 0 actionable
+
+## 2026-05-12 13:05 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer healthy, gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (0 actionable, all ingested), steering=0, curiosity=82 pending (all hle_failure blank predictions)
+- retrieval-drain: 0 projects ingested (all already up to date)
+- Action this tick: committed fix 4fd23ed — prompt rule in gemma4.md for blank HLE predictions (all 82 curiosity items show Predicted: empty / no answer extracted; model produces only thinking tokens for direct math/factual Q&A; one-line rule forces explicit 'Answer: <value>' line; addresses curiosity:60afc0316f958a9a)
+
+## 2026-05-13 04:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, 1 model forwarded correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0, curiosity=82 pending (retrieval drain: 0 actionable, all already ingested; top curiosity: 3x hle_failure/Math/no-answer-extracted — model writes code but omits FINAL ANSWER text message; fix would pollute gemma4.md for all users or require hle_eval.py harness change, both inadvisable this tick; no action taken)
+- Action this tick: no action — system healthy
+
+## 2026-05-13 03:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; llamacpp-gemma4 container up 7 days — Docker "unhealthy" is stale healthcheck config, balancer forwards correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (all already ingested), curiosity=82 pending
+- retrieval-drain: 0 projects ingested (all 175 entries already consumed)
+- curiosity-queue: top 3 are all `hle_failure` kind — math questions (gold: 1/1451520, 1/2, 56) with "no answer extracted"; gemma4.md's "FIRST response must be a tool call" likely causes model to attempt retrieve on pure math HLE questions then produce empty output; needs HLE question context before safe prompt change; deferred for user review
+- Action this tick: no action — system healthy
+
+## 2026-05-12 11:31 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, llamacpp-gemma4 forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0, curiosity=0 (queue empty; retrieval drain: 0 actionable; dominant patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name all addressed in prior commits)
+- Action this tick: no action — system healthy
+
 ## 2026-05-12 23:00 UTC tick
 - Stress: 1658/1658 COMPLETE (pid 340932 dead since May 11; babysitter correctly not restarting — full cycle done)
 - Write rate: N/A (cycle complete)
@@ -5039,3 +5140,21 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries; retrieval drain: 0 actionable, all already ingested; dominant patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name all addressed in prior commits)
 - Action this tick: no action — system healthy
+
+## 2026-05-12 11:01 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, forwarding to gemma4 correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (no new entries; retrieval drain: 0 actionable; dominant patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name all addressed in prior commits)
+- Action this tick: no action — system healthy
+
+## 2026-05-13 03:05 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires (no admiral_history.log)
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy; llamacpp-gemma4 container up 7 days — Docker "unhealthy" is stale healthcheck config, model responds normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104303+, retrieval=175 (0 actionable, all ingested), steering=0, curiosity=82 pending (7 consumed total)
+- Action this tick: committed fix d16b0cd (addresses curiosity:48e5153bccf92e61) — HLE answer extraction mismatch: prompt said "Answer: X" but extractor scanned for "FINAL ANSWER:", causing blank predictions on thinking-only turns; updated gemma4.md to emit "FINAL ANSWER:" and extended hle_eval.py extractor to also accept "Answer:" for backwards compat
