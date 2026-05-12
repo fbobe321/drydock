@@ -125,6 +125,15 @@ class CommandRegistry:
                             "/steering off | /steering list).",
                 handler="_steering_command",
             ),
+            "mcp": Command(
+                aliases=frozenset(["/mcp"]),
+                description="Configure MCP servers in ~/.drydock/config.toml "
+                            "(usage: /mcp | /mcp add stdio <name> <cmd...> | "
+                            "/mcp add http <name> <url> | "
+                            "/mcp add streamable-http <name> <url> | "
+                            "/mcp remove <name> | /mcp examples).",
+                handler="_mcp_command",
+            ),
         }
 
         for command in excluded_commands:

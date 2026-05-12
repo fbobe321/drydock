@@ -1462,6 +1462,176 @@ class DrydockApp(App):  # noqa: PLR0904
             )
         )
 
+    async def _mcp_command(self, args: str = "") -> None:
+        """Configure MCP servers in ~/.drydock/config.toml."""
+        import shlex
+        import tomli
+        import tomli_w
+
+        config_path = Path.home() / ".drydock" / "config.toml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _load() -> dict:
+            if not config_path.exists():
+                return {}
+            try:
+                return tomli.loads(config_path.read_text())
+            except Exception:
+                return {}
+
+        def _save(data: dict) -> None:
+            config_path.write_text(tomli_w.dumps(data))
+
+        def _render_servers(servers: list[dict]) -> str:
+            if not servers:
+                return "_(no MCP servers configured)_"
+            lines = []
+            for s in servers:
+                name = s.get("name", "?")
+                transport = s.get("transport", "?")
+                if transport == "stdio":
+                    cmd = s.get("command", "")
+                    if isinstance(cmd, list):
+                        cmd = " ".join(cmd)
+                    extra = " ".join(s.get("args", []) or [])
+                    target = f"`{cmd} {extra}`".strip()
+                else:
+                    target = f"`{s.get('url', '')}`"
+                lines.append(f"- **{name}** ({transport}) → {target}")
+            return "\n".join(lines)
+
+        parts = shlex.split(args) if args.strip() else []
+        sub = parts[0].lower() if parts else "list"
+
+        if sub in ("list", ""):
+            data = _load()
+            servers = data.get("mcp_servers", []) or []
+            msg = (
+                "### MCP servers\n\n"
+                f"Config: `{config_path}`\n\n"
+                f"{_render_servers(servers)}\n\n"
+                "**Commands:**\n"
+                "- `/mcp add stdio <name> <command> [args...]`\n"
+                "- `/mcp add http <name> <url>`\n"
+                "- `/mcp add streamable-http <name> <url>`\n"
+                "- `/mcp remove <name>`\n"
+                "- `/mcp examples`\n\n"
+                "_Restart Drydock after changes to load new servers._"
+            )
+            await self._mount_and_scroll(UserCommandMessage(msg))
+            return
+
+        if sub == "examples":
+            await self._mount_and_scroll(UserCommandMessage(
+                "### MCP server examples\n\n"
+                "**stdio (local process):**\n"
+                "```\n"
+                "/mcp add stdio filesystem npx -y "
+                "@modelcontextprotocol/server-filesystem /data\n"
+                "```\n\n"
+                "**HTTP:**\n"
+                "```\n"
+                "/mcp add http weather https://mcp.example.com\n"
+                "```\n\n"
+                "**Streamable HTTP:**\n"
+                "```\n"
+                "/mcp add streamable-http myapi https://api.example.com/mcp\n"
+                "```\n\n"
+                "For auth headers, env-var API keys, custom timeouts, or "
+                "`sampling_enabled=false`, edit `~/.drydock/config.toml` "
+                "directly. Schema: `name`, `transport`, plus `command`/"
+                "`args`/`env` (stdio) or `url`/`headers`/`api_key_env`/"
+                "`api_key_header`/`api_key_format` (http variants)."
+            ))
+            return
+
+        if sub == "remove":
+            if len(parts) < 2:
+                await self._mount_and_scroll(UserCommandMessage(
+                    "Usage: `/mcp remove <name>`"
+                ))
+                return
+            name = parts[1]
+            data = _load()
+            servers = data.get("mcp_servers", []) or []
+            new_servers = [s for s in servers if s.get("name") != name]
+            if len(new_servers) == len(servers):
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"No MCP server named `{name}` found."
+                ))
+                return
+            data["mcp_servers"] = new_servers
+            _save(data)
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Removed MCP server `{name}`. Restart Drydock to apply."
+            ))
+            return
+
+        if sub == "add":
+            if len(parts) < 4:
+                await self._mount_and_scroll(UserCommandMessage(
+                    "Usage:\n"
+                    "- `/mcp add stdio <name> <command> [args...]`\n"
+                    "- `/mcp add http <name> <url>`\n"
+                    "- `/mcp add streamable-http <name> <url>`"
+                ))
+                return
+            transport = parts[1].lower()
+            name = parts[2]
+            rest = parts[3:]
+
+            if transport not in ("stdio", "http", "streamable-http"):
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"Unknown transport `{transport}`. "
+                    "Use `stdio`, `http`, or `streamable-http`."
+                ))
+                return
+
+            entry: dict
+            if transport == "stdio":
+                entry = {
+                    "name": name,
+                    "transport": "stdio",
+                    "command": rest[0],
+                    "args": list(rest[1:]),
+                }
+            else:
+                if len(rest) != 1:
+                    await self._mount_and_scroll(UserCommandMessage(
+                        f"Usage: `/mcp add {transport} <name> <url>`"
+                    ))
+                    return
+                entry = {
+                    "name": name,
+                    "transport": transport,
+                    "url": rest[0],
+                }
+
+            data = _load()
+            servers = data.get("mcp_servers", []) or []
+            servers = [s for s in servers if s.get("name") != name]
+            servers.append(entry)
+            data["mcp_servers"] = servers
+            _save(data)
+
+            target = (
+                f"`{entry['command']} {' '.join(entry.get('args', []))}`".strip()
+                if transport == "stdio"
+                else f"`{entry['url']}`"
+            )
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Added MCP server **{name}** ({transport}) → {target}\n\n"
+                f"Config: `{config_path}`\n"
+                "Restart Drydock to load the server. Edit the file directly "
+                "for advanced fields (headers, env, api_key_env, timeouts)."
+            ))
+            return
+
+        await self._mount_and_scroll(UserCommandMessage(
+            "Usage: `/mcp {list | add <transport> <name> ... | "
+            "remove <name> | examples}`"
+        ))
+
     async def _admiral_apply_command(self, args: str = "") -> None:
         """Merge an Admiral-staged proposal branch into main."""
         import subprocess

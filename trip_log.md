@@ -1,5 +1,23 @@
 # Drydock Trip Log
 
+## 2026-05-12 15:00 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle done, PID dead, babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: not checked (no stress run active)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (0 new ingests), steering=0
+- Action: no action — healthy. Uncommitted /mcp feature (179 lines) continues deferred to user review per >100-line soft rule. Retrieval drain consumed 0 (all already ingested).
+
+## 2026-05-12 14:00 UTC tick
+- Stress: 1658/1658 COMPLETE (cycle finished, PID dead, babysitter idle as expected)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: N/A (stress not running)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (0 actionable), steering=N/A
+- Action this tick: no action — healthy; dispatch queue dominated by thinking_stall and bash:heredoc_loop already addressed in prior commits; retrieval drain 0 new ingests; balancer PID 380535 on :8001 healthy
+
 ## 2026-05-12 04:00 UTC tick
 - Stress: 1658/1658 COMPLETE (PID 340932 dead — run finished normally; babysitter idle as expected)
 - Write rate: N/A (cycle complete)
@@ -4823,3 +4841,93 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=104302, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
 - Action this tick: no action — system healthy; balancer PID 380535 confirmed on :8001 (llm_balancer.py); dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 07:00 UTC tick
+- Stress: 1658/1658 (complete, babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (API via balancer responds normally)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; balancer PID 380535 confirmed on :8001 (llm_balancer.py); dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 08:00 UTC tick
+- Stress: 1658/1658 (complete, babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104302, retrieval=175 (all ingested), steering=0
+- Action this tick: no action — system healthy; dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits (493c2b2 et al.); no new bugs found
+
+## 2026-05-12 09:00 UTC tick
+- Stress: 1658/1658 (complete, harness exited cleanly at end of cycle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; babysitter confirms harness exited at idx=1658/1658 (not a crash); dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 10:00 UTC tick
+- Stress: 1658/1658 (complete, cycle ended cleanly)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 up 6 days, balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; stress run completed full 1658-prompt cycle; dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 11:00 UTC tick
+- Stress: 1658/1658 (complete, cycle ended cleanly)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no action — system healthy; stress run completed full 1658-prompt cycle; babysitter confirms clean exit (done=88 skip=53 recycle=42); dominant dispatch patterns (thinking_stall, bash_heredoc_loop) already addressed in prior commits; no new bugs found
+
+## 2026-05-12 12:00 UTC tick
+- Stress: 1658/1658 (complete, cycle ended cleanly)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175 (drain: 0 actionable — all already ingested), steering=0
+- Action this tick: no commit — found 180-line uncommitted feature in working tree (drydock/cli/commands.py + textual_ui/app.py): adds /mcp command for configuring MCP servers in ~/.drydock/config.toml (list/add/remove/examples subcommands); syntax clean, tomli/tomli_w available; deferred to user review per >100-line soft rule; dominant dispatch patterns (thinking_stall, bash_heredoc_loop, hallucinated_name) already addressed in prior commits
+
+## 2026-05-12 13:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 on :8000, balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (dominant patterns thinking_stall + bash_heredoc_loop already addressed in prior commits)
+- Action this tick: no action — system healthy; uncommitted /mcp feature (179 lines in commands.py + app.py) still deferred to user review per >100-line soft rule
+
+## 2026-05-12 15:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (dominant patterns thinking_stall + bash_heredoc_loop already addressed in prior commits)
+- Action this tick: no action — system healthy; uncommitted /mcp feature (179 lines in commands.py + app.py) still deferred to user review per >100-line soft rule; no new bugs found
+
+## 2026-05-12 16:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (dominant patterns thinking_stall + bash_heredoc_loop already addressed in prior commits; retrieval drain: 0 actionable)
+- Action this tick: no action — system healthy; uncommitted /mcp feature (179 lines in commands.py + app.py) still deferred to user review per >100-line soft rule
+
+## 2026-05-12 17:00 UTC tick
+- Stress: 1658/1658 (complete, PID 340932 dead — normal end-of-cycle; babysitter idle)
+- Write rate: N/A (cycle complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, gemma4 container up)
+- GH issues: 0 open
+- Dispatch queue: harness=104303, retrieval=175, steering=0 (dominant patterns thinking_stall + bash_heredoc_loop already addressed in prior commits; retrieval drain: 0 actionable)
+- Action this tick: no action — system healthy; uncommitted /mcp feature (179 lines in commands.py + app.py) still deferred to user review per >100-line soft rule
