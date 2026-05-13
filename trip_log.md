@@ -1,5 +1,14 @@
 # Drydock Trip Log
 
+## 2026-05-17 16:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, forwarding to gemma4 correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), curiosity=706 entries / 3 pending unconsumed (HLE math failures: Dirichlet characters/elliptic curves, multivariate stats, random trees — pure knowledge gaps, no corpus or prompt rule can address)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no actionable fix this tick
+
 ## 2026-05-13 09:01 UTC tick
 - Stress: 1658/1658 (COMPLETE — watchdog paused via .pause_watchdog sentinel)
 - Write rate: N/A (stress cycle finished)
@@ -5431,3 +5440,21 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=3 pending (HLE math failures: Dirichlet characters/elliptic curves, multivariate stats, random trees — pure knowledge gaps, no corpus or prompt rule can address)
 - Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no action this tick
+
+## 2026-05-17 12:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, forwarding to gemma4 correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=3 pending (HLE math failures: Dirichlet characters/elliptic curves, multivariate stats, random trees — pure knowledge gaps, no corpus or prompt rule can address)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no action this tick
+
+## 2026-05-13 10:01 UTC tick
+- Stress: 1658/1658 (COMPLETE — full run finished, 1442 accepted/216 skipped, 0 timeouts, elapsed 3041m)
+- Write rate: N/A (stress run complete)
+- Admiral last 30 min: 0 fires (admiral_history.log absent/empty)
+- vLLM 400s: 0 (balancer healthy on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=~104K entries (all thinking_stall/bash:heredoc_loop/hallucinated_name — all previously addressed), retrieval=175 (0 actionable), curiosity=706 entries, top 3 HLE math failures (Dirichlet chars, multivariate stats, random trees — pure knowledge gaps)
+- Action this tick: no action — stress run completed naturally; no new bugs found; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no actionable fix this tick
