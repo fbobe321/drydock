@@ -323,6 +323,17 @@ DryDock discovers skills from:
 3. Global `~/.drydock/skills/`
 4. Bundled skills (shipped with the package)
 
+### Built-in tools beyond the basics
+
+In addition to the standard `read_file` / `write_file` / `search_replace` / `bash` / `grep` / `glob` / `task` / `retrieve` set, DryDock ships four direct built-ins designed to plug well-known transformer weaknesses:
+
+- **`math`** — exact arithmetic via stdlib (math, statistics, Fraction, Decimal). Sandboxed Python expression. Fixes factorials, large multiplies, primes, statistics, exact fractions.
+- **`count`** — exact substring/regex/lines/words/chars/bytes count over a string OR a file. Fixes "how many X are in this text" estimation errors.
+- **`memory`** — persistent cross-session key/value notes at `~/.drydock/agent_memory/notes.jsonl`. Save, recall (TF-IDF ranked), list keys, forget. Bridges the long-term memory gap.
+- **`verify`** — runs a shell command (or checks a file) and matches the output against an expectation (contains/not_contains/regex/equals/exit_code/file_exists/file_contains). Operationalizes the "Loop until verified" core principle.
+
+All four are direct built-ins, NOT MCP servers — per Babich's "MCP is Dead" (Apr 2026), MCP servers burn ~20K tokens of context per call which is a real cost on a 131K-context local model. Direct built-ins use a strict Pydantic schema, single subprocess-free path, and tighter security.
+
 ### Math Tool
 
 DryDock ships with a `math` tool the model calls instead of doing arithmetic in its head. It's a direct built-in (NOT an MCP server — see [MCP is Dead](https://medium.com/) for why direct tools beat MCP for small bandwidth-limited models like Gemma 4). One argument, sandboxed Python expression, exact results.
