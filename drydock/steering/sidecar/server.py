@@ -176,6 +176,55 @@ def _now() -> int:
     return int(time.time())
 
 
+def prepare_chat_inputs(
+    tokenizer: Any, messages: list[dict[str, Any]], *, device: Any = None
+) -> dict[str, Any]:
+    """Apply the tokenizer's chat template and return a dict that
+    `model.generate(**inputs, ...)` can consume.
+
+    transformers >=5 returns a BatchEncoding (dict-like) from
+    `apply_chat_template`; older versions returned a bare Tensor. This
+    helper normalizes both shapes to `{"input_ids": Tensor, ...}` and
+    optionally moves the tensors onto `device`.
+
+    Falls back to tokenize-then-encode when the template path doesn't
+    accept `return_dict=True` or fails.
+    """
+    import torch
+
+    try:
+        inputs = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            return_dict=True,
+        )
+    except TypeError:
+        prompt_text = tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, tokenize=False
+        )
+        inputs = tokenizer(prompt_text, return_tensors="pt")
+
+    if isinstance(inputs, torch.Tensor):
+        inputs = {"input_ids": inputs}
+    else:
+        inputs = dict(inputs)
+
+    if device is not None:
+        inputs = {
+            k: (v.to(device) if isinstance(v, torch.Tensor) else v)
+            for k, v in inputs.items()
+        }
+
+    if "input_ids" not in inputs:
+        raise RuntimeError(
+            f"prepare_chat_inputs: tokenizer returned {list(inputs.keys())!r} "
+            "with no input_ids — chat template likely misconfigured"
+        )
+
+    return inputs
+
+
 def build_app() -> FastAPI:
     app = FastAPI(
         title="Drydock Deep Noir Steering Sidecar",
@@ -236,21 +285,19 @@ def build_app() -> FastAPI:
                 content={"error": {"message": str(e), "type": "model_load_failed"}},
             )
 
-        # Apply the chat template — Gemma 4 has its own.
+        # Apply the chat template — see prepare_chat_inputs for the API
+        # drift across transformers versions.
+        import torch
+
         try:
-            prompt_ids = tokenizer.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                return_tensors="pt",
+            inputs = prepare_chat_inputs(
+                tokenizer, messages, device=model.device
             )
         except Exception as e:
             raise HTTPException(
                 status_code=400, detail=f"chat template failed: {e}"
             )
-
-        import torch
-
-        prompt_ids = prompt_ids.to(model.device)
+        prompt_ids = inputs["input_ids"]
         max_new_tokens = int(payload.get("max_tokens") or 512)
         # Gemma 4 anti-loop sampling defaults — match what we ship in
         # DEFAULT_MODELS for the local model. Caller can override via
@@ -267,29 +314,21 @@ def build_app() -> FastAPI:
         active_layers: list[int] = []
         t0 = time.perf_counter()
         with torch.no_grad():
+            gen_kwargs = dict(
+                max_new_tokens=max_new_tokens,
+                do_sample=do_sample,
+                temperature=temperature if do_sample else 1.0,
+                top_p=top_p if do_sample else 1.0,
+                top_k=top_k if do_sample else 0,
+                pad_token_id=tokenizer.eos_token_id,
+            )
             if _HOOK_MANAGER is not None and directives:
                 with _HOOK_MANAGER.activate(directives) as active:
                     if active is not None:
                         active_layers = active.fired_layers()
-                    output = model.generate(
-                        prompt_ids,
-                        max_new_tokens=max_new_tokens,
-                        do_sample=do_sample,
-                        temperature=temperature if do_sample else 1.0,
-                        top_p=top_p if do_sample else 1.0,
-                        top_k=top_k if do_sample else 0,
-                        pad_token_id=tokenizer.eos_token_id,
-                    )
+                    output = model.generate(**inputs, **gen_kwargs)
             else:
-                output = model.generate(
-                    prompt_ids,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=do_sample,
-                    temperature=temperature if do_sample else 1.0,
-                    top_p=top_p if do_sample else 1.0,
-                    top_k=top_k if do_sample else 0,
-                    pad_token_id=tokenizer.eos_token_id,
-                )
+                output = model.generate(**inputs, **gen_kwargs)
         gen_time = time.perf_counter() - t0
 
         # Decode only the newly-generated portion.

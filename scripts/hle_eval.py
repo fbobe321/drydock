@@ -184,11 +184,33 @@ def judge_with_gemma(question: str, gold: str, pred: str) -> tuple[str, str]:
         return "ERROR", f"judge failed: {e!r}"
 
 
-def score_answer(q: dict, pred: str) -> dict:
+def score_answer(q: dict, pred: str, outcome: dict | None = None) -> dict:
+    """Score the model's predicted answer against the ground truth.
+
+    `outcome` is the dict returned by `run_one` (optional). When passed
+    and `pred` is empty, we sub-classify the empty failure using
+    `msg_count` so the diagnostic distinguishes 'model never started'
+    (msg_count<=1) from 'model talked but did not emit FINAL ANSWER:'
+    (msg_count>1). This dropped out of the Q4 30-Q overnight diagnosis
+    on 2026-05-13 — 26/30 empties shared `method='empty'` but the
+    sessions had very different shapes underneath.
+    """
     gold = q["answer"]
     answer_type = q.get("answer_type", "text") or "text"
     if not pred.strip():
-        return {"correct": False, "method": "empty", "verdict": "NO",
+        method = "empty"
+        if outcome is not None:
+            msg_count = int(outcome.get("msg_count") or 0)
+            if msg_count <= 1:
+                # Only the user message landed — the model never even
+                # produced a tool call or content token before the
+                # harness killed the session.
+                method = "empty:no_response"
+            else:
+                # Assistant did produce messages (tool calls / thinking
+                # turns) but extraction found no FINAL ANSWER: line.
+                method = "empty:no_final_answer"
+        return {"correct": False, "method": method, "verdict": "NO",
                 "judge_reasoning": "no answer extracted"}
     if answer_type in ("multipleChoice", "exactMatch", "numeric"):
         if exact_score(pred, gold):
@@ -494,7 +516,7 @@ def main() -> int:
                     "predicted": "", "ground_truth": q["answer"],
                     "session_dir": "", "runner_error": repr(e),
                 }
-            score = score_answer(q, outcome["predicted"])
+            score = score_answer(q, outcome["predicted"], outcome)
             outcome.update(score)
             print(f"  pred: {outcome['predicted'][:120]}")
             print(f"  gold: {q['answer'][:120]}")
@@ -530,15 +552,36 @@ def main() -> int:
                         ),
                         source=f"hle:{qid}",
                         suggested_action=(
-                            "Investigate retrieval coverage for this topic; "
-                            "consider GraphRAG ingest of relevant corpus or "
-                            "a prompt rule to force retrieve before answering."
+                            # Refined per Q4 30-Q diagnosis (2026-05-13):
+                            # `empty:no_response` (msg_count<=1) is a
+                            # thinking-stall — model never started, so
+                            # the action is harness-side (timeout,
+                            # forcing function, quant). `empty:no_final_answer`
+                            # (msg_count>1) means the model engaged but
+                            # didn't produce a FINAL ANSWER: line — that's
+                            # a retrieval / prompt-rule gap.
+                            "Model never produced a response within the "
+                            "session timeout. Action: investigate thinking-"
+                            "budget exhaustion (raise timeout, force tool-"
+                            "call cap, consider Q3 vs Q4 quant)."
+                            if method == "empty:no_response"
+                            else "Model engaged with tools but never emitted "
+                                 "FINAL ANSWER: — investigate retrieval "
+                                 "coverage / prompt rule to force "
+                                 "answer-after-N-turns."
+                            if method == "empty:no_final_answer"
+                            else "Investigate retrieval coverage for this "
+                                 "topic; consider GraphRAG ingest of relevant "
+                                 "corpus or a prompt rule to force retrieve "
+                                 "before answering."
                             if method == "empty"
                             else "Compare predicted vs gold; surface to "
                                  "autonomous_review as a prompt/AGENTS.md "
                                  "candidate."
                         ),
-                        confidence=0.9 if method == "empty" else 0.6,
+                        confidence=(
+                            0.9 if method.startswith("empty") else 0.6
+                        ),
                         extra={"category": q.get("category", ""),
                                "method": method},
                     ))

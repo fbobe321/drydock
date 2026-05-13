@@ -3520,6 +3520,26 @@ class AgentLoop:
                 "curator. Respond with text only, no further tool calls."
             )
             self._inject_system_note(note)
+        elif chunks:
+            # Quality hits but no curated ANSWER marker — common case
+            # for arXiv-corpus retrievals. Without a nudge, Gemma 4
+            # defaults to chaining web_search calls and burns the
+            # session timeout before producing any content (HLE Q4
+            # overnight 2026-05-13: 26/30 sessions ended at 481s with
+            # last role=tool, no assistant content). The nudge here is
+            # advisory — model can still web_search if needed, but it
+            # gets told to prefer the retrieval first.
+            soft_note = (
+                "The retrieve tool result above contains "
+                f"{len(chunks)} chunk(s) drawn from the local corpus "
+                f"(top score {top_score:.1f}). Read these carefully "
+                "and answer from them. Only use web_search if the "
+                "retrieved context is clearly insufficient — do not "
+                "duplicate the same query you already have evidence "
+                "for. When you have enough to answer, respond with "
+                "text (no further tool calls)."
+            )
+            self._inject_system_note(soft_note)
 
         logger.warning(
             "[AUTO-RETRIEVE] synthesized retrieve tool result: %d chunks "

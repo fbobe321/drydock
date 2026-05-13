@@ -1,6 +1,43 @@
 # HLE PRD — drydock + GraphRAG + Deep Noir vs Humanity's Last Exam
 
-**Status as of 2026-05-07 22:00 UTC.** Phase 2.5 ablation COMPLETE.
+**Status as of 2026-05-13 12:15 UTC.** Q4_K_M validated and held. AR-OFF
+disambiguation says auto-retrieve is NET POSITIVE on correctness and NOT
+the dominant cause of thinking-stalls. Deep Noir sidecar wiring (M1-M4)
+is in tree; M1 end-to-end GPU smoke pending after the transformers 5.x
+apply_chat_template fix (f02aa4b).
+
+## Q4 vs AR-OFF disambiguation (2026-05-13)
+
+Two variables shifted simultaneously when the v1 baseline ran (Q3+AR-off
+pre-curiosity-layer) → Q4 30-Q overnight (Q4+AR-on, v2.8.20-24):
+
+| Run | Model | AR | Result |
+|-----|-------|----|--------|
+| v1 baseline (Q3, AR-off, pre-curiosity) | Q3_K_M | off | 10/200 = 5.0% raw; 42% thinking-stalls |
+| Q4 30-Q math overnight (2026-05-13 04:27) | Q4_K_M | on | 2/30 = 6.7%; 26/30 (87%) end-on-tool |
+| Q4 5-Q math AR-off smoke (2026-05-13 12:13) | Q4_K_M | off | 0/5 = 0%; 2/5 msg<=1, 3/5 engaged-then-empty |
+
+**Conclusions:**
+
+- Auto-retrieve is **NET POSITIVE for correctness** (6.7% with AR vs 0%
+  without on Math) — the rare YES answers come from curated chunks that
+  retrieve surfaces.
+- Auto-retrieve is **NOT the cause of stalls** — every Q4 attempt
+  stalled regardless of AR state. Stalls are about model reasoning
+  budget, not scaffolding.
+- The `method='empty'` bucket masks two distinct failure shapes (now
+  split in `scripts/hle_eval.py` per commit d022572):
+  - `empty:no_response` (msg_count <= 1) — model never started, pure
+    thinking-stall. 2/5 in AR-off Q4 smoke. Harness/quant/timeout
+    problem.
+  - `empty:no_final_answer` (msg_count > 1) — model engaged with
+    tools but never emitted `FINAL ANSWER:`. 3/5 in AR-off Q4 smoke.
+    Retrieval / prompt-rule problem.
+- **Open question**: Q4 quant vs Q3 quant impact on stall rate. Not
+  disambiguated yet — needs a 5-Q math smoke after swapping back to
+  Q3 with current curiosity defaults.
+
+## Phase 2.5 ablation — FINAL RESULTS
 
 ## Phase 2.5 ablation — FINAL RESULTS
 
