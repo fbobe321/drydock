@@ -58,8 +58,12 @@ def test_detect_returns_first_responsive_endpoint():
     assert info.label == "llama.cpp"
     assert info.api_base == "http://127.0.0.1:8080/v1"
     assert info.model_name == "devstral-q4"
-    # We hit the first endpoint and stopped (didn't probe others).
-    assert calls == ["http://127.0.0.1:8080/v1/models"]
+    # 8000 (vLLM) is probed first per the current detection order; it
+    # refuses → fall through to 8080 (llama.cpp) which succeeds → stop.
+    assert calls == [
+        "http://127.0.0.1:8000/v1/models",
+        "http://127.0.0.1:8080/v1/models",
+    ]
 
 
 def test_detect_falls_through_to_later_endpoint():
@@ -186,7 +190,7 @@ def test_patch_bakes_llama_cpp_anti_loop_recipe():
     assert local["temperature"] == 1.0
     assert local["extra_params"]["top_k"] == 40
     assert local["extra_params"]["top_p"] == 0.95
-    assert local["extra_params"]["frequency_penalty"] == 1.1
+    assert local["extra_params"]["repeat_penalty"] == 1.1
     assert local["extra_params"]["max_tokens"] == 2048
 
 
@@ -236,7 +240,7 @@ def test_patch_does_not_overwrite_user_extra_params():
     assert local["extra_params"]["min_p"] == 0.05
     # Missing keys filled in with article defaults
     assert local["extra_params"]["top_p"] == 0.95
-    assert local["extra_params"]["frequency_penalty"] == 1.1
+    assert local["extra_params"]["repeat_penalty"] == 1.1
     assert local["extra_params"]["max_tokens"] == 2048
 
 

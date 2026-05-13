@@ -816,3 +816,83 @@ class TestAgentLoopCuriosityHooks:
         from drydock.curiosity import read_recent
         # Some surprise present, but below 0.6 → not enqueued.
         assert read_recent() == []
+
+
+# ============================================================================
+# DRYDOCK.md auto-create
+# ============================================================================
+
+class TestDrydockMdAutoCreate:
+    """`_ensure_drydock_md` writes a lean per-project instructions file
+    on first session in a fresh directory. Mirrors the AGENTS.md pattern
+    but uses drydock's own format and tool inventory."""
+
+    def _run(self, monkeypatch, cwd: Path):
+        monkeypatch.chdir(cwd)
+        al = object.__new__(AgentLoop)
+        al._ensure_drydock_md()
+
+    def test_creates_file_when_missing(self, tmp_path: Path, monkeypatch):
+        self._run(monkeypatch, tmp_path)
+        f = tmp_path / "DRYDOCK.md"
+        assert f.is_file()
+        assert f.stat().st_size > 0
+
+    def test_lean_under_4kb(self, tmp_path: Path, monkeypatch):
+        # The whole point is "don't blow up context budget".
+        self._run(monkeypatch, tmp_path)
+        assert (tmp_path / "DRYDOCK.md").stat().st_size < 4000
+
+    def test_contains_tool_inventory(self, tmp_path: Path, monkeypatch):
+        self._run(monkeypatch, tmp_path)
+        text = (tmp_path / "DRYDOCK.md").read_text()
+        for tool in ("math", "count", "memory", "verify", "retrieve"):
+            assert tool in text, f"missing tool mention: {tool}"
+
+    def test_contains_4_core_principles(self, tmp_path: Path, monkeypatch):
+        self._run(monkeypatch, tmp_path)
+        text = (tmp_path / "DRYDOCK.md").read_text()
+        # Look for the load-bearing phrase from each principle.
+        for phrase in (
+            "Don't assume",
+            "Minimum code",
+            "Touch only what you must",
+            "Loop until verified",
+        ):
+            assert phrase in text, f"missing principle: {phrase}"
+
+    def test_detects_python_project(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+        self._run(monkeypatch, tmp_path)
+        text = (tmp_path / "DRYDOCK.md").read_text()
+        assert "Python" in text and "Stack" in text
+
+    def test_detects_javascript_project(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "package.json").write_text("{}")
+        self._run(monkeypatch, tmp_path)
+        text = (tmp_path / "DRYDOCK.md").read_text()
+        assert "JavaScript" in text or "TypeScript" in text
+
+    def test_detects_rust_project(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "Cargo.toml").write_text("[package]\nname = 'x'\n")
+        self._run(monkeypatch, tmp_path)
+        text = (tmp_path / "DRYDOCK.md").read_text()
+        assert "Rust" in text
+
+    def test_unknown_stack_falls_back(self, tmp_path: Path, monkeypatch):
+        # No manifests at all.
+        self._run(monkeypatch, tmp_path)
+        text = (tmp_path / "DRYDOCK.md").read_text()
+        assert "Unknown stack" in text
+
+    def test_does_not_overwrite_existing(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "DRYDOCK.md").write_text("USER CONTENT — do not overwrite")
+        self._run(monkeypatch, tmp_path)
+        assert (tmp_path / "DRYDOCK.md").read_text() == "USER CONTENT — do not overwrite"
+
+    def test_respects_lowercase_drydock_md(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "drydock.md").write_text("lowercase wins")
+        self._run(monkeypatch, tmp_path)
+        # Should NOT create DRYDOCK.md when drydock.md exists.
+        assert not (tmp_path / "DRYDOCK.md").exists()
+        assert (tmp_path / "drydock.md").read_text() == "lowercase wins"

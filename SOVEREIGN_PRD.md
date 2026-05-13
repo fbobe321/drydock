@@ -480,49 +480,141 @@ without waiting on consumer infrastructure.
   mode), so every eval run produces ≥10 learning signals
 - ✅ 26 unit tests in `tests/test_curiosity.py` added to the deploy gate
 
-### Tier 2 — consumer side + forcing function — *next week*
+### Tier 2 — consumer side + forcing function — *shipped 2026-05-12 (v2.8.20–22)*
 
 The prompt rule alone gets the model to retrieve more, but Gemma 4 will
-still default to prior under context pressure (per
-`project_graphrag_underused.md`). Tier 2 closes that gap and starts
-shipping fixes from the queue.
+still default to prior under context pressure. Tier 2 closes that gap
+and starts shipping fixes from the queue.
 
-- ▢ `agent_loop.py` first-turn hook — call `detect_gaps(user_msg)`
-  before the first LLM call; if any candidates returned, automatically
-  invoke `retrieve` on the top 2–3 and inject results onto the user
-  message as `[CURIOSITY PREFETCH]` context. Forces evidence into the
-  window before the model can answer from prior. ~40 lines.
-- ▢ `autonomous_review.sh` curiosity consumer — read
-  `~/.drydock/dispatch/curiosity.jsonl`, pick highest-confidence
-  unconsumed item, generate a fix proposal (AGENTS.md hint / prompt
-  rule / GraphRAG ingest plan), commit with subject prefix
-  `addresses curiosity:<fingerprint>:`. Mirrors the existing harness
-  bucket consumer. ~80 lines.
-- ▢ Surprise-on-tool-result scoring inside `_handle_tool_response` —
-  when `score_surprise()` exceeds threshold, enqueue an
-  `EVIDENCE_CONFLICT` item automatically. Catches confident-but-wrong
-  claims without operator priming.
-- ▢ HLE re-run with the tier-1 prompt to measure adherence — the
-  `retrieve called on ≥80% of HLE Q` criterion needs an actual
-  measurement to confirm the prompt rule moves the needle.
+- ✅ `agent_loop.py` curiosity gap-logging hook — every user message
+  runs through `detect_gaps`; each candidate term is enqueued as an
+  `UNKNOWN_TERM` item (gated by `DRYDOCK_CURIOSITY=1`, default on)
+- ✅ `_maybe_log_surprise` in `_handle_tool_response` — fires on tool
+  failures, scores against the most recent assistant assertion, queues
+  `EVIDENCE_CONFLICT` items above the 0.6 threshold. Catches
+  confident-but-wrong claims without operator priming.
+- ✅ Auto-prefetch retrieve hook (`_auto_prefetch_retrieve`) flipped
+  to **default ON** (was env-gated off). Synthetic `retrieve` tool
+  call injected before the first LLM turn whenever the GraphRAG corpus
+  has good hits. Forces evidence into the window — the §5.7
+  acceptance #1 forcing function. Opt out: `DRYDOCK_AUTO_RETRIEVE=0`.
+- ✅ `autonomous_review.sh` curiosity consumer — step 2b in
+  `scripts/autonomous_review_prompt.md` drains the top item per tick,
+  acts on it, marks consumed, prefixes commit with
+  `addresses curiosity:<id>:`.
+- ✅ `python -m drydock.curiosity {top,stats,consume,reset}` CLI.
+- ✅ `/curiosity` slash command for in-TUI inspection.
+- ✅ HLE backfill script — 82 historical HLE_FAILURE items ingested
+  from prior runs so the queue has signal even before fresh runs.
 
-### Tier 3 — Phase 3 proper — *after Deep Noir vectors land*
+### Tier 3a — operator-visible scaffolding — *shipped 2026-05-12 (v2.8.22)*
 
-The advanced layer that depends on infrastructure not yet in place.
+- ✅ `scripts/curiosity_idle_cycle.sh` — bounded exploration worker
+  (cron-suggested hourly). Idle-gated (no TUI / no HLE / no
+  autonomous_review), daily-capped at 12 cycles, pause sentinel.
+  Appends hypotheses to `curiosity_log.md`; no model calls.
+- ▢ Wire the idle-cycle script into cron — operator decision; script
+  is checked in and ready.
+
+### Tier 3b — model-shape work — *blocked / future*
 
 - ▢ Deep Noir "exploration" mode vector candidate — train from
-  curiosity-log traces (retrieve calls, hypothesis enumeration,
-  reading-before-writing). Becomes the steerable behavioral prior
-  for curiosity once `drydock.steering` has real vectors.
-- ▢ Idle-cycle exploration worker — when drydock is idle > N minutes
-  and the classifier dispatch queues are non-empty, run one bounded
-  exploratory cycle (pick highest-priority pattern, ingest fresh logs,
-  generate hypothesis, log to `~/.drydock/curiosity_log.md`). Bounded
-  by a tokens-per-day budget so curiosity does not starve user work.
-- ▢ Frustration / surprise detection across the full session, not
-  just single turns — when the operator repeatedly redirects on the
-  same topic, treat it as a high-confidence curiosity signal even if
-  no individual turn tripped the per-turn detectors.
+  curiosity-log traces. Blocked on real Deep Noir vectors landing in
+  `drydock.steering`.
+- ▢ Frustration / surprise detection across the full session — pattern:
+  when the operator repeatedly redirects on the same topic, treat it
+  as a high-confidence curiosity signal even if no individual turn
+  tripped the per-turn detectors.
+
+---
+
+## 5.8 Direct built-in tools for transformer weaknesses — shipped 2026-05-12 (v2.8.22–23)
+
+Per the transformer-weakness map (Babich, "What coding can fix"):
+arithmetic, counting, persistent memory, and reliability/verification
+are well-solved by classical code wrapped as agent tools. We ship them
+as direct built-ins (NOT MCP — per Babich, "MCP is Dead", MCP servers
+burn ~20K tokens of context per call, which is a real cost on a
+131K-context local model).
+
+| Tool | Closes | Status |
+| ---- | ------ | ------ |
+| `math(expression="...")` | Arithmetic, factorials, primes, statistics, exact fractions via Python stdlib (math/statistics/Fraction/Decimal) sandbox | ✅ shipped, 37 tests |
+| `count(pattern, text/path, mode)` | "How many X" estimation — substring/regex/lines/words/chars/bytes | ✅ shipped, 23 tests |
+| `memory(op, key, value)` | Long-term cross-session memory at `~/.drydock/agent_memory/notes.jsonl` (save / recall / list_keys / forget / stats) | ✅ shipped, 22 tests |
+| `verify(criterion, command, expect, expect_mode)` | Operationalizes "Loop until verified" — runs a check, returns pass/fail (contains/regex/equals/exit_code/file_exists/file_contains) | ✅ shipped, 24 tests |
+
+Anti-pattern explicitly forbidden: NEVER convert these into MCP
+servers later. The whole point is one direct built-in per closed
+weakness. MCP integration remains available for users who want to
+connect external services, just not for capabilities the harness
+should own.
+
+## 5.9 Project-instructions auto-create (DRYDOCK.md)
+
+Per CLAUDE.md / AGENTS.md convention: every fresh project session
+should land a per-project instructions file the model reads on every
+turn. Best practices: lean (every byte costs context budget), language-
+detected, with TODO stubs the user fills in.
+
+- ✅ `_ensure_drydock_md()` in `agent_loop.py` — runs once on first
+  session. Detects language from manifest (pyproject / package.json /
+  Cargo.toml / go.mod / Gemfile / pom.xml / build.gradle), writes a
+  ~2.8 KB starter with: project overview (auto-detected stack +
+  TODO purpose), tool inventory by purpose (especially the new
+  math/count/memory/verify built-ins the model otherwise overlooks),
+  4 core principles, Curiosity behavior, TODO stubs for Coding
+  Standards / Workflow / External References. 10 unit tests.
+- ✅ `/data3/drydock/DRYDOCK.md` — hand-written canonical for drydock
+  itself, loaded when running drydock from this source tree.
+
+## 5.10 Inference throughput (Multi-Token Prediction investigation)
+
+Investigation 2026-05-12 — outcome: **blocked on llama.cpp upstream**.
+
+- ✅ Baseline measured: **64.1 tok/s** on `gemma-4-26B-A4B-it-UD-Q3_K_M`
+  via llama.cpp 9115 on 2× RTX 4060 Ti, single-GPU `-ngl 99`,
+  `-c 32768`, `-ctk q8_0 -ctv q8_0`.
+- ✅ `scripts/bench_inference.py` — 5-prompt × N-token throughput
+  bench against localhost:8000 for any future MTP / quant / serving
+  comparison.
+- ✅ Trained drafter checkpoints downloaded to `/data3/Models/`
+  (AtomicChat + Radamanthys community quants of the
+  `gemma-4-26B-A4B-it-assistant` model). **Blocked**: both use custom
+  archs `gemma4_assistant` / `gemma4_mtp` that llama.cpp 9115 doesn't
+  recognize. Files ready for when upstream lands the arch.
+- ✅ Built-in ngram-* speculative decoding tested
+  (`--spec-type ngram-simple|ngram-cache|ngram-mod`) — 0% measured
+  speedup on either mixed prompts or code-heavy prompts. The lookup
+  overhead cancels saved forward passes for this 26B MoE shape on
+  TP=2.
+- ▢ vLLM with MTP — untested. The article (Pawel, 2026-05-10) claims
+  day-one vLLM support. Switching back to the `start_gemma4.sh` vLLM
+  path with the bf16 assistant Transformers checkpoint (not GGUF) is
+  the next thing to try.
+- ▢ Quant upgrade Q3_K_M → Q4_K_M — Q4 file downloaded
+  (`gemma-4-26B-A4B-it-UD-Q4_K_M.gguf`, 15.78 GiB), pending validation
+  that it doesn't reintroduce the hallucinated-tool / write-loop
+  failure modes that Q3_K_M was originally selected to suppress.
+  Higher quants (Q5_K_M, Q6_K) require tensor split via `-sm row`.
+
+## 5.11 Bug-report template + dependency audit
+
+Operator-visibility plumbing landed alongside the §5.7 work:
+
+- ✅ `.github/ISSUE_TEMPLATE/bug-report.yml` overhaul — pre-flight
+  checklist, expanded component dropdown (CLI/TUI / ACP / MCP /
+  GraphRAG / Curiosity / Auto-release / Install), required Model +
+  provider field (the #1 missing-info gap on prior bugs), separate
+  OS+Python+install field, expected-vs-actual section, logs section
+  pointed at correct paths.
+- ✅ `.github/ISSUE_TEMPLATE/config.yml` — removed broken upstream
+  links (mistralai/mistral-vibe Discussions, old Mistral docs URL,
+  outdated Discord).
+- ✅ Dependency audit — `requests` removed (0 imports anywhere; `httpx`
+  is the actual HTTP client); `pexpect` moved runtime → dev (only used
+  by harness scripts that don't ship in the wheel). End-user install
+  drops ~1.8 MB. All other suspicious entries verified used.
 
 ---
 

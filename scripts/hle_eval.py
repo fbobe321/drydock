@@ -394,10 +394,19 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--resume", type=Path,
                     help="resume from existing run dir (skip already-done IDs)")
+    ap.add_argument(
+        "--category", default="",
+        help=(
+            "Filter to questions in this HLE category (case-insensitive "
+            "substring match against q['category']). Examples: 'math', "
+            "'chemistry', 'physics'. Use this to measure tool-impact on a "
+            "specific axis."
+        ),
+    )
     args = ap.parse_args()
 
     print(f"[hle_eval] source={args.source} limit={args.limit} "
-          f"shuffle={args.shuffle}")
+          f"shuffle={args.shuffle} category={args.category or '(any)'}")
 
     if args.source == "seed":
         questions = load_seed()
@@ -405,6 +414,13 @@ def main() -> int:
         questions = load_hle()
 
     print(f"[hle_eval] loaded {len(questions)} questions")
+
+    if args.category:
+        cat = args.category.lower().strip()
+        before = len(questions)
+        questions = [q for q in questions if cat in (q.get("category", "") or "").lower()]
+        print(f"[hle_eval] category filter '{args.category}': {before} → {len(questions)} questions")
+
     if args.shuffle:
         random.Random(args.seed).shuffle(questions)
     questions = questions[: args.limit]
