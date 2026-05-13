@@ -1,11 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Feature request
-    url: https://github.com/mistralai/mistral-vibe/discussions/new?category=ideas
-    about: Suggest a new feature or improvement via GitHub Discussions
-  - name: Ask a question
-    url: https://discord.com/channels/1144547040454508606/1447989080720670915
-    about: Join the Discord server for support and discussions
+  - name: Feature request or idea
+    url: https://github.com/fbobe321/drydock/issues/new?labels=enhancement&template=
+    about: Open an enhancement issue describing the feature you'd like to see
   - name: Read the docs
-    url: https://docs.mistral.ai/mistral-vibe/introduction
-    about: Read the Drydock documentation for more information
+    url: https://github.com/fbobe321/drydock#readme
+    about: README + per-feature setup guides (MCP, Curiosity Layer, GraphRAG, etc.)

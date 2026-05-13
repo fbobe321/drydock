@@ -1,5 +1,50 @@
 # Drydock Trip Log
 
+## 2026-05-15 19:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no new admiral_history.log activity)
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, gemma4 model responding)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=0 pending (queue empty)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty, no action
+
+## 2026-05-15 15:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no admiral_history.log activity)
+- vLLM 400s: 0 (llamacpp-gemma4 up 7 days (unhealthy healthcheck, but balancer forwarding correctly), balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=0 pending (queue empty)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty, no action
+
+## 2026-05-15 11:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — harness finished, watchdog paused)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 up 7 days, Docker "unhealthy" false alarm; balancer on :8001 confirmed responding)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all old thinking_stall/heredoc_loop/hallucinated_name patterns already addressed), retrieval=175 (0 actionable), steering=N/A, curiosity=0 pending
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty
+
+## 2026-05-15 07:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no admiral_history.log activity)
+- vLLM 400s: 0 (llamacpp-gemma4 up 7 days; Docker health check shows "unhealthy" but this is a false alarm — health check probes :8080 inside container, actual service routes correctly via balancer PID 380535 on :8001, /v1/models confirmed responding)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=0 pending (queue empty)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty, no action
+
+## 2026-05-15 03:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no admiral_history.log activity)
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, forwarding to gemma4 correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=0 pending (queue empty)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty, no action
+
 ## 2026-05-14 11:30 UTC tick
 - Stress: 1658/1658 (complete, watchdog paused via .pause_watchdog; PID 340932 dead)
 - Write rate: N/A (cycle complete)
@@ -5269,3 +5314,30 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 1 open (issue #19 — fixed this tick)
 - Dispatch queue: harness=104303, retrieval=175 (all already ingested), steering=N/A, curiosity=3 pending (all hle_failure blank predictions, no action — HLE stall issue; retrieval-drain: 0 new ingestions)
 - Action this tick: committed fix for GitHub issue #19 — MCPHttp/MCPStdio `startup_timeout_seconds` AttributeError typo in mcp_resources.py (810a9b6); 2 regression tests added
+
+## 2026-05-14 15:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no admiral_history.log)
+- vLLM 400s: 0 (llamacpp-gemma4 up 7 days, balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (patterns: thinking_stall x18, bash:heredoc_loop x1, tool:hallucinated_name x1 — all already addressed in prior commits), retrieval=175 (all ingested), steering=N/A, curiosity=0 pending (queue empty, all consumed)
+- Action this tick: no action — all healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty, no action
+
+## 2026-05-14 19:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no admiral_history.log activity)
+- vLLM 400s: 0 (llamacpp-gemma4 up 7 days, balancer PID healthy on :8001, forwarding to gemma4 correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=0 pending (queue empty)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty, no action
+
+## 2026-05-14 23:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — watchdog paused intentionally via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no new admiral_history.log activity)
+- vLLM 400s: 0 (balancer PID 380535 on :8001 healthy, forwarding to gemma4 correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns thinking_stall/bash:heredoc_loop/tool:hallucinated_name already addressed in prior commits), retrieval=175 (0 actionable, all ingested), steering=N/A, curiosity=0 pending (queue empty)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: empty, no action

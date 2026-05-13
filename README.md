@@ -323,6 +323,81 @@ DryDock discovers skills from:
 3. Global `~/.drydock/skills/`
 4. Bundled skills (shipped with the package)
 
+### Math Tool
+
+DryDock ships with a `math` tool the model calls instead of doing arithmetic in its head. It's a direct built-in (NOT an MCP server — see [MCP is Dead](https://medium.com/) for why direct tools beat MCP for small bandwidth-limited models like Gemma 4). One argument, sandboxed Python expression, exact results.
+
+```
+math(expression="math.factorial(20)")          # 2432902008176640000 — exact
+math(expression="math.comb(50, 5)")            # 2118760
+math(expression="math.gcd(48, 18)")            # 6
+math(expression="statistics.stdev([2,4,4,4,5,5,7,9])")
+math(expression="Fraction(1,3) + Fraction(1,6)")  # exact 1/2
+math(expression="Decimal('0.1') + Decimal('0.2')") # exact 0.3
+math(expression="round(math.pi, 12)")
+math(expression="sum(range(1, 101))")          # 5050
+```
+
+Available names: arithmetic operators (`+ - * / // % **`), comparisons, `and / or / not`, `abs / round / min / max / sum / len / pow / divmod / range / int / float / bool`, the `math` and `statistics` modules, `Fraction`, `Decimal`. Constants: `pi`, `e`, `tau`, `inf`, `nan`. **No imports, no `open()`, no file/network access**, no attribute access outside the whitelist.
+
+Always auto-approved (read-only, side-effect free). Errors return a structured `{ok: false, error: "..."}` instead of raising.
+
+### Custom Tools
+
+Add your own built-in tools by dropping a file into one of these locations:
+
+- **Project-local:** any path listed in `config.toml`'s `tool_paths` array
+- **Global:** `~/.drydock/tools/`
+- **Bundled:** `drydock/core/tools/builtins/` (forks only)
+
+Each file should subclass `BaseTool[ArgsModel, ResultModel, ConfigModel, StateModel]` with a Pydantic args model + result model + an async `run()` generator. Auto-discovery picks up every non-underscore-prefixed `.py` in those directories. The class name auto-converts to a snake_case tool name (`MyTool` → `my_tool`).
+
+Minimum viable tool:
+
+```python
+# ~/.drydock/tools/word_count.py
+from collections.abc import AsyncGenerator
+from typing import ClassVar, final
+from pydantic import BaseModel, Field
+from drydock.core.tools.base import (
+    BaseTool, BaseToolConfig, BaseToolState, InvokeContext, ToolPermission,
+)
+from drydock.core.tools.ui import ToolCallDisplay, ToolResultDisplay, ToolUIData
+from drydock.core.types import ToolStreamEvent
+
+class WordCountArgs(BaseModel):
+    text: str = Field(description="Text to count words in")
+
+class WordCountResult(BaseModel):
+    count: int
+
+class WordCountConfig(BaseToolConfig):
+    permission: ToolPermission = ToolPermission.ALWAYS
+
+class WordCount(
+    BaseTool[WordCountArgs, WordCountResult, WordCountConfig, BaseToolState],
+    ToolUIData[WordCountArgs, WordCountResult],
+):
+    description: ClassVar[str] = "Count words in a string."
+
+    @classmethod
+    def format_call_display(cls, args): return ToolCallDisplay(summary=f"count: {args.text[:30]}")
+    @classmethod
+    def get_result_display(cls, event): return ToolResultDisplay(success=True, message=f"{event.result.count} words")
+    @classmethod
+    def get_status_text(cls): return "Counting"
+    def resolve_permission(self, args): return ToolPermission.ALWAYS
+
+    @final
+    async def run(self, args: WordCountArgs, ctx: InvokeContext | None = None
+                  ) -> AsyncGenerator[ToolStreamEvent | WordCountResult, None]:
+        yield WordCountResult(count=len(args.text.split()))
+```
+
+Restart drydock; the model now sees `word_count` in its tool list.
+
+For tools that should run as separate processes or that you want to share with other AI clients (Claude Code, Cursor, etc.), use the [MCP integration](#mcp-servers) instead — but be aware MCP burns substantial context per call (~20K tokens for tool-rich servers like Figma's), so a direct built-in is almost always the better choice for performance-sensitive local-model setups.
+
 ### MCP Servers
 
 DryDock can connect to any Model Context Protocol server. Tools from a server `foo` show up as `foo__<tool_name>` in the agent's tool list. Two ways to add one:

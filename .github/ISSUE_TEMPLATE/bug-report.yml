@@ -1,24 +1,70 @@
 name: Bug Report
-description: Tell us about a defect in Drydock
+description: Tell us about a defect in DryDock
 title: "bug: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: >
-        Thanks for filing a detailed bug. Fill out every section so we can
-        reproduce the issue quickly
+        Thanks for filing a detailed bug. Fill out every section so the
+        autonomous improvement loop can reproduce, classify, and ship a fix
+        on the next 6-hour release tick.
+
+  - type: checkboxes
+    id: prechecks
+    attributes:
+      label: Pre-flight
+      description: Quick sanity checks before filing.
+      options:
+        - label: I'm on the latest released version (`pip install -U drydock-cli`)
+          required: true
+        - label: I searched existing open + closed issues for this symptom
+          required: true
 
   - type: dropdown
     id: component
     attributes:
       label: Component
-      description: Which part of Drydock is affected?
+      description: Which part of DryDock is affected?
       options:
-        - CLI
-        - ACP
-        - Both
+        - CLI / TUI
+        - ACP (Agent Client Protocol)
+        - MCP (Model Context Protocol integration)
+        - GraphRAG / retrieve tool
+        - Curiosity Layer
+        - Auto-release / cron / autonomous loop
+        - Install / packaging
         - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: DryDock version
+      description: Output of `drydock --version`.
+      placeholder: "drydock 2.8.21"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model + provider
+      description: >
+        DryDock's behavior is highly model-dependent. Tell us the active
+        model name and the runtime serving it (vLLM, llama.cpp, Ollama,
+        LM Studio, OpenAI-compatible endpoint, etc.).
+      placeholder: "gemma4 (vLLM Docker on localhost:8000)"
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: OS + Python + install method
+      description: Operating system, Python version, and how DryDock was installed.
+      placeholder: "Ubuntu 22.04, Python 3.12, pip install drydock-cli"
     validations:
       required: true
 
@@ -26,7 +72,7 @@ body:
     id: summary
     attributes:
       label: Summary
-      description: What went wrong? Keep it short but specific.
+      description: One or two sentences. What went wrong, in user terms.
     validations:
       required: true
 
@@ -35,24 +81,38 @@ body:
     attributes:
       label: Reproduction steps
       description: >
-        Commands, code, or payloads that trigger the bug. Include any relevant
-        input files or snippets (redact secrets).
+        Exact commands, prompts, or actions that trigger the bug. Include
+        the slash command / tool / agent if relevant. Redact secrets.
+      placeholder: |
+        1. Run `drydock`
+        2. Type `/mcp add stdio foo npx -y @modelcontextprotocol/server-foo`
+        3. Type `list_mcp_resources` ...
+        4. See error
     validations:
       required: true
 
-  - type: input
-    id: versions
+  - type: textarea
+    id: expected
     attributes:
-      label: Versions / environment
-      description: >
-        Include Drydock version, uv or pip version and OS.
-      placeholder: "drydock 2.4.2, uv 0.9.0 on macOS 15.7"
+      label: Expected vs actual
+      description: What you expected to happen vs what actually happened.
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: Logs & screenshots
-      description: Paste relevant stack traces, JSON snippets, or console output.
+      label: Logs / traceback / screenshots
+      description: >
+        Paste the relevant traceback, error message, JSON snippet, or
+        console output. For TUI rendering bugs, screenshots help most.
+        Session logs live at `~/.drydock/logs/` and `~/.vibe/logs/session/`.
       render: shell
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: >
+        Workarounds you tried, related issues, anything you noticed about
+        when it does/doesn't reproduce. Optional.
