@@ -6,9 +6,18 @@ Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
 - **Repo:** https://github.com/fbobe321/drydock
 - **PyPI:** https://pypi.org/project/drydock-cli/ (v2.6.32)
 - **Goal:** Reliable TUI coding agent with local LLMs. PRD-driven project building.
-- **Hardware:** 2x RTX 4060 Ti 16GB, Gemma 4 26B MoE (A4B) via vLLM Docker at localhost:8000
+- **Hardware:** 2x RTX 4060 Ti 16GB, Gemma 4 26B MoE (A4B)
 - **Server:** remus (Ubuntu 22.04, user: bobef)
-- **Active model:** Gemma 4 26B-A4B-it-AWQ-4bit (only 4B active params, ~70 tok/s)
+- **Active model (2026-05-14):** **Gemma-4-26B-A4B-it-UD-Q3_K_M.gguf** via
+  llama.cpp Docker (`ghcr.io/ggml-org/llama.cpp:server-cuda`) on :8000.
+  Q4_K_M was trialed 2026-05-12→14 but rolled back because the
+  quant shift produced no measurable HLE-correctness lift and added
+  ~9% per-token latency. Re-swap to Q4 via
+  `docker stop llamacpp-gemma4 && docker rm llamacpp-gemma4`
+  and a `docker run` with `-m /models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf`.
+  AWQ-4bit on vLLM is the historical alternate path and stays available
+  via `/data3/Models/start_gemma4.sh` (the vLLM script — NOT the
+  llama.cpp one). Speed: ~64 tok/s e2e on Q3.
 - **The honest test:** `scripts/shakedown_interactive.py` — drives the real TUI
   via pexpect with a multi-step user conversation (24 steps per PRD: plan,
   build, test, add features, debug, review code, edge cases, README).
@@ -23,7 +32,54 @@ Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
   testing.
 - **Priority:** TUI experience first. Fix drydock bugs, don't simplify PRDs.
 - **370 PRDs** at /data3/drydock_test_projects/ — the benchmark suite
-- **Current version:** v2.6.32 on PyPI
+- **Current version:** v2.8.27 on PyPI (auto-released every 6h from `main`)
+- **Active continuous loops:** stress harness (hourly), autonomous_review
+  (30-min), classify_pulse (10-min), telegram_bot keepalive (2-min),
+  hle_babysitter (hourly @ :45 — 10-Q math HLE batch per tick, see
+  HLE_PRD §"Continuous HLE evaluation"). Anything new the operator
+  adds should not run at :00 or :30 (autonomous_review owns those).
+
+## Current plan (2026-05-14)
+
+Three vectors moving in parallel. Each has a queue of concrete fixes
+tracked as TaskCreate items; the high-level shape is:
+
+1. **HLE** — keep pushing the floor up from 6.7% on Math. The
+   `scripts/hle_babysitter.sh` cron runs 10-Q Math batches every hour.
+   Open work: rotate categories beyond Math; build a multi-batch
+   aggregator (`scripts/hle_aggregate.py`); produce a clean Q3 vs Q4
+   stall-rate comparison once 30+ Q3 Math attempts have accumulated;
+   verify the gemma4.md tool-inventory change (e47cc4e) actually
+   lifted math/count/memory/verify call rates.
+
+2. **GraphRAG** — the auto-prefetch hook is shipping good chunks on
+   trivia but not on hard symbolic Math. Two concrete moves: lower
+   `QUALITY_THRESHOLD` (currently 8.0 in `agent_loop.py:3391`) once
+   we know the real score distribution, and add an arxiv-corpus
+   fallback (`/data3/arxiv_corpus/graphrag.sqlite`) when the primary
+   index returns nothing above threshold.
+
+3. **Deep Noir** — sidecar/hooks/capture/train all coded; the
+   `apply_chat_template` API-drift fix shipped 2026-05-14 (f02aa4b).
+   Real blocker for v1 vectors: contrastive-pair extraction is
+   currently broken — admiral records full UUIDs (e.g.
+   `5b55aacd-3606-4656-ad4b-eacf86506eda`) but session dirs are named
+   `session_<date>_<time>_<short_uuid>` where the `short_uuid` is the
+   first 8 chars of the SESSION's own UUID, not admiral's recorded
+   one. `extract_pairs._find_session_dir` matches on session_dir name
+   endswith(admiral_short) which only succeeds for the rare case
+   where both happen to match. Yield on `empty_after_tool:bash`:
+   2 / 88 derailed sessions found. Needs a real mapping layer
+   (meta.json → admiral) or admiral has to be fixed to record the
+   short hash used by session dirs.
+
+Operator controls for the continuous loops:
+
+```bash
+touch /data3/drydock/.pause_hle_babysitter      # pause continuous HLE
+touch /data3/drydock_test_projects/.pause_watchdog
+touch /data3/drydock/.pause_auto_release        # pause 6h PyPI publish
+```
 
 ## Build & Test
 

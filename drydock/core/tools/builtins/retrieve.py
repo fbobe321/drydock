@@ -199,10 +199,11 @@ class Retrieve(
                 )
                 return
 
+        text_limit = args.text_limit or self.config.default_text_limit
+        symbol_limit = args.symbol_limit or self.config.default_symbol_limit
+
         try:
             idx = Index(db_path)
-            text_limit = args.text_limit or self.config.default_text_limit
-            symbol_limit = args.symbol_limit or self.config.default_symbol_limit
             result = idx.retrieve(
                 args.query,
                 text_limit=text_limit,
@@ -211,7 +212,48 @@ class Retrieve(
         except Exception as e:
             raise ToolError(f"retrieve failed: {e}") from e
 
-        formatted = ingest_note + result.format() if ingest_note else result.format()
+        # Fallback chain — same shape as the auto-prefetch hook in
+        # agent_loop._auto_prefetch_retrieve. When the primary DB returns
+        # nothing useful, fall through to the arXiv corpus (1.18M chunks
+        # of STEM coverage) before giving up. The 2026-05-14 HLE audit
+        # found 77% of sessions hit empty primary — the model-invoked
+        # retrieve path was carrying the same gap.
+        #
+        # Skip fallback when the operator overrode args.db explicitly
+        # (they pointed us at a specific DB on purpose).
+        fallback_note = ""
+        if result.is_empty() and not args.db:
+            fallback_default = "/data3/arxiv_corpus/graphrag.sqlite"
+            fallback_db_raw = os.environ.get(
+                "DRYDOCK_GRAPHRAG_FALLBACK_DB", fallback_default
+            )
+            if fallback_db_raw:
+                fb_path = Path(fallback_db_raw).expanduser()
+                if (fb_path.is_file()
+                        and fb_path.resolve() != db_path.resolve()):
+                    try:
+                        fb_idx = Index(fb_path)
+                        fb_result = fb_idx.retrieve(
+                            args.query,
+                            text_limit=text_limit,
+                            symbol_limit=symbol_limit,
+                        )
+                        if not fb_result.is_empty():
+                            result = fb_result
+                            db_path = fb_path
+                            fallback_note = (
+                                f"[primary index empty; using fallback {fb_path}]\n"
+                            )
+                    except Exception:
+                        # Fallback failure is non-fatal — just emit the
+                        # primary's empty result.
+                        pass
+
+        formatted = (
+            fallback_note + ingest_note + result.format()
+            if (fallback_note or ingest_note)
+            else result.format()
+        )
         yield RetrieveResult(
             found=not result.is_empty(),
             db_path=str(db_path),

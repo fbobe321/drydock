@@ -1,6 +1,38 @@
 # Deep Noir activation-patching PRD — reasoning steering, transformers-backed sidecar
 
-**Status:** Draft, 2026-05-09. Phase 3 of HLE_PRD.
+**Status:** Draft, last updated 2026-05-14. Phase 3 of HLE_PRD.
+
+## 2026-05-14 progress update
+
+- ✅ Milestones 1-4 are coded and unit-test green (91/91 in
+  `tests/test_steering*`).
+- ✅ Sidecar `apply_chat_template` API-drift bug fixed (f02aa4b) +
+  5 dedicated tests against fake tokenizers.
+- ⚠ **Live-GPU smoke deferred.** First attempt 2026-05-13 11:21 UTC
+  loaded the AWQ weights but crashed in `model.generate()` (the bug
+  fixed above). The crashed Python kept ~29 GB of VRAM until manually
+  killed; production Q4 then refused to restart for ~30 seconds. With
+  the fix shipped, the next attempt is expected clean — but needs an
+  operator-approved Q3-stop window.
+- 🚨 **Pair extraction is broken.** `extract_pairs.py` resolves admiral
+  session UUIDs against `~/.vibe/logs/session/session_<date>_<short>`
+  via name-suffix match on the first 8 hex chars of the admiral UUID.
+  This only succeeds when the admiral UUID and the session's own UUID
+  happen to share those 8 chars — they don't, because admiral and
+  session generate UUIDs independently. Yield on
+  `empty_after_tool:bash`: **2 / 88 derailed pairs** found
+  (`/data3/drydock/research/deep_noir/pairs/empty_after_bash.jsonl`,
+  82 total = 2 derailed + 80 good). That's not enough to train a
+  vector. Fix candidates:
+    1. Crawl every session dir's `meta.json`, build a `{full_uuid →
+       dir}` map, look up admiral UUIDs against that map. Highest
+       fidelity. The crawl is one-shot and cacheable.
+    2. Change admiral to record the same short-hash that session dirs
+       use (would require coordinating with `drydock.admiral`).
+  Path 1 is unblocked and surgical; path 2 is bigger surgery for
+  marginal benefit. Default to path 1.
+
+## Next concrete steps
 
 The v0 token-bias path (`LogitBiasSteeringApplier`) hit its expected ceiling: phase1_steered scored 1/20 = 5% on the worked-example seed, identical to the unsteered baseline. This PRD scopes the next-tier applier — real activation patching at a configurable decoder layer — using a `transformers`-backed sidecar process so we can validate the architecture before the bigger vLLM forward-hook port. Goal: get one steering vector to lift Phase 1 above 5/20 on the existing 20-question seed, proving reasoning steering works at all on quantized Gemma 4. Then port to vLLM for production speed.
 

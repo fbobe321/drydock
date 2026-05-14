@@ -91,7 +91,25 @@ RULES: tuple[ClassificationRule, ...] = (
     ),
     ClassificationRule(
         pattern_id="harness:tool:hallucinated_name",
-        regex=_r(r"(unknown\s+tool|hallucinated.*tool)"),
+        # Require the line to either name a specific hallucinated tool or
+        # quote the format.py suppression-redirect message. The old regex
+        # `(unknown\s+tool|hallucinated.*tool)` matched any narrative
+        # mention of "hallucinated tools" — autonomous_review.log summary
+        # entries like "addressed thinking_stall, bash loops, hallucinated
+        # tools" fired this 48× during the 2026-05-11→14 window with no
+        # real hallucinated call behind them.
+        regex=_r(
+            # 'unknown tool: <name>' — require colon then an identifier
+            r"(unknown\s+tool:\s*[\w_.-]{3,}"
+            # 'hallucinated tool '<name>'' — require QUOTED name. Excludes
+            # narrative phrases like "hallucinated tool name to ..." that
+            # leaked through the prior regex.
+            r"|hallucinated\s+tool\s+['\"][\w_.-]+['\"]"
+            # format.py redirect-message signature (verbatim) — em-dash + tail
+            r"|'[^']{2,40}'\s+does\s+not\s+exist\s+—\s+do\s+not\s+call"
+            # admiral / detectors narrative phrasing
+            r"|model\s+invented\s+(?:a\s+)?tool\s+['\"][\w_.-]+['\"])"
+        ),
         bucket=Bucket.HARNESS,
         suggested_action="Add the hallucinated tool name to _IGNORE_TOOLS suppression list.",
     ),

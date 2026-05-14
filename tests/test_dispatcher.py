@@ -142,5 +142,48 @@ def test_make_jsonl_handler_appends_not_overwrites(tmp_path: Path):
     assert len(lines) == 2
 
 
+def test_make_jsonl_handler_dedups_across_calls(tmp_path: Path):
+    """The same (pattern_id, evidence) submitted twice across separate
+    handler invocations must NOT produce two queue lines. Fixes the
+    73.6× amplification observed on the thinking_stall queue in May
+    2026 — the same admiral_history line getting re-classified across
+    cron ticks ballooned the queue without adding signal."""
+    h = make_jsonl_handler(Bucket.HARNESS, tmp_path)
+    sig = _signal(Bucket.HARNESS, "h:thinking_stall", "duplicate-evidence")
+    h(sig)
+    h(sig)  # same content
+    h(sig)  # again
+    path = _queue_path_for(Bucket.HARNESS, tmp_path)
+    lines = path.read_text().splitlines()
+    assert len(lines) == 1
+
+
+def test_make_jsonl_handler_dedup_persists_across_handler_rebuild(tmp_path: Path):
+    """Restarting the handler (cron tick boundary) must NOT forget the
+    fingerprints — they live in `.fp_<bucket>` on disk."""
+    h1 = make_jsonl_handler(Bucket.HARNESS, tmp_path)
+    h1(_signal(Bucket.HARNESS, "h:thinking_stall", "x"))
+
+    # New handler instance — simulates a fresh cron-tick process.
+    h2 = make_jsonl_handler(Bucket.HARNESS, tmp_path)
+    h2(_signal(Bucket.HARNESS, "h:thinking_stall", "x"))   # dup
+    h2(_signal(Bucket.HARNESS, "h:thinking_stall", "y"))   # new
+
+    path = _queue_path_for(Bucket.HARNESS, tmp_path)
+    lines = path.read_text().splitlines()
+    assert len(lines) == 2  # x once, y once
+
+
+def test_make_jsonl_handler_dedup_can_be_disabled(tmp_path: Path):
+    """Tests / one-shot tools can opt out: dedup=False restores the
+    original append-every-signal behaviour."""
+    h = make_jsonl_handler(Bucket.HARNESS, tmp_path, dedup=False)
+    sig = _signal(Bucket.HARNESS, "h:test", "same")
+    h(sig); h(sig); h(sig)
+    path = _queue_path_for(Bucket.HARNESS, tmp_path)
+    lines = path.read_text().splitlines()
+    assert len(lines) == 3
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

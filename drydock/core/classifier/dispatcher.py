@@ -56,17 +56,78 @@ def _queue_path_for(bucket: Bucket, root: Path | None = None) -> Path:
     return (root or _default_queue_root()) / f"{bucket}.jsonl"
 
 
-def make_jsonl_handler(bucket: Bucket, root: Path | None = None) -> DispatchHandler:
+_FINGERPRINT_CAP = 20_000  # keep at most this many fingerprints per bucket
+
+
+def _fingerprint_path(bucket: Bucket, root: Path | None = None) -> Path:
+    return (root or _default_queue_root()) / f".fp_{bucket}"
+
+
+def _signal_fingerprint(signal: FailureSignal) -> str:
+    """Stable hash of (pattern_id, evidence). Used to dedupe a signal
+    that fires repeatedly across cron ticks — without this, a single
+    admiral_history line getting re-classified produces a queue entry
+    per re-classification (observed 2026-05-14: thinking_stall queue
+    had 73.6× amplification, 14213 entries / 193 unique strings)."""
+    import hashlib
+    src = f"{signal.pattern_id}\0{signal.evidence or ''}"
+    return hashlib.sha1(src.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _load_fingerprints(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    try:
+        return set(path.read_text().splitlines())
+    except OSError:
+        return set()
+
+
+def _append_fingerprint(path: Path, fp: str, cap: int = _FINGERPRINT_CAP) -> None:
+    """Append a fingerprint to disk; truncate the file when it exceeds
+    the cap to bound storage."""
+    try:
+        with path.open("a", encoding="utf-8") as f:
+            f.write(fp + "\n")
+    except OSError:
+        return
+    try:
+        if path.stat().st_size > cap * 64:  # rough size guard
+            lines = path.read_text().splitlines()
+            if len(lines) > cap:
+                path.write_text("\n".join(lines[-cap:]) + "\n")
+    except OSError:
+        pass
+
+
+def make_jsonl_handler(
+    bucket: Bucket, root: Path | None = None, *, dedup: bool = True
+) -> DispatchHandler:
     """Build a handler that appends each signal as one JSON line under
     ~/.drydock/dispatch/<bucket>.jsonl (or `root`/<bucket>.jsonl).
 
     Atomicity: each write is one line per signal, with a timestamp.
     The append is open-write-flush-close so concurrent runs don't
-    interleave half-lines."""
+    interleave half-lines.
+
+    Cross-run dedup (`dedup=True`, default): a sidecar file
+    `.fp_<bucket>` holds sha1 fingerprints of `(pattern_id, evidence)`
+    tuples seen in this queue. A signal whose fingerprint is already
+    present is dropped at write time. Bounded to ~20k fingerprints
+    via rolling truncation. The amplification factor observed on
+    2026-05-14 (thinking_stall 73.6×) drops to ~1× with this enabled."""
     path = _queue_path_for(bucket, root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    fp_path = _fingerprint_path(bucket, root)
+    fingerprints: set[str] = _load_fingerprints(fp_path) if dedup else set()
 
     def handler(signal: FailureSignal) -> None:
+        if dedup:
+            fp = _signal_fingerprint(signal)
+            if fp in fingerprints:
+                return
+            fingerprints.add(fp)
+            _append_fingerprint(fp_path, fp)
         record = signal.to_jsonable()
         record["ts"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         with path.open("a", encoding="utf-8") as f:

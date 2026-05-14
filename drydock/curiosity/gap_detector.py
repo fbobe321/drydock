@@ -34,7 +34,43 @@ _STOPWORDS: frozenset[str] = frozenset({
     # Common imperative openers for drydock tasks.
     "Build", "Fix", "Add", "Remove", "Update", "Refactor", "Test",
     "Run", "Check", "Review", "Show", "List", "Explain", "Find", "Look",
+    # HLE/exam prose openers — flagged in 2026-05-14 queue audit
+    # because they always lead a Title-Case phrase ("Consider the X").
+    "Consider", "Suppose", "Given", "Let", "Define", "Compute",
+    "Determine", "Evaluate", "Prove", "Recall", "Note", "Assume",
 })
+
+# HLE / harness prompt-template tokens that the detector kept flagging
+# as "unknown terms" — 2026-05-14 queue audit found FINAL (45×),
+# ANSWER (44×), QUESTION (44×), FINAL ANSWER: (47×) all in the curiosity
+# queue as false positives. Compared case-insensitively. Any candidate
+# whose stripped form (case-folded, trailing colon stripped) is in this
+# set is dropped before enqueue.
+_TEMPLATE_NOISE: frozenset[str] = frozenset(
+    s.lower() for s in {
+        "FINAL", "ANSWER", "QUESTION", "FINAL ANSWER",
+        "GROUND TRUTH", "PREDICTED ANSWER", "VERDICT",
+        # autonomous_review / admiral output tokens
+        "CONSIDER", "RESPONSE", "RESULT", "VERIFIED",
+        # Common prose openers that pass acronym + title-case regexes
+        "CHAPTER", "SECTION", "PART", "INTRODUCTION", "CONCLUSION",
+    }
+)
+
+
+def _is_template_noise(candidate: str) -> bool:
+    """True if the candidate is HLE/admiral boilerplate, not a real term."""
+    norm = candidate.strip(" :.,;").lower()
+    if not norm:
+        return True
+    if norm in _TEMPLATE_NOISE:
+        return True
+    # Drop bare English stopword tokens too (the user prompt sometimes
+    # gets fragmented and "the" / "is" leak through the quoted-string
+    # path with 3-char minimum length).
+    if norm in {sw.lower() for sw in _STOPWORDS}:
+        return True
+    return False
 
 # Acronyms shorter than this are too noisy to chase ("ID", "OK", "OS").
 _MIN_ACRONYM_LEN = 3
@@ -125,4 +161,6 @@ def detect_gaps(text: str, max_gaps: int = _MAX_GAPS) -> list[str]:
                 continue
         candidates.append(phrase)
 
-    return _dedup_preserve_order(c for c in candidates if c)[:max_gaps]
+    return _dedup_preserve_order(
+        c for c in candidates if c and not _is_template_noise(c)
+    )[:max_gaps]

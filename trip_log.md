@@ -1,5 +1,71 @@
 # Drydock Trip Log
 
+## 2026-05-14 04:30 UTC tick
+- Stress: 1658/1658 complete (run finished, babysitter correctly dormant)
+- HLE: 5.0% lifetime (10 runs, 181 total, 9 correct). Chemistry batch 024501 shows 0/10: all `empty:no_response` or `empty:no_final_answer` at 480s wall-clock timeout. Root cause: model used 11-60 tool calls searching web but STOP_NOW warning (default turn 60) never fired within 480s budget.
+- Admiral last 30 min: 2 harness signals (thinking_stall, pre-addressed)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=1266 lines (2 unique thinking_stall), retrieval=3 (0 actionable), curiosity=665 pending (86 hle_failure + 579 unknown_term)
+- Retrieval drain: 0 projects ingested (all already current)
+- Action this tick: committed 85d1a70 — lower HLE session turn limits to WRAP_UP=10/STOP_NOW=15 (was 30/60) via hle_eval.py env dict; add DRYDOCK_STOP_NOW_SUFFIX hook to agent_loop so HLE injects "Write your best answer as FINAL ANSWER: now." in the stop-now message. Consumed curiosity:67cbe6732f7350b6 (Gamma function hle_failure).
+
+## 2026-05-14 04:00 UTC tick
+- Stress: 1658/1658 (complete, not restarted — run is finished)
+- Write rate: N/A (complete)
+- Admiral last 30 min: 2 harness signals (thinking_stall, pre-addressed)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy at 63 tok/s; "400" in logs = 400-token eval chunks)
+- GH issues: 0 open
+- HLE: 5.0% lifetime (10 runs, 180 total, 9 correct). Chemistry batch at 024501 shows all-empty predictions (no_response / no_final_answer). The no_final_answer case averages ~10 tool turns with no FINAL ANSWER: line — WRAP_UP/STOP_NOW nudges never fired (thresholds were 30/60, far above the 10-turn sessions).
+- Dispatch queue: harness=2, retrieval=3 (0 actionable, all already ingested), curiosity=664 pending (85 hle_failure + 579 unknown_term). Retrieval drain: 0 projects ingested.
+- Action this tick: committed fix (9a59aeb) — DRYDOCK_WRAP_UP_WARN_AT=8 / DRYDOCK_STOP_NOW_WARN_AT=12 env-var overrides in agent_loop.py + set both in hle_babysitter.sh so stop nudge fires before 480s timeout on no_final_answer sessions.
+
+## 2026-05-14 03:30 UTC tick
+- Stress: 1658/1658 (complete)
+- Write rate: N/A
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 :8000 healthy, `/health` returns ok; balancer :8001 OK)
+- GH issues: 0 open
+- HLE: 5.1% lifetime (10 runs, 176 total, 9 correct). Chemistry batch PID 1306038 running (45+ min, all-empty predictions — predates e2154f2 nudge, expected).
+- Dispatch queue: harness=2 (thinking_stall, all pre-addressed), retrieval=3 (0 actionable), curiosity=900 total / 642 pending (81 hle_failure + 561 unknown_term — top unknown_terms are template noise: FINAL/ANSWER/QUESTION, pre-filter-fix artifacts, no new ingestion needed)
+- retrieval-drain: 0 ingested (all already current)
+- curiosity-queue: no new actionable item; top hle_failure entries are empty-prediction math — already addressed by e2154f2. unknown_term entries are template noise.
+- Action this tick: fixed start_gemma4_llamacpp.sh to override Docker healthcheck from wrong port 8080 to correct port 8000 (container showed "unhealthy" despite model responding; cosmetic only — no container restart needed during live chemistry batch).
+
+## 2026-05-14 03:00 UTC tick
+- Stress: 1658/1658 (complete, PID dead as expected)
+- Write rate: N/A
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 :8000 OK, balancer :8001 OK)
+- GH issues: 0 open
+- HLE: 5.2% lifetime (10 runs, 172 total, 9 correct). Batch PID 1306038 running (15+ min elapsed).
+- Dispatch queue: harness=1265 (all pre-addressed), retrieval=3 (0 actionable), curiosity=873 total / 616 pending
+- retrieval-drain: 0 ingested (all already current)
+- curiosity-queue: acted on hle_failure a9f98fae92f048f6 (empty-prediction math); strengthened gemma4.md FINAL ANSWER rule to explicitly note empty responses score 0. Committed e2154f2. Curiosity item consumed (258 total consumed).
+- Action this tick: committed fix (addresses curiosity:a9f98fae92f048f6) — gemma4.md prompt nudge for empty HLE predictions; prior tick's autonomous_review exited budget-exceeded at 02:35 UTC.
+
+## 2026-05-14 02:30 UTC tick
+- Stress: 1658/1658 (COMPLETE — babysitter correctly not restarting; PID 340932 dead as expected)
+- Write rate: N/A (run finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 on :8000 OK, balancer PID 380535 on :8001 OK)
+- GH issues: 0 open
+- HLE: 5.3% lifetime (9 runs, 171 total). Last batch 0/10 Math — all 10 questions hit 480s timeout. Question 1 had a correct equivalent answer but judge returned `IndexError('list index out of range')`; bc12eee fixes empty-content but this IndexError cause not identified (too deep to diagnose within budget). Questions 2-10 empty predictions: model engaged (249-1033 TUI log lines) but didn't emit FINAL ANSWER in time.
+- Dispatch queue: harness=1265 (all pre-addressed, latest entry 2026-05-11), retrieval=3 (0 actionable), curiosity=862 total / 605 pending (top 3 all HLE math knowledge gaps — chromatic roots, gamma function, finite groups — no drydock code fix applicable)
+- retrieval-drain: 0 new ingestions (all already ingested recently)
+- curiosity-queue: 605 pending, no actionable items this tick
+- Action this tick: no action — system healthy; autonomous_review running in parallel at 02:30 UTC
+
+## 2026-05-14 02:00 UTC tick (autonomous_review)
+- Stress: 1658/1658 COMPLETE (PID 340932 dead/finished, .pause_watchdog active)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M healthy, balancer PID 380535 OK on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=1264 (top: thinking_stall=810 [May 11], bash_generic=177 [May 10], hallucinated_name=133 [May 11] — all previously addressed patterns, evidence confirms), retrieval=3 (0 actionable — already ingested), curiosity=605 pending (77 hle_failure + 528 unknown_term; top 3 are empty-prediction math failures — thinking stall, not corpus gap)
+- HLE: 5.3% lifetime (9 runs, 171 Qs); last batch completed (PID 1255999 dead), next at :45; babysitter rotating per-batch logs
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue 605 pending hle_failure+unknown_term, top items are empty predictions (thinking stall), no new fix needed this tick
+
 ## 2026-05-14 04:00 UTC tick
 - Stress: 1658/1658 (COMPLETE — PID 340932 dead/finished, watchdog paused via .pause_watchdog)
 - Write rate: N/A (stress cycle finished)
@@ -5674,3 +5740,63 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=104303 (all thinking_stall/bash:heredoc_loop/tool:hallucinated_name — previously addressed, latest entry 2026-05-11), retrieval=175 (0 actionable, all ingested), curiosity=3 pending (same HLE math failures: Dirichlet chars/elliptic curves, multivariate stats, random trees — pure knowledge gaps, no actionable fix)
 - Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no action this tick
+
+## 2026-05-14 05:00 UTC tick
+- Stress: 1658/1658 (COMPLETE — PID 340932 dead/finished, watchdog paused via .pause_watchdog)
+- Write rate: N/A (stress cycle finished)
+- Admiral last 30 min: 0 fires (no admiral_history.log activity)
+- vLLM 400s: 0 (balancer OK on :8001, gemma4 forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all thinking_stall/bash:heredoc_loop/tool:hallucinated_name — previously addressed, latest entry 2026-05-11), retrieval=175 (0 actionable, all ingested), curiosity=3 pending (same HLE math failures: Dirichlet chars/elliptic curves, multivariate stats, random trees — pure knowledge gaps, no actionable fix)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no action this tick
+
+## 2026-05-14 06:00 UTC tick
+- Stress: 1658/1658 (complete)
+- Write rate: N/A (run finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer up on :8001, gemma4 forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns previously addressed, no new entries since 2026-05-11), retrieval=175 (0 actionable), curiosity=3 pending (same 3 HLE math gap failures)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no actionable fix this tick
+
+## 2026-05-14 07:00 UTC tick
+- Stress: 1658/1658 (complete)
+- Write rate: N/A (run finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (balancer PID 380535 up on :8001, gemma4 forwarding correctly)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (all patterns previously addressed, latest entry 2026-05-11), retrieval=175 (0 actionable, all ingested), curiosity=3 pending (same 3 HLE math failures: Dirichlet chars/elliptic curves, multivariate stats, random trees — pure knowledge gaps, no actionable fix)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: 3 pending HLE math failures, no actionable fix this tick
+
+## 2026-05-14 08:00 UTC tick
+- Stress: 1658/1658 (complete)
+- Write rate: N/A (run finished)
+- Admiral last 30 min: 0 fires (classify_pulse scanned 3 new lines, 0 dispatched)
+- vLLM 400s: 0 (balancer PID 380535 up on :8001, gemma4 responding OK)
+- GH issues: 0 open
+- Dispatch queue: harness=104303 (no new entries since 2026-05-11, all patterns previously addressed), retrieval=175 (0 actionable, all ingested), curiosity=751 total / top 3 same HLE math gap failures (Dirichlet chars, multivariate stats, random trees — pure knowledge corpus gaps, no drydock fix applicable)
+- HLE babysitter: batch running pid=1255999 (10-Q math batch, hle_eval.py)
+- Action this tick: no action — system healthy; retrieval-drain: 0 new ingestions; curiosity-queue: top 3 all HLE math failures with no actionable code fix
+
+## 2026-05-14 01:01 UTC tick
+- Stress: 1658/1658 (COMPLETE — run finished, babysitter shows dead PID as expected)
+- Write rate: N/A (run complete)
+- Admiral last 30 min: harness queue unchanged (1264 entries, all harness:thinking_stall pre-addressed)
+- vLLM 400s: 0 (llamacpp-gemma4 unhealthy flag but responding OK on :8000; balancer OK on :8001)
+- GH issues: 0 open
+- Dispatch queue: harness=1264, retrieval=3 (0 actionable, all ingested), curiosity=824 pending
+- HLE babysitter: batch running pid=1255999 (10-Q math batch, hle_eval.py alive)
+- retrieval-drain: 0 new ingestions (all already ingested recently)
+- Action this tick: committed gemma4.md prompt rule for combinatorial optimization brute-force via math tool (addresses curiosity:988f3867ffc6e386); curiosity item 988f3867ffc6e386 consumed
+
+## 2026-05-14 01:31 UTC tick
+- Stress: 1658/1658 (complete, babysitter shows PID 340932 dead as expected)
+- Write rate: N/A (run finished)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 up on :8000, unhealthy healthcheck flag but responding; balancer PID 380535 OK on :8001)
+- GH issues: 0 open
+- HLE babysitter: running (pid 1255999, 10-Q math batch, hle_eval.py)
+- Dispatch queue: harness=1264 (all thinking_stall/heredoc_loop/hallucinated_name, pre-addressed, latest 2026-05-11), retrieval=3 (0 actionable, all ingested), curiosity=854 pending (top 3: chromatic roots, gamma function Hadamard product, finite groups product-free sets — pure knowledge corpus gaps, no actionable code fix)
+- retrieval-drain: 0 new ingestions
+- curiosity-queue: 3 pending hle_failure items, pure knowledge gaps, no actionable fix this tick
+- Action this tick: committed fix for hle_eval._extract_answer — now handles \boxed{}, $...$, markdown emphasis on FINAL ANSWER, multipart content lists, trailing code fences (a74b484). Pre-existing unstaged changes, not authored this tick.

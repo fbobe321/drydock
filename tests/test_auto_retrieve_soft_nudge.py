@@ -165,3 +165,131 @@ def test_authoritative_and_soft_are_mutually_exclusive(monkeypatch, tmp_path):
     agent, notes = _make_agent(monkeypatch, hits, tmp_path)
     AgentLoop._auto_prefetch_retrieve(agent, "QUESTION: What is X?")
     assert len(notes) == 1  # not 2
+
+
+def test_fallback_db_fires_when_primary_misses(monkeypatch, tmp_path):
+    """When the primary DB returns no above-threshold hits, the fallback
+    DB must be tried. 2026-05-14: 77% of HLE-eval sessions had the
+    primary corpus return nothing — the arxiv-fallback path is the
+    forcing function that makes auto-retrieve useful for STEM."""
+    from drydock.core.agent_loop import AgentLoop
+
+    primary_db = tmp_path / "primary.sqlite"
+    fallback_db = tmp_path / "fallback.sqlite"
+    primary_db.write_text("")
+    fallback_db.write_text("")
+
+    # Primary returns low-score hits (below threshold), fallback returns
+    # quality hits.
+    primary_hits = [_Hit(score=2.0, content="weak primary hit")]
+    fallback_hits = [_Hit(score=30.0, content="strong fallback chunk about SGD")]
+
+    import drydock.graphrag as graphrag_pkg
+    seen_dbs: list[str] = []
+
+    class _SwitchingIndex:
+        def __init__(self, db_path):
+            self.db_path = str(db_path)
+            seen_dbs.append(self.db_path)
+
+        def retrieve(self, query, *, symbol_limit=0, text_limit=4):
+            if self.db_path == str(primary_db):
+                return _FakeResult(primary_hits)
+            return _FakeResult(fallback_hits)
+
+    monkeypatch.setattr(graphrag_pkg, "Index", _SwitchingIndex)
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_DB", str(primary_db))
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_FALLBACK_DB", str(fallback_db))
+
+    notes: list[str] = []
+
+    class _FakeAgent:
+        messages = _FakeMessages()
+
+        def _inject_system_note(self, note):
+            notes.append(note)
+
+    AgentLoop._auto_prefetch_retrieve(_FakeAgent(), "QUESTION: What is SGD?")
+
+    # Both DBs must have been consulted in order.
+    assert seen_dbs == [str(primary_db), str(fallback_db)], seen_dbs
+    # The fallback's strong hit should produce the soft nudge.
+    assert len(notes) == 1
+    assert "chunk" in notes[0].lower()
+
+
+def test_no_fallback_when_primary_has_hits(monkeypatch, tmp_path):
+    """When the primary DB already returns above-threshold hits, the
+    fallback must NOT be queried (avoid redundant work + log noise)."""
+    from drydock.core.agent_loop import AgentLoop
+
+    primary_db = tmp_path / "primary.sqlite"
+    fallback_db = tmp_path / "fallback.sqlite"
+    primary_db.write_text("")
+    fallback_db.write_text("")
+
+    primary_hits = [_Hit(score=30.0, content="strong primary")]
+
+    import drydock.graphrag as graphrag_pkg
+    seen_dbs: list[str] = []
+
+    class _PrimaryOnly:
+        def __init__(self, db_path):
+            self.db_path = str(db_path)
+            seen_dbs.append(self.db_path)
+
+        def retrieve(self, query, *, symbol_limit=0, text_limit=4):
+            return _FakeResult(primary_hits)
+
+    monkeypatch.setattr(graphrag_pkg, "Index", _PrimaryOnly)
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_DB", str(primary_db))
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_FALLBACK_DB", str(fallback_db))
+
+    notes: list[str] = []
+
+    class _FakeAgent:
+        messages = _FakeMessages()
+
+        def _inject_system_note(self, note):
+            notes.append(note)
+
+    AgentLoop._auto_prefetch_retrieve(_FakeAgent(), "QUESTION: What is X?")
+
+    assert seen_dbs == [str(primary_db)], seen_dbs
+    assert len(notes) == 1
+
+
+def test_fallback_disabled_when_env_empty(monkeypatch, tmp_path):
+    """Setting DRYDOCK_GRAPHRAG_FALLBACK_DB to empty disables the
+    fallback entirely (so operators on machines without the arxiv
+    corpus aren't surprised by a missing-file warning)."""
+    from drydock.core.agent_loop import AgentLoop
+
+    primary_db = tmp_path / "primary.sqlite"
+    primary_db.write_text("")
+    primary_hits = [_Hit(score=2.0, content="weak primary")]  # below threshold
+
+    import drydock.graphrag as graphrag_pkg
+    seen_dbs: list[str] = []
+
+    class _Idx:
+        def __init__(self, db_path):
+            seen_dbs.append(str(db_path))
+        def retrieve(self, query, *, symbol_limit=0, text_limit=4):
+            return _FakeResult(primary_hits)
+
+    monkeypatch.setattr(graphrag_pkg, "Index", _Idx)
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_DB", str(primary_db))
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_FALLBACK_DB", "")
+
+    notes: list[str] = []
+
+    class _FakeAgent:
+        messages = _FakeMessages()
+        def _inject_system_note(self, note):
+            notes.append(note)
+
+    AgentLoop._auto_prefetch_retrieve(_FakeAgent(), "QUESTION: What is X?")
+
+    assert seen_dbs == [str(primary_db)]
+    assert notes == []  # no good hits → no injection

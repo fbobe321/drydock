@@ -6,6 +6,89 @@ the dominant cause of thinking-stalls. Deep Noir sidecar wiring (M1-M4)
 is in tree; M1 end-to-end GPU smoke pending after the transformers 5.x
 apply_chat_template fix (f02aa4b).
 
+## HLE was retrieving against the WRONG corpus (fixed edb61c9)
+
+Trace from a Q3 session 2026-05-14: a local-field-theory HLE Math
+question pulled `/data3/drydock_test_projects/403_tool_agent/help_output.txt`
+(score 38.7) as the top retrieve hit. hle_eval.py spawns drydock
+subprocesses that, until now, defaulted to
+`~/.drydock/graphrag.sqlite` — the project corpus full of test
+artifacts — not the arXiv corpus (1.18M chunks, math/physics/CS).
+The Q3-with-AR run effectively had the model answering math
+questions with a tool_agent CLI help page as "evidence."
+
+Fixed in `scripts/hle_babysitter.sh`: every per-batch invocation
+now sets `DRYDOCK_GRAPHRAG_DB=/data3/arxiv_corpus/graphrag.sqlite`
+for the subprocess only. User TUI / stress / other drydock sessions
+still see the project corpus.
+
+Takes effect on the next cron tick after this commit lands —
+shell scripts run from the source tree, not site-packages, so this
+fix is live without waiting for v2.8.28.
+
+## Judge was broken for the entire history (fixed bc12eee)
+
+Audit 2026-05-14: across all 165 HLE results on disk, the judge was
+invoked 22 times and returned **ERROR every single time (100%)**.
+Zero YES verdicts, zero NO verdicts — every judged answer dropped
+to ERROR because `text.splitlines()[0]` raised IndexError on empty
+content (Gemma 4 thinking-budget exhaustion on the judge call,
+emitting only `reasoning_content` with no `content`).
+
+The 5/163 = 3.1% lifetime score came entirely from `exact` (5) and
+`fuzzy` (0) matches — judge YES count was zero. **The real correctness
+rate is unknown until the fix ships.** Q3 Math Q1 today produced
+`e^{-\gamma} \frac{q-1}{h} q^{g-1} \log q` against gold
+`\frac{q^{g-1}(q-1)\log q}{e^\gamma h}` (mathematically identical)
+and got marked ERROR. That alone changes the 0/N batch verdict for
+that session.
+
+Fix in commit `bc12eee` (will ship in v2.8.28):
+- Read `reasoning_content` when `content` is empty
+- Scan the whole response for YES/NO/PARTIAL with word-boundary
+- max_tokens 80 → 200, plus a tighter "one word only" retry
+- ERROR reason now echoes the raw text so failures are diagnosable
+
+**Backfill applied 2026-05-14 01:48 UTC.** Ran
+`scripts/rejudge_hle.py --apply --apply-to-summary` across all 22
+historical ERROR rows. Outcome:
+- 4 new YES (judged correct)
+- 13 new NO (judged wrong but valid)
+- 2 new PARTIAL
+- 3 still ERROR (genuinely undecidable / model returned nothing)
+
+Lifetime aggregate jumped **5/171 = 2.9% → 9/171 = 5.3%**. Per-category
+deltas: Math +1, Bio/Med +1, Humanities/Social Science +2. Aggregator
+now prefers `rejudged.jsonl` over `results.jsonl` when present
+(commit c1981fe).
+
+## Q4 → Q3 rollback (2026-05-14 00:26 UTC)
+
+User decision after the Q4 30-Q math overnight (2/30 = 6.7%, 87%
+stall rate) and the AR-OFF disambiguation: **no measurable Q4
+benefit**, swap back to Q3_K_M. Container now serves
+`/models/gemma-4-26B-A4B-it-UD-Q3_K_M.gguf` via
+`/data3/Models/start_gemma4_llamacpp.sh`. Swap took 18s. Frees ~4 GB
+VRAM (12.1 GB vs Q4's 16.2 GB). The Q3 vs Q4 stall-rate comparison
+will fall out naturally as the hourly babysitter accumulates 30+ Q3
+attempts (~3 cron ticks at 10-Q each).
+
+## Continuous HLE evaluation (2026-05-14)
+
+`scripts/hle_babysitter.sh` (cron line `45 * * * * ...`) keeps a 10-Q
+math HLE batch running every hour. Skips on its own if (a) a prior
+batch is still alive, (b) stress is mid-run, (c) autonomous_review
+is firing, or (d) the balancer at :8001 isn't healthy. Operator
+controls:
+
+- `touch /data3/drydock/.pause_hle_babysitter` — pause future batches
+- `rm /data3/drydock/.pause_hle_babysitter` — resume
+- `kill $(cat /tmp/hle_continuous.pid)` — stop current batch
+- `tail -f /tmp/hle_babysitter.log` — cron-tick history
+
+Each batch lands in `hle_results/run_<ts>/` with results.jsonl +
+summary.json. Multi-batch aggregation is a separate (future) job.
+
 ## Q4 vs AR-OFF disambiguation (2026-05-13)
 
 Two variables shifted simultaneously when the v1 baseline ran (Q3+AR-off

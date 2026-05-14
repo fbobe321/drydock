@@ -80,28 +80,99 @@ def _all_flagged_session_ids(findings: dict[str, list[str]]) -> set[str]:
     return flagged
 
 
-def _find_session_dir(session_id: str, roots: list[Path]) -> Optional[Path]:
-    """Resolve a session_id to its directory across multiple roots.
+_META_MAP_CACHE: dict[tuple[str, ...], dict[str, Path]] = {}
 
-    Sessions can live under `~/.drydock/logs/session` (post-rename) OR
-    `~/.vibe/logs/session` (pre-rename) depending on when they ran.
-    Some directories are named `session_<timestamp>_<short-uuid>`
-    rather than the full uuid, so we also accept any dir whose name
-    ends with the (lowercased) first 8 hex chars of the id.
+
+def _build_meta_map(roots: list[Path]) -> dict[str, Path]:
+    """Walk every session dir under `roots` and build a
+    `{meta.session_id → dir}` lookup. Cached per `roots` tuple so
+    repeated calls within one extraction don't re-crawl.
+
+    Why this exists: admiral records each finding's `session_id` as the
+    full UUID written by drydock to `meta.json` (e.g.
+    `5b55aacd-3606-4656-ad4b-eacf86506eda`). The session DIRECTORY,
+    however, is named `session_<date>_<time>_<short-hash>` where the
+    `<short-hash>` is the first 8 chars of the dir's OWN id at create
+    time. That id is unrelated to the admiral-recorded UUID — same
+    process, but admiral generates independently. The original
+    `endswith(short_admiral_uuid)` match therefore almost never hit;
+    the May 2026 extraction yielded 2 / 88 sessions for the dominant
+    `empty_after_tool:bash` finding because of this mismatch.
+
+    The fix: read every dir's `meta.json`, key by its `session_id`
+    field, and look admiral's UUID up directly. One sequential walk
+    per (roots, run) is cheap relative to the rest of the pipeline.
     """
-    short = session_id.replace("-", "")[:8].lower() if session_id else ""
+    key = tuple(str(r) for r in roots)
+    cached = _META_MAP_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    mapping: dict[str, Path] = {}
     for root in roots:
         if not root.is_dir():
             continue
-        # Direct match: <root>/<session_id>/
+        for child in root.iterdir():
+            if not child.is_dir():
+                continue
+            meta_file = child / "meta.json"
+            if not meta_file.is_file():
+                continue
+            try:
+                meta = json.loads(meta_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            sid = meta.get("session_id")
+            if isinstance(sid, str) and sid:
+                # Last-writer-wins is fine; sessions don't share UUIDs.
+                mapping[sid.lower()] = child
+    _META_MAP_CACHE[key] = mapping
+    logger.info(
+        "meta-map: indexed %d session dirs across %d root(s)",
+        len(mapping), len(roots),
+    )
+    return mapping
+
+
+def _find_session_dir(session_id: str, roots: list[Path]) -> Optional[Path]:
+    """Resolve a session_id to its directory across multiple roots.
+
+    Three resolution strategies in order of fidelity:
+      1. Direct: `<root>/<session_id>/` (legacy UUID-named dirs).
+      2. meta.json crawl: build a `{meta.session_id → dir}` map and
+         look up the full admiral UUID. This is the path that works
+         for current session-dir naming (`session_<date>_<time>_<short>`
+         where short ≠ admiral's UUID).
+      3. Fallback: name-suffix match on the first 8 hex chars of the
+         id. Almost never hits in practice; kept for tests that
+         construct dir names directly from the id.
+    """
+    if not session_id:
+        return None
+    sid_lc = session_id.lower()
+
+    for root in roots:
+        if not root.is_dir():
+            continue
+        # 1. Direct match: <root>/<session_id>/
         direct = root / session_id
         if direct.is_dir():
             return direct
-        # Name-suffix match: <root>/session_*_<short>/
-        if short:
-            for child in root.iterdir():
-                if child.is_dir() and child.name.lower().endswith(short):
-                    return child
+
+    # 2. meta.json map (the load-bearing path on real session data).
+    mapping = _build_meta_map(roots)
+    hit = mapping.get(sid_lc)
+    if hit is not None:
+        return hit
+
+    # 3. Legacy fallback: name-suffix match.
+    short = session_id.replace("-", "")[:8].lower()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for child in root.iterdir():
+            if child.is_dir() and child.name.lower().endswith(short):
+                return child
     return None
 
 

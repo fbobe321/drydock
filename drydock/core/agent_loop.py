@@ -805,8 +805,10 @@ class AgentLoop:
             HARD_STOP_CALLS = int(
                 getattr(self, "_admiral_hard_stop_tool_calls", 100)
             )
-            WRAP_UP_WARN_AT = int(getattr(self, "_admiral_wrap_up_warn_at", 30))
-            STOP_NOW_WARN_AT = int(getattr(self, "_admiral_stop_now_warn_at", 60))
+            WRAP_UP_WARN_AT = int(getattr(self, "_admiral_wrap_up_warn_at",
+                int(os.environ.get("DRYDOCK_WRAP_UP_WARN_AT", 30))))
+            STOP_NOW_WARN_AT = int(getattr(self, "_admiral_stop_now_warn_at",
+                int(os.environ.get("DRYDOCK_STOP_NOW_WARN_AT", 60))))
             _prompt_start = time.perf_counter()
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
@@ -852,11 +854,13 @@ class AgentLoop:
                         "summary so the user can review."
                     )
                 elif tool_turns == STOP_NOW_WARN_AT:
+                    _stop_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
                     self._inject_system_note(
                         f"You have used {tool_turns} tool calls on this "
                         "single request. STOP NOW. Emit a final text "
                         "response summarizing what you did (or what is "
-                        "blocked) so the user can take the next step."
+                        f"blocked) so the user can take the next step."
+                        + (f" {_stop_suffix}" if _stop_suffix else "")
                     )
                 elif tool_turns >= HARD_STOP_CALLS:
                     # Hard end-of-turn: synthesize a user-facing message
@@ -3350,13 +3354,6 @@ class AgentLoop:
         """
         try:
             from drydock.graphrag import Index
-            db = os.environ.get("DRYDOCK_GRAPHRAG_DB") or str(
-                Path.home() / ".drydock" / "graphrag.sqlite"
-            )
-            if not Path(db).is_file():
-                logger.warning("[AUTO-RETRIEVE] db missing: %s", db)
-                return
-            idx = Index(db)
         except Exception as e:
             logger.warning("[AUTO-RETRIEVE] setup failed: %s", e, exc_info=True)
             return
@@ -3381,19 +3378,62 @@ class AgentLoop:
             return
         logger.warning("[AUTO-RETRIEVE] extracted query: %r", query[:120])
 
-        try:
-            result = idx.retrieve(query, symbol_limit=0, text_limit=4)
-        except Exception as e:
-            logger.warning("[AUTO-RETRIEVE] query failed: %s", e, exc_info=True)
-            return
-
-        text_hits = getattr(result, "text", None) or getattr(result, "text_hits", []) or []
         QUALITY_THRESHOLD = 8.0
-        good_hits = [h for h in text_hits if getattr(h, "score", 0) >= QUALITY_THRESHOLD]
-        logger.warning("[AUTO-RETRIEVE] %d total hits, %d above threshold %.1f",
-                       len(text_hits), len(good_hits), QUALITY_THRESHOLD)
+
+        # DB chain: try the primary index first, then fall back to the
+        # arXiv corpus (if present) on miss. As of 2026-05-14, 77% of
+        # HLE-eval sessions had retrieve return zero above-threshold hits
+        # from the primary corpus — for generic STEM questions the arXiv
+        # corpus at /data3/arxiv_corpus/graphrag.sqlite (1.18M chunks)
+        # has much better recall. The fallback path is operator-tunable
+        # via DRYDOCK_GRAPHRAG_FALLBACK_DB; set to empty to disable.
+        primary_db = os.environ.get("DRYDOCK_GRAPHRAG_DB") or str(
+            Path.home() / ".drydock" / "graphrag.sqlite"
+        )
+        fallback_default = "/data3/arxiv_corpus/graphrag.sqlite"
+        fallback_db_raw = os.environ.get(
+            "DRYDOCK_GRAPHRAG_FALLBACK_DB", fallback_default
+        )
+        fallback_db = fallback_db_raw if fallback_db_raw else None
+        # Don't double-search the same db.
+        db_chain: list[str] = [primary_db]
+        if fallback_db and Path(fallback_db).resolve() != Path(primary_db).resolve():
+            db_chain.append(fallback_db)
+
+        good_hits: list = []
+        text_hits: list = []
+        used_db: str | None = None
+        for db in db_chain:
+            if not Path(db).is_file():
+                logger.warning("[AUTO-RETRIEVE] db missing: %s", db)
+                continue
+            try:
+                idx = Index(db)
+                result = idx.retrieve(query, symbol_limit=0, text_limit=4)
+            except Exception as e:
+                logger.warning(
+                    "[AUTO-RETRIEVE] retrieve failed on %s: %s", db, e
+                )
+                continue
+            hits = getattr(result, "text", None) or getattr(result, "text_hits", []) or []
+            gh = [h for h in hits if getattr(h, "score", 0) >= QUALITY_THRESHOLD]
+            logger.warning(
+                "[AUTO-RETRIEVE] %s: %d total hits, %d above threshold %.1f",
+                db, len(hits), len(gh), QUALITY_THRESHOLD,
+            )
+            if gh:
+                text_hits = hits
+                good_hits = gh
+                used_db = db
+                break
+
         if not good_hits:
             return
+        if used_db != primary_db:
+            logger.warning(
+                "[AUTO-RETRIEVE] primary corpus returned 0 above-threshold "
+                "hits; using fallback %s", used_db,
+            )
 
         # Build the system note. Cap at ~2000 chars total.
         chunks = []
@@ -3426,7 +3466,12 @@ class AgentLoop:
         import uuid
 
         tool_call_id = f"auto-retrieve-{uuid.uuid4().hex[:16]}"
-        tool_args = json.dumps({"query": (user_msg or "")[:200]})
+        # Reflect the CLEANED query (with QUESTION:/FINAL ANSWER: boilerplate
+        # stripped) in the synthesized tool_call arguments — not the raw
+        # user_msg. Operators reading messages.jsonl could otherwise mistake
+        # the noisy full prompt for what BM25 actually scored against, and
+        # the model itself sees the same arguments echoed back in compaction.
+        tool_args = json.dumps({"query": query[:200]})
         synth_assistant = LLMMessage(
             role=Role.assistant,
             content="",

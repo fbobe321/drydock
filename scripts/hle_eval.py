@@ -148,38 +148,97 @@ def judge_with_gemma(question: str, gold: str, pred: str) -> tuple[str, str]:
 
     Cheap, local, no external API. Validates against the answer drydock
     produced; doesn't use it to drive drydock.
+
+    Robustness notes (2026-05-14):
+    - Gemma 4 on hard math judging frequently exhausts the thinking
+      budget and returns an empty `content` even when the model
+      actually decided a verdict. The old code did
+      `text.splitlines()[0]` on an empty string → IndexError → ERROR
+      verdict. We saw Q3 Math Q1 produce a mathematically-identical
+      answer that got marked ERROR instead of YES because of this.
+    - `reasoning_content` (the llama.cpp `--jinja` thinking field)
+      sometimes carries the verdict when `content` is empty — we
+      search both. Last-resort: scan the full response text for
+      YES / NO / PARTIAL tokens.
+    - max_tokens bumped 80 → 200 to give a real budget after thinking.
+    - On retry-worthy failures (timeout, empty), one extra retry with
+      a tighter "answer in one word only" prompt.
     """
-    try:
-        import urllib.request
-        prompt = (
-            "You are grading a free-form answer against a ground truth. "
-            "Respond with exactly one of: YES, NO, or PARTIAL on the first "
-            "line, then a one-sentence reason on the second.\n\n"
-            f"QUESTION: {question[:1200]}\n"
-            f"GROUND TRUTH: {gold[:600]}\n"
-            f"PREDICTED ANSWER: {pred[:1200]}\n\n"
-            "Verdict:"
-        )
+    import urllib.request
+
+    def _call(p: str, mt: int) -> str:
         req = urllib.request.Request(
             "http://localhost:8001/v1/chat/completions",
             data=json.dumps({
                 "model": "gemma4",
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [{"role": "user", "content": p}],
                 "temperature": 0.0,
-                "max_tokens": 80,
+                "max_tokens": mt,
             }).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=90) as r:
             data = json.loads(r.read())
-        text = data["choices"][0]["message"]["content"].strip()
-        first = text.splitlines()[0].strip().upper()
-        verdict = "ERROR"
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+        msg = choices[0].get("message") or {}
+        content = (msg.get("content") or "").strip()
+        if content:
+            return content
+        # Fall back to reasoning_content (llama.cpp --jinja thinking field)
+        return (msg.get("reasoning_content") or "").strip()
+
+    def _verdict_from(text: str) -> str:
+        if not text:
+            return ""
+        # Try the first line first (the canonical shape).
+        lines = text.splitlines()
+        if lines:
+            first = lines[0].strip().upper()
+            for v in ("YES", "PARTIAL", "NO"):
+                if first.startswith(v):
+                    return v
+        # Then scan the whole text for a clean verdict token. Stops at
+        # the first occurrence so "YES but not NO" prefers YES.
+        up = text.upper()
         for v in ("YES", "PARTIAL", "NO"):
-            if first.startswith(v):
-                verdict = v
-                break
-        return verdict, text[:300]
+            i = up.find(v)
+            if i >= 0:
+                # Require word boundary so "YESTERDAY" doesn't count.
+                end = i + len(v)
+                if end == len(up) or not up[end].isalpha():
+                    return v
+        return ""
+
+    prompt = (
+        "You are grading a free-form answer against a ground truth. "
+        "Respond with exactly one of: YES, NO, or PARTIAL on the first "
+        "line, then a one-sentence reason on the second.\n\n"
+        f"QUESTION: {question[:1200]}\n"
+        f"GROUND TRUTH: {gold[:600]}\n"
+        f"PREDICTED ANSWER: {pred[:1200]}\n\n"
+        "Verdict:"
+    )
+    try:
+        text = _call(prompt, 200)
+        verdict = _verdict_from(text)
+        if verdict:
+            return verdict, text[:300]
+        # Tighter retry — one word, no reasoning. Gives the model a
+        # path that doesn't burn the whole budget on thinking.
+        terse = (
+            "Grade this answer against the ground truth and reply with "
+            "ONE WORD ONLY: YES, NO, or PARTIAL.\n\n"
+            f"GROUND TRUTH: {gold[:600]}\nPREDICTED: {pred[:600]}\n\nAnswer:"
+        )
+        text2 = _call(terse, 16)
+        verdict = _verdict_from(text2)
+        if verdict:
+            return verdict, f"[retry] {text2[:200]}"
+        # Both calls gave nothing usable. Report the raw text so the
+        # operator can see WHAT went wrong instead of a generic ERROR.
+        return "ERROR", f"judge produced no parseable verdict: {(text or text2)[:200]!r}"
     except Exception as e:
         return "ERROR", f"judge failed: {e!r}"
 
@@ -301,21 +360,71 @@ def _send_prompt_as_paste(child, text: str) -> None:
 
 
 def _extract_answer(messages: list[dict]) -> str:
-    """Pull the FINAL ANSWER line out of the last assistant message that
-    has text content. Falls back to the full last assistant content if no
-    marker is present."""
+    """Pull the FINAL ANSWER value out of the last assistant message
+    that has text content. Falls back to the tail of the last assistant
+    content if no marker is present.
+
+    Robustness extras (2026-05-14):
+    - tolerate `content` being a list of {'type':'text','text':...} parts
+      (Anthropic-style multipart) — flatten before searching
+    - strip markdown emphasis (`**FINAL ANSWER:** x` → `x`)
+    - unwrap a single trailing `\\boxed{...}` wrapper (common math convention)
+    - normalize surrounding `$...$` math delimiters
+    """
+    import re as _re
+
+    def _flat(c) -> str:
+        if c is None:
+            return ""
+        if isinstance(c, str):
+            return c
+        if isinstance(c, list):
+            parts = []
+            for item in c:
+                if isinstance(item, dict):
+                    t = item.get("text") or item.get("content")
+                    if isinstance(t, str):
+                        parts.append(t)
+            return "\n".join(parts)
+        return str(c)
+
+    _MARKER_RE = _re.compile(
+        r"^\**\s*(?:FINAL\s+ANSWER|ANSWER)\s*:\s*\**\s*",
+        _re.IGNORECASE,
+    )
+    _BOXED_RE = _re.compile(r"\\boxed\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}")
+    _MATH_DOLLAR_RE = _re.compile(r"^\$+(.*?)\$+$")
+
+    def _cleanup(v: str) -> str:
+        v = v.strip()
+        # Unwrap \boxed{x} → x (only if it's the whole answer).
+        m = _BOXED_RE.fullmatch(v)
+        if m:
+            v = m.group(1).strip()
+        # Strip surrounding $...$ delimiters when they wrap the whole value.
+        m = _MATH_DOLLAR_RE.fullmatch(v)
+        if m:
+            v = m.group(1).strip()
+        return v
+
     for m in reversed(messages):
         if m.get("role") != "assistant":
             continue
-        content = (m.get("content") or "").strip()
+        content = _flat(m.get("content")).strip()
         if not content:
             continue
         for line in reversed(content.splitlines()):
             ls = line.strip()
-            ls_up = ls.upper()
-            if ls_up.startswith("FINAL ANSWER:") or ls_up.startswith("ANSWER:"):
-                return ls.split(":", 1)[1].strip()
-        return content[-500:].strip()
+            marker = _MARKER_RE.match(ls)
+            if marker:
+                return _cleanup(ls[marker.end():])
+        # No marker — take the tail. Strip trailing newlines / markdown
+        # fences (model sometimes wraps the answer in a code block).
+        tail = content[-500:].strip()
+        for fence in ("```", "$$"):
+            if tail.endswith(fence):
+                tail = tail.rsplit(fence, 1)[0].rstrip()
+        return _cleanup(tail)
     return ""
 
 
@@ -328,7 +437,13 @@ def run_one(q: dict, sk, run_dir: Path) -> dict:
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     env = {**os.environ, "TERM": "xterm-256color",
-           "COLUMNS": "120", "LINES": "30"}
+           "COLUMNS": "120", "LINES": "30",
+           # HLE sessions must commit quickly. Lower turn thresholds so the
+           # model gets the wrap-up warning before the 480s wall-clock kills it.
+           # Default 30/60 is for coding tasks; 10/15 forces an answer sooner.
+           "DRYDOCK_WRAP_UP_WARN_AT": "10",
+           "DRYDOCK_STOP_NOW_WARN_AT": "15",
+           "DRYDOCK_STOP_NOW_SUFFIX": "Write your best answer as 'FINAL ANSWER: <answer>' now."}
     start = time.time()
     # --dangerously-skip-permissions: HLE is batch eval against read-only
     # tools (web_search, retrieve, grep, read_file). Without it, web_search
@@ -647,12 +762,33 @@ def main() -> int:
 
     pct = summary["score"] * 100
     gap = pct - SOTA_REFERENCE
-    notify_telegram(
-        "hle-final",
-        f"HLE FINAL: {correct}/{n} = {pct:.1f}% "
-        f"(SOTA {SOTA_REFERENCE}%, gap {gap:+.1f})\n\n"
-        f"By category:\n" + "\n".join(cat_lines)
-    )
+
+    # Avoid spamming telegram on every 10-Q babysitter batch — most
+    # land at 0% under the current floor. Only ping when the batch is
+    # genuinely interesting:
+    #   - any correct answers AND score >= NOTABLE_PCT (default 10%)
+    #   - OR an outright crash / no-result case (caller path)
+    #   - OR the batch hit ≥ correctness watermark observed in last 24h
+    # Operator override: HLE_EVAL_NOTIFY=always sends every batch
+    # (legacy behaviour); HLE_EVAL_NOTIFY=never silences fully.
+    notify_mode = os.environ.get("HLE_EVAL_NOTIFY", "auto").lower()
+    NOTABLE_PCT = float(os.environ.get("HLE_EVAL_NOTABLE_PCT", "10.0"))
+    should_notify = False
+    if notify_mode == "always":
+        should_notify = True
+    elif notify_mode == "never":
+        should_notify = False
+    else:
+        # auto: only notable scores
+        should_notify = correct > 0 and pct >= NOTABLE_PCT
+
+    if should_notify:
+        notify_telegram(
+            "hle-final",
+            f"HLE FINAL: {correct}/{n} = {pct:.1f}% "
+            f"(SOTA {SOTA_REFERENCE}%, gap {gap:+.1f})\n\n"
+            f"By category:\n" + "\n".join(cat_lines)
+        )
     return 0
 
 

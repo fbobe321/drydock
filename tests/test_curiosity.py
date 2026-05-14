@@ -90,6 +90,39 @@ class TestGapDetector:
         gaps = detect_gaps(text)
         assert len(gaps) <= 8
 
+    def test_drops_hle_template_tokens(self):
+        """HLE-style boilerplate (FINAL, ANSWER, QUESTION) must not be
+        enqueued as 'unknown terms'. The 2026-05-14 queue audit found
+        these accounted for 180+ false positives."""
+        text = (
+            "Answer this question. End your response with the literal "
+            "string FINAL ANSWER: followed by your answer.\n"
+            "QUESTION: Consider the elliptic curve E."
+        )
+        gaps = detect_gaps(text)
+        for noise in ("FINAL", "ANSWER", "QUESTION", "FINAL ANSWER"):
+            assert noise not in gaps, f"detected noise: {noise!r} in {gaps}"
+
+    def test_drops_consider_suppose_given_prose_openers(self):
+        """Mathematical prose openers (Consider, Suppose, Given, Let)
+        consume Title-Case + glue words downstream. Drop them at the
+        leading stopword so the Title-Case phrase regex doesn't emit
+        'Consider the lattice'-style noise."""
+        gaps = detect_gaps("Consider the lattice. Suppose X is closed.")
+        for noise in ("Consider", "Suppose", "Consider the"):
+            assert noise not in gaps, f"detected noise: {noise!r} in {gaps}"
+
+    def test_keeps_real_terms_amid_hle_noise(self):
+        """Validates the fix isn't over-broad: real entity names must
+        survive alongside the boilerplate."""
+        text = (
+            "QUESTION: Consider the elliptic curve and the Dirichlet "
+            "character chi_1 mod p. FINAL ANSWER:"
+        )
+        gaps = detect_gaps(text)
+        # chi_1 is a snake_case identifier — must persist.
+        assert any("chi_1" in g for g in gaps), gaps
+
 
 # ============================================================================
 # Surprise scorer

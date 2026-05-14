@@ -146,12 +146,75 @@ def cmd_consume(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_reset(_args: argparse.Namespace) -> int:
-    if CONSUMED_STATE.is_file():
-        CONSUMED_STATE.unlink()
-        print(f"Cleared {CONSUMED_STATE}")
-    else:
-        print("No consumed-state file to clear.")
+def cmd_reset(args: argparse.Namespace) -> int:
+    """Two modes:
+      - default: clear the entire consumed-state file (legacy)
+      - --since DATE / --kind NAME / --term-pattern REGEX: bulk-MARK
+        matching items consumed without losing the rest. Useful when
+        a batch of noise (e.g. pre-2026-05-14 FINAL/ANSWER/QUESTION
+        false positives) needs draining without resetting the whole
+        queue.
+    """
+    if not (args.since or args.kind or args.term_pattern):
+        if CONSUMED_STATE.is_file():
+            CONSUMED_STATE.unlink()
+            print(f"Cleared {CONSUMED_STATE}")
+        else:
+            print("No consumed-state file to clear.")
+        return 0
+
+    # Bulk-mark mode.
+    import re
+    from datetime import datetime, timezone
+    cutoff: datetime | None = None
+    if args.since:
+        try:
+            cutoff = datetime.strptime(args.since, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError:
+            print(f"bad --since: {args.since!r} (expect YYYY-MM-DD)")
+            return 2
+    term_re = re.compile(args.term_pattern) if args.term_pattern else None
+
+    consumed = _load_consumed()
+    matched = 0
+    skipped = 0
+    qpath = queue_path()
+    if not qpath.is_file():
+        print(f"No queue at {qpath}")
+        return 0
+    for line in qpath.read_text(errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        # Date filter
+        if cutoff is not None:
+            ts = item.get("ts") or item.get("created_at") or ""
+            try:
+                ts_dt = datetime.fromisoformat((ts or "").replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                skipped += 1
+                continue
+            if ts_dt >= cutoff:
+                continue
+        # Kind filter
+        if args.kind and item.get("kind") != args.kind:
+            continue
+        # Term pattern filter
+        if term_re is not None and not term_re.search(item.get("term") or ""):
+            continue
+        iid = item.get("id")
+        if iid and iid not in consumed:
+            consumed.add(iid)
+            matched += 1
+    _save_consumed(consumed)
+    print(f"Marked {matched} items consumed (skipped {skipped} undated).")
+    print(f"Total consumed now: {len(consumed)}")
     return 0
 
 
@@ -172,7 +235,23 @@ def main(argv: list[str] | None = None) -> int:
     ap_consume.add_argument("id")
     ap_consume.set_defaults(func=cmd_consume)
 
-    ap_reset = sub.add_parser("reset", help="clear consumed state")
+    ap_reset = sub.add_parser(
+        "reset",
+        help=("clear consumed state, OR bulk-mark items matching "
+              "--since / --kind / --term-pattern"),
+    )
+    ap_reset.add_argument(
+        "--since", default="",
+        help="YYYY-MM-DD UTC. Marks items older than this consumed.",
+    )
+    ap_reset.add_argument(
+        "--kind", default="",
+        help="Only items with this kind (e.g. unknown_term).",
+    )
+    ap_reset.add_argument(
+        "--term-pattern", default="",
+        help="Regex matched against the term field.",
+    )
     ap_reset.set_defaults(func=cmd_reset)
 
     args = ap.parse_args(argv)

@@ -117,6 +117,65 @@ def test_resolve_db_path_uses_env_when_set(monkeypatch: pytest.MonkeyPatch, tmp_
     assert _resolve_db_path("") == target
 
 
+def test_fallback_db_kicks_in_when_primary_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """When primary index returns no hits, the tool falls through to
+    DRYDOCK_GRAPHRAG_FALLBACK_DB if it has matching content. This
+    closes the 2026-05-14 HLE-eval gap where 77% of model-invoked
+    retrievals on STEM topics returned nothing useful."""
+    from drydock.graphrag import Index
+
+    # Primary db: empty corpus (no Widget content)
+    primary = tmp_path / "primary.sqlite"
+    Index(primary)  # creates schema
+
+    # Fallback db: has Widget content
+    fallback = tmp_path / "fallback.sqlite"
+    proj = tmp_path / "fallback_src"
+    proj.mkdir()
+    (proj / "thing.py").write_text(
+        'class Widget:\n    """The widget."""\n    pass\n'
+    )
+    Index(fallback).ingest_path(proj)
+
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_FALLBACK_DB", str(fallback))
+
+    tool = Retrieve(config=RetrieveConfig(), state=BaseToolState())
+    args = RetrieveArgs(query="Widget", db=str(primary))  # explicit override
+    # With explicit db, fallback should NOT kick in.
+    result = _drive(tool, args)
+    assert result.found is False  # primary is empty, explicit db skips fallback
+
+
+def test_fallback_db_fires_when_db_not_explicit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Without an explicit args.db, primary-empty → fallback fires."""
+    from drydock.graphrag import Index
+
+    primary = tmp_path / "primary.sqlite"
+    Index(primary)  # empty
+
+    fallback = tmp_path / "fallback.sqlite"
+    proj = tmp_path / "fb_src"
+    proj.mkdir()
+    (proj / "thing.py").write_text(
+        'class Widget:\n    """The widget."""\n    pass\n'
+    )
+    Index(fallback).ingest_path(proj)
+
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_DB", str(primary))
+    monkeypatch.setenv("DRYDOCK_GRAPHRAG_FALLBACK_DB", str(fallback))
+
+    tool = Retrieve(config=RetrieveConfig(), state=BaseToolState())
+    args = RetrieveArgs(query="Widget")  # no explicit db
+    result = _drive(tool, args)
+    assert result.found is True
+    assert "fallback" in result.formatted.lower()
+    assert "Widget" in result.formatted
+
+
 def test_tool_is_discoverable():
     """ToolManager must auto-discover the new tool by name."""
     from drydock.core.paths import DEFAULT_TOOL_DIR

@@ -85,6 +85,43 @@ def test_harness_hallucinated_tool():
     assert _bucket(signals, "harness:tool:hallucinated_name") == Bucket.HARNESS
 
 
+def test_harness_hallucinated_tool_format_redirect():
+    """The format.py suppression-redirect message must match."""
+    signals = classify_text(
+        "'ralph_repo_index' does not exist — do not call it again."
+    )
+    assert _bucket(signals, "harness:tool:hallucinated_name") == Bucket.HARNESS
+
+
+def test_harness_hallucinated_tool_quoted_name():
+    signals = classify_text(
+        "hallucinated tool 'ralph_repo_index'"
+    )
+    assert _bucket(signals, "harness:tool:hallucinated_name") == Bucket.HARNESS
+
+
+def test_harness_hallucinated_tool_does_not_match_narrative():
+    """Autonomous-review-style narrative mentioning 'hallucinated tools'
+    in a comma-separated list must NOT trigger the rule. Prior to the
+    2026-05-14 regex tightening, this false-positive ran 48× over the
+    May 11–14 window because the rule matched 'hallucinated.*tool'
+    anywhere in text."""
+    signals = classify_text(
+        "All dominant failures (thinking_stall, bash loops, "
+        "hallucinated tools, search_replace errors) were addressed "
+        "by prior commits."
+    )
+    assert _bucket(signals, "harness:tool:hallucinated_name") is None
+
+
+def test_harness_hallucinated_tool_does_not_match_suggested_action():
+    """Suggested-action text leaking into a log must NOT re-fire the rule."""
+    signals = classify_text(
+        "Add the hallucinated tool name to _IGNORE_TOOLS suppression list."
+    )
+    assert _bucket(signals, "harness:tool:hallucinated_name") is None
+
+
 def test_harness_thinking_stall():
     signals = classify_text("empty assistant message after tool result")
     assert _bucket(signals, "harness:thinking_stall") == Bucket.HARNESS
