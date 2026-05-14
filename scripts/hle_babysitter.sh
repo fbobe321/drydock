@@ -73,8 +73,12 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
 fi
 
 # Stress harness owns the inference slot during its runs.
-if pgrep -fa "stress_.*\.py\b|stress_2000" >/dev/null 2>&1; then
-    log "skip — stress run in progress"
+# Use the PID file instead of pgrep — pgrep matches claude processes whose
+# --append-system-prompt text happens to contain "stress_2000", causing
+# false-positive skips every time autonomous_review runs.
+STRESS_PID_FILE=/tmp/stress_pid.txt
+if [ -f "$STRESS_PID_FILE" ] && kill -0 "$(cat "$STRESS_PID_FILE")" 2>/dev/null; then
+    log "skip — stress run in progress (pid $(cat "$STRESS_PID_FILE"))"
     exit 0
 fi
 

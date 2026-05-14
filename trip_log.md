@@ -1,5 +1,32 @@
 # Drydock Trip Log
 
+## 2026-05-14 10:30 UTC tick
+- Stress: 1658/1658 complete (full suite finished, stress harness PID 340932 dead as expected)
+- Write rate: n/a (stress run complete)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy on :8000; balancer :8001 responding)
+- GH issues: 0 open
+- Dispatch queue: harness=3 in 24h (thinking_stall, already addressed), retrieval=0 actionable, curiosity=764 pending (99 hle_failure + 665 unknown_term)
+- HLE: 5.0% lifetime (12 runs, 201 total, 10 correct); batches at 08:45 and 09:45 were silently skipped by babysitter bug
+- Action this tick: committed cb73ae2 fix(hle_babysitter) — pgrep -fa "stress_2000" false-positively matched autonomous_review's claude process (whose --append-system-prompt contains "stress_2000" in the text), blocking all HLE ticks while autonomous_review ran; replaced pgrep with PID-file kill -0 check; curiosity-queue: 764 pending, top items are empty-prediction PhD-level math — no actionable prompt fix
+
+## 2026-05-14 10:00 UTC tick
+- Stress: 1658/1658 complete (done=88, skip=53, timeout=0, recycle=42) — full suite finished; babysitter confirmed no-restart correct (idx>=total)
+- Write rate: n/a (stress run complete)
+- vLLM 400s: 0 (llamacpp-gemma4 Up 10h, healthy on :8000; docker shows "unhealthy" because old container was started with healthcheck pointing to :8080 instead of :8000 — cosmetic, model works; balancer :8001 PID=380535 confirmed llm_balancer.py)
+- GH issues: 0 open
+- Dispatch queue: harness=3 in 24h (thinking_stall, already addressed in prior commits), retrieval=0 actionable (all ingested), curiosity=764 pending (99 hle_failure + 665 unknown_term)
+- HLE: 5.0% lifetime (12 runs, 201 total, 10 correct); Math 2.9% (3/102), Bio/Med 18.8% (3/16); no active batch running at tick time
+- Action this tick: no code commit — top curiosity items are empty-prediction PhD-level math (p-adic algebraic extensions, matrix-indexed-by-subsets, 5D hypercube game theory) — capability gap not addressable by prompt rules or corpus ingest; retrieval-drain: 0 ingested (already done); stress babysitter verified complete state
+
+## 2026-05-14 09:30 UTC tick
+- Stress: 1658/1658 complete (done=88, skip=53, timeout=0, recycle=42) — full run finished, babysitter holding (correct: no restart when idx>=total)
+- Write rate: n/a (stress run complete)
+- vLLM 400s: 0 (llamacpp-gemma4 clean; :8000 and :8001 both live)
+- GH issues: 0 open
+- Dispatch queue: harness=3 (thinking_stall, already addressed), retrieval=3 entries all already ingested, curiosity=764 pending (99 hle_failure + 665 unknown_term)
+- HLE: 5.0% lifetime (12 runs, 201 total, 10 correct); Math 2.9% (3/102), Bio/Med 18.8% (3/16); no active batch (next fires at :45)
+- Action this tick: no action — system healthy; top curiosity items are empty-prediction PhD-level math (p-adic extensions, matrix subset indexing, 5D hypercube games) — capability gap, not fixable by prompt rules; autonomous_review running in parallel (started 09:30 UTC); retrieval-drain: 0 projects ingested (all already done)
+
 ## 2026-05-14 09:00 UTC tick
 - Stress: 1658/1658 complete (done=88, skip=53, timeout=0, recycle=42) — full run finished, harness not restarted
 - Write rate: n/a (stress run complete)
