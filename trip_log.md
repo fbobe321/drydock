@@ -1,5 +1,15 @@
 # Drydock Trip Log
 
+## 2026-05-14 22:00 UTC tick
+- Stress: COMPLETED — 1658/1658 prompts done (done=88, skip=53, recycle=42). Babysitter intentionally not restarting.
+- HLE: 4.6% overall (12/261 correct across 18 runs). Chemistry 0/39=0.0%, Math 5/112=4.5%, CS/AI 1/43=2.3%, Bio/Med 3/16=18.8%, Engineering 1/23=4.3%.
+- vLLM 400s: 3 errors in last 30 min (llama.cpp Q3_K_M on :8000, balancer on :8001 — both healthy).
+- GH issues: 0 open.
+- Dispatch queue: harness=9 thinking_stall in last 24h (all addressed by prior ticks), retrieval=0 actionable, curiosity=977 pending (last 24h: 388 unknown_term, 141 hle_failure).
+- Retrieval drain: 0 projects ingested (all already up to date).
+- Curiosity queue: consumed item f3fee270fca36264 (Math hle_failure "no answer extracted", gold=0.08 — addressed by hard-stop if/elif fix shipped d2692cb). 977 pending, no further action this tick.
+- Action this tick: no code fix — system healthy, stress complete, queues clear.
+
 ## 2026-05-14 21:30 UTC tick
 - Stress: COMPLETED — 1658/1658 prompts done (done=88, skip=53, recycle=42). No restart needed.
 - HLE: 4.7% overall (12/257 correct across 18 runs). Chemistry 0/39=0.0%, Math 5/112=4.5%, CS/AI 1/39=2.6%, Bio/Med 3/16=18.8%. Current batch: computer science (PID 1726536, running ~47 min).
@@ -6131,3 +6141,15 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=1272, retrieval=3 (0 actionable), steering=0, curiosity=1202 (921 pending)
 - Action this tick: committed fix 7aa9507 — added 'no relevant information found' to _looks_empty() in agent_loop.py so web_search repeated empty-result loop detection fires correctly. Root cause: Chemistry HLE sessions spent full 480s calling web_search 4+ times with no results because the websearch.py empty-result string ('No relevant information found on the web.') wasn't in the loop-detection pattern list, so EMPTY_RESULT_THRESHOLD never triggered. Fix: one-line addition to the pattern tuple. Also consumed curiosity:c486729c (Chemistry hle_failure: empty prediction pattern). Retrieval drain: 0 projects (all already ingested).
+
+## 2026-05-14 22:30 UTC tick
+- Stress: 1658/1658 COMPLETE (no restart needed — all prompts exhausted; burndown daemon is the new continuous workload)
+- HLE burndown: PID 1742185 running 26 min, current batch Math (v2.8.31 with all hard-stop + loop fixes deployed)
+- HLE aggregate: 20 runs, 264 questions, 13 correct = 4.9%; Math 6/115=5.2%, Bio/Med 3/16=18.8%, Chemistry 0/39=0.0% (Chemistry batches pre-date v2.8.31 loop fix; next batch will have it)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M :8000 healthy, balancer :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all thinking_stall, all previously addressed), retrieval=0 actionable, curiosity=984 pending (137 hle_failure, 847 unknown_term)
+- retrieval-drain: 0 new ingestions (all already current)
+- curiosity-queue: 3 top items are generic Math hle_failure (no answer extracted, gold=24/20/3) — insufficient context to act on without reading full session; skipping
+- Investigated Chemistry 0/39: session logs confirm model looped on web_search for obscure terms (Böttcher Molecular Complexity) — root cause was the missing empty-result string in _looks_empty, fixed in 7aa9507 (v2.8.31). Chemistry batches in v2.8.31+ should improve.
+- Action this tick: no commit — system healthy, v2.8.31 deployed with all hard-stop + loop fixes, burndown daemon running
