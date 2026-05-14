@@ -1,0 +1,833 @@
+                                          Harold’s Logic
+                                           Cheat Sheet
+                                             5 May 2026
+
+
+The 7 Basic Logical Symbols
+
+       Operator               Symbol           Example                      English
+                                                             •   Conjunction
+                                                             •   p and q
+                                                             •   p, but q
+                          ∧, ∧, ∧, ⋀, ∧
+  1) Intersection                                 p∧q        •   despite the fact that p, q
+                                  •                          •   even though p, q
+                                                             •   although p, q
+                                                             •   overlap
+                                                             •   Disjunction
+                                                             •   p or q
+  2) Union                 ∨, ∨, ∨, ⋁, ∨          p∨q
+                                                             •   inclusive or
+                                                             •   both combined
+  3) Negation                  ¬, ￢, ~             ¬p        •   not p
+                                                            •    if p then q
+                                                            •    if p, q
+                                                            •    q if p
+                             →, →, →, ⟶,                    •    p implies q
+  4) Conditional                                 p→q
+                                ⇒, ⟹, ⊃                     •    p only if q
+                                                            •    q in case that p
+                                                            •    p is sufficient for q
+                                                            •    q is necessary for p
+                                                            •    p iff q
+                                                            •    p if and only if q
+                            ↔, ⟷, ↔, ⇔,
+  5) Biconditional                               p⟷q        •    p is necessary and sufficient for q
+                                   ⟺
+                                                            •    if p then q, and conversely
+                                                            •    if not p then not q, and conversely
+                                                            •    for all
+  6) Universal
+                                 ∀x, (x)         ∀x p(x)    •    for any
+  Quantifier
+                                                            •    for each
+  7) Existential                                            •    there exists
+                                   ∃x            ∃x p(x)
+  Quantifier                                                •    there is at least one
+                                                            •    is identical to
+                                                            •    is equivalent to
+  Equivalence                                 expression1 ≡
+                                ≡, ≡, ≡                     •    is defined as
+  (See Biconditional)                          expression2
+                                                            •    the two expressions always have
+                                                                 the same truth value
+       “… the structure of all mathematical statements can be understood using these symbols, and
+         all mathematical reasoning can be analyzed in terms of the proper use of these symbols.”
+                 Source: “How to Prove It: A Structured Approach”, 3rd Edition, p. 75.
+
+
+Copyright © 2021-2026 by Harold Toomey, WyzAnt Tutor                                                   1
+Logical Truth Tables
+
+                Conjunction   NAND      Disjunction        NOR       XOR     XNOR         Negation
+   p    q         (AND)         ⊼           (OR)            ⊽       ⊻,⊕       ⊙            (NOT)
+                     ∧                       ∨                                               ¬P
+   F    F            F          T             F             T         F          T
+   F    T            F          T             T             F         T          F           T
+   T    F            F          T             T             F         T          F           F
+   T    T            T          F             T             F         F          T
+
+
+
+                Material Implication       Biconditional        Tautology        Contradiction
+   p    q           (If … Then)                (Iff)              (True)            (False)
+                         →                      ↔                   ⊤                  ⊥
+   F    F                 T                      T                   T                 F
+   F    T                 T                      F                   T                 F
+   T    F                 F                      F                   T                 F
+   T    T                 T                      T                   T                 F
+
+
+
+Blank Truth Tables
+
+            Inputs                   Output                         Inputs            Output
+    p       q      r      s      x     y        z               p     q      r        x       y
+    F       F      F      F                                     F     F      F
+    F       F      F      T                                     F     F      T
+    F       F      T      F                                     F     T      F
+    F       F      T      T                                     F     T      T
+    F       T      F      F                                     T     F      F
+    F       T      F      T                                     T     F      T
+    F       T      T      F                                     T     T      F
+    F       T      T      T                                     T     T      T
+    T       F      F      F
+    T       F      F      T
+    T       F      T      F                                     Inputs       Output
+    T       F      T      T                                     p     q          x
+    T       T      F      F                                     F     F
+    T       T      F      T                                     F     T
+    T       T      T      F                                     T     F
+    T       T      T      T                                     T     T
+
+
+
+
+Copyright © 2021-2026 by Harold Toomey, WyzAnt Tutor                                                 2
+Logical Conditional Connective Laws
+
+     Law or             Logical               Is Equivalent To
+                                                                                     Description
+   Statement          Expression                     (≡)
+  Antecedent /       If <Antecedent> then <Consequent> .                    The Antecedent immediately
+  Consequent         <Consequent> if <Antecedent> .                         follows the “if” statement.
+                                                  ¬p ∨ q
+                                                 ¬(p ∧ ¬q)
+
+                                         Logical Equivalences:
+                                                  p ∨ q ≡ ¬p → q
+                                                                            Conditional, If ... Then,
+  Conditional Laws        p→q                    p ∧ q ≡ ¬(p → ¬q)
+                                                                            Implication
+                                                 ¬(p → q) ≡ p ∧ ¬q
+                                          (p → q) ∧ (p → r) ≡ p → (q ∧ r)
+                                          (p → q) ∨ (p → r) ≡ p → (q ∨ r)
+                                          (p → r) ∧ (q → r) ≡ (p ∧ q) → r
+                                          (p → r) ∨ (q → r) ≡ (p ∨ q) → r
+                                                 (p → q) ∧ (q → p)
+                                               (p → q) ∧ (¬p → ¬q)
+                                                (p ∧ q) ∨ (¬p ∧ ¬q)
+  Biconditional                                                             Bi-conditional, If and only If, iff,
+                          p↔q                        ¬p ↔ ¬q
+  Laws                                                                      XNOR
+                                         Logical Equivalences:
+                                               ¬(p ↔ q) ≡ p ↔ ¬q
+       Sufficient    p is a sufficient
+                                         The truth of p suffices to guarantee the truth of q.
+       Condition     condition for q
+       Necessary     q is a necessary    For p to be true, it is necessary for q to be true also.
+       Condition     condition for p     ¬q → ¬p
+                                                       p≡q                   Is logically equivalent to (p ≡ ¬
+  Equivalence             p↔q                                                ¬ p)
+                                                      p⟹q
+                                                                             Is equivalent to
+  Contrapositive          p→q                       ≡ ¬q → ¬p                True
+  Converse*               p→q                        ≢q→p                    False
+  Inverse*                p→q                      ≢ ¬p → ¬q                 False
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                         3
+Rules of Implication
+(Inference with Propositions)
+
+      Rule Name               Rule Logic                                    Example
+                          Givens.                   It is raining today.
+  Hypothesis
+                          First lines of a proof.   You live in McKinney, Texas.
+
+                                                    Therefore.
+  Therefore                          ∴
+                                                    In conclusion.
+
+                                    𝑝               It is raining today.
+  1) Modus Ponens                 𝑝→𝑞               If it is raining today, I will not ride my bike to school.
+  (MP)                             ∴𝑞               Therefore, I will not ride my bike to school.
+
+                                   ¬𝑞               If Sam studied for his test, then Sam passed his test.
+  2) Modus Tollens                𝑝→𝑞               Sam did not pass his test.
+  (MT)                            ∴ ¬𝑝              Therefore, Sam did not study for his test.
+
+  3) Hypothetical                𝑝→𝑞                If you are mad, then you will yell.
+  Syllogism (HS)                  𝑞→𝑟               If you yell, then you will wake the baby.
+  (Transitivity)                 ∴𝑝→𝑟               Therefore, if you are mad, then you will wake the baby.
+
+  4) Disjunctive                  𝑝 ∨ 𝑞             Sam studied for his test, or Sam took a nap.
+  Syllogism (DS)                   ¬𝑝               Sam did not study for his test.
+  (Elimination)                    ∴𝑞               Therefore, Sam took a nap.
+
+                                              Oscar is either a dog or a cat.
+                                 𝑝 ∨ 𝑞
+  5) Constructive                             If Oscar is a dog, then you’ll have fleas, and if Oscar is a
+                            (𝑝 → 𝑟) ∧ (𝑞 → 𝑠)
+  Dilemma (CD)                                cat, then you’ll have fur balls.
+                                ∴𝑟∨𝑠
+                                              Therefore, you’ll have either fleas or fur balls.
+
+  6) Simplification               𝑝 ∧ 𝑞             It is rainy today, and it is windy today.
+  (Simp)                                            Therefore, it is rainy today.
+                                   ∴𝑝
+  (Specialization)
+
+                                                    Sam studied for his test.
+                                   𝑝
+                                   𝑞                Sam passed his test.
+  7) Conjunction (Conj)
+                                 ∴𝑝 ∧ 𝑞             Therefore, Sam studied for his test, and Sam passed his
+                                                    test.
+
+                                   𝑝                It is raining today.
+  8) Addition (Add)
+                                                    Therefore, it is either It is raining today or snowing
+  (Generalization)               ∴𝑝 ∨ 𝑞
+                                                    today or both.
+
+                                  𝑝 ∨ 𝑞             Your shirt is red, or your pants are blue.
+  9) Resolution                  ¬𝑝 ∨ 𝑞             Your shirt is not red, or your pants are blue.
+                                 ∴𝑞 ∨ 𝑟             Therefore, your pants are blue, or your shoes are white.
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                             4
+                                  𝑝 ∨ 𝑞           It is raining, or it is Monday.
+  10) Proof by Division           𝑝→𝑟             It is raining, so it is wet.
+  into Cases                      𝑞→𝑟             It is Monday, so it is wet.
+                                   ∴𝑟             It is wet.
+
+  11) Contradiction               ¬𝑝 → 𝐹          If it is not raining is a false statement; then it is raining.
+  Rule                             ∴𝑝
+
+
+
+
+Rules of Replacement
+(Logical Connective Laws / Equivalences / Inference)
+
+               Law                         Union Example                   Intersection Example
+  12) Identity Laws                 p∨F≡p                                p∧T≡p
+  13) Domination or Null
+                                    p∨T≡T                                p∧F≡F
+  (Universal Bound Laws)
+  14) Idempotent Laws               p∨p≡p                                p∧p≡p
+  15) Double Negations (DN)
+                                    ¬ ¬p ≡ p
+  (Involution Law)
+  16) Negation or Complement        p ∨ ¬p ≡ T                           p ∧ ¬p ≡ F
+  (Complementary Laws)              ¬F ≡ T                               ¬T ≡ F
+  17) Commutative Laws (Com)        p∨q≡q∨p                              p∧q≡q∧p
+  18) Associative Laws (Assoc)      (p ∨ q) ∨ r ≡ p ∨ (q ∨ r)            (p ∧ q) ∧ r ≡ p ∧ (q ∧ r)
+  19) Distributive Laws (Dist)      p ∧ (q ∨ r) ≡ (p ∧ q) ∨ (p ∧ r)      p ∨ (q ∧ r) ≡ (p ∨ q) ∧ (p ∨ r)
+  20) Uniting Laws                  (p ∧ q) ∨ (p ∧ ¬q) ≡ p               (p ∨ q) ∧ (p ∨ ¬q) ≡ p
+  21) Absorption Laws               p ∨ (p ∧ q) ≡ p                      p ∧ (p ∨ q) ≡ p
+                                    p ∨ q ≡ ¬(¬p ∧ ¬q)
+  22) De Morgan’s Laws (DM)                                              p ∧ q ≡ ¬(¬p ∨ ¬q)
+                                    ¬(p ∨ q) ≡ ¬p ∧ ¬q
+  (Propositional Logic)                                                  ¬(p ∧ q) ≡ ¬p ∨ ¬q
+                                    (p ∨ ¬q) → r ≡ ¬r → (¬p ∧ q)
+  23) Multiplying and Factoring     (p ∨ q) ∧ (¬p ∨ r) ≡                 (p ∧ q) ∨ (¬p ∧ r) ≡
+  Laws                              (p ∧ r) ∨ (¬p ∧ q)                   (p ∨ r) ∧ (¬p ∨ q)
+                                    (p ∧ q) ∨ (q ∧ r) ∨ (¬p ∧ r) ≡       (p ∨ q) ∧ (q ∨ r) ∧ (¬p ∨ r) ≡
+  24) Consensus Laws
+                                    (p ∧ q) ∨ (¬p ∧ r)                   (p ∨ q) ∧ (¬p ∨ r)
+                                    p ∨ (⊤) ≡ ⊤
+                                                                         p ∧ (⊤) ≡ p
+  25) Tautology Laws (⊤)            p ∨ ¬p ≡ ⊤ (True)
+                                    ¬(⊤) = ⊥
+                                                                         p ∧ (⊥) ≡ ⊥
+                                    p ∨ (⊥) ≡ p
+  26) Contradiction Laws (⊥)                                             p ∧ ¬p ≡ ⊥ (False)
+                                    ¬(⊥) ≡ ⊤
+  27) Exclusive Or Laws (⊕)         p ⊕ q ≡ (p ∨ q) ∨ ¬(p ∧ q)           p ⊕ q ≡ (¬p ∧ q) ∨ (p ∨ ¬q)
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                         5
+Proof Methods
+
+    Method                                               Definition
+                    •   Assume the hypothesis is true, then use logical steps to arrive at the conclusion.
+  Direct (DP)
+                    •   Assume p is true, then conclude q.
+                    •   Assume the opposite of what you want to prove, then show this leads to a
+                        contradiction.
+                    •   To prove 𝑝, assume ¬𝑝 and derive a contradiction, such as ¬q ∧ q.
+  Indirect (IP)     •   If some statement is assumed true, and a logical contradiction occurs, then the
+  (Contradiction)       statement must be false.
+                    •   Can also be a proof by counterexample.
+                         o E.g., Assume ¬(p → q), which is equivalent to p ∧ ¬q.
+                    •   Assumption for Indirect Proof (AIP)
+                    •   Assume a hypothesis temporarily is true to derive a conclusion.
+                    •   Assume 𝑝, derive 𝑞; conclude 𝑝 → 𝑞.
+  Conditional
+                    •   The goal is not to prove p is true in reality, but to prove that if p were true, then
+  (CP)
+                        q would necessarily follow.
+                    •   Assumption for Conditional Proof (ACP)
+                    •   Modus Tollens.
+                    •   Infers the statement p → q by establishing the logically equivalent
+                        contrapositive statement: ¬q → ¬p.
+                    •   When given p → q, assume ¬q is true, then prove ¬p.
+                    •   We prove that if the negation of the original conclusion is false, then the
+                        negation of the initial theorem is false.
+  Contrapositive    •   Relies on De Morgen's Law.
+                           p q       p→q          Technique
+                           F    F      T       Modus Tollens
+                           F    T      T       (seems forced)
+                           T    F      F
+                           T    T      T       Modus Ponens
+                    •   A proof by contrapositive is a special case of a proof by contradiction (indirect).
+                    •   The construction of a concrete example with a property to show that something
+  Construction
+                        having that property exists.
+  (Example)
+                    •   AKA proof by example.
+  Exhaustion /      •   The conclusion is established by dividing it into a finite number of cases and
+  By Cases              proving each one separately.
+                    •   A single "base case" is proved, and an "induction rule" is proved that establishes
+  Induction
+                        that any arbitrary case implies the next case.
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                        6
+Logical Predicates
+
+                         Logical
+    Definition                              Is Equivalent To (≡)                     Plain English
+                       Expression
+                                                                              •   Universe of Discourse
+  Universe of                             All possible inputs in a given
+                             U                                                •   Universal Set
+  Discourse                                           range
+                                                                              •   Universe
+  Domain of                               All possible inputs in a given      •   Domain of Discourse
+                             𝔻
+  Discourse                                           range                   •   Universe of Discourse
+                                                                              •   Must be True or False
+  Proposition or        p: “Roxy is a
+                                                         p                    •   Cannot be a question
+  Logical Statement      mammal.”
+                                                                              •   Cannot be a command
+                                                                              •   A logical statement
+                                                                                  whose truth value is a
+                                                                                  function of one or more
+                        P(x): “x is a                                             variables
+  Predicate                                            P(x)
+                        mammal”                                               • Truth depends upon the
+                                                                                  input variable x
+                                                                              • P(x) ≠ a number
+                                                                              • P(5) is a proposition
+                                                                              • Is either True or False
+                      q: ∀x ∈ 𝔻, P(x):     “For all x in the domain of        • A quantified predicate
+     Example          “x is a mammal”    discourse, P(x) is a mammal.”            turns it into a logical
+     Statements                                                                   statement
+                                                                             Predicate with two input
+                           T(x, y)              “x is a twin of y.”
+                                                                             variables
+                                                    T = {a | P(a)}
+  Truth Set                                                                The set of all values of x that
+                          T = P(x)                T = {a ∈ A | P(a)}
+  (Single Free                                                             make the statement p(x) true
+                                                        a∈T
+  Variable)
+                         Example:        P(x1), P(x2), and P(x3) are True
+                                              {(a, b) ∈ A × B | P(a, b)}
+                         T = P(x, y)                                        Cross product truth set
+                                                      (a, b) ∈ T
+  Truth Set                              {(p, n) ∈ P × ℕ | the person p has n children} = {(John, 2), …}
+  (Ordered Pair)
+                         Examples:
+                                         {(p, c, n) ∈ P × C × ℕ | the person p has lived in the city c for n
+                                         years}
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                       7
+Logical Quantifiers
+
+                   Logical
+  Definition                              Is Equivalent To (≡)                       Plain English
+                 Expression
+                                                                              •   for all
+                                                                              •   all elements
+                                                                              •   for each member
+                                    “For all x in the domain, P(x) is true”
+                    ∀x P(x)                                                   •   any
+                   ∀x ∈ P(x)                                                  •   anyone
+  Universal                            ∀x ∈ A P(x) ≡ ∀x (x ∈ A → P(x))
+                  ∀x ∈ 𝔻, P(x)                                                •   anything
+  Quantifier
+                                                                              •   every
+  (∀)                               For the finite set domain of discourse
+                 ∀x, if x is in 𝔻                                             •   everyone
+                                                 {a1, a2, …, ak},
+                   then P(x)                                                  •   everybody
+                                      ∀x P(x) ≡ P(a1) ∧ P(a2) ∧ … ∧ P(ak)
+                                                                              •   everything
+                                                                              •   x could be anything at all
+                                                                              •   whoever
+                                                                              •   there exists an x
+                                                                              •   there is
+                                     “There exists x in the domain, such      •   some
+                                              that P(x) is true”              •   someone
+                                                                              •   somebody
+  Existential       ∃x P(x)
+                                    For the finite set domain of discourse    •   something
+  Quantifier       ∃x ∈ P(x)
+                                                 {a1, a2, …, ak},             •   at least one value of x
+  (∃)             ∃x ∈ 𝔻, P(x)
+                                      ∃x P(x) ≡ P(a1) ∨ P(a2) ∨ … ∨ P(ak)     •   there is at least one x
+                                                                              •   it is the case that
+                                                   P(x) ≠ ∅                   •   the truth set is not equal
+                                                                                  to ∅
+                                                                              •   a few
+                                    there is a unique x in P(x) such that …   •   unique
+                                                                              •   there is a unique x
+  Uniqueness
+                                         ∃x (P(x) ∧ ¬ y (P(y) ∧ y ≠ x))       •   there exists exactly one
+  Quantifier        ∃!x P(x)
+                                         ∃x (P(x) ∧ ∀y (P(y) → y = x))        •   there is exactly one x
+  (∃!)
+                                              ∃x ∀y (P(y) ↔ y = x)                such that P(x)
+                                     ∃x P(x) ∧ ∀y ∀z((P(y) ∧ P(z)) → y = z)
+                                                                               • nobody
+  Negated          ¬ [∃x P(x)]                     ∀x ¬P(x)
+                                                                               • no one
+  Existential
+                                                                               • not one
+  Quantifier       ¬ [∀x P(x)]                     ∃x ¬P(x)
+                                                                               • there does not exist
+                PEMDAS for Logic:                          Symbol:            Applied Left to Right
+                   1. Parenthesis                             (), {}, []
+                   2. Logical NOT                             ¬               Example :
+  Order of         3. Quantifiers                             ∀, ∃            ∀x P(x) ∧ Q(x) ≡
+  Precedence       4. Logical AND                             ∧               (∀x P(x)) ∧ Q(x)
+                   5. Logical OR                              ∨
+                   6. Logical Conditional                     →
+                   7. Logical Biconditional                   ↔
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                    8
+Quantifier Logic Examples
+
+   Quantifier        Symbolic Translations                          English Example
+                               ∀x P(x)                  •   Everyone is <something>.
+  Everyone                 ∀x ∀y P(x, y)
+                                                        •   Everyone <did something> to everyone.
+                        NOTE: includes (x = y)
+                                                        •   Everyone except <someone> is
+                           ∀x (x ≠ y → P(x))
+                                                            <something>.
+  Everyone Else
+                        ∀x ∀y (x ≠ y) → P(x, y)         •   Everyone <did something> to everyone
+                        NOTE: excludes (x = y)              else.
+                                                        •   It is not the case that every <something>
+                          ¬∀x (A(x) → B(x))
+  Not Every                                                 <did something>.
+                               ∃x ¬P(x)                 •   Not every <something> <did something>.
+                                                        •   Someone other than <someone> is
+                          ∃x ((x ≠ y)- ∨ P(x))
+                                                            <something>.
+  Someone Else
+                        ∀x ∃y ((x ≠ y) ∧ P(x, y))       •   Everyone <did something> to <someone>
+                        NOTE: excludes (x = y)              else.
+                               ∃!x P(x)
+  Exactly One                                           •   Exactly one person <did something>.
+                   ∃x (P(x) ∧ ∀y ((x ≠ y) → ¬P(y))) ≡
+                               ¬∃x P(x)
+  No One                                                •   No one <did something>.
+                               ∀x ¬P(x)
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                9
+Rules of Inference with Quantifiers
+
+     Rule Name                  Rule Logic                          English Example
+  Variables             x : Quantified variable          The domain is the set of all integers.
+
+                        c, d : Elements of the domain,   c is a particular integer. Element
+  Elements
+                        arbitrary or particular          definition.
+
+                                                         Sam is a student in the class.
+                        c is an element (arbitrary or
+                        particular)                      Every student in the class completed the
+  Universal
+                                                         assignment.
+  Instantiation (UI)    ∀x P(x)
+                                                         Therefore, Sam completed his
+                        ∴ P(c)
+                                                         assignment.
+
+                                                         All psychiatrists are doctors.
+                                                         All doctors are college graduates.
+                                                         Therefore, all psychiatrists are college
+                                                         graduates.
+                      c is an arbitrary element               1. ∀x (P(x) → D(x))      Given
+  Universal
+                      P(c)        .                           2. ∀x (D(x) → C(x))      Given
+  Generalization (UG)
+                      ∴ ∀x P(x)                               3. P(x) → D(x)          1, UI
+                                                              4. D(x) → C(x)          2, UI
+                                                              5. …
+                                                              6. P(x) → C(x)
+                                                              7. ∴ ∀x (P(x) → C(x)) 6, UG
+
+                                                        All attorneys are college graduates.
+                                                        Some attorneys are golfers.
+                        ∃x P(x)                         Therefore, some golfers are college
+  Existential
+                        ∴ (c is a particular element) • graduates.
+  Instantiation (EI)
+                        P(c)
+                                                        i.e., If an object is known to exist, then
+                                                        that object can be given a name.
+
+                                                         All tenors are singers.
+                                                         Andrea Bocelli is a tenor.
+                        c is an element (arbitrary or    Therefore, there is at least one singer.
+  Existential           particular)                           1. ∀x (T(x) → S(x))      Given
+  Generalization (EG)   P(c)        .                         2. T(a)                 Given
+                        ∴ ∃x P(x)                             3. T(a) → S(a)          1, UI
+                                                              4. S(a)                 2,3, MP
+                                                              5. ∴ ∃x S(x)            4, EG
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                 10
+Quantifier Translation Hints
+
+     Statement Form               Symbolic Translation                       English Example
+  AB                                       A(x) ∧ B(x)             Pretty girl.
+                                           A(x) ∨ B(x)             Rachel is a journalist or a newscaster.
+  Either A or B                                                    Rachel is either a journalist or a
+                                 (A(x) ∨ ¬B(x)) ∨ (¬A(x) ∨ B(x))
+                                                                   newscaster, but not both. (XOR)
+                                                                   Neither Wordsworth nor Shelley was
+  Neither A nor B                        ¬A(x) ∧ ¬B(x)
+                                                                   Irish.
+                                                                   Eli is a student.
+  A is/are B                              A(x) → B(x)
+                                                                   Sea lions are mammals.
+  Anything is A                             ∀x A(x)                Anything is conceivable.
+  All A are B                           ∀x (A(x) → B(x))           All maples are trees.
+  Some A are B                          ∃x (A(x) ∧ B(x))           Some grapes are sour.
+  Some A are not B                     ∃x (A(x) ∧ ¬B(x))           Some grapes are not sour.
+  A exist                                    ∃x A(x)               Tigers exist.
+                                            ¬∃x A(x)
+  A do not exist                                                   Unicorns do not exist.
+                                            ∀x ¬A(x)
+                                       ¬∀x (A(x) → B(x))
+  No A are B                                                       No novels are biographies.
+                                       ∃x (A(x) ∧ ¬B(x))
+                                       ∀x (A(x) → ¬B(x))            Not a single psychologist attended the
+  Not a single A did B
+                                       ¬∃x (A(x) ∧ B(x))            convention.
+  Whoever is A is B                     ∀x (A(x) → B(x))            Whoever is a socialite is vain.
+                                                                    Some dogs bite if and only if they are
+  Some A B iff C                     ∃x (A(x) ∧ (B(x) ≡ C(x)))
+                                                                    teased.
+  Some A B are C                     ∃x [(A(x) ∧ B(x)) ∧ C(x)]      Some French restaurants are exclusive.
+  A B are C                         ∀x [(A(x) ∧ B(x)) → C(x)]       Ripe apples are delicious.
+                                                                    Violins and cellos are stringed
+  A and B are C D               ∀x [(A(x) ∨ B(x)) → (C(x) ∧ D(x))]
+                                                                    instruments.
+  Only i is F.                       F(i) ∧ ∀x [F(x) → (x = i)]     Only Sally is running.
+                                                                    The only instrument that is brass is the
+  The only F that is G is i.
+                                F(i) ∧ G(i) ∧ ∀x [(F(x) ∧ G(x)) → trumpet.
+                                              (x = i)]              No plants except for Venus flytraps are
+  No F except i is G.
+                                                                    carnivorous.
+                                F(i) ∧ ¬G(i) ∧ ∀x [(F(x) ∧ (x ≠ i))
+  All F except i are G.                                             All students except Billy are on time.
+                                             → G(x)]
+  i is the F that is most so-    F(i) ∧ ∀x [(F(x) ∧ (x ≠ i)) → i is Rex is the dog that is most loved than
+  and-so.                            more so-and-so than x]         the rest.
+  There is at most one F.        ∀x ∀y [(F(x) ∧ F(y)) → (x = y)]    There is at most one moon.
+  There are at least two F’s.      ∃x ∃y [F(x) ∧ F(y) ∧ (x ≠ y)]    There are at least two moons.
+                                ∃x ∃y { F(x) ∧ F(y) ∧ (x ≠ y) ∧ ∀z
+  There are exactly two F’s.                                        There are exactly two moons.
+                                   [F(z) → ((z = x) v (z = y))] }
+                                 ∃x [F(x) ∧ ∀y (F(y) → (y = x)) ∧
+  The F is G.                                                       The moon is bright.
+                                               G(x)]
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                     11
+Quantifier Laws
+
+                                                    Is Equivalent
+     Definition        Logical Expression                                     Plain English
+                                                        To (≡)
+  Abbreviation            ∃x (x ∈ A ∧ ¬P(x))          ∃x ∈ A ¬P(x)     Simplification
+  Expanding
+                             ∀x ∈ A P(x)           ∀x (x ∈ A → P(x))   Complication
+  Abbreviation
+                              ∀x ¬P(x)                    ¬∃x P(x)      • nobody’s perfect
+  1) Quantifier
+                                                                        • not everyone is perfect
+  Negation Laws               ¬∀x P(x)                    ∃x ¬P(x)
+                                                                        • someone is imperfect
+  2) Conditional Law        x ∈ A → P(x)              x ∉ A ∨ P(x)     p → q ≡ ¬p ∨ q
+  3) Subset Negation                                                   Negate then swap ∈ with ∉, or
+                                x∈A                       ¬(x ∉ A)
+  Law                                                                  vice versa
+                                    ¬∀x P(x) ≡ ∃x ¬P(x)
+                                    ¬∃x P(x) ≡ ∀x ¬P(x)
+  4) De Morgan’s Law
+                                                                       De Morgan’s Law for single and
+  (Quantifier                  ¬∀x ∀y P(x, y) ≡ ∃x ∃y ¬P(x, y)
+                                                                       nested quantifiers
+  Negation)                    ¬∀x ∃y P(x, y) ≡ ∃x ∀y ¬P(x, y)
+                               ¬∃x ∀y P(x, y) ≡ ∀x ∃y ¬P(x, y)
+                               ¬∃x ∃y P(x, y) ≡ ∀x ∀y ¬P(x, y)
+                                ∀x ∀y                    ∀y ∀x         •     for all objects x and y, …
+                                                                       •     there are objects x and y
+                                ∃x ∃y                      ∃y ∃x
+                                                                             such that …
+  5) Nested /
+                                                                       False
+  Multiple-
+                                                                       Counterexample for x, y ∈ ℤ:
+  Quantified                    ∀x ∃y P(x, y) ≢ ∃x ∀y P(x, y)
+                                                                       ∀x ∃y (x + y = 0) ≡ True
+  Statements
+                                                                       ∃x ∀y (x + y = 0) ≡ False
+                           ¬(∀x ∃y P(x, y))         ∃x ∀y ¬P(x, y)     Negation of multiple quantified
+                           ¬(∃x ∀y P(x, y))         ∀x ∃y ¬P(x, y)     statements
+  6) Moving                      ∀x (P(x) → ∃y Q(x, y)) ≡              You can move a quantifier left
+  Quantifiers                      ∀x ∃y (P(x) → Q(x, y))              if the variable is not used yet
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                               12
+Quantifier Laws
+
+                            Logical             Is Equivalent To
+     Definition                                                              English Example
+                          Expression                   (≡)
+  Abbreviation           ∃x (x ∈ A • ¬P(x))     ≡     ∃x ∈ A ¬P(x)      Simplification
+  Expanding
+                            ∀x ∈ A P(x)         ≡   ∀x (x ∈ A → P(x))   Complication
+  Abbreviation
+                                                                        •    everyone is perfect
+                              ∀x P(x)           ≡       ¬∃x ¬P(x)
+                                                                        •    no one is imperfect
+                                                                        •    somebody is perfect
+                              ∃x P(x)           ≡       ¬∀x ¬P(x)
+  1. Quantifier                                                         •    nobody is imperfect
+  Negation Laws (QN)                                                    •    not everyone is perfect
+                              ¬∀x P(x)          ≡       ∃x ¬P(x)
+                                                                        •    someone is imperfect
+                                                                        •    nobody is perfect
+                              ¬∃x P(x)          ≡       ∀x ¬P(x)
+                                                                        •    everybody is imperfect
+  2. Conditional Law
+                           x ∈ A → P(x)         ≡      x ∉ A ∨ P(x)     p → q ≡ ¬p ∨ q
+  (ACP)
+  3. Subset Negation                                                    Negate then swap ∈ with ∉, or
+                               x∈A              ≡       ¬(x ∉ A)
+  Law                                                                   vice versa
+                             ¬∀x P(x)           ≡      ∃x ¬P(x)         De Morgan’s Law for a single
+                             ¬∃x P(x)           ≡      ∀x ¬P(x)         quantifier
+  4. De Morgan’s Law       ¬∀x ∀y P(x, y)       ≡    ∃x ∃y ¬P(x, y)
+  (Quantifier
+                           ¬∀x ∃x P(x, y)       ≡    ∃x ∀y ¬P(x, y)     De Morgan’s Law for nested
+  Negation)
+                           ¬∃x ∀y P(x, y)       ≡    ∀x ∃y ¬P(x, y)     quantifiers
+                           ¬∃x ∃y P(x, y)       ≡    ∀x ∀y ¬P(x, y)
+                              ∀x ∀y             ≡        ∀y ∀x          •     for all objects x and y, …
+                                                                        •     there are objects x and y
+                               ∃x ∃y            ≡         ∃y ∃x
+                                                                              such that …
+  5. Nested /
+                                                                        False
+  Multiple-
+                                                                        Counterexample for x, y ∈ ℤ:
+  Quantified               ∀x ∃y P(x, y)        ≢     ∃x ∀y P(x, y)
+                                                                        ∀x ∃y (x + y = 0) ≡ True
+  Statements
+                                                                        ∃x ∀y (x + y = 0) ≡ False
+                          ¬ (∀x ∃y P(x, y))     ≡    ∃x ∀y ¬P(x, y)     Negation of multiple-quantified
+                          ¬(∃x ∀y P(x, y))      ≡    ∀x ∃y ¬P(x, y)     statements
+  6. Moving                                          ∀x ∃y (P(x) →      You can move a quantifier left
+                       ∀x (P(x) → ∃y Q(x, y))   ≡
+  Quantifiers                                           Q(x, y))        if the variable is not used yet
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                               13
+Valid Quantifier Formulas
+
+            A                                B
+       ∀x (P(x) ∧ Q(x))     ≡     ∀x P(x) ∧ ∀x Q(x)
+       ∃x (P(x) ∧ Q(x))     →     ∃x P(x) ∧ ∃x Q(x)
+       ∀x (P(x) ∨ Q(x))     ←     ∀x P(x) ∨ ∀x Q(x)
+       ∃x (P(x) ∨ Q(x))     ≡     ∃x P(x) ∨ ∃x Q(x)
+       ∀x (P(x) → Q(x))     ←     ∃x P(x) → ∀x Q(x)
+       ∃x (P(x) → Q(x))     ≡     ∀x P(x) → ∃x Q(x)
+               ∀x ¬P(x)     ≡     ¬∃x P(x)
+               ∃x ¬P(x)     ≡     ¬∀x P(x)
+          ∀x ∃y T(x, y)     ←     ∃y ∀x T(x, y)
+          ∀y ∃x T(x, y)     ←     ∃x ∀y T(x, y)
+          ∀x ∀y T(x, y)     ≡     ∀y ∀x T(x, y)
+           ∃x ∃y T(x, y)    ≡     ∃y ∃x T(x, y)
+          ∀x (P(x) ∨ R)     ≡     ∀x P(x) ∨ R
+           ∃x (P(x) ∧ R)    ≡     ∃x P(x) ∧ R
+         ∀x (P(x) → R)      ≡     ∃x P(x) → R
+          ∃x (P(x) → R)     →     ∀x P(x) → R
+         ∀x (R → Q(x))      ≡     R → ∀x Q(x)
+         ∃x (R → Q(x))      →     R → ∃x Q(x)
+                   ∀x R     ←     R
+                   ∃x R     →     R
+
+Note: The above formulas are valid in classical first-order logic assuming that x does not occur free in R.
+
+
+Invalid Quantifier Formulas
+
+            A                                B                    Counterexample
+       ∃x (P(x) ∧ Q(x))     ←     ∃x P(x) ∧ ∃x Q(x)         D = {a, b}, M = {P(a), Q(b)}
+       ∀x (P(x) ∨ Q(x))     →     ∀x P(x) ∨ ∀x Q(x)         D = {a, b}, M = {P(a), Q(b)}
+       ∀x (P(x) → Q(x))     →     ∃x P(x) → ∀x Q(x)         D = {a, b}, M = {P(a), Q(a)}
+          ∀x ∃y T(x, y)     →     ∃y ∀x T(x, y)             D = {a, b}, M = {T(a, b), T(b, a)}
+          ∃x (P(x) → R)     ←     ∀x P(x) → R               D = Ø, M = {R}
+         ∃x (R → Q(x))      ←     R → ∃x Q(x)               D = Ø, M = Ø
+                   ∀x R     →     R                         D = Ø, M = Ø
+                   ∃x R     ←     R                         D = Ø, M = {R}
+
+Note: if empty domains are not allowed, then the last four implications above are in fact valid.
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                     14
+The Sixteen Logical Operations on Two Variables
+
+    #     Venn      Sym          Logical Notation(s)                                  Name(s)
+  0000                ⊥                        0                   Contradiction; falsehood; antilogy; constant 0
+
+
+  0001                ∧          𝑥 ∧ 𝑦,        𝑥𝑦,          𝑥&𝑦    Conjunction; AND
+
+
+  0010                ̅
+                      ⊃        𝑥 ∧ 𝑦̅, 𝑥 ⊅ 𝑦, [𝑥 > 𝑦], 𝑥 ∸ 𝑦       Nonimplication; difference; but not
+
+
+  0011                ∟                        𝑥                   Left projection
+
+
+  0100                ̅
+                      ⊂       𝑥̅ ∧ 𝑦, 𝑥 ⊄ 𝑦, [𝑥 < 𝑦], 𝑦 ∸ 𝑥        Converse nonimplication; not ... but
+
+
+  0101                𝖱                        𝑦                   Right projection
+
+
+  0110                ⨁        𝑥 ⨁ 𝑦,         𝑥 ≢ 𝑦,         𝑥^𝑦   Exclusive disjunction; nonequivalence; XOR
+
+
+  0111                ∨               𝑥 ∨ 𝑦,          𝑥|𝑦          (Inclusive) disjunction; and/or; OR
+
+
+  1000                ⊽          𝑥̅ ∧ 𝑦̅, ̅̅̅̅̅̅̅
+                                          𝑥 ∨ 𝑦, 𝑥 ⊽ 𝑦, 𝑥 ↓ 𝑦      Nondisjunction; joint denial; neither... NOR
+
+
+  1001                ≡      𝑥 ≡ 𝑦,        𝑥 ⟷ 𝑦,           𝑥⇔𝑦    Equivalence; if and only if; IFF
+
+
+  1010                ̅
+                      𝖱        𝑦̅,      ¬𝑦,          ! 𝑦,    ~𝑦    Right complementation; NOT
+
+
+  1011                ⊂      𝑥 ∨ 𝑦̅, 𝑥 ⊂ 𝑦, 𝑥 ⇐ 𝑦, [𝑥 ≥ 𝑦], 𝑥 𝑦    Converse implication; IF
+
+
+  1100                ̅
+                      ∟        𝑥̅ ,     ¬𝑥,          ! 𝑥,    ~𝑥    Left complementation; NOT
+
+                                      𝑥̅ ∨ 𝑦, 𝑥 ⊃ 𝑦, 𝑥 ⇒
+  1101                ⊃                                            Implication; only if; if … then
+                                         𝑦, [𝑥 ≤ 𝑦], 𝑦 𝑥
+
+  1110                ⊼           𝑥̅ ∨ 𝑦̅, ̅̅̅̅̅̅̅
+                                           𝑥 ∧ 𝑦, 𝑥 ⊼ 𝑦, 𝑥 | 𝑦     Nonconjunction; not both … and; NAND
+
+
+  1111                ⊤                        1                   Affirmation; validity; tautology; constant 1
+
+
+Donald E. Knuth (1968). 7.1.1 Boolean Basics, The Art of Computer Programming, Pre-fascicle 0B: The
+sixteen logical operations in two variables. See also Wikipedia, Truth function.
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                                      15
+The Twelve SQL Join Types
+Created by Steve Steadman
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor   16
+Sources
+      •   SNHU MAT 230 - Discrete Mathematics, zyBooks.
+      •   https://byjus.com/maths/set-theory-symbols/
+      •   https://en.wikipedia.org/wiki/List_of_logic_symbols
+      •   https://en.wikipedia.org/wiki/Truth_function#Table_of_binary_truth_functions
+      •   https://nokyotsu.com/qscripts/2014/07/distribution-of-quantifiers-over-logic-
+          connectives.html
+      •   Knuth, Donald E. (1968). 7.1.1 Boolean Basics, The Art of Computer Programming, Pre-fascicle
+          0B: The sixteen logical operations in two variables.
+      •   Steadman, Steven (2025). TSQL Join Types, version 22.03.
+          https://stedmansolutions.kit.com/1296307228
+
+See Also
+      •   Harold’s Logic Cheat Sheet
+      •   Harold’s Logic (Philosophy) Cheat Sheet
+      •   Harold’s Sets Cheat Sheet
+      •   Harold’s Boolean Algebra Cheat Sheet
+      •   Harold’s Proofs Cheat Sheet
+
+
+
+
+Copyright © 2021-2025 by Harold Toomey, WyzAnt Tutor                                               17
+

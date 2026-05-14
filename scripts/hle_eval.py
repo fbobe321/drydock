@@ -189,23 +189,23 @@ def judge_with_gemma(question: str, gold: str, pred: str) -> tuple[str, str]:
         # Fall back to reasoning_content (llama.cpp --jinja thinking field)
         return (msg.get("reasoning_content") or "").strip()
 
-    def _verdict_from(text: str) -> str:
+    def _verdict_from(text: str, tail_only: bool = False) -> str:
         if not text:
             return ""
-        # Try the first line first (the canonical shape).
-        lines = text.splitlines()
-        if lines:
+        # When scanning reasoning_content (thinking tokens), the verdict
+        # usually appears at the end of the analysis, not the beginning.
+        # tail_only=True restricts the scan to the last 300 characters.
+        scan = text[-300:] if tail_only else text
+        lines = scan.splitlines()
+        if lines and not tail_only:
             first = lines[0].strip().upper()
             for v in ("YES", "PARTIAL", "NO"):
                 if first.startswith(v):
                     return v
-        # Then scan the whole text for a clean verdict token. Stops at
-        # the first occurrence so "YES but not NO" prefers YES.
-        up = text.upper()
+        up = scan.upper()
         for v in ("YES", "PARTIAL", "NO"):
             i = up.find(v)
             if i >= 0:
-                # Require word boundary so "YESTERDAY" doesn't count.
                 end = i + len(v)
                 if end == len(up) or not up[end].isalpha():
                     return v
@@ -223,21 +223,26 @@ def judge_with_gemma(question: str, gold: str, pred: str) -> tuple[str, str]:
     try:
         text = _call(prompt, 200)
         verdict = _verdict_from(text)
+        if not verdict:
+            # reasoning_content (thinking tokens) may carry the verdict at
+            # the tail of the analysis when content is empty. Scan the last
+            # 300 chars with word-boundary check to avoid false positives.
+            verdict = _verdict_from(text, tail_only=True)
         if verdict:
             return verdict, text[:300]
-        # Tighter retry — one word, no reasoning. Gives the model a
-        # path that doesn't burn the whole budget on thinking.
+        # Tighter retry — bump budget to 256 so thinking + one-word answer
+        # both fit (16 was too small: model exhausted the budget on thinking).
         terse = (
             "Grade this answer against the ground truth and reply with "
             "ONE WORD ONLY: YES, NO, or PARTIAL.\n\n"
             f"GROUND TRUTH: {gold[:600]}\nPREDICTED: {pred[:600]}\n\nAnswer:"
         )
-        text2 = _call(terse, 16)
+        text2 = _call(terse, 256)
         verdict = _verdict_from(text2)
+        if not verdict:
+            verdict = _verdict_from(text2, tail_only=True)
         if verdict:
             return verdict, f"[retry] {text2[:200]}"
-        # Both calls gave nothing usable. Report the raw text so the
-        # operator can see WHAT went wrong instead of a generic ERROR.
         return "ERROR", f"judge produced no parseable verdict: {(text or text2)[:200]!r}"
     except Exception as e:
         return "ERROR", f"judge failed: {e!r}"

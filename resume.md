@@ -54,6 +54,30 @@ ls /data3/drydock/.pause_* /data3/drydock_test_projects/.pause_* 2>/dev/null
 /home/bobef/miniconda3/bin/gh issue list --repo fbobe321/drydock --state open | head -10
 ```
 
+## Symbolic-math tool stack (2026-05-14, late morning push)
+
+Seven new sympy/scipy-backed built-ins for HLE Math/Physics/Bio/Med
+correctness. The pattern: where the local model gets symbolic work
+wrong from prior, give it a tool that just does it. All live in
+source tree at `drydock/core/tools/builtins/*_tool.py`, auto-discovered,
+wired into `gemma4.md` system prompt with HLE-shape mapping.
+
+| Tool | Ops | Backend |
+|------|-----|---------|
+| `logic` | 12 | sympy.logic.boolalg — propositional reasoning |
+| `algebra` | 13 | sympy CAS — solve/simplify/diff/integrate/limit/series |
+| `number_theory` | 16 | sympy.ntheory — primes / factors / mod arithmetic / CRT |
+| `set` | 11 | frozenset + itertools — discrete math |
+| `linear_algebra` | 15 | sympy.Matrix — det / inv / eigenvals / Ax=b |
+| `stats` | 15 | scipy.stats — distributions / hypothesis tests / CI |
+| `units` | 6 | sympy.physics.units — convert / dimensional analysis |
+
+88 ops total. Plus the `prove` skill (workflow that ties them together).
+133 new tests; 324 total tests in the related sweep.
+
+Live in source tree immediately. PyPI release v2.8.30 at 17:00 UTC.
+First batch with these tools available fires 12:45 UTC.
+
 ## Active vectors (as of 2026-05-14)
 
 Three vectors moving in parallel per CLAUDE.md "Current plan":

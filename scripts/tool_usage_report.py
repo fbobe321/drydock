@@ -22,17 +22,36 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
+def _session_roots() -> list[Path]:
+    """Return all session-log roots that exist on disk.
+
+    Drydock's active root is `~/.drydock/logs/session` (post the
+    config-save_dir cleanup on 2026-05-14). Older sessions still live
+    at `~/.vibe/logs/session` from before the migration; we still
+    read those so historical analyses don't lose ~12k sessions.
+    """
+    candidates = [
+        Path.home() / ".drydock" / "logs" / "session",
+        Path.home() / ".vibe" / "logs" / "session",
+    ]
+    return [r for r in candidates if r.is_dir()]
+
+
+# Back-compat: kept as the first existing root so legacy callers that
+# read this constant get a sensible value. New code should call
+# `_session_roots()` directly.
+_roots = _session_roots()
+SESSION_ROOT = _roots[0] if _roots else Path.home() / ".drydock" / "logs" / "session"
 
 
 def _session_dirs(limit: int, since: datetime | None) -> list[Path]:
-    if not SESSION_ROOT.is_dir():
+    roots = _session_roots()
+    if not roots:
         return []
-    dirs = sorted(
-        (p for p in SESSION_ROOT.glob("session_*") if p.is_dir()),
-        key=lambda p: p.name,
-        reverse=True,
-    )
+    all_dirs: list[Path] = []
+    for r in roots:
+        all_dirs.extend(p for p in r.glob("session_*") if p.is_dir())
+    dirs = sorted(all_dirs, key=lambda p: p.name, reverse=True)
     if since is not None:
         # session_YYYYMMDD_HHMMSS_xxx
         keep: list[Path] = []

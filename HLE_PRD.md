@@ -6,6 +6,40 @@ the dominant cause of thinking-stalls. Deep Noir sidecar wiring (M1-M4)
 is in tree; M1 end-to-end GPU smoke pending after the transformers 5.x
 apply_chat_template fix (f02aa4b).
 
+## Symbolic-math tool stack shipped (2026-05-14)
+
+Major shipping push 2026-05-14: built four new sympy-backed built-in
+tools to give the model offload paths for the symbolic work it
+systematically gets wrong from prior. Pattern: same as `math` for
+arithmetic — wrap a reliable library, sandbox the inputs, expose the
+ops the model would otherwise have to "reason about." 52 new
+operations total.
+
+| Tool | Ops | Use case |
+|------|-----|----------|
+| `logic` | 12 | propositional logic — contrapositive, De Morgan, equivalence, truth tables, Modus Ponens, satisfiability, CNF/DNF |
+| `algebra` | 13 | symbolic math — solve / simplify / expand / factor / diff / integrate / limit / series / evaluate / trigsimp |
+| `number_theory` | 16 | primes / divisors / gcd / totient / Möbius / modular inverse / mod_pow / CRT |
+| `set` | 11 | discrete math — union / intersection / power set / Cartesian product / cardinality / subset |
+
+Each tool sandboxed with AST-level validation (no imports, no
+attribute access, no dunder, no eval/exec), max-expression-length
+caps, and per-tool result caps (e.g. power_set refuses |A|>10,
+product refuses |A|·|B|>1000).
+
+All four wired into `gemma4.md` system prompt with HLE-shape →
+op mapping. The first hourly babysitter tick after these land
+(02:45+ UTC) is the first batch where the model can use them; the
+22h trailing tool_usage_report will measure whether the lift is real.
+
+Why this matters for HLE: Math sits at 3/102 = 2.9% lifetime, the
+worst category. The dominant failure mode (per the day's session
+traces) is `empty:no_final_answer` — the model engages, calls
+retrieve, then web_searches, then runs out of 481s without producing
+a FINAL ANSWER. Offloading the actual symbolic work to sympy lets
+the model spend its turn budget on planning + extraction instead of
+re-deriving algebra in plain English (which it gets wrong).
+
 ## HLE was retrieving against the WRONG corpus (fixed edb61c9)
 
 Trace from a Q3 session 2026-05-14: a local-field-theory HLE Math

@@ -158,6 +158,8 @@ if [ -n "$GRAPHRAG_DB_OVERRIDE" ]; then
     DRYDOCK_GRAPHRAG_DB="$GRAPHRAG_DB_OVERRIDE" \
     DRYDOCK_WRAP_UP_WARN_AT=8 \
     DRYDOCK_STOP_NOW_WARN_AT=12 \
+    DRYDOCK_STOP_NOW_TIME_SEC=360 \
+    DRYDOCK_THINKING_BUDGET_TOKENS=8000 \
     PYTHONUNBUFFERED=1 \
     nohup "$PY" -u "$DRYDOCK/scripts/hle_eval.py" \
         --source hle --limit "$LIMIT" --shuffle --seed "$SEED" --category "$CATEGORY" \
@@ -165,6 +167,8 @@ if [ -n "$GRAPHRAG_DB_OVERRIDE" ]; then
 else
     DRYDOCK_WRAP_UP_WARN_AT=8 \
     DRYDOCK_STOP_NOW_WARN_AT=12 \
+    DRYDOCK_STOP_NOW_TIME_SEC=360 \
+    DRYDOCK_THINKING_BUDGET_TOKENS=8000 \
     PYTHONUNBUFFERED=1 \
     nohup "$PY" -u "$DRYDOCK/scripts/hle_eval.py" \
         --source hle --limit "$LIMIT" --shuffle --seed "$SEED" --category "$CATEGORY" \

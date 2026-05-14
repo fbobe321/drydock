@@ -28,13 +28,10 @@ DRYDOCK_BIN = "/home/bobef/miniforge3/envs/drydock/bin/drydock"
 def _resolve_session_root() -> Path:
     """Match drydock's actual session-logging save_dir.
 
-    Users can (and do) override via ~/.drydock/config.toml's
-    [session_logging] save_dir. Historical default here was
-    ~/.drydock/logs/session, but current drydock defaults and the
-    user's config both point to ~/.vibe/logs/session. A hardcoded
-    wrong SESSION_ROOT silently broke SessionWatcher — find_session
-    always returned None, so every prompt looked like a SKIP even
-    though drydock was processing them fine.
+    Users override via ~/.drydock/config.toml's [session_logging]
+    save_dir. As of 2026-05-14 the canonical default is
+    ~/.drydock/logs/session; legacy sessions live at ~/.vibe/logs/session
+    from before the migration and remain readable for back-compat.
     """
     try:
         import tomllib
@@ -52,11 +49,11 @@ def _resolve_session_root() -> Path:
         except Exception:
             pass
     # Fall back: current drydock default, then legacy path.
-    for candidate in (Path.home() / ".vibe" / "logs" / "session",
-                      Path.home() / ".drydock" / "logs" / "session"):
+    for candidate in (Path.home() / ".drydock" / "logs" / "session",
+                      Path.home() / ".vibe" / "logs" / "session"):
         if candidate.is_dir():
             return candidate
-    return Path.home() / ".vibe" / "logs" / "session"
+    return Path.home() / ".drydock" / "logs" / "session"
 
 
 SESSION_ROOT = _resolve_session_root()

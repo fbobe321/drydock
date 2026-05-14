@@ -32,7 +32,19 @@ from pathlib import Path
 DISPATCH_DIR = Path.home() / ".drydock" / "dispatch"
 QUEUE = DISPATCH_DIR / "retrieval.jsonl"
 STATE = DISPATCH_DIR / ".retrieval_consumed.json"
-SESSION_ROOT = Path.home() / ".vibe" / "logs" / "session"
+SESSION_ROOT = Path.home() / ".drydock" / "logs" / "session"
+
+
+def _session_roots() -> list[Path]:
+    """All session-log roots that exist. Drydock writes to
+    `~/.drydock/logs/session` post the 2026-05-14 config fix; legacy
+    sessions still live under `~/.vibe/logs/session` and we want to
+    still match against them when consuming retrieval-queue items."""
+    candidates = [
+        Path.home() / ".drydock" / "logs" / "session",
+        Path.home() / ".vibe" / "logs" / "session",
+    ]
+    return [r for r in candidates if r.is_dir()]
 
 REINGEST_AFTER_DAYS = 7
 SESSION_MATCH_WINDOW = timedelta(hours=1)
@@ -106,30 +118,32 @@ def _find_session_cwd(target: datetime) -> Path | None:
     directory-name timestamp first (zero I/O), then only read meta.json
     for the handful of candidates within the time window.
     """
-    if not SESSION_ROOT.exists():
+    roots = _session_roots()
+    if not roots:
         return None
     window_s = SESSION_MATCH_WINDOW.total_seconds()
     candidates: list[tuple[float, Path]] = []
-    for entry in SESSION_ROOT.iterdir():
-        if not entry.is_dir():
-            continue
-        dt = _dirname_to_dt(entry.name)
-        if dt is None:
-            continue
-        if abs((dt - target).total_seconds()) > window_s:
-            continue
-        meta = entry / "meta.json"
-        try:
-            data = json.loads(meta.read_text())
-        except Exception:
-            continue
-        start = _parse_iso(data.get("start_time", "")) or dt
-        delta = abs((start - target).total_seconds())
-        if delta > window_s:
-            continue
-        cwd = (data.get("environment") or {}).get("working_directory")
-        if cwd:
-            candidates.append((delta, Path(cwd)))
+    for root in roots:
+        for entry in root.iterdir():
+            if not entry.is_dir():
+                continue
+            dt = _dirname_to_dt(entry.name)
+            if dt is None:
+                continue
+            if abs((dt - target).total_seconds()) > window_s:
+                continue
+            meta = entry / "meta.json"
+            try:
+                data = json.loads(meta.read_text())
+            except Exception:
+                continue
+            start = _parse_iso(data.get("start_time", "")) or dt
+            delta = abs((start - target).total_seconds())
+            if delta > window_s:
+                continue
+            cwd = (data.get("environment") or {}).get("working_directory")
+            if cwd:
+                candidates.append((delta, Path(cwd)))
     if not candidates:
         return None
     candidates.sort()

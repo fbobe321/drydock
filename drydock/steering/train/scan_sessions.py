@@ -26,8 +26,8 @@ completion}`. Pairs feed directly into `drydock.steering.train.capture`.
 CLI:
 
     python -m drydock.steering.train.scan_sessions \\
-        --sessions-dir ~/.vibe/logs/session \\
         --sessions-dir ~/.drydock/logs/session \\
+        --sessions-dir ~/.vibe/logs/session \\
         --pattern empty_after_tool:bash \\
         --out pairs.jsonl \\
         --max-derailed 200 \\

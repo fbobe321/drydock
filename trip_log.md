@@ -1,5 +1,109 @@
 # Drydock Trip Log
 
+## 2026-05-14 16:30 UTC tick
+- Stress: 1658/1658 COMPLETE (run finished, babysitter correctly not restarting)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (Q3_K_M on :8000 responding correctly; Docker shows "unhealthy" but /health returns {"status":"ok"} — healthcheck probe issue, not a real outage)
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all thinking_stall, all previously addressed); retrieval=0 actionable; curiosity=891 pending (consumed 3 empty-prediction thinking stalls this tick: f264321e, b7791f05, a5ee0a5b)
+- HLE: lifetime 10/231 = 4.3%; last Engineering batch 0/10 (5 no_final_answer + 3 no_response + 2 judge ERRORs); batch ran pre-fad6127 so no_final_answer expected; Chemistry 0/29 but chemistry tool not yet deployed when those ran
+- Action this tick: committed fix 8f6b89b — judge verdict parsing: (1) tail-scan reasoning_content last 300 chars for verdict at end of thinking analysis, (2) bump retry max_tokens 16→256 so thinking+answer both fit. Addresses recurring judge ERROR pattern seen across multiple batches.
+
+## 2026-05-14 15:30 UTC tick
+- Stress: 1658/1658 COMPLETE (stress run finished; PID 340932 gone; babysitter will not restart)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: 0 fires (no active stress sessions)
+- vLLM 400s: 0 (Q3_K_M on :8000 healthy, balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=6 in 24h window (all thinking_stall, all previously addressed); retrieval=0 actionable; curiosity=880 pending (118 hle_failure + 762 unknown_term)
+- HLE: lifetime 10/226 = 4.4%; Engineering batch running (PID 1592987, ~50m elapsed); first 5 Qs all timed out at 480s with empty:no_final_answer (model engages 7-31 turns but never emits FINAL ANSWER); expected pre-fix behavior — fad6127 escalation not yet deployed (ships at 18:00 UTC auto_release)
+- retrieval-drain: 0 actionable (3 queue entries, all already ingested recently)
+- curiosity-drain: consumed ffa043d1dc2a8b61 (hle_failure: function epsilon property, gold=3, empty prediction — thinking stall, addressed by 8000-token cap de8b163 + STOP_NOW escalation fad6127)
+- Action this tick: no new commit — all queued patterns already addressed; Engineering stalls are pre-fix expected behavior; next batch after 18:00 UTC deploy will test the escalation fix
+
+## 2026-05-14 15:00 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 dead by completion; babysitter will not restart)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: 0 fires (no active stress sessions)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M on :8000 healthy; container shows "unhealthy" in Docker healthcheck but actual /health → ok — healthcheck pings :8080 which doesn't exist, false alarm)
+- GH issues: 0 open
+- Dispatch queue: harness=6 in 24h window (all thinking_stall, all from May 11, all addressed); retrieval=0 actionable; curiosity=856 pending (117 hle_failure + 739 unknown_term)
+- retrieval-drain: 0 new ingestions (all 3 entries already recently ingested)
+- HLE: lifetime 10/222 = 4.5%; 14:45 UTC Engineering batch still running (PID 1592987, 16m elapsed, Q1 stalled 480s with no_final_answer). Pattern: model makes tool calls after STOP_NOW injection, session hits 480s wall clock with empty prediction.
+- curiosity-drain: consumed item 847981d0bf980453 (hle_failure: no_final_answer on real-number bounds problem)
+- Action this tick: committed fad6127 — added one-shot escalation (URGENT note) 60s after first STOP_NOW fires when model keeps calling tools instead of producing text. Only activates when DRYDOCK_STOP_NOW_TIME_SEC > 0 (HLE eval context). Addresses pattern: curiosity:847981d0bf980453. Auto-release will ship at next 17:00 UTC tick.
+
+## 2026-05-14 14:00 UTC tick
+- Stress: 1658/1658 COMPLETE (run ended cleanly; babysitter confirmed idx=1658 and correctly declined to restart)
+- Write rate: n/a (run complete; final stats: done=88, skip=53, recycle=42 of 1658 prompts over 555 min)
+- Admiral last 30 min: 0 fires (no active stress sessions)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M on :8000 healthy, balancer pid=380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=1268 total / 4 in 24h window (all thinking_stall, addressed by de8b153), retrieval=3 total / 0 actionable, steering=n/a, curiosity=853 pending (116 hle_failure + 737 unknown_term)
+- retrieval-drain: 0 new ingestions (all 3 entries already recently ingested)
+- HLE batch: PID 1545638 running (1h17m elapsed, CS/AI category). Visible pattern: no_final_answer (11-17 msgs, 480s wall-clock kill) alongside no_response (1 msg, thinking stall). De8b153 8000-token cap not yet in this batch (kicked pre-release); next batch will benefit. Lifetime: 10/220 = 4.5%.
+- curiosity-drain: consumed item 468af79ac3bdc582 (hle_failure: 5D hypercube game theory, empty prediction — classified as thinking stall addressed by de8b153). 852 pending remain.
+- Action this tick: no commit — all dispatch patterns already addressed; autonomous_review running concurrently (started 14:00 UTC); no new drydock bugs found
+
+## 2026-05-14 13:30 UTC tick
+- Stress: 1658/1658 COMPLETE (idle — babysitter correctly not restarting completed run)
+- Write rate: n/a (run complete; final stats: done=88, skip=53, recycle=42 of 1658 prompts over 555 min)
+- Admiral last 30 min: 0 fires (no active stress sessions)
+- vLLM 400s: 0 (llamacpp-gemma4 on :8000 healthy, balancer on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=4 in 24h window (all thinking_stall, all pre-de8b153, no new fix needed), retrieval=0 actionable, curiosity=830 pending (112 hle_failure + 718 unknown_term)
+- retrieval-drain: 0 new ingestions (all 3 entries already recently ingested)
+- HLE batch: PID 1545638 running (45 min elapsed, CS/AI category). Continued no_final_answer/no_response failures on hard CS theory questions (LSH, FEN chess, PCP, set theory). Batch running on v2.8.29 — de8b153 thinking cap and symbolic-math tools not yet live (ship at 18:00 UTC auto_release). Lifetime: 10/216 = 4.6%.
+- Action this tick: no commit — all dispatch patterns already addressed; autonomous_review started concurrently at 13:30 UTC and will handle curiosity drain; no new bugs found
+
+## 2026-05-14 13:00 UTC tick
+- Stress: 1658/1658 COMPLETE (full run done; babysitter confirmed idle, no restart needed)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (llamacpp-gemma4 shows "unhealthy" docker status but model API responding normally)
+- GH issues: 0 open
+- Dispatch queue: harness=1267 total (3 in 24h window, all thinking_stall, all pre-de8b153), retrieval=3 total (0 actionable, all recently ingested), steering=0, curiosity=1079 total (810 pending: 109 hle_failure + 701 unknown_term)
+- Action this tick: retrieval drain 0 actionable; consumed curiosity item 2e965892a32a9cc8 (hard matrix spectral-norm HLE failure — empty prediction, classified as thinking-stall not corpus gap; de8b153 8000-token cap fix should reduce these); HLE live batch at 10/212=4.7%; chemistry tool (7a2211b) landed as 8th symbolic-math tool; no new bugs found
+
+## 2026-05-14 12:30 UTC tick
+- Stress: 1658/1658 COMPLETE (run fully done, babysitter correctly idle)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=3 (thinking_stall, all pre-de8b153 fix), retrieval=0 actionable, steering=0, curiosity=801 pending (109 hle_failure + 692 unknown_term)
+- Action this tick: retrieval drain 0 actionable (all ingested recently); top 3 curiosity items are empty-prediction HLE failures (model produced no output) — already addressed by de8b153 thinking budget cap committed 07:03 UTC; marked curiosity item e29d10c81f41c09e consumed; no new bugs found; system healthy
+
+## 2026-05-14 12:00 UTC tick
+- Stress: 1658/1658 COMPLETE (harness finished; babysitter correctly idle)
+- Write rate: n/a
+- Admiral last 30 min: 0 fires (no new admiral entries)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=3 (thinking_stall, all old), retrieval=0 actionable, curiosity=800 pending (108 hle_failure + 692 unknown_term)
+- Action this tick: committed fix de8b153 — adds DRYDOCK_THINKING_BUDGET_TOKENS=8000 to hle_babysitter.sh and backing env-var support in generic.py; caps model thinking at ~125s to prevent no_response 480s stalls; retrieval drain 0 actionable (addresses pattern harness:thinking_stall)
+
+## 2026-05-14 11:30 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 dead, babysitter correctly not restarting)
+- Write rate: n/a (stress run complete)
+- Admiral last 30 min: 0 vLLM errors; llama.cpp healthy
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=3 in 24h (thinking_stall, all already addressed), retrieval=0 actionable, curiosity=788 pending (104 hle_failure + 684 unknown_term)
+- HLE: 4.9% lifetime (13 runs, 206 total, 10 correct); chemistry batch PID 1495800 alive (46 min at tick time, 5/10 done with heavy no_response failures); top failure mode = model thinking for full 480s on chemistry/engineering problems without producing any content
+- Action this tick: committed fix 04a0fe6 — wire DRYDOCK_STOP_NOW_TIME_SEC=360 into hle_babysitter.sh so the time-based STOP_NOW (f80c8ca) actually fires for no_final_answer cases; no_response (1 msg, 480s) cases still unaddressed (first LLM call takes 480s before STOP_NOW can fire between turns)
+
+## 2026-05-14 11:00 UTC tick
+- Stress: 1658/1658 complete (harness PID 340932 dead; babysitter correctly not restarting — run finished)
+- Write rate: n/a (stress run complete)
+- Admiral last 30 min: 0 errors (llamacpp-gemma4 idle; last slot was a 200 OK)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=3 in 24h (thinking_stall, already addressed), retrieval=0 actionable, steering=1267 total, curiosity=769 pending (87 hle_failure + 239 unknown_term in last 24h)
+- HLE: 5.0% lifetime (13 runs, 202 total, 10 correct); babysitter PID 1495800 alive (15 min elapsed at tick time)
+- Action this tick: no action — all systems healthy; curiosity top-3 are PhD-level math capability gaps not addressable by prompt rules; retrieval drain: 0 new projects (all already ingested)
+
 ## 2026-05-14 10:30 UTC tick
 - Stress: 1658/1658 complete (full suite finished, stress harness PID 340932 dead as expected)
 - Write rate: n/a (stress run complete)
@@ -5905,3 +6009,15 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=1267, retrieval=3, steering=N/A, curiosity=1016 pending (totals)
 - Action this tick: committed feat(agent_loop): time-based STOP_NOW for slow-turn HLE sessions (f80c8ca). Engineering HLE batch (07:30 UTC): 4/7 questions hit 480s wall clock with empty predictions — per-turn latency 60-160s means turn-based STOP_NOW at 12 never fires before timeout. Added DRYDOCK_STOP_NOW_TIME_SEC env var (fires at wall-clock threshold regardless of turns); hle_eval.py sets it to 300s so model gets a FINAL ANSWER nudge at 5 min, 3 min before wall clock. Retrieval drain: 0 ingested (all already current). Consumed curiosity item 1bcaa8f5aa40216a (cellular automaton — computation gap, not retrieval gap). HLE babysitter running (PID 1401018, 45+ min, engineering category). Lifetime HLE: 9/197 = 4.6%.
+
+## 2026-05-14 14:30 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 dead; babysitter confirmed idx=1658 and declined restart — expected completion, not failure)
+- Write rate: N/A (run finished; final: done=88, skip=53, recycle=42)
+- Admiral last 30 min: 0 fires (no active stress sessions)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M on :8000 healthy, balancer :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=10 (all thinking_stall, all previously addressed — latest entry 14:10 UTC confirms), retrieval=3 (0 actionable), curiosity=853 pending (116 hle_failure, 737 unknown_term)
+- retrieval-drain: 0 new ingestions (all already current)
+- curiosity-queue: consumed 4f2d419fdf13faac (Titan superconducting arch — blank prediction, classified as thinking stall addressed by de8b153 8000-token cap)
+- HLE: 10/221 = 4.5%; Chemistry 0/29 but chemistry tool shipped in 7a2211b (this release) — next Chemistry batch should improve; latest CS/AI batch 0/10 at 12:45 UTC was first batch eligible for de8b153 thinking cap — awaiting 14:45 batch for real signal
+- Action this tick: no commit — system healthy, all queued patterns previously addressed, chemistry+symbolic-math tools just shipped and need evaluation time

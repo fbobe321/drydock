@@ -812,6 +812,7 @@ class AgentLoop:
             STOP_NOW_TIME_SEC = int(os.environ.get("DRYDOCK_STOP_NOW_TIME_SEC", "0"))
             _prompt_start = time.perf_counter()
             _time_stop_injected = False
+            _time_stop_escalated = False
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
                 # Drain any user messages typed while the agent was working.
@@ -862,6 +863,20 @@ class AgentLoop:
                         "this single request. STOP NOW. Emit a final text "
                         "response summarizing what you have or your best "
                         "guess."
+                        + (f" {_stop_suffix}" if _stop_suffix else "")
+                    )
+                elif (STOP_NOW_TIME_SEC > 0
+                        and _time_stop_injected
+                        and not _time_stop_escalated
+                        and _elapsed > STOP_NOW_TIME_SEC + 60):
+                    # Model made another tool call after the first STOP_NOW.
+                    # Escalate: one more forceful injection, then let it run out.
+                    _time_stop_escalated = True
+                    _stop_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
+                    self._inject_system_note(
+                        f"URGENT: {int(_elapsed)}s elapsed. Do NOT call any more tools. "
+                        "Emit a plain text response RIGHT NOW with your best answer. "
+                        "If uncertain, still write an answer."
                         + (f" {_stop_suffix}" if _stop_suffix else "")
                     )
                 if tool_turns == WRAP_UP_WARN_AT:

@@ -719,7 +719,7 @@ while real users see loops and hangs.
 **How it works:**
 - Drives the real `drydock` TUI via pexpect (no headless mode)
 - Sends a vague user-style prompt ("review the PRD and build the package")
-- Polls the live `~/.vibe/logs/session/session_<id>/messages.jsonl` in parallel
+- Polls the live `~/.drydock/logs/session/session_<id>/messages.jsonl` in parallel (legacy sessions at `~/.vibe/logs/session/` are still read for back-compat)
 - Watches for write loops, search_replace cascades, hallucinated-tool hangs
 - Types simulated `STOP` interrupts when loops are detected, then tracks
   whether the model OBEYS them

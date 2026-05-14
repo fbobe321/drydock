@@ -193,6 +193,15 @@ class OpenAIAdapter(APIAdapter):
         # Enable thinking for models that support it (Gemma 4)
         if thinking and thinking not in ("off", ""):
             payload["chat_template_kwargs"] = {"enable_thinking": True}
+            # Cap thinking length (llama.cpp). Prevents runaway thinking stalls
+            # on hard HLE questions (model can think >480s without this).
+            # Set DRYDOCK_THINKING_BUDGET_TOKENS=8000 in HLE batch launches.
+            _budget = os.environ.get("DRYDOCK_THINKING_BUDGET_TOKENS")
+            if _budget:
+                try:
+                    payload["thinking_budget_tokens"] = int(_budget)
+                except ValueError:
+                    pass
 
         if enable_streaming:
             payload["stream"] = True

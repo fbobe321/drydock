@@ -71,7 +71,7 @@ You ARE authorized to:
 
 - **DO NOT `git push`.** Local and origin diverge by design; deploy is via 4 AM rsync cron + auto_release for PyPI.
 - **DO NOT use broad pattern kills like `pkill -f drydock` or `pkill -f python`.** They WILL kill the user's TUI sessions, the stress harness, and other things you didn't intend. Only kill by specific PID after confirming the target. (CLAUDE.md learning #38: this has caused real damage twice.)
-- **DO NOT delete `/home/bobef/.drydock/`, `/home/bobef/.vibe/`, or `/data3/drydock_test_projects/`** — these contain irreplaceable state.
+- **DO NOT delete `/home/bobef/.drydock/`, `/home/bobef/.vibe/` (legacy session archive — drydock now writes to `~/.drydock/logs/session/` after the 2026-05-14 save_dir cleanup), or `/data3/drydock_test_projects/`** — these contain irreplaceable state.
 - **DO NOT modify `.pause_*` sentinels.** They're the user's kill switches.
 - **DO NOT edit `~/.drydock/config.toml`** (production config — user owns this).
 - **DO NOT lift `/data3/drydock/research/STOP` or `/data3/drydock/.pause_vllm_failover`** — user has paused these deliberately.
