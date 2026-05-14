@@ -276,6 +276,11 @@ def score_answer(q: dict, pred: str, outcome: dict | None = None) -> dict:
             return {"correct": True, "method": "exact", "verdict": "YES"}
         if fuzzy_score(pred, gold):
             return {"correct": True, "method": "fuzzy", "verdict": "YES"}
+        # Short pred (single letter/word) can't embed the right answer —
+        # skip the judge to avoid ERROR on an obviously wrong answer.
+        if len(normalize(pred)) <= 3:
+            return {"correct": False, "method": "exact", "verdict": "NO",
+                    "judge_reasoning": "short pred does not match gold"}
         # Fall through to judge for tricky MC where pred has explanation
     verdict, reasoning = judge_with_gemma(q["question"], gold, pred)
     return {
@@ -440,9 +445,15 @@ def run_one(q: dict, sk, run_dir: Path) -> dict:
            "COLUMNS": "120", "LINES": "30",
            # HLE sessions must commit quickly. Lower turn thresholds so the
            # model gets the wrap-up warning before the 480s wall-clock kills it.
-           # Default 30/60 is for coding tasks; 10/15 forces an answer sooner.
-           "DRYDOCK_WRAP_UP_WARN_AT": "10",
-           "DRYDOCK_STOP_NOW_WARN_AT": "15",
+           # Default 30/60 is for coding tasks; 8/12 forces an answer sooner.
+           # On engineering/math questions llama.cpp Q3 averages 60-160s/turn,
+           # so the turn-based STOP_NOW at 12 fires at 720-1920s — well past
+           # the 480s wall clock. STOP_NOW_TIME_SEC=300 fires at 5 minutes
+           # regardless of turn count, giving the model 3 minutes to respond.
+           # Respect env overrides (e.g. babysitter exports lower values).
+           "DRYDOCK_WRAP_UP_WARN_AT": os.environ.get("DRYDOCK_WRAP_UP_WARN_AT", "8"),
+           "DRYDOCK_STOP_NOW_WARN_AT": os.environ.get("DRYDOCK_STOP_NOW_WARN_AT", "12"),
+           "DRYDOCK_STOP_NOW_TIME_SEC": os.environ.get("DRYDOCK_STOP_NOW_TIME_SEC", "300"),
            "DRYDOCK_STOP_NOW_SUFFIX": "Write your best answer as 'FINAL ANSWER: <answer>' now."}
     start = time.time()
     # --dangerously-skip-permissions: HLE is batch eval against read-only

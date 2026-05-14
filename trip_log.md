@@ -1,5 +1,63 @@
 # Drydock Trip Log
 
+## 2026-05-14 09:00 UTC tick
+- Stress: 1658/1658 complete (done=88, skip=53, timeout=0, recycle=42) — full run finished, harness not restarted
+- Write rate: n/a (stress run complete)
+- Admiral last 30 min: n/a
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=3 new (thinking_stall, already addressed in agent_loop.py), retrieval=0 ingested (all recent), curiosity=765 pending (100 hle_failure + 665 unknown_term)
+- HLE: 5.0% lifetime (12 runs, 201 total, 10 correct); Math 2.9% (3/102), Bio/Med 18.8% (3/16); no active batch (PID dead, next :45 tick)
+- Action this tick: consumed curiosity:cf2cdaa2615aa0f8 (Conway/prime/GoL HLE stall — deep math, empty prediction, prompt rules already address pattern; no new fix); retrieval drain: 0 projects ingested (all already done); autonomous_review started new run at 09:00 UTC
+
+## 2026-05-14 08:30 UTC tick
+- Stress: 1658/1658 complete (done=88, skip=53, recycle=42) — suite exhausted, not a failure
+- Write rate: n/a (stress run complete)
+- Admiral last 30 min: n/a
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=1267 (all old thinking_stall entries, already fixed), retrieval=0 actionable, curiosity=765 pending (101 hle_failure + 664 unknown_term)
+- HLE: 5.0% lifetime (12 runs, 201 total, 10 correct); Math 2.9% (3/102), Bio/Med 18.8% (3/16); PID 1401018 dead, auto-restart at :45
+- Action this tick: retrieval-drain: 0 ingests; consumed curiosity:6f5be8e925adedfe (empty-prediction hle_failure — covered by time-based STOP_NOW fix f80c8ca, shipping at 11:00 UTC); no new drydock bugs found; autonomous_review running since 08:30
+
+## 2026-05-14 07:00 UTC tick
+- Stress: PID 340932 dead; babysitter invoked (no output, likely dormant — no PRDs left to run)
+- Write rate: n/a (no stress run)
+- Admiral last 30 min: n/a
+- vLLM 400s: 1 minor error in llamacpp logs
+- GH issues: 0 open
+- Dispatch queue: harness=10, retrieval=0 actionable (all ingested), curiosity=737 pending (98 hle_failure + 639 unknown_term)
+- HLE: 4.6% lifetime (12 runs, 194 total, 9 correct); current Engineering batch in progress; prior batches showed `no_final_answer, 480s, 21 msgs` — STOP_NOW at tool-turn 15 fired too late (15 turns * ~35s = 525s > 480s wall clock)
+- Action this tick: committed fix ff12396 — lowered hle_eval.py STOP_NOW threshold 15→12 tool turns (WRAP_UP 10→8) so nudge fires at ~360s, leaving 120s buffer before wall clock; also fixed babysitter env-override being silently clobbered by hle_eval.py's hardcoded dict literal. Retrieval drain: 0 projects ingested (all recent). Curiosity: consumed item 86652a02e46cefbd (hle_failure/no_final_answer timing root cause addressed by this fix).
+
+## 2026-05-14 06:00 UTC tick
+- Stress: 1658/1658 complete (babysitter dormant; no stress PID in /tmp/stress_pid.txt)
+- HLE: 4.7% lifetime (11 runs, 191 total, 9 correct); 04:45 batch (CS/AI) final: 0/10 — 4x empty:no_response (480s, 1 msg each), 4x empty:no_final_answer, 1 wrong answer, 1 judge ERROR
+- vLLM 400s: 0 (llamacpp-gemma4 Q3 healthy; Docker health=unhealthy is false alarm — health check uses port 8080 but container is on 8000)
+- GH issues: 0 open
+- Dispatch queue: harness=2 (thinking_stall × 2, previously addressed), retrieval=0 actionable, curiosity=717 pending (95 hle_failure + 622 unknown_term)
+- Retrieval drain: 0 projects ingested (all already current)
+- Action this tick: no fix committed. The 04:45 batch ran AFTER 85d1a70 (WRAP_UP=10/STOP_NOW=15 fix) but still shows 4 no_response failures — root cause is model generating thinking-only responses on its first turn (msg_count=1 after 480s), which the STOP_NOW nudge cannot reach because it only fires after N tool calls. Top curiosity items (finite groups, BVP, spy-notebook) are hard math failures with empty predictions, consistent with no_response pattern; not retrieval gaps. No new actionable fix identified this tick without deeper investigation of thinking suppression for first-turn HLE calls.
+
+## 2026-05-14 05:30 UTC tick
+- Stress: 1658/1658 complete (run finished; babysitter correctly dormant; not a death)
+- HLE: 4.8% lifetime (11 runs, 187 total, 9 correct); batch PID 1353401 running (45 min elapsed)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=2 (thinking_stall, already addressed), retrieval=0 actionable, curiosity=706 pending (91 hle_failure + 615 unknown_term)
+- Retrieval drain: 0 projects ingested (all already current)
+- Action this tick: no fix committed — top curiosity items are hard math questions (group theory, ODE, combinatorics) where retrieval/prompt changes cannot help; unknown_term noise is assembly opcodes (MUL/DIV/JUMP/CALL/RET) from stress PRD; system healthy
+
+## 2026-05-14 05:00 UTC tick
+- Stress: 1658/1658 complete (babysitter dormant; next restart at top of hour by cron)
+- HLE: 4.9% lifetime (11 runs, 183 total, 9 correct). 04:45 batch (Computer Science/AI) still in progress — 2/10 visible: 1 correct(B/E mix-up), 1 empty:no_response (480s, 1 msg — JS deobfuscation puzzle, model produced no content after thinking tokens)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=2 (thinking_stall, addressed by 85d1a70), retrieval=0 actionable, curiosity=688 pending (87 hle_failure + 601 unknown_term)
+- Retrieval drain: 0 projects ingested (all already current)
+- Autonomous review: 04:00Z tick hit budget; 04:30Z tick committed 85d1a70 (HLE turn limit fix); 05:00Z tick started concurrently with this cron tick
+- Action this tick: no fix committed — system healthy, AR covering curiosity drain, no new actionable patterns found
+
 ## 2026-05-14 04:30 UTC tick
 - Stress: 1658/1658 complete (run finished, babysitter correctly dormant)
 - HLE: 5.0% lifetime (10 runs, 181 total, 9 correct). Chemistry batch 024501 shows 0/10: all `empty:no_response` or `empty:no_final_answer` at 480s wall-clock timeout. Root cause: model used 11-60 tool calls searching web but STOP_NOW warning (default turn 60) never fired within 480s budget.
@@ -5800,3 +5858,23 @@ restarted, cron self-match bug fixed in this same session).
 - retrieval-drain: 0 new ingestions
 - curiosity-queue: 3 pending hle_failure items, pure knowledge gaps, no actionable fix this tick
 - Action this tick: committed fix for hle_eval._extract_answer — now handles \boxed{}, $...$, markdown emphasis on FINAL ANSWER, multipart content lists, trailing code fences (a74b484). Pre-existing unstaged changes, not authored this tick.
+
+## 2026-05-14 06:35 UTC tick
+- Stress: 1658/1658 (completed full suite — babysitter correctly dormant; PID 340932 dead, was expected completion not failure)
+- Write rate: 88/1658 done, 53 skip
+- Admiral last 30 min: N/A (stress complete, no active sessions)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, Q3_K_M, balancer :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=2 (thinking_stall, already addressed), retrieval=3 (0 actionable, all ingested), curiosity=717 pending (top 3: hle_failure — group theory/PDE/combinatorics, pure knowledge gaps)
+- retrieval-drain: 0 new ingestions
+- curiosity-queue: 717 pending; top items are genuinely hard math (no_response pattern = thinking stall, no_final_answer pattern = hits 480s wall before STOP_NOW turn-limit fires at turn 15); identified fix: lower DRYDOCK_STOP_NOW_WARN_AT from 15→8 in hle_eval.py so FINAL ANSWER nudge fires at ~turn 8 (~480s) rather than turn 15 (~750s). HLE latest batch: 0/10 CS/AI, 4 no_response (thinking stall), 3 no_final_answer (timeout before nudge), 1 judge error. Overall HLE: 9/191 = 4.7%.
+- Action this tick: no commit — restarted stress babysitter (found PID 340932 dead but babysitter was correctly treating it as completed run, not failure); identified STOP_NOW timing bug in HLE eval for next tick to fix.
+
+## 2026-05-14 07:30 UTC tick
+- Stress: watchdog paused (no stress idx available)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (llama.cpp Q3 healthy, balancer on :8001 serving)
+- GH issues: 0 open
+- Dispatch queue: harness=1267, retrieval=3, steering=N/A, curiosity=1016 pending (totals)
+- Action this tick: committed feat(agent_loop): time-based STOP_NOW for slow-turn HLE sessions (f80c8ca). Engineering HLE batch (07:30 UTC): 4/7 questions hit 480s wall clock with empty predictions — per-turn latency 60-160s means turn-based STOP_NOW at 12 never fires before timeout. Added DRYDOCK_STOP_NOW_TIME_SEC env var (fires at wall-clock threshold regardless of turns); hle_eval.py sets it to 300s so model gets a FINAL ANSWER nudge at 5 min, 3 min before wall clock. Retrieval drain: 0 ingested (all already current). Consumed curiosity item 1bcaa8f5aa40216a (cellular automaton — computation gap, not retrieval gap). HLE babysitter running (PID 1401018, 45+ min, engineering category). Lifetime HLE: 9/197 = 4.6%.

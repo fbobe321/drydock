@@ -809,7 +809,9 @@ class AgentLoop:
                 int(os.environ.get("DRYDOCK_WRAP_UP_WARN_AT", 30))))
             STOP_NOW_WARN_AT = int(getattr(self, "_admiral_stop_now_warn_at",
                 int(os.environ.get("DRYDOCK_STOP_NOW_WARN_AT", 60))))
+            STOP_NOW_TIME_SEC = int(os.environ.get("DRYDOCK_STOP_NOW_TIME_SEC", "0"))
             _prompt_start = time.perf_counter()
+            _time_stop_injected = False
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
                 # Drain any user messages typed while the agent was working.
@@ -846,6 +848,22 @@ class AgentLoop:
                         stopped_by_middleware=True,
                     )
                     return
+                # Time-based STOP_NOW: fires when wall-clock exceeds
+                # DRYDOCK_STOP_NOW_TIME_SEC regardless of turn count.
+                # Helps HLE batches where per-turn latency is 60-160s
+                # and the turn-based STOP_NOW fires too late or not at all.
+                if (STOP_NOW_TIME_SEC > 0
+                        and not _time_stop_injected
+                        and _elapsed > STOP_NOW_TIME_SEC):
+                    _time_stop_injected = True
+                    _stop_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
+                    self._inject_system_note(
+                        f"Time limit reached: {int(_elapsed)}s elapsed on "
+                        "this single request. STOP NOW. Emit a final text "
+                        "response summarizing what you have or your best "
+                        "guess."
+                        + (f" {_stop_suffix}" if _stop_suffix else "")
+                    )
                 if tool_turns == WRAP_UP_WARN_AT:
                     self._inject_system_note(
                         f"You have used {tool_turns} tool calls on this "
