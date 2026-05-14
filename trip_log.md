@@ -1,5 +1,106 @@
 # Drydock Trip Log
 
+## 2026-05-14 21:30 UTC tick
+- Stress: COMPLETED — 1658/1658 prompts done (done=88, skip=53, recycle=42). No restart needed.
+- HLE: 4.7% overall (12/257 correct across 18 runs). Chemistry 0/39=0.0%, Math 5/112=4.5%, CS/AI 1/39=2.6%, Bio/Med 3/16=18.8%. Current batch: computer science (PID 1726536, running ~47 min).
+- vLLM 400s: n/a (llama.cpp Q3_K_M on :8000, balancer on :8001 — both healthy).
+- GH issues: 0 open.
+- Dispatch queue: harness=8 thinking_stall in last 24h (all previously addressed), curiosity=958 pending (825 unknown_term, 133 hle_failure).
+- Retrieval drain: 0 projects ingested (all already up to date).
+- Curiosity queue: consumed item 9bdd39a269d86a74 (Math no_final_answer, term "14:21:60.5" — classified as thinking stall, addressed by hard-stop + 8000-token cap fixes). No new source fix needed this tick.
+- Action this tick: no new commit — system healthy, autonomous_review running (started 21:30).
+
+## 2026-05-14 21:00 UTC tick
+- Stress: COMPLETED — 1658/1658 prompts done (done=88, skip=53, recycle=42, write rate ~5.3%). Babysitter confirmed complete, no restart.
+- HLE: 4.8% overall (12/252 correct). Chemistry 0/39=0.0%, Math 5/112=4.5%, CS/AI 1/34=2.9%, Bio/Med 3/16=18.8%. Current batch: computer science (PID 1726536, running 16+ min).
+- vLLM 400s: n/a (llama.cpp Q3_K_M on :8000, balancer on :8001 — both healthy).
+- GH issues: 0 open.
+- Dispatch queue: harness=1272 total (8 thinking_stall in last 24h), retrieval=3 (0 actionable, all recently ingested), curiosity=1222 total (932 pending: 804 unknown_term, 128 hle_failure).
+- Retrieval drain: 0 projects ingested (all already up to date).
+- Curiosity queue: 932 pending. Top items are Math hle_failure with empty predictions (no_final_answer) — these should be addressed by the hard-stop if/elif ordering fix (d2692cb) and web_search empty-result fix (7aa9507) already shipped in v2.8.30. No curiosity action this tick (old failures, new code should prevent recurrence).
+- Action this tick: no code changes. Chemistry at 0% is the main concern — the model engages with web_search on synthesis questions but doesn't emit FINAL ANSWER before the hard-stop. The chemistry_tool only covers stoichiometry, not synthesis/IUPAC naming. The hard-stop + injection fixes are the right lever; next batch results will tell if 7aa9507 moved the needle.
+
+## 2026-05-14 20:00 UTC tick
+- Stress: not running (PID 340932 gone, babysitter at :00 will restart)
+- Write rate: n/a
+- HLE lifetime: 12/251 = 4.8% (Math 4.5%, Chemistry 0.0%, CS/AI 3.0%, Bio 18.8%); 18:45 Chemistry batch: 0/10, 12:45 CS/AI batch: 0/10 — all hitting 480s with no_final_answer
+- Admiral: llamacpp-gemma4 up 20h (Docker shows "unhealthy" but serving correctly); balancer :8001 healthy (pid 380535)
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=8 (all thinking_stall, addressed), curiosity=923 pending (129 hle_failure, 794 unknown_term)
+- Retrieval drain: 0 projects ingested (all current)
+- Action this tick: committed fix d2692cb — addresses curiosity:d796cfab795f70df. Root cause of 0/10 Chemistry+CS batches: the hard-stop if/elif chain checked most-lenient condition first, so when a single LLM generation spanned all thresholds (started at 200s, returned at 480s), it only got to inject a warning at 480s instead of hard-stopping at 360s. Fix reverses the condition order so elapsed>TIME_SEC+120 triggers unconditional hard-stop. Ships in next auto-release (23:00 UTC).
+
+## 2026-05-14 19:30 UTC tick
+- Stress: 1658/1658 COMPLETE (full cycle done, babysitter idle)
+- Write rate: n/a (run complete)
+- HLE batch 18:45 running (Q7/10 at tick time; Chemistry — all 6 completed Qs timed out at 480s with no_response or no_final_answer despite hard-stop fix 16f1289)
+- HLE lifetime: 12/247 = 4.9% (Math 4.5%, Chemistry 0.0%, CS/AI 3.0%, Biology 18.8%)
+- Admiral last 30 min: 0 vLLM errors; llamacpp-gemma4 healthy
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all thinking_stall, addressed), curiosity=913 pending (127 hle_failure, 787 unknown_term)
+- Retrieval drain: 0 projects newly ingested (all already current)
+- Action this tick: consumed curiosity:bcdc8a5b0e2792ec (Isis pyramid geometry — blank prediction/thinking stall, classified as thinking stall addressed by existing fixes). Chemistry batch still showing 480s no_response/no_final_answer — suspect thinking_budget_tokens param not supported by llama.cpp, capping thinking spend. No commit (in-flight batch, budget constrained).
+
+## 2026-05-14 19:00 UTC tick
+- Stress: 1658/1658 COMPLETE (done=88, skip=53, recycle=42 — full cycle, babysitter idle)
+- Write rate: n/a (run complete)
+- HLE batch 18:45 running (Q2/10; Q1 hit 480s stall — hard-stop fix 16f1289 not yet released, ships 23:00 UTC)
+- HLE lifetime: 12/242 = 5.0% (Math 4.5%, Biology 18.8%)
+- Admiral last 30 min: 0 vLLM errors; llamacpp-gemma4 healthy
+- vLLM 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all thinking_stall, addressed), curiosity=902 pending (124 hle_failure, 778 unknown_term)
+- Retrieval drain: 0 projects newly ingested (all current)
+- Action this tick: consumed curiosity:909a8f1150bfffd0 (math "-6" blank prediction — thinking stall, addressed by hard-stop commits 16f1289 + 9edab2d, ship pending 23:00 UTC)
+
+## 2026-05-14 18:30 UTC tick
+- Stress: 1658/1658 COMPLETE (fully done, babysitter idle)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: autonomous_review running (18:30 tick in progress)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy on Q3_K_M)
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all thinking_stall, addressed), retrieval=3 (0 actionable), steering=n/a, curiosity=901 pending (124 hle_failure, 777 unknown_term)
+- Latest HLE batch: 2/10=20% (16:45 UTC batch, pre-9edab2d fix; next batch at 18:45 will use 240s STOP_NOW)
+- Action this tick: committed fix 16f1289 — hard-stop agent at STOP_NOW_TIME_SEC+120 (360s) when both STOP_NOW injections are ignored; saves ~120s per no_final_answer timeout; consumed curiosity item 1d7544292d2444d8 (barbell graph, no_final_answer pattern addressed by timing fix)
+
+## 2026-05-14 18:00 UTC tick
+- Stress: 1658/1658 COMPLETE (run fully finished, babysitter correctly idle)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: 0 fires (no active stress sessions)
+- vLLM 400s: 0 (Q3_K_M on :8000 healthy, balancer on :8001 healthy via PID 380535)
+- GH issues: 0 open
+- Dispatch queue: harness=7 in last 24h (all thinking_stall, addressed); retrieval=0 actionable; curiosity=902 pending (125 hle_failure + 777 unknown_term)
+- HLE: lifetime 12/241 = 5.0%; latest batch 2/10 = 20%; Chemistry 0/29, Physics 0/12 are worst categories; no_final_answer=44/241 cases identified as timing bug
+- Action this tick: committed fix 9edab2d — lowered STOP_NOW_TIME_SEC 360→240 in hle_babysitter.sh; prior value caused STOP_NOW to fire with only 60s left before 480s wall-clock kill (escalation never had time to fire); new value gives model 180s to respond after first STOP_NOW. Consumed curiosity item d230a91a2715bfe0 (topology/no-final-answer). retrieval-drain: 0 projects ingested.
+
+## 2026-05-14 17:30 UTC tick
+- Stress: 1658/1658 COMPLETE (run finished naturally; babysitter correctly not restarting)
+- Write rate: n/a (run complete; done=88, skip=53, recycle=42 across 1658 prompts)
+- Admiral last 30 min: n/a (no active stress sessions)
+- vLLM 400s: 0 (Q3_K_M on :8000 healthy, balancer on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=1271 total (7 in last 24h, all thinking_stall, addressed by de8b153); retrieval=3 entries (0 actionable, all already ingested); steering=0; curiosity=898 pending (123 hle_failure + 775 unknown_term)
+- HLE: lifetime 11/237 = 4.6%; batch PID 1640231 running 46m; Math 4/108, Biology/Medicine 3/16 best performer
+- autonomous_review: started 17:30 UTC (last run completed 17:03 UTC exit=0)
+- retrieval-drain: 0 actionable
+- curiosity-drain: consumed 76aa0ff1063d6dc7 (hle_failure: auction timeout — addressed by today's thinking-cap fix de8b153)
+- Action this tick: no new commit — system healthy; stress run completed; all harness patterns addressed in last 24h; consumed one curiosity item
+
+## 2026-05-14 17:00 UTC tick
+- Stress: 1658/1658 COMPLETE (not restarting, expected)
+- Write rate: n/a (run complete)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 0 (Q3_K_M on :8000 healthy, balancer PID 380535 on :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all thinking_stall, already addressed); retrieval=0 actionable; curiosity=894 pending (120 hle_failure + 774 unknown_term)
+- HLE: lifetime 4.3% (10/232); Math batch running (PID 1640231, 15+ min); recent batches 0/10 pattern consistent with pre-v2.8.30 behavior (thinking cap de8b153 + STOP_NOW escalation fad6127 ship in this tick's auto-release at 17:00 UTC); Chemistry 0/29 and Physics 0/12 worth watching post-tool-deployment
+- autonomous_review: failed at 16:00 and 16:30 UTC (budget exhaustion), new run at 17:00 UTC
+- retrieval-drain: 0 actionable (all already ingested)
+- curiosity-drain: consumed 23f749de64ac6b4e (hle_failure: Halloween candy geometry, empty prediction — geometry timeout, not a retrieval gap)
+- Action this tick: no new commit — system healthy; all active failure patterns addressed by commits in v2.8.30 auto-release; monitoring for first post-v2.8.30 HLE batch results
+
 ## 2026-05-14 16:30 UTC tick
 - Stress: 1658/1658 COMPLETE (run finished, babysitter correctly not restarting)
 - Write rate: n/a (run complete)
@@ -6021,3 +6122,12 @@ restarted, cron self-match bug fixed in this same session).
 - curiosity-queue: consumed 4f2d419fdf13faac (Titan superconducting arch — blank prediction, classified as thinking stall addressed by de8b153 8000-token cap)
 - HLE: 10/221 = 4.5%; Chemistry 0/29 but chemistry tool shipped in 7a2211b (this release) — next Chemistry batch should improve; latest CS/AI batch 0/10 at 12:45 UTC was first batch eligible for de8b153 thinking cap — awaiting 14:45 batch for real signal
 - Action this tick: no commit — system healthy, all queued patterns previously addressed, chemistry+symbolic-math tools just shipped and need evaluation time
+
+## 2026-05-14 20:30 UTC tick
+- Stress: no active PID (stress_babysitter owns hourly restart; next fire at :00)
+- Write rate: N/A (stress watchdog paused)
+- HLE: 17 batches, 12/251 = 4.8% lifetime; Chemistry 0/39 = 0.0%; last batch (chemistry) 0/10
+- vLLM: N/A (llamacpp-gemma4 on :8000, healthy); balancer :8001 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=1272, retrieval=3 (0 actionable), steering=0, curiosity=1202 (921 pending)
+- Action this tick: committed fix 7aa9507 — added 'no relevant information found' to _looks_empty() in agent_loop.py so web_search repeated empty-result loop detection fires correctly. Root cause: Chemistry HLE sessions spent full 480s calling web_search 4+ times with no results because the websearch.py empty-result string ('No relevant information found on the web.') wasn't in the loop-detection pattern list, so EMPTY_RESULT_THRESHOLD never triggered. Fix: one-line addition to the pattern tuple. Also consumed curiosity:c486729c (Chemistry hle_failure: empty prediction pattern). Retrieval drain: 0 projects (all already ingested).

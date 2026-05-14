@@ -787,6 +787,34 @@ class AgentLoop:
             except Exception as _e:
                 logger.warning("curiosity gap logging failed (skipped): %s", _e)
 
+        # === CONSTRAINT-SHAPE DETECTOR ===
+        # The solve tool (Z3-backed) is the right answer for "find x such
+        # that ...", optimization, prove-from-premises, mod-arithmetic, and
+        # logic-puzzle questions. Gemma 4 doesn't reach for it on its own —
+        # this hook recognises the shape and injects a worked-example
+        # template the model can specialize. Off under pytest, on by default
+        # in production. Opt out via DRYDOCK_CONSTRAINT_HINT=0.
+        _constraint_hint_default = "0" if _under_pytest else "1"
+        if os.environ.get(
+            "DRYDOCK_CONSTRAINT_HINT", _constraint_hint_default
+        ).strip().lower() not in ("0", "false", "no"):
+            try:
+                from drydock.core.constraint_hint import (
+                    detect_constraint_shape, build_hint,
+                )
+                hit = detect_constraint_shape(user_msg or "")
+                if hit is not None:
+                    label, example = hit
+                    logger.warning(
+                        "[CONSTRAINT-HINT] matched %s; injecting template",
+                        label,
+                    )
+                    self._inject_system_note(build_hint(label, example))
+            except Exception as _e:
+                logger.warning(
+                    "constraint hint failed (skipped): %s", _e, exc_info=True
+                )
+
         try:
             should_break_loop = False
             tool_turns = 0
@@ -853,7 +881,39 @@ class AgentLoop:
                 # DRYDOCK_STOP_NOW_TIME_SEC regardless of turn count.
                 # Helps HLE batches where per-turn latency is 60-160s
                 # and the turn-based STOP_NOW fires too late or not at all.
+                #
+                # IMPORTANT: check most-extreme condition FIRST. If a single
+                # LLM generation spans all three thresholds (e.g. starts at
+                # 200s, returns at 480s), the loop only gets one check at
+                # 480s. The old if/elif order would fire the *first* injection
+                # at 480s instead of the hard-stop. Reversed order ensures the
+                # hard-stop always wins when we're past all thresholds.
                 if (STOP_NOW_TIME_SEC > 0
+                        and _elapsed > STOP_NOW_TIME_SEC + 120):
+                    # Past all injection thresholds — hard-stop unconditionally.
+                    yield AssistantEvent(
+                        content=(
+                            f"\n\n[Drydock: hard time limit ({int(_elapsed)}s) reached. "
+                            "No final answer was provided before the deadline.]\n"
+                        ),
+                        stopped_by_middleware=True,
+                    )
+                    return
+                elif (STOP_NOW_TIME_SEC > 0
+                        and not _time_stop_escalated
+                        and _elapsed > STOP_NOW_TIME_SEC + 60):
+                    # Model made another tool call after the first STOP_NOW
+                    # (or missed it entirely). Escalate with a forceful injection.
+                    _time_stop_injected = True
+                    _time_stop_escalated = True
+                    _stop_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
+                    self._inject_system_note(
+                        f"URGENT: {int(_elapsed)}s elapsed. Do NOT call any more tools. "
+                        "Emit a plain text response RIGHT NOW with your best answer. "
+                        "If uncertain, still write an answer."
+                        + (f" {_stop_suffix}" if _stop_suffix else "")
+                    )
+                elif (STOP_NOW_TIME_SEC > 0
                         and not _time_stop_injected
                         and _elapsed > STOP_NOW_TIME_SEC):
                     _time_stop_injected = True
@@ -863,20 +923,6 @@ class AgentLoop:
                         "this single request. STOP NOW. Emit a final text "
                         "response summarizing what you have or your best "
                         "guess."
-                        + (f" {_stop_suffix}" if _stop_suffix else "")
-                    )
-                elif (STOP_NOW_TIME_SEC > 0
-                        and _time_stop_injected
-                        and not _time_stop_escalated
-                        and _elapsed > STOP_NOW_TIME_SEC + 60):
-                    # Model made another tool call after the first STOP_NOW.
-                    # Escalate: one more forceful injection, then let it run out.
-                    _time_stop_escalated = True
-                    _stop_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
-                    self._inject_system_note(
-                        f"URGENT: {int(_elapsed)}s elapsed. Do NOT call any more tools. "
-                        "Emit a plain text response RIGHT NOW with your best answer. "
-                        "If uncertain, still write an answer."
                         + (f" {_stop_suffix}" if _stop_suffix else "")
                     )
                 if tool_turns == WRAP_UP_WARN_AT:
@@ -3137,7 +3183,8 @@ class AgentLoop:
             for p in ('"total_count": 0', '"total_count":0',
                       'total_count: 0', 'retrieved 0 todos',
                       'no todos', '0 tasks', 'no tasks',
-                      'no results', 'no matches', '0 matches'):
+                      'no results', 'no matches', '0 matches',
+                      'no relevant information found'):
                 if p in s:
                     return True
             return False

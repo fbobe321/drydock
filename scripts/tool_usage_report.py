@@ -124,12 +124,21 @@ def main() -> int:
         for name in c:
             sessions_using[name] += 1
 
+    symbolic_stack = ("logic", "algebra", "number_theory", "set",
+                      "linear_algebra", "stats", "units", "chemistry")
+
     if args.json:
         out = {
             "sessions_scanned": len(dirs),
             "since": args.since or None,
             "tool_calls_total": dict(total_counts),
             "sessions_using_tool": dict(sessions_using),
+            "symbolic_stack": {
+                "tools": list(symbolic_stack),
+                "calls": {t: total_counts.get(t, 0) for t in symbolic_stack},
+                "sessions_using": {t: sessions_using.get(t, 0)
+                                   for t in symbolic_stack},
+            },
         }
         print(json.dumps(out, indent=2, sort_keys=True))
         return 0
@@ -160,6 +169,20 @@ def main() -> int:
     print(f"NEW TOOLS (math/count/memory/verify):")
     print(f"  total calls:   {new_use}")
     print(f"  sessions used: {new_sess} / {len(dirs)}")
+
+    sym_use = sum(total_counts.get(t, 0) for t in symbolic_stack)
+    sym_sess = sum(1 for d in dirs if any(
+        _scan_session(d).get(t, 0) for t in symbolic_stack))
+    print()
+    print("SYMBOLIC STACK (logic/algebra/number_theory/set/linear_algebra/"
+          "stats/units/chemistry):")
+    print(f"  total calls:   {sym_use}")
+    print(f"  sessions used: {sym_sess} / {len(dirs)}")
+    # Per-tool breakdown so we see which ones are dead weight vs. used.
+    print(f"  {'tool':<18s} {'calls':>8s} {'sessions':>10s}")
+    for t in symbolic_stack:
+        print(f"    {t:<16s} {total_counts.get(t, 0):>8d} "
+              f"{sessions_using.get(t, 0):>10d}")
     return 0
 
 

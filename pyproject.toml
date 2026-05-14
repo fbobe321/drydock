@@ -1,6 +1,6 @@
 [project]
 name = "drydock-cli"
-version = "2.8.30"
+version = "2.8.31"
 description = "Local-first CLI coding agent — tested with Gemma 4 26B via vLLM"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -57,6 +57,7 @@ dependencies = [
     "tree-sitter>=0.25.2",
     "tree-sitter-bash>=0.25.1",
     "watchfiles>=1.1.1",
+    "z3-solver>=4.16.0",
     "zstandard>=0.25.0",
 ]
 
