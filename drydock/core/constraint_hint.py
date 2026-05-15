@@ -32,6 +32,110 @@ logger = logging.getLogger("drydock.constraint_hint")
 # variables/constraints encoding for that question shape, so the model
 # can specialize rather than invent the encoding from scratch.
 _PATTERN_HINTS: list[tuple[re.Pattern[str], str, str]] = [
+    # ── Boolean / propositional algebra (Zhigalkin, formulas, truth tables) ──
+    # Pure boolean problems are Z3's bread and butter — the SAT/SMT solver
+    # decides equivalence and satisfiability efficiently. HLE example:
+    # 66edc256...d744 ("Zhigalkin polynomial of a Boolean formula") which
+    # the model got wrong (gold='$((a↓b)↑¬(c↓b))↔︎¬(d...').
+    (
+        re.compile(
+            r"\bboolean\s+(?:formula|expression|function|polynomial|algebra)\b"
+            r"|\bzhigalkin\s+polynomial\b"
+            r"|\balgebraic\s+normal\s+form\b"
+            r"|\b(?:propositional|prop)\s+(?:formulas?|expressions?|logic|sentences?)\b"
+            r"|\btruth\s+table\b"
+            r"|\bnand|nor|xor|⊕|\\oplus\b"
+            r"|\b(equivalent|equivalence)\s+of\s+(?:two\s+)?(?:formulas?|expressions?)\b",
+            re.IGNORECASE,
+        ),
+        "boolean-algebra",
+        '# For "is formula A equivalent to formula B?" or "simplify formula F":\n'
+        'solve(op="prove", variables="a:Bool, b:Bool, c:Bool",\n'
+        '      constraints=[],\n'
+        '      conclusion="<FORMULA_A> == <FORMULA_B>")\n'
+        '→ valid (equivalent) or countered (with a:Bool=<witness>)\n'
+        '\n'
+        '# For "find a satisfying assignment to F":\n'
+        'solve(op="solve", variables="a:Bool, b:Bool, c:Bool",\n'
+        '      constraints=["<FORMULA_AS_PYTHON_BOOL_EXPR>"])\n'
+        '\n'
+        '# Operators: And(a,b), Or(a,b), Not(a), Implies(p,q), Xor(p,q)\n'
+        '# Z3 decides Boolean SAT/equivalence definitively — DO NOT try to\n'
+        '# work out De Morgan / contrapositive / XOR identities by hand.',
+    ),
+
+    # ── Counting structures over a finite set ──
+    # "How many <structures> on a set of N elements". For small N these
+    # are enumerable by brute search but tedious; Z3 with BitVec/Int tables
+    # nails them. HLE example: 66edc256...754 ("How many associative AND
+    # commutative binary operations on 3 elements?", gold=63 — Z3 can
+    # encode this as a 3×3 table of Ints with the right axioms).
+    (
+        re.compile(
+            r"\bhow\s+many\s+(?:associative|commutative|abelian|cyclic|distinct|finite)\b"
+            r"|\bhow\s+many\s+(?:binary\s+)?(?:operations?|functions?|relations?|graphs?|structures?|groups?|rings?|fields?|magmas?|monoids?|semigroups?)\b.{0,30}(?:on|over|with)\s+(?:a\s+set\s+of|the\s+set)?\s*\d"
+            r"|\bnumber\s+of\s+(?:operations?|functions?|relations?|graphs?|matrices|sequences?)\s+(?:on|over|with|in)\b",
+            re.IGNORECASE,
+        ),
+        "structure-count",
+        '# For "How many <X> operations on a set of N elements?":\n'
+        '# Encode the op as a table: op[i][j] = some value in {0..N-1}.\n'
+        '# Use Int variables t_ij for the N² table cells, then add axioms.\n'
+        '#\n'
+        '# Example: count commutative AND associative binary ops on {0,1,2}\n'
+        'solve(op="find_all",\n'
+        '      variables="t00:Int,t01:Int,t02:Int,t11:Int,t12:Int,t22:Int",\n'
+        '      constraints=[\n'
+        '        # range\n'
+        '        "t00>=0","t00<=2","t01>=0","t01<=2","t02>=0","t02<=2",\n'
+        '        "t11>=0","t11<=2","t12>=0","t12<=2","t22>=0","t22<=2",\n'
+        '        # associativity: (a*b)*c == a*(b*c) for all 27 (a,b,c)\n'
+        '        # (write only the non-redundant cases — use If(...) to look\n'
+        '        # up t[a][b]; commutativity reduces 9 entries to 6)\n'
+        '      ],\n'
+        '      limit=200, timeout_ms=30000)\n'
+        '→ len(models) is the answer.\n'
+        '\n'
+        '# REAL HLE: "comm+assoc binary ops on {0,1,2}" → 63 solutions.',
+    ),
+
+    # ── Perfect-power-counting / Diophantine-finite-search ──
+    # Highest priority because it has the most specific template, and
+    # because it's one of the few HLE question classes where Z3 is
+    # demonstrably strictly better than reasoning (verified: HLE
+    # 66ea031360fbbf249dec70e1, Z3 returned exactly 4 solutions in 4.4s).
+    (
+        re.compile(
+            r"\bfor\s+how\s+many\s+(?:integers?|natural\s+numbers?|positive\s+integers?)\b.*?\b(?:perfect\s+(?:square|cube|power)|a\s+square|a\s+cube|prime|divisible|squarefree)\b"
+            r"|\bperfect\s+(?:square|cube|power)\b.*?\bfor\s+how\s+many\b"
+            r"|\bhow\s+many\s+(?:non-?negative\s+|positive\s+)?integer\s+(?:solutions?|tuples?|points?)\b"
+            r"|\bhow\s+many\s+(?:integers?|values?|positive\s+integers?|natural\s+numbers?)\s+(?:x|y|n|k|m|with|such|less|greater|between|in)\b"
+            r"|\bhow\s+many\s+(?:positive\s+integers?|natural\s+numbers?|integers?).{0,40}?\b(?:squarefree|prime|perfect|divisible|composite|coprime|relatively\s+prime)\b"
+            r"|\bdiophantine\s+(?:equation|solutions?)\b"
+            r"|\bnumber\s+of\s+(?:non-?negative\s+)?integer\s+(?:solutions?|tuples?|pairs?)\b"
+            r"|\bcount\s+the\s+(?:number\s+of\s+)?(?:integers?|solutions?|tuples?)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        "diophantine-count",
+        '# For "For how many integers x is f(x) a perfect square?":\n'
+        'solve(op="find_all", variables="x:Int, y:Int",\n'
+        '      constraints=[\n'
+        '        "y * y == <FILL: f(x) as polynomial in x>",\n'
+        '        "x >= -100", "x <= 100",   # adjust bound by problem scale\n'
+        '        "y >= 0",                   # canonical: only positive root\n'
+        '      ],\n'
+        '      limit=100, timeout_ms=30000)\n'
+        '→ count len(models) — that IS the answer\n'
+        '\n'
+        '# For "Diophantine: how many (x1,...,xk) with sum^2 = N?":\n'
+        'solve(op="find_all", variables="x1:Int, x2:Int, x3:Int",\n'
+        '      constraints=["x1 >= 0", "x2 >= 0", "x3 >= 0",\n'
+        '                   "x1*x1 + x2*x2 + x3*x3 == 2024"],\n'
+        '      limit=100000)\n'
+        '\n'
+        '# REAL HLE WIN: f(x)=x^3-16x^2-72x+1056 perfect square → 4 solutions\n'
+        '#   (x=-4, x=4, x=17, x=65). Z3 finds them in 4 seconds, exact.',
+    ),
     (
         re.compile(
             r"\b(einstein|zebra)\s+puzzle\b"
@@ -105,10 +209,27 @@ _PATTERN_HINTS: list[tuple[re.Pattern[str], str, str]] = [
     ),
     (
         re.compile(
-            r"\bfind\s+(?:all\s+)?(?:x|y|n|the\s+(?:value|values|number|integer|integers))\s+such\s+that\b"
-            r"|\bfor\s+what\s+(?:value|values|x|y|n)\s+(?:does|is|of)\b"
+            # Classic "find x such that" / "for what x"
+            r"\bfind\s+(?:all\s+)?(?:x|y|n|k|m|the\s+(?:value|values|number|integer|integers|set|points?))\b"
+            r"|\bfor\s+what\s+(?:value|values|x|y|n|k|m|integers?)\b"
             r"|\bexists\s+(?:a|an)\s+\w+\s+such\s+that\b"
-            r"|\bthere\s+(?:is|exists)\s+(?:a|an|some)\s+\w+\s+(?:such\s+that|with)\b",
+            r"|\bthere\s+(?:is|exists)\s+(?:a|an|some)\s+\w+\s+(?:such\s+that|with)\b"
+            # Counting questions: "for how many integers x is...", "how many ... satisfy"
+            r"|\bfor\s+how\s+many\b"
+            r"|\bhow\s+many\s+(?:integers?|values?|solutions?|positive|natural)\b"
+            r"|\bdetermine\s+(?:all|the\s+number\s+of|how\s+many)\b"
+            # Bound problems
+            r"|\b(lower|upper)\s+bound\b"
+            r"|\bfind\s+the\s+(?:lower|upper|tight)\b"
+            # Perfect square / power / divisibility predicates (Diophantine territory)
+            r"|\bperfect\s+(?:square|cube|power)\b"
+            r"|\bdiophantine\b"
+            # Compute-the-number-of style
+            r"|\bcompute\s+(?:the\s+(?:number|count|sum)\s+of|the\s+value\s+of)\b"
+            # Equivalence/equation-solving
+            r"|\bsolve\s+(?:the\s+)?(?:equation|system|inequality)\b"
+            # "What is the X-th prime / largest / smallest" — finite search
+            r"|\bwhat\s+is\s+the\s+(?:smallest|largest|number\s+of|maximum|minimum)\b",
             re.IGNORECASE,
         ),
         "find-such-that",

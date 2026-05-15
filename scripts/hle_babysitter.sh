@@ -161,6 +161,7 @@ if [ -n "$GRAPHRAG_DB_OVERRIDE" ]; then
     DRYDOCK_STOP_NOW_TIME_SEC=240 \
     DRYDOCK_THINKING_BUDGET_TOKENS=4000 \
     DRYDOCK_TOOL_STOP_AFTER=3 \
+    DRYDOCK_AUTO_COMPACT_THRESHOLD=28000 \
     DRYDOCK_STOP_NOW_SUFFIX="End your response with 'FINAL ANSWER: <your answer>' on its own line." \
     PYTHONUNBUFFERED=1 \
     nohup "$PY" -u "$DRYDOCK/scripts/hle_eval.py" \

@@ -247,9 +247,12 @@ run_loop() {
             fi
         done
 
-        # Per-batch summary
-        local lifetime=$(grep -c "RESULT" "$RUN_LOG" 2>/dev/null || echo 0)
-        local correct=$(grep -E "→ (YES|PARTIAL)" "$RUN_LOG" 2>/dev/null | wc -l)
+        # Per-batch summary — count "→ YES/NO/PARTIAL/UNGRADED" verdict
+        # lines (what hle_eval actually emits). Earlier version greped
+        # for "RESULT" which the eval script doesn't print, so $lifetime
+        # was always 0.
+        local lifetime=$(grep -cE "→ (YES|NO|PARTIAL|UNGRADED)" "$RUN_LOG" 2>/dev/null || echo 0)
+        local correct=$(grep -cE "→ (YES|PARTIAL)" "$RUN_LOG" 2>/dev/null || echo 0)
         log "batch complete slot=$slot pid=$BATCH_PID category=$CAT correct=$correct/$lifetime"
 
         rm -f "$BATCH_PID_FILE"

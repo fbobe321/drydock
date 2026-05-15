@@ -625,13 +625,20 @@ class AgentLoop:
             self.middleware_pipeline.add(PriceLimitMiddleware(self._max_price))
 
         active_model = self.config.get_active_model()
-        if active_model.auto_compact_threshold > 0:
+        _compact_thresh = active_model.auto_compact_threshold
+        _env_thresh = os.environ.get("DRYDOCK_AUTO_COMPACT_THRESHOLD", "")
+        if _env_thresh.strip():
+            try:
+                _compact_thresh = int(_env_thresh.strip())
+            except ValueError:
+                pass
+        if _compact_thresh > 0:
             self.middleware_pipeline.add(
-                AutoCompactMiddleware(active_model.auto_compact_threshold)
+                AutoCompactMiddleware(_compact_thresh)
             )
             if self.config.context_warnings:
                 self.middleware_pipeline.add(
-                    ContextWarningMiddleware(0.5, active_model.auto_compact_threshold)
+                    ContextWarningMiddleware(0.5, _compact_thresh)
                 )
 
         self.middleware_pipeline.add(

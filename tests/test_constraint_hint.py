@@ -41,12 +41,31 @@ from drydock.core.constraint_hint import (
     ("This is a classic Einstein puzzle.", "logic-puzzle"),
     ("Solve the 8-queens problem.", "logic-puzzle"),
     ("Here is a Sudoku to solve.", "logic-puzzle"),
+
+    # diophantine-count (Z3-tractable counting problems)
+    ("For how many integers x is x^3 - 16x^2 - 72x + 1056 a perfect square?", "diophantine-count"),
+    ("How many non-negative integer solutions to x1^2+x2^2+x3^2+x4^2+x5^2 = 2024?", "diophantine-count"),
+    ("For how many positive integers n is n^2 + n + 41 prime?", "diophantine-count"),
+    ("How many positive integers less than 100 are squarefree?", "diophantine-count"),
+    ("Count the number of integer tuples (a,b) satisfying a^2 + b^2 == 50.", "diophantine-count"),
+
+    # boolean-algebra (Boolean / propositional questions)
+    ("If (a AND b) XOR a XOR 1 is the Zhigalkin polynomial of a Boolean formula, simplify.", "boolean-algebra"),
+    ("Find a Boolean expression in algebraic normal form for NAND(a, NOT b).", "boolean-algebra"),
+    ("Construct the truth table for (p IMPLIES q) IFF (NOT p OR q).", "boolean-algebra"),
+    ("Are the propositional formulas A and B equivalent?", "boolean-algebra"),
+
+    # structure-count
+    ("How many associative and commutative binary operations can be defined on a set of 3 elements?", "structure-count"),
+    ("How many distinct functions exist on a set of 4 elements?", "structure-count"),
 ])
 def test_detector_positive_matches(msg: str, label: str) -> None:
     hit = detect_constraint_shape(msg)
     assert hit is not None, f"expected {label!r} match for {msg!r}"
     assert hit[0] == label, f"got {hit[0]!r}, expected {label!r}"
-    assert hit[1].startswith("solve(")  # worked example starts with a solve call
+    # Worked example must reference the solve tool somewhere — could
+    # lead with a comment ("# For ...:") or directly with `solve(`.
+    assert "solve(" in hit[1], f"template missing solve() call: {hit[1][:80]!r}"
 
 
 # ── Negative matches (coding / arithmetic / generic chat) ─────────────
