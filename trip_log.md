@@ -1,5 +1,13 @@
 # Drydock Trip Log
 
+## 2026-05-15 11:30 UTC tick
+- Stress: alive PID 1878801, 55m elapsed (restarted this cycle)
+- HLE lifetime: 33/371 = 8.9% (Math 11.4%, CS/AI 2.3%, Chem 0.0%, Bio/Med 16.7%, Eng 4.3%); latest batch 2/10 = 20% Biology/Medicine; burndown daemon PID 1742185 alive
+- vLLM 400s: 0; model Q3_K_M confirmed; balancer :8001 up
+- GH issues: 0 open
+- Dispatch queue: harness=17 (all thinking_stall, self-referential), curiosity=503 in 24h window (1255 pending total); retrieval drain: 0 actionable
+- Action this tick: committed fix (cd4e560) — DRYDOCK_AUTO_COMPACT_THRESHOLD env override wired into agent_loop + babysitter sets 28000 token threshold; burndown.sh batch-summary grep fixed (was matching "RESULT" not emitted, lifetime/correct always 0); constraint_hint expanded with boolean-algebra / structure-count / diophantine-count patterns (47 tests pass); consumed curiosity item 9200f122 (Math blank prediction, thinking-stall pattern, already addressed by DRYDOCK_TOOL_STOP_AFTER). Note: 481s stalls persist because llama.cpp ignores `thinking_budget_tokens` (reasoning-budget logged as 2147483647); no in-flight fix — root cause requires testing llama.cpp-specific throttle API.
+
 ## 2026-05-15 10:34 UTC tick
 - Stress: restarted from step 1 (PID 1878801) — prior run had completed all 1658/1658 prompts; babysitter does not auto-recycle, so triggered manually
 - HLE lifetime: 32/365 = 8.8% (Math 11.4%, CS/AI 2.3%, Chem 0.0%, Bio/Med 16.7%, Eng 4.3%); active batch PID 1875152 (16m elapsed, on Q5/10 Biology/Medicine)

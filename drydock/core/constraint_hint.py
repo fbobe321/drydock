@@ -44,7 +44,7 @@ _PATTERN_HINTS: list[tuple[re.Pattern[str], str, str]] = [
             r"|\balgebraic\s+normal\s+form\b"
             r"|\b(?:propositional|prop)\s+(?:formulas?|expressions?|logic|sentences?)\b"
             r"|\btruth\s+table\b"
-            r"|\bnand|nor|xor|⊕|\\oplus\b"
+            r"|\b(?:nand|nor|xor)\b|⊕|\\oplus\b"
             r"|\b(equivalent|equivalence)\s+of\s+(?:two\s+)?(?:formulas?|expressions?)\b",
             re.IGNORECASE,
         ),
@@ -274,12 +274,28 @@ def detect_constraint_shape(user_msg: str) -> tuple[str, str] | None:
     Patterns are checked in priority order: logic-puzzle first (most
     specific), then modular arithmetic, optimization, prove, and finally
     the broad \"find x such that\" catchall. The first match wins.
+
+    When the question has an extractable concrete formula (e.g. "is
+    f(x) a perfect square"), the worked example is SPECIALISED with
+    f(x) already filled in. Otherwise the generic template is returned.
     """
     cleaned = _strip_boilerplate(user_msg)
     if len(cleaned) < 10:
         return None
     for pat, label, example in _PATTERN_HINTS:
         if pat.search(cleaned):
+            # Try to specialise the example with extracted formula/predicate.
+            try:
+                from drydock.core.constraint_extract import extract, render_template
+                extr = extract(cleaned)
+                if extr is not None and extr.confidence >= 0.5:
+                    specialised = render_template(extr)
+                    if specialised:
+                        return (label, specialised + "\n\n# Generic template "
+                                "for reference (only use if the specialisation "
+                                "above is wrong):\n" + example)
+            except Exception:  # noqa: BLE001 — extraction is best-effort
+                pass
             return (label, example)
     return None
 

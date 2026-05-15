@@ -81,6 +81,14 @@ def test_detector_positive_matches(msg: str, label: str) -> None:
     "Hello",
     "",
     "?",
+    # Regression: 'nor' was matching inside 'norm' / 'normed' due to a
+    # word-boundary bug in the boolean-algebra alternation. HLE Math
+    # question about Menger intervals in a normed vector space was
+    # wrongly being routed to boolean-algebra template.
+    "Suppose V is a normed real vector space.",
+    "Consider a vector with norm 1.",
+    "Normalize the vector to unit length.",
+    "Define the operator norm of a linear map.",
 ])
 def test_detector_no_false_positives(msg: str) -> None:
     assert detect_constraint_shape(msg) is None
