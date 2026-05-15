@@ -1,5 +1,34 @@
 # Drydock Trip Log
 
+## 2026-05-15 10:34 UTC tick
+- Stress: restarted from step 1 (PID 1878801) — prior run had completed all 1658/1658 prompts; babysitter does not auto-recycle, so triggered manually
+- HLE lifetime: 32/365 = 8.8% (Math 11.4%, CS/AI 2.3%, Chem 0.0%, Bio/Med 16.7%, Eng 4.3%); active batch PID 1875152 (16m elapsed, on Q5/10 Biology/Medicine)
+- vLLM 400s: 0; model Q3_K_M on llamacpp-gemma4 healthy; balancer :8001 responding
+- GH issues: 0 open
+- Dispatch queue: harness=1284, retrieval=3, curiosity=1226 pending; retrieval drain: 0 actionable; consumed curiosity dd52a7abe7b2cfa1 (no_final_answer Math, addressed by a176ed7 DRYDOCK_TOOL_STOP_AFTER=3); harness:thinking_stall pattern addressed by same commit batch
+- Action this tick: restarted stress harness (was complete, not dead); consumed one curiosity item; no source fixes needed — healthy
+
+## 2026-05-15 10:00 UTC tick
+- Stress: COMPLETE at 1658/1658 (babysitter exits cleanly on completion, no restart needed)
+- HLE lifetime: 31/359 = 8.6% (Math 11.4%, CS/AI 2.3%, Chem 0.0%, Eng 4.3%, Bio/Med 16.7%); HLE pid 1864047 running 48m
+- vLLM 400s: 0; model Q3 on :8000, balancer on :8001 — healthy
+- GH issues: 0 open
+- Dispatch queue: harness=17 (thinking_stall, already addressed), retrieval=0 actionable, curiosity=1209 pending (191 hle_failure / 1018 unknown_term)
+- retrieval-drain: 0 projects (all recently ingested)
+- curiosity-queue: 1209 pending; top items are empty-prediction HLE failures already addressed by v2.8.33; no new action this tick
+- Action this tick: committed fix a176ed7 — DRYDOCK_TOOL_STOP_AFTER=3 was implemented (045169c) but never added to hle_babysitter.sh; last 5 runs show 54% empty:no_final_answer (26/48); fix wires the gate so the model is capped at 3 tool calls then forced to emit FINAL ANSWER text (addresses pattern harness:thinking_stall)
+
+## 2026-05-15 09:30 UTC tick
+- Stress: COMPLETE at 1658/1658 (babysitter idle, no action needed)
+- Write rate: N/A (stress done)
+- HLE lifetime: 30/353 = 8.5% (Math 11.4%, CS/AI 2.3%, Chem 0.0%, Eng 4.3%, Bio/Med 16.7%); HLE pid 1864047 running ~18m
+- vLLM 400s: 0 (llamacpp clean, 0 errors in last 30m)
+- GH issues: 0 open
+- Dispatch queue: harness=17 (thinking_stall, already addressed by 045169c), retrieval=0 actionable, curiosity=1199 pending (122 hle_failure / 1010 unknown_term)
+- retrieval-drain: 0 projects ingested (3 entries, all already ingested recently)
+- curiosity-queue: consumed 3 hle_failure items (5d4362861f, e9cd8146bf, 6ab35090c8) — all no_final_answer pattern after tool cap
+- Action this tick: committed fix 7e4f4ba (wire DRYDOCK_STOP_NOW_SUFFIX in hle_babysitter.sh so TOOL_STOP_AFTER and STOP_NOW nudges both append FINAL ANSWER format reminder; addresses curiosity hle_failure no_final_answer pattern)
+
 ## 2026-05-15 09:00 UTC tick
 - Stress: COMPLETE at 1658/1658 (done=88, skip=53, recycle=42; babysitter correctly idle)
 - Write rate: N/A (stress done)
