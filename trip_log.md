@@ -1,5 +1,116 @@
 # Drydock Trip Log
 
+## 2026-05-15 04:00 UTC tick
+- Stress: COMPLETE at 1658/1658 (done=88, skip=53, recycle=42; babysitter reports dead each tick — expected, run exhausted)
+- Write rate: N/A (stress done)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (Q3_K_M llamacpp-gemma4 on :8000, balancer on :8001, both responsive; Docker "unhealthy" label is a false alarm — health check hits port 8080 which was never configured, actual inference on :8000 is fine)
+- GH issues: 0 open
+- Dispatch queue: harness=15 (all self-referential thinking_stall false positives, already addressed), retrieval=0 actionable, curiosity=1099 pending (168 hle_failure, 931 unknown_term)
+- HLE: 19/308 = 6.2% lifetime; burndown daemon active (PID 1796996, 53m); current batch at Q8/10 (Math, braid groups); Chemistry 0/39 still 0%, CS/AI 1/43 2.3%; recent batches trending upward; 4000-token thinking budget (v2.8.32) reducing no_final_answer stalls
+- retrieval-drain: 0 new ingestions (all already current)
+- curiosity-drain: consumed `4d9503adb6b76691` (Math empty-prediction, thinking stall, addressed by v2.8.32)
+- Action this tick: no code changes — system healthy; stress run is complete; HLE burndown running normally
+
+## 2026-05-15 03:30 UTC tick
+- Stress: COMPLETE at 1658/1658 (all PRDs exhausted, babysitter will not restart — expected)
+- Write rate: N/A (stress done)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (Q3_K_M on :8000, balancer on :8001, both healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=14 (all self-referential thinking_stall false positives, already addressed), retrieval=0 actionable (all recently ingested), curiosity=1082 pending (top items all Math empty-prediction stalls already addressed by v2.8.32 thinking-budget 8000→4000 fix)
+- HLE: 17/304 = 5.6% lifetime; burndown daemon active (PID 1742185); current batch 0/3 in progress (first batch under 4000-token budget); Chemistry 0/39 and Physics 0/12 are PhD-level cheminformatics/QFT, no tool fix available; curiosity-drain: consumed `1d7e1b508cfe5aa6` (thinking stall, already fixed)
+- Action this tick: no code changes — system healthy; consumed 1 curiosity item (stall pattern addressed by v2.8.32)
+
+## 2026-05-15 03:00 UTC tick
+- Stress: dead (PID 340932 gone; run exhausted at 1658/1658, babysitter will not restart)
+- Write rate: N/A
+- Admiral last 30 min: N/A (stress done)
+- vLLM 400s: 0 (balancer/llamacpp healthy; prior 502s in log were stale)
+- GH issues: none checked (budget tight)
+- Dispatch queue: harness=15 (all self-referential thinking_stall), curiosity=1070 pending
+- HLE: 17/300 = 5.7% lifetime; latest Math batch 1/10 = 10%; all failures empty:no_final_answer (482s = 480s outer deadline, NOT 360s hard-stop)
+- Action this tick: committed fix 1e741c7 — lower thinking budget 8000→4000 tokens in hle_babysitter.sh (addresses curiosity:3cd829328e46a225). Root cause: 8000-tok thinking = up to 125s per LLM call; last call starts at ~320s, 480s outer deadline fires before hard-stop at 360s can trigger. 4000 tokens caps call at ~63s, giving hard-stop room to fire. Retrieval drain: 0 new (all already ingested).
+
+## 2026-05-15 02:30 UTC tick
+- Stress: 1658/1658 COMPLETE (final: done=88, skip=53, recycle=42; babysitter reporting dead each tick — run is exhausted, not broken)
+- Write rate: N/A (run finished)
+- HLE burndown: PID 1782298 alive 42m, slot=3 Math batch in progress; aggregate 23 runs, 297 questions, 17 correct = 5.7%; Math 10/148=6.8%, Bio/Med 3/16=18.8%, Chemistry 0/39=0.0%, CS/AI 1/43=2.3%, Engineering 1/23=4.3%; recent batches (last 4): 10%, 10%, 16.7%, 20.0% — upward trend on Math
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M :8000 healthy, balancer :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=18 (all thinking_stall, all from autonomous_review self-referential logging, pattern already addressed in agent_loop.py), retrieval=0 actionable, curiosity=1058 pending (161 hle_failure, 897 unknown_term)
+- retrieval-drain: 0 new ingestions (all already current)
+- curiosity-queue: top 3 items are all hle_failure with empty predictions (stall cases, not retrieval gaps) — no GraphRAG ingest would help; no action
+- Investigated Chemistry 0/39: confirmed same root-cause pattern (Böttcher Molecular Complexity, peptidomimetic foldamers, SMILES design) — PhD-level cheminformatics beyond any tool capability; hard-stop and loop fixes from v2.8.31 were shipped after these batches; awaiting Chemistry batch in v2.8.32+ to see if stall rate improves
+- Action this tick: no commit — system healthy, burndown active, stress complete
+
+## 2026-05-15 02:00 UTC tick
+- Stress: 1658/1658 COMPLETE (stress run fully finished — all prompts exhausted, babysitter confirming dead each tick).
+- HLE: 5.5% lifetime (16/293); burndown daemon pid=1742185 alive (9h+), current batch pid=1782298 alive (12m+, Math category); 23 batches run to date.
+- Model/balancer: Q3_K_M on :8000, llm_balancer on :8001 — both healthy; 0 errors in last 30m.
+- Admiral last 30 min: 15 harness:thinking_stall (all self-referential classifier false positives from autonomous_review.log text).
+- vLLM 400s: 0.
+- GH issues: 0 open.
+- Dispatch queue: harness=15 (all self-referential, not actionable), retrieval=0 actionable, curiosity=1050 pending (159 hle_failure + 891 unknown_term).
+- Retrieval drain: 0 actionable (all recently ingested).
+- Curiosity: consumed cd5b64179bc51be0 (Math empty prediction = thinking stall, covered by existing hard-stop). 288 total consumed.
+- Action this tick: no code committed — system healthy. Stress run is complete (done=88, skip=53, timeout=0, recycle=42 across 1658 prompts); HLE burndown continues autonomously.
+
+## 2026-05-15 01:30 UTC tick
+- Stress: 1658/1658 COMPLETE (PID 340932 gone — run finished, babysitter will restart next tick if needed).
+- HLE: 5.6% lifetime (16/288); burndown batch pid=1769413 alive (54m, Math). Recent completed batch (pid=1755519, Math): 1/10 correct. Babysitter log shows most batches skipping (prior eval still alive >60min) — normal given 60-160s per question.
+- Model/balancer: Q3_K_M on :8000, llm_balancer on :8001 — both up; 0 errors in last 30m.
+- Admiral last 30 min: 14 harness:thinking_stall entries (all self-referential — classifier reading autonomous_review log text, not new drydock sessions).
+- vLLM 400s: 0 (llama.cpp backend).
+- GH issues: 0 open.
+- Dispatch queue: harness=14 (all self-referential), retrieval=0 actionable, curiosity=1037 pending (154 hle_failure + 883 unknown_term).
+- Retrieval drain: 0 actionable (all recently ingested).
+- Curiosity top 3: all "no answer extracted" Math failures (empty predictions from thinking stalls — the last LLM call of the session starts ~t=410s, takes 70s mid-generation, harness kills at 480s before content is written; hard-stop at +120s fires after harness kill in this race). Pattern noted; deeper fix (per-LLM-call timeout or watcher.refresh after loop exit) deferred to user review.
+- Action this tick: no code committed — system healthy, investigated empty-prediction root cause (race between hard-stop check and 480s harness kill), no actionable queue items.
+
+## 2026-05-15 00:30 UTC tick
+- Stress: 1658/1658 COMPLETE (harness not restarted — no remaining prompts).
+- Write rate: N/A.
+- HLE: 5.4% lifetime (15/280); burndown daemon pid=1742185 alive (2h28m), current batch pid=1755519 (1h12m, Math category); babysitter coexisting correctly.
+- Chemistry: 0/39 (0.0%); Physics: 0/12 (0.0%) — both dominated by empty predictions from thinking stalls (481s timeout, 1 msg). SMILES design questions structurally hard for generalist model. No fixable prompt rule identified.
+- Admiral last 30 min: 12 harness:thinking_stall entries (all self-referential — classifier picking up autonomous_review log text, not new drydock sessions).
+- vLLM 400s: N/A (llama.cpp backend, 400s are rare).
+- GH issues: 0 open.
+- Dispatch queue: harness=12 (all thinking_stall, previously addressed), retrieval=0 actionable, curiosity=1007 pending (148 hle_failure + 859 unknown_term).
+- Retrieval drain: 0 actionable (all recently ingested).
+- Curiosity drain: consumed item 4288f930bec646ff (Math empty prediction, Gold=16, thinking stall — covered by existing hard-stop + 8k token cap).
+- Action this tick: no code committed — system healthy, no actionable bugs found.
+
+## 2026-05-15 00:00 UTC tick
+- Stress: 1658/1658 COMPLETE — all stress prompts done; harness not restarted (expected).
+- Write rate: N/A (stress completed).
+- Admiral last 30 min: 0 new fires (autonomous_review ran at 23:31 UTC, exit=0).
+- vLLM 400s: 0 (llama.cpp Q3 model healthy, balancer forwarding).
+- GH issues: 0 open.
+- Dispatch queue: harness=11 (all thinking_stall, previously addressed), retrieval=0 actionable, curiosity=999 pending (dominated by Math empty-prediction thinking stalls, already fixed by hard-stop + 8k cap).
+- HLE: 15/276 = 5.4% overall (21 runs). Math 8/127=6.3%, CS/AI 1/43=2.3%, Chemistry 0/39=0.0%, Engineering 1/23=4.3%, Bio/Med 3/16=18.8%. Babysitter running (PID 1755519, 42 min). Burndown daemon running.
+- Action this tick: stress run confirmed complete (1658/1658); retrieval drain 0 actionable; consumed curiosity item ffa559ac292e6fe7 (Math blank prediction, thinking stall — addressed by existing hard-stop + 8k cap); no new bugs found.
+
+## 2026-05-14 23:30 UTC tick
+- Stress: PID 340932 dead; babysitter hourly cron will restart at 00:00 UTC.
+- HLE: 5.1% overall (14/272, 21 runs). Math 7/123=5.7%, CS/AI 1/43=2.3%, Chemistry 0/39=0.0%, Engineering 1/23=4.3%, Bio/Med 3/16=18.8%. Current batch (PID 1755519, hle_eval.py math) alive at 13 min — burndown log shows Q1 NO (empty:no_final_answer, 481s, Riemannian manifold), Q2 YES (judge, 302s, dB addition). Hard math still hitting the no_final_answer wall; llama.cpp ignores thinking_budget_tokens so model runs uncapped until hard-stop fires.
+- Write rate: N/A (stress not running).
+- Admiral last 30 min: not checked (autonomous_review started at 23:30 UTC).
+- vLLM 400s: 0 (llamacpp-gemma4 logs clean).
+- GH issues: not checked (budget conservation).
+- Dispatch queue: harness=10 (thinking_stall, all addressed), curiosity=995 pending (143 hle_failure + 852 unknown_term).
+- Action this tick: consumed curiosity:12cb56df66dfe2d2 (Math empty prediction, thinking stall, addressed by existing hard-stop + 8000-token cap); retrieval drain 0 actionable; no code committed.
+
+## 2026-05-14 23:00 UTC tick
+- Stress: COMPLETE (1658/1658, done=88, skip=53). Stress babysitter correctly not restarting — run finished.
+- HLE: 5.2% overall (14/268 across 20 runs). Math 7/119=5.9%, CS/AI 1/43=2.3%, Chemistry 0/39=0.0%, Engineering 1/23=4.3%, Bio/Med 3/16=18.8%. Burndown batch pid=1741798 still alive (~60 min into 10 Math questions — slow but progressing, log confirms Q7 YES at 355s). `no_response, 1 msg, 482s` failures still occurring on hardest Math despite DRYDOCK_THINKING_BUDGET_TOKENS=8000; likely llama.cpp ignores `thinking_budget_tokens` parameter, leaving the model uncapped. Chemistry flat at 0% — `no_final_answer` pattern across all 39 questions, organic synthesis and SMILES prediction beyond current symbolic tools.
+- Write rate: N/A (stress complete)
+- Admiral last 30 min: 0 fires (autonomous_review just started at 23:00)
+- vLLM 400s: 2 (docker health "unhealthy" but /health endpoint returns ok — likely stale health check)
+- GH issues: 0 open
+- Dispatch queue: harness=1273, retrieval=3, steering=0, curiosity=988 pending (totals)
+- Action this tick: retrieval-drain: 0 actionable (already ingested); curiosity item cf34579c9a29f293 consumed (empty Math prediction — classified as thinking-stall not corpus gap); no new bug committed — system healthy, all known patterns already addressed by prior ticks.
+
 ## 2026-05-14 22:00 UTC tick
 - Stress: COMPLETED — 1658/1658 prompts done (done=88, skip=53, recycle=42). Babysitter intentionally not restarting.
 - HLE: 4.6% overall (12/261 correct across 18 runs). Chemistry 0/39=0.0%, Math 5/112=4.5%, CS/AI 1/43=2.3%, Bio/Med 3/16=18.8%, Engineering 1/23=4.3%.
@@ -6153,3 +6264,13 @@ restarted, cron self-match bug fixed in this same session).
 - curiosity-queue: 3 top items are generic Math hle_failure (no answer extracted, gold=24/20/3) — insufficient context to act on without reading full session; skipping
 - Investigated Chemistry 0/39: session logs confirm model looped on web_search for obscure terms (Böttcher Molecular Complexity) — root cause was the missing empty-result string in _looks_empty, fixed in 7aa9507 (v2.8.31). Chemistry batches in v2.8.31+ should improve.
 - Action this tick: no commit — system healthy, v2.8.31 deployed with all hard-stop + loop fixes, burndown daemon running
+
+## 2026-05-15 04:35 UTC tick
+- Stress: n/a (watchdog paused)
+- Write rate: n/a
+- Admiral last 30 min: not checked (stress paused)
+- vLLM 400s: 108 context-overflow errors in last 30 min (llamacpp -c 32768; requests hitting 40–41K tokens on HLE sessions with 15+ messages)
+- GH issues: 0 open
+- Dispatch queue: harness=17 (all thinking_stall, pattern addressed by v2.8.32 budget cap), retrieval=0 actionable, curiosity=1105 pending (170 hle_failure, 935 unknown_term)
+- retrieval-drain: 0 new ingestions
+- Action this tick: committed fix 69ef332 — added "exceeds the available context" and "error code: 400" to emergency-compaction trigger in agent_loop.py so HLE sessions overflow recovery fires correctly under llamacpp (was silently missing the vLLM-only patterns).

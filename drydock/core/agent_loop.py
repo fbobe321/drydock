@@ -1028,7 +1028,9 @@ class AgentLoop:
                     elif ("context length" in error_str.lower()
                           or "maximum context" in error_str.lower()
                           or "400 bad request" in error_str.lower()
-                          or "status: 400" in error_str.lower()):
+                          or "status: 400" in error_str.lower()
+                          or "exceeds the available context" in error_str.lower()
+                          or "error code: 400" in error_str.lower()):
                         # Context limit or malformed request — aggressive recovery
                         # Step 0 (added 2026-05-09): if the error looks like a
                         # malformed tool call (most common 400 cause that ISN'T
