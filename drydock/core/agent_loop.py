@@ -1051,7 +1051,10 @@ class AgentLoop:
                           or "400 bad request" in error_str.lower()
                           or "status: 400" in error_str.lower()
                           or "exceeds the available context" in error_str.lower()
-                          or "error code: 400" in error_str.lower()):
+                          or "error code: 400" in error_str.lower()
+                          or "500 internal server error" in error_str.lower()
+                          or "status: 500" in error_str.lower()
+                          or "llm backend error" in error_str.lower()):
                         # Context limit or malformed request — aggressive recovery
                         # Step 0 (added 2026-05-09): if the error looks like a
                         # malformed tool call (most common 400 cause that ISN'T
@@ -1127,11 +1130,31 @@ class AgentLoop:
                         except Exception:
                             pass
                         if dropped_bad_tool_call:
-                            error_text = (
-                                "Your last tool call was rejected by the "
-                                "server (likely malformed arguments). "
-                                "Try a simpler form, or use a different tool."
+                            # Detect JSON-truncation: llama.cpp returns this
+                            # when max_tokens is too low and the tool call
+                            # JSON gets cut off mid-string.
+                            _trunc = (
+                                "missing closing quote" in error_str.lower()
+                                or (
+                                    "parse error at" in error_str.lower()
+                                    and "column" in error_str.lower()
+                                )
                             )
+                            if _trunc:
+                                error_text = (
+                                    "Your write_file content was too large — "
+                                    "the server truncated the response mid-JSON "
+                                    "(hit max_tokens). Split the file into "
+                                    "smaller sections and write each with a "
+                                    "separate write_file call (aim for ≤50 "
+                                    "lines per call)."
+                                )
+                            else:
+                                error_text = (
+                                    "Your last tool call was rejected by the "
+                                    "server (likely malformed arguments). "
+                                    "Try a simpler form, or use a different tool."
+                                )
                         else:
                             error_text = (
                                 "Context compacted due to API error. "

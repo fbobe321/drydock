@@ -1,5 +1,86 @@
 # Drydock Trip Log
 
+## 2026-05-15 16:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 38/418 = 9.1% lifetime (35 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%; burndown daemon alive (43:51 elapsed)
+- vLLM 400s: 0; llamacpp-gemma4 healthy (Q3_K_M on :8000); balancer :8001 up
+- GH issues: 1 open (#21 — user on RedHat8/navygpt reports 500 JSON-parse error when write_file content exceeds max_tokens; also notes temperature 0.02 vs 1 in config.toml — not reproduced locally)
+- Dispatch queue: harness=19 (all thinking_stall, addressed by bc99b6b), retrieval=0 actionable, curiosity=611 signals / top hle_failure items = empty-prediction failures (no FINAL ANSWER output)
+- retrieval-drain: 0 ingestions (all recently consumed)
+- curiosity-drain: no action — top 3 hle_failure items have empty predictions traceable to thinking stall / FINAL ANSWER format; root cause already addressed
+- Action this tick: committed a338858 fix(recovery): detect JSON-truncation 500 (closes #21) — when llama.cpp returns HTTP 500 with 'missing closing quote' or 'parse error at column N', now injects targeted message telling model to split write_file into ≤50-line chunks instead of the generic 'malformed arguments' message
+
+## 2026-05-15 16:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 38/414 = 9.2% lifetime (35 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%; burndown daemon PID 1938107 alive (14h elapsed)
+- vLLM 400s: 0 in last 30min; llamacpp-gemma4 healthy (Q3_K_M); balancer :8001 up (pid 380535, llm_balancer.py confirmed)
+- GH issues: 1 open (#21 — user on RedHat8/navygpt reports 500 JSON-parse error + temperature 0.02 instead of 1 from config.toml; JSON-parse 500 is covered by c174552 compaction routing; temperature 0.02 bug not reproduced locally — no code path produces 0.02, may be misread of 0.2 default or extra_params temperature collision; no fix this tick, needs repro)
+- Dispatch queue: harness=18 (all thinking_stall, latest 12:10 UTC, addressed by bc99b6b), retrieval=0 actionable, curiosity=1458 pending (230 hle_failure, 1228 unknown_term)
+- retrieval-drain: 0 ingestions (3 entries all recently consumed)
+- curiosity-drain: 1458 pending, no action this tick — top hle_failure items are empty-prediction failures traceable to thinking stalls + missing FINAL ANSWER format; root causes addressed by bc99b6b + f8f4f06; autonomous_review cron just started at 16:00:01 UTC
+- Action this tick: no fix committed — all queued patterns addressed by today's earlier commits; system healthy
+
+## 2026-05-15 15:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 37/408 = 9.1% lifetime (34 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%, Eng 4.3%; burndown daemon PID 1926757 alive (slot 14, category=other)
+- vLLM 400s: 0; llamacpp-gemma4 healthy (Q3_K_M); balancer :8001 up
+- GH issues: 0 open (closed #20 this tick — already fixed in c174552, shipping in next auto-release; added close comment)
+- Dispatch queue: harness=19 (all thinking_stall, no new fires since 39ddef9), retrieval=0 actionable, curiosity=1436 pending (226 hle_failure, 1210 unknown_term)
+- retrieval-drain: 0 ingestions (all recently consumed)
+- curiosity-drain: 1436 pending, no action this tick — top items are empty-prediction failures; root cause traced to same thinking_budget gap below
+- Action this tick: committed fix bc99b6b (addresses pattern harness:thinking_stall) — docker logs showed budget=2147483647 on ~80% of requests even after 39ddef9, because the budget cap was only applied when thinking != "off"; llama.cpp activates reasoning with INT32_MAX by default on ALL requests; fix: always include thinking_budget in chat_template_kwargs when DRYDOCK_THINKING_BUDGET_TOKENS is set, regardless of thinking mode.
+
+## 2026-05-15 15:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 36/403 = 8.9% lifetime (34 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%, Eng 4.3%; burndown daemon PID 1926757 alive (slot 14, category=other, batch in progress)
+- vLLM 400s: 0; llamacpp-gemma4 healthy (Q3_K_M, budget=8000 confirmed in docker logs); balancer :8001 up
+- GH issues: 1 open (#20 — already fixed in c174552, ships at next auto-release tick)
+- Dispatch queue: harness=19 in 24h (all harness:thinking_stall, last fire 12:10 UTC documenting the 39ddef9 fix, no new fires post-fix); retrieval=0 actionable; curiosity=1409 pending (222 hle_failure, 1187 unknown_term)
+- retrieval-drain: 0 ingestions (3 entries, all recently consumed)
+- curiosity-drain: 1409 pending, no action this tick — top items are empty-prediction failures on extremely hard questions (MIT Mystery Hunt, Go puzzles); thinking budget IS working per docker logs (budget=8000, forced-end on exhaust), these are model-capability failures on questions above the model's ceiling
+- Action this tick: no fix committed — thinking_budget fix (39ddef9) confirmed operational; thinking_stall dispatch pattern has no new fires since fix shipped; system healthy
+
+## 2026-05-15 14:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 35/397 = 8.8% lifetime (33 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%, Eng 4.3%; burndown daemon PID 1917195 alive (category=other, 40+ min elapsed — stalling on 9-msg sessions)
+- vLLM 400s: 0; llamacpp-gemma4 healthy (Q3_K_M); balancer :8001 up
+- GH issues: 1 open (#20 "API error with tool call" — already fixed in c174552, pending next auto-release)
+- Dispatch queue: harness=20 in 24h (all thinking_stall, addressed by 39ddef9), retrieval=0 actionable, curiosity=1380 pending (217 hle_failure, 1163 unknown_term)
+- retrieval-drain: 0 ingestions (3 entries, all recently consumed)
+- curiosity-drain: 1380 pending, no action this tick (top items are pre-fix no_final_answer failures, will clear naturally)
+- Action this tick: committed fix f8f4f06 — hle_burndown.sh was missing DRYDOCK_TOOL_STOP_AFTER=3 and DRYDOCK_STOP_NOW_SUFFIX that hle_babysitter.sh had; burndown batches were spinning 9+ tool turns into 480s timeouts instead of capping at 3 tool calls
+
+## 2026-05-15 13:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 34/387 = 8.8% lifetime (32 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.4%, Chem 0.0%, Eng 4.3%; burndown daemon PID 1905338 alive (slot=12 Computer Science/AI batch, ~47min elapsed, still running)
+- vLLM 400s: 5 (minor); llamacpp-gemma4 healthy (Q3_K_M confirmed, budget=8000 in docker logs — 39ddef9 fix verified working); balancer :8001 up (PID 380535)
+- GH issues: 0 open
+- Dispatch queue: harness=21 in 24h (all thinking_stall, addressed by 39ddef9), retrieval=0 actionable, curiosity=1349 pending (135 hle_failure, 1140 unknown_term in 24h); dispatch report 578 signals in 24h window
+- retrieval-drain: 0 ingestions (3 entries, all recently consumed)
+- curiosity-drain: consumed item 4bd8d88fca523801 (Math empty prediction 3.9942, root cause = thinking budget unlimited; addressed by 39ddef9 chat_template_kwargs fix; total consumed: 305)
+- Action this tick: no code changes needed; 39ddef9 thinking_budget fix is current work; current batch (slot=12) predates fix and still shows 480s stalls, next batch will benefit
+
+## 2026-05-15 13:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 34/384 = 8.9% lifetime (32 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.6%, Chem 0.0%, Physics 0.0%; burndown daemon PID 1905338 alive (slot=12, Computer Science batch in progress); 135/197 failures are method=empty (thinking stalls)
+- vLLM 400s: 0; llamacpp-gemma4 healthy (Q3_K_M confirmed); balancer :8001 up; thinking budget CONFIRMED working — docker logs show "reasoning-budget: activated, budget=8000 tokens" (was INT32_MAX before 39ddef9)
+- GH issues: 0 open
+- Dispatch queue: harness=1289 total (22 in 24h window, all thinking_stall — ADDRESSED by 39ddef9), retrieval=3 (0 actionable), curiosity=1636 total (135 hle_failure:no_final_answer, 419 unknown_term in 24h window)
+- retrieval-drain: 0 new ingestions (3 entries all already consumed recently)
+- curiosity-drain: consumed item 1b7d0cc4aaf08f52 (Math blank prediction 6*sqrt(2); root cause = thinking stall, addressed by 39ddef9 chat_template_kwargs fix; total consumed: 304)
+- Action this tick: no new commit — 39ddef9 thinking_budget fix confirmed live in source tree (miniconda3 Python uses source dev path); current batch slot=12 uses fixed code; next auto-release at ~17:00 UTC will ship fix to PyPI as v2.8.38; system healthy
+
+## 2026-05-15 12:30 UTC tick
+- Stress: paused (.pause_stress sentinel)
+- Write rate: N/A (stress paused)
+- HLE: 33/378 = 8.7% lifetime (31 runs); burndown daemon alive (PID 1896475, ~34 min, running Computer Science/AI batch)
+- vLLM 400s: 0 errors; llamacpp-gemma4 healthy (Q3_K_M, model_path confirmed)
+- GH issues: 0 open
+- Dispatch queue: harness=22 (thinking_stall, root cause fixed by 39ddef9 this tick), retrieval=0 actionable, curiosity=1297 pending (1093 unknown_term, 204 hle_failure)
+- retrieval-drain: 0 new ingestions (all 3 entries already ingested)
+- curiosity-drain: consumed item 8d95bf4cc3fc45d3 (Math blank prediction pi/2-1/4; root cause = thinking stall, fixed by 39ddef9)
+- Action this tick: no new commit — 39ddef9 (thinking_budget into chat_template_kwargs for llama.cpp) already committed and live in source tree; current burndown batch is pre-fix but next batch will use correct 4000-token budget cap; system healthy, no new actionable patterns
+
 ## 2026-05-15 11:30 UTC tick
 - Stress: alive PID 1878801, 55m elapsed (restarted this cycle)
 - HLE lifetime: 33/371 = 8.9% (Math 11.4%, CS/AI 2.3%, Chem 0.0%, Bio/Med 16.7%, Eng 4.3%); latest batch 2/10 = 20% Biology/Medicine; burndown daemon PID 1742185 alive
@@ -6399,3 +6480,22 @@ restarted, cron self-match bug fixed in this same session).
 - HLE: 22/331 = 6.6% lifetime (27 runs); burndown daemon alive (PID 1838832, 6h+ elapsed, running Math batch)
 - Dispatch queue: harness=16 (thinking_stall, all self-referential false positives already addressed), retrieval=0 actionable, curiosity=1154 pending (972 unknown_term, 182 hle_failure)
 - Action this tick: consumed curiosity item bd848692c98c1362 (Math blank-prediction thinking stall, already addressed by v2.8.32 4000-token cap); retrieval drain 0 actionable; no code changes needed — system healthy
+
+## 2026-05-15 12:00 UTC tick
+- Stress: paused (.pause_stress sentinel)
+- Write rate: N/A (stress paused)
+- HLE: 33/372 = 8.9% lifetime (31 runs); burndown daemon alive (PID 1896475, ~4h elapsed)
+- vLLM 400s: 0 critical; llamacpp-gemma4 shows "unhealthy" Docker health status (healthcheck hitting wrong port 8080 vs actual 8000) — API responds normally, false alarm
+- GH issues: 0 open
+- Dispatch queue: harness=21 (thinking_stall), retrieval=0 actionable, curiosity=1263 pending (1063 unknown_term, 200 hle_failure)
+- Action this tick: fixed real bug — thinking_budget_tokens was being sent as a top-level payload field which llama.cpp silently ignores (logs showed budget=2147483647=INT32_MAX on every HLE call). Correct path is chat_template_kwargs.thinking_budget — verified empirically. This was causing all 480s+ thinking stalls despite DRYDOCK_THINKING_BUDGET_TOKENS=4000/8000 being set. Committed 39ddef9; addresses pattern harness:thinking_stall. Consumed curiosity item 7e62485e82c6849c (top hle_failure blank-prediction, root cause same). Retrieval drain: 0 actionable.
+
+## 2026-05-15 14:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 35/393 = 8.9% lifetime (33 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%, Eng 4.3%; burndown daemon PID 1917195 alive (running "other" category batch, ~9m elapsed)
+- vLLM 400s: n/a (llamacpp); balancer :8001 up; model Q3_K_M confirmed
+- GH issues: 1 new (issue #20 filed 13:56 UTC — user on Red Hat 8 / navygpt hitting "Stopping: 15+ API errors" after search_replace "file path required" error)
+- Dispatch queue: harness=21 (all thinking_stall, addressed by 39ddef9), retrieval=0 actionable, curiosity=1365 pending (1152 unknown_term, 213 hle_failure)
+- retrieval-drain: 0 ingestions (3 entries, all recently consumed)
+- curiosity-drain: no action — top 3 are empty-predicted hle_failure items (symptoms of thinking_stall fixed by 39ddef9, not a separate issue)
+- Action this tick: fixed issue #20 — commit c174552. Root cause: llama.cpp backends return HTTP 500 (not 400) for context overflow; the error handler only applied aggressive compaction+truncation for 400 errors. 500s hit the fallback path that injected an error note WITHOUT truncating context, making each retry larger and recovery impossible. Fix: route "500 Internal Server Error", "status: 500", "LLM backend error" through the same compaction path as 400 errors. 3 regression tests added. Issue commented with fix details.

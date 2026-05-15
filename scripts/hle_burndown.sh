@@ -200,6 +200,8 @@ run_loop() {
             DRYDOCK_STOP_NOW_WARN_AT=12 \
             DRYDOCK_STOP_NOW_TIME_SEC=240 \
             DRYDOCK_THINKING_BUDGET_TOKENS=8000 \
+            DRYDOCK_TOOL_STOP_AFTER=3 \
+            DRYDOCK_STOP_NOW_SUFFIX="End your response with 'FINAL ANSWER: <your answer>' on its own line." \
             PYTHONUNBUFFERED=1 \
             nohup "$PY" -u "$DRYDOCK/scripts/hle_eval.py" \
                 --source hle --limit "$LIMIT" --shuffle --seed "$SEED" \
@@ -210,6 +212,8 @@ run_loop() {
             DRYDOCK_STOP_NOW_WARN_AT=12 \
             DRYDOCK_STOP_NOW_TIME_SEC=240 \
             DRYDOCK_THINKING_BUDGET_TOKENS=8000 \
+            DRYDOCK_TOOL_STOP_AFTER=3 \
+            DRYDOCK_STOP_NOW_SUFFIX="End your response with 'FINAL ANSWER: <your answer>' on its own line." \
             PYTHONUNBUFFERED=1 \
             nohup "$PY" -u "$DRYDOCK/scripts/hle_eval.py" \
                 --source hle --limit "$LIMIT" --shuffle --seed "$SEED" \

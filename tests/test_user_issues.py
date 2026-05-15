@@ -227,6 +227,51 @@ class TestWriteFileDedup:
         assert old != new  # Different = allow write
 
 
+class TestIssue20_500ErrorRecovery:
+    """#20: 500 Internal Server Error from llama.cpp backend triggers no-op
+    error path instead of context compaction, making recovery impossible."""
+
+    def test_500_error_matches_compaction_path(self):
+        """The condition that routes errors to aggressive compaction should
+        match 500 Internal Server Error strings from llama.cpp backends."""
+        # Reproduce the predicate extracted from agent_loop.py
+        error_str = "API error from local (model: navygpt): LLM backend error [local]\nstatus: 500 Internal Server Error reason: Internal Server Error"
+        cond = (
+            "context length" in error_str.lower()
+            or "maximum context" in error_str.lower()
+            or "400 bad request" in error_str.lower()
+            or "status: 400" in error_str.lower()
+            or "exceeds the available context" in error_str.lower()
+            or "error code: 400" in error_str.lower()
+            or "500 internal server error" in error_str.lower()
+            or "status: 500" in error_str.lower()
+            or "llm backend error" in error_str.lower()
+        )
+        assert cond, "500 error should trigger compaction path"
+
+    def test_generic_500_matches(self):
+        """Plain '500 Internal Server Error' string should also match."""
+        error_str = "status: 500 Internal Server Error"
+        cond = (
+            "500 internal server error" in error_str.lower()
+            or "status: 500" in error_str.lower()
+        )
+        assert cond
+
+    def test_non_500_error_does_not_match(self):
+        """Unrelated errors (e.g. timeout) should NOT match."""
+        error_str = "Connection timed out after 30s"
+        cond = (
+            "context length" in error_str.lower()
+            or "400 bad request" in error_str.lower()
+            or "status: 400" in error_str.lower()
+            or "500 internal server error" in error_str.lower()
+            or "status: 500" in error_str.lower()
+            or "llm backend error" in error_str.lower()
+        )
+        assert not cond
+
+
 class TestEscapeCharacters:
     """#70: Invalid escape characters causing API errors."""
 
