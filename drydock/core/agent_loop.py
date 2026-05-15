@@ -1358,7 +1358,17 @@ class AgentLoop:
                 and bool(_prev_tool_result.strip())
             )
             if _stall_attempt == 0:
-                if _prev_write_path_error:
+                if _tool_stop_injected:
+                    _fa_suffix = os.environ.get(
+                        "DRYDOCK_STOP_NOW_SUFFIX",
+                        "End with 'FINAL ANSWER: <answer>'.",
+                    )
+                    note = (
+                        "STOP THINKING. Do NOT use any tools. "
+                        "Write your best answer as plain text RIGHT NOW. "
+                        + _fa_suffix
+                    )
+                elif _prev_write_path_error:
                     note = (
                         "Your write_file call failed because the path argument was empty. "
                         "Retry write_file RIGHT NOW with the correct path. "
@@ -1526,8 +1536,10 @@ class AgentLoop:
         # Detect repetitive text generation (Gemma 4 sometimes loops text within one response)
         if last_message.content and len(last_message.content) > 200:
             text = last_message.content
-            # Check if any sentence repeats 3+ times
-            sentences = [s.strip() for s in text.split('.') if len(s.strip()) > 30]
+            # Check if any sentence repeats 3+ times.
+            # Threshold 15: catches short repeated phrases like "(Wait, I'll call the tool."
+            # which split to 28-char fragments — previously filtered by the old > 30 threshold.
+            sentences = [s.strip() for s in text.split('.') if len(s.strip()) > 15]
             if sentences:
                 from collections import Counter
                 sentence_counts = Counter(sentences)

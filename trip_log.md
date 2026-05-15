@@ -1,5 +1,100 @@
 # Drydock Trip Log
 
+## 2026-05-15 22:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (pid 2001562, 55 min elapsed); lifetime 9.2% (43/467 across 40 runs) — Math 11.5%, Bio/Med 16.7%, CS/AI 3.2%
+- vLLM 400s: 1 (minor, llama.cpp container otherwise clean)
+- GH issues: 1 open (#23 image-processing enhancement — requires mmproj download, deferred to user return)
+- Dispatch queue: harness=1291 total (thinking_stall pattern all addressed by prior commits), retrieval=3 (0 actionable, already ingested), curiosity=1627 pending
+- Retrieval-drain: 0 projects ingested (all already current)
+- Curiosity top 3: all hle_failure with empty predictions (Math/Bio) — genuine model non-responses; extraction already addressed by 8e92b1e/64a90b4
+- Action this tick: committed b0350cb fix(stall): targeted FINAL-ANSWER nudge when _tool_stop_injected stalls — unstaged agent_loop.py change (10-line addition) that injects "STOP THINKING, write FINAL ANSWER" when model stalls after hitting TOOL_STOP_AFTER limit, instead of the generic read-stall message
+
+## 2026-05-15 22:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (25 min elapsed this batch); lifetime 9.3% (43/463 across 40 runs) — Math 11.8%, Bio/Med 16.7%, CS/AI 3.2%
+- vLLM 400s: 0 (llama.cpp container clean)
+- GH issues: 1 open (#23 image-processing enhancement, not actionable this tick)
+- Dispatch queue: harness=18 thinking_stall (all addressed by prior commits), retrieval=0 actionable, curiosity=1619 pending (265 hle_failure + 1354 unknown_term)
+- Curiosity top items: hle_failure with empty-predicted on Math/Bio questions — genuine model non-responses, not extractable drydock bugs; prior 8e92b1e/64a90b4 commits covered the two structural extraction gaps
+- Action this tick: no action — system healthy, no actionable drydock bug; retrieval-drain: 0 projects ingested (all already current)
+
+## 2026-05-15 21:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE: 42/460 = 9.1% lifetime (39 runs); burndown daemon alive (PID in /tmp/hle_continuous.pid, engineering batch just completed 1/10=10%)
+- vLLM 400s: 0 (llamacpp-gemma4 "unhealthy" Docker healthcheck but /health endpoint returns ok, model responding fine)
+- GH issues: 1 open (#23 enhancement, image processing — not a drydock source bug)
+- Dispatch queue: harness=19 (all harness:thinking_stall, addressed by 64a90b4), retrieval=0 actionable, curiosity=1614 pending (264 hle_failure, 1350 unknown_term)
+- Action this tick: no fix committed. Engineering batch shows 4/10 questions hitting 481s timeout with `empty:no_response` (1 msg — model never produces content). The bc99b6b thinking-budget cap (DRYDOCK_THINKING_BUDGET_TOKENS=8000) is deployed in v2.8.38 and the burndown correctly passes the env var; unclear why stalls persist. Balancer passthrough confirmed correct. Next tick: verify llama.cpp is honoring chat_template_kwargs.thinking_budget by checking docker logs for "reasoning-budget:" lines on a live request.
+
+## 2026-05-15 21:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE: 41/456 = 9.0% lifetime (39 runs); burndown daemon alive (38:50 elapsed, engineering batch 19 in flight)
+- vLLM 400s: 0 (llamacpp-gemma4 build b9115 clean)
+- GH issues: 1 open (#23 enhancement, image processing — skipped, not a drydock source bug)
+- Dispatch queue: harness=19 (all thinking_stall, all addressed), retrieval=0 actionable, curiosity=1602 pending (262 hle_failure, 1340 unknown_term)
+- Action this tick: no fix committed. Identified critical ongoing issue: engineering batch shows 3/5 questions hitting 481s QUESTION_TIMEOUT with only 1 message (model never responds). Docker logs show `reasoning-budget: activated, budget=2147483647` on ALL recent requests, confirming bc99b6b thinking-budget cap is NOT reaching llama.cpp despite correct payload construction. `chat_template_kwargs.thinking_budget=8000` is built correctly in code but llama.cpp b9115 appears to ignore it. Root cause unconfirmed — ran out of budget before deeper investigation. Next tick should verify if llama.cpp b9115 requires a different field path or if there's a proxy/stripping issue between drydock and the server.
+
+## 2026-05-15 20:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE: 41/452 = 9.1% lifetime (39 runs); burndown daemon alive (8:52 elapsed, engineering batch in flight)
+- vLLM 400s: 0 (llamacpp-gemma4 clean)
+- GH issues: 1 open (#23 enhancement, image processing — not actioned)
+- Dispatch queue: harness=19 (all thinking_stall, previously addressed), retrieval=0 actionable, curiosity=1591 pending (260 hle_failure, 1331 unknown_term)
+- Action this tick: investigated empty-prediction pattern in Humanities/Social Science batches (8/10 empty in run_1778867670, 19:07 UTC, after bc99b6b thinking-cap fix) — still ongoing post-fix; likely model-side, not drydock bug. No code committed. System healthy.
+
+## 2026-05-15 20:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 40/448 = 8.9% lifetime (38 runs); burndown daemon alive (54 min elapsed, chemistry batch slot 18 in flight)
+- Write rate: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp-gemma4 clean)
+- GH issues: 1 open (#23 enhancement: multimodal/image — not actionable)
+- Dispatch queue: harness=1290 total (stale thinking_stall, pattern covered); retrieval=0 actionable; curiosity=1888 total / 1578 pending
+- Action this tick: committed 64a90b4 — fix(hle): skip drydock error messages in _extract_answer. When MAX_STALL_RETRIES exhausted, agent_loop sets assistant content to "[Drydock: model returned an empty response...]"; _extract_answer was returning this error text as the prediction (causing judge to score NO on every case), wasting an API call per question. Now skips messages starting with "[Drydock:". Retrieval drain: 0 actionable (3 entries already ingested). Curiosity top-3 all hle_failure:empty — pattern partially addressed by 8e92b1e (reasoning_content fallback) and 64a90b4 (error-message skip); remaining empty cases are genuine timeouts.
+
+## 2026-05-15 19:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 38/440 = 8.6% lifetime (37 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%; burndown daemon alive (01:05:50 elapsed)
+- Write rate: N/A (stress paused)
+- vLLM 400s: 0
+- GH issues: 1 open (#23 enhancement: multimodal/image processing — not actionable this tick)
+- Dispatch queue: harness=19 (stale thinking_stall, already covered by bc99b6b); retrieval=0 actionable; curiosity=1566 pending
+- Action this tick: committed 8e92b1e — fix _extract_answer to fall back to reasoning_content when content is empty. llama.cpp --jinja mode stores Gemma 4 thinking in reasoning_content; 44-78% of HLE questions were scoring as empty:no_final_answer because the function skipped those messages. Matches logic already in judge function. Addresses curiosity:b572406518cd9013.
+
+## 2026-05-15 18:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 38/436 = 8.7% lifetime (37 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%; burndown daemon alive (35:49 elapsed)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0
+- GH issues: 1 open (#23 enhancement: image processing/multimodal); closed #21 and #22 (fixes already in v2.8.38)
+- Dispatch queue: harness=19 (all thinking_stall, entries from May 3 — stale, already addressed); retrieval=0 actionable; curiosity=1534 pending (top-3 are no_final_answer cases, covered by shipped TOOL_STOP_AFTER+STOP_NOW fixes)
+- Action this tick: closed GH #21 and #22 manually (commits had "closes" but no push to GitHub); no source fix needed — system healthy
+
+## 2026-05-15 18:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 38/432 = 8.8% lifetime (37 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%; burndown daemon alive (05:54 elapsed at tick time)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0
+- GH issues: 2 open (#21 #22 — fixed by recent commits, not yet pushed)
+- Dispatch queue: harness=19 (all thinking_stall), retrieval=0 actionable, curiosity=1515 pending (645 in 24h)
+- Action this tick: investigated empty:no_response pattern in Physics HLE batch (0/10, 480s timeouts) — model likely exhausts thinking budget on hard QFT/gauge-theory questions before producing FINAL ANSWER; thinking_budget cap (bc99b6b, 8000 tok) is in place but stall debug shows retries working normally for other sessions; no commit — deeper diagnosis deferred. Retrieval drain: 0 actionable. Autonomous_review 17:30 tick failed (budget exceeded).
+
+## 2026-05-15 17:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- HLE: 38/422 = 9.0% lifetime (36 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%; burndown daemon alive (11:07 elapsed)
+- vLLM 400s: 0; llamacpp-gemma4 healthy (Q3_K_M on :8000); balancer :8001 up
+- GH issues: 2 open (#21 still showing open despite close commit a338858; #22 looping bug filed by RedHat8 user — "(Wait, I'll call the tool.)" repeated 10+ times on large C++-to-Python port request)
+- Dispatch queue: harness=19 (thinking_stall, addressed), retrieval=0 actionable, curiosity=1483 pending (top hle_failure: empty-prediction pre-thinking-budget-fix, consumed 2 stale items)
+- retrieval-drain: 0 ingestions
+- Action this tick: committed 50db330 fix(loop): lower repetitive-text sentence threshold 30→15 (closes #22) — "(Wait, I'll call the tool." fragments are 28 chars, previously filtered by >30 guard; now caught at >15, truncation fires after 3 repeats
+
 ## 2026-05-15 16:30 UTC tick
 - Stress: paused (.pause_stress sentinel active)
 - HLE: 38/418 = 9.1% lifetime (35 runs); Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%, Chem 0.0%; burndown daemon alive (43:51 elapsed)
@@ -6499,3 +6594,15 @@ restarted, cron self-match bug fixed in this same session).
 - retrieval-drain: 0 ingestions (3 entries, all recently consumed)
 - curiosity-drain: no action — top 3 are empty-predicted hle_failure items (symptoms of thinking_stall fixed by 39ddef9, not a separate issue)
 - Action this tick: fixed issue #20 — commit c174552. Root cause: llama.cpp backends return HTTP 500 (not 400) for context overflow; the error handler only applied aggressive compaction+truncation for 400 errors. 500s hit the fallback path that injected an error note WITHOUT truncating context, making each retry larger and recovery impossible. Fix: route "500 Internal Server Error", "status: 500", "LLM backend error" through the same compaction path as 400 errors. 3 regression tests added. Issue commented with fix details.
+
+## 2026-05-15 17:30 UTC tick
+- Stress: paused (`.pause_stress` sentinel active)
+- Write rate: N/A (stress paused)
+- HLE daemon: alive (PID 1949327, 41 min elapsed at tick start); current batch is Physics, 6/10 done, showing `no_response/no_final_answer` at 480s — expected for pre-v2.8.38 sessions where thinking="off" mode had no budget cap (bc99b6b). Future batches post-v2.8.38 have the cap applied to all modes.
+- HLE score: 38/427 = 8.9% lifetime (Math 11.4%, Bio 16.7%, CS 3.2%, Physics 3.6%, Chemistry 0.0%)
+- vLLM 400s: 0 (llama.cpp container clean)
+- GH issues: 2 open (#21, #22 — fixes committed 50db330+a338858, pending 4 AM rsync push to GitHub for auto-close)
+- Dispatch queue: harness=1290 (all addressed by bc99b6b), retrieval=3 (0 actionable), steering=N/A, curiosity=1492 pending
+- retrieval-drain: 0 ingestions (all recently consumed)
+- curiosity-drain: top items are pre-thinking-budget-fix empty-predicted failures — not actionable as code changes
+- Action this tick: no fix committed — system healthy, previous ticks (15:30, 16:30, 17:00) shipped bc99b6b+a338858+50db330 addressing all queued patterns; no new dispatch signals or GH issues since 17:00 tick

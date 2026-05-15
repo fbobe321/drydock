@@ -422,6 +422,13 @@ def _extract_answer(messages: list[dict]) -> str:
         if m.get("role") != "assistant":
             continue
         content = _flat(m.get("content")).strip()
+        # Skip internal drydock error messages — they are not model answers.
+        if content.startswith("[Drydock:"):
+            continue
+        # llama.cpp --jinja stores thinking in reasoning_content; content may
+        # be empty even when the model wrote a FINAL ANSWER inside thinking.
+        if not content:
+            content = _flat(m.get("reasoning_content")).strip()
         if not content:
             continue
         for line in reversed(content.splitlines()):
