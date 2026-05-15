@@ -35,9 +35,13 @@ Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
 - **Current version:** v2.8.27 on PyPI (auto-released every 6h from `main`)
 - **Active continuous loops:** stress harness (hourly), autonomous_review
   (30-min), classify_pulse (10-min), telegram_bot keepalive (2-min),
-  hle_babysitter (hourly @ :45 — 10-Q math HLE batch per tick, see
-  HLE_PRD §"Continuous HLE evaluation"). Anything new the operator
-  adds should not run at :00 or :30 (autonomous_review owns those).
+  hle_babysitter (hourly @ :45 — 10-Q HLE batch per tick, see
+  HLE_PRD §"Continuous HLE evaluation"), **hle_burndown daemon** (back-to-back
+  batches, runs as background process via `scripts/hle_burndown.sh start`;
+  keepalive cron at `*/15` resurrects if it dies). Both HLE loops share
+  `/tmp/hle_continuous.pid` — whichever owns the lock keeps it; the other
+  exits/skips. Anything new the operator adds should not run at :00 or
+  :30 (autonomous_review owns those).
 
 ## Current plan (2026-05-14)
 
@@ -76,9 +80,11 @@ tracked as TaskCreate items; the high-level shape is:
 Operator controls for the continuous loops:
 
 ```bash
-touch /data3/drydock/.pause_hle_babysitter      # pause continuous HLE
+touch /data3/drydock/.pause_hle_babysitter           # pause hourly HLE cron
+touch /data3/drydock/.pause_hle_burndown             # pause back-to-back burndown daemon
+touch /data3/drydock/.pause_hle_burndown_keepalive   # disable burndown auto-resurrection
 touch /data3/drydock_test_projects/.pause_watchdog
-touch /data3/drydock/.pause_auto_release        # pause 6h PyPI publish
+touch /data3/drydock/.pause_auto_release             # pause 6h PyPI publish
 ```
 
 ## Build & Test

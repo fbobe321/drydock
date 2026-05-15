@@ -113,6 +113,94 @@ def test_extract_divisible_by_alternative_phrasing():
     assert r.divisor == 6
 
 
+# ── equation_solve / smallest_with / largest_with ────────────────────────
+
+def test_extract_equation_solve_with_lhs_rhs():
+    r = extract("Find all integers x such that x^2 - 5x + 6 = 0.")
+    assert r is not None and r.predicate == "equation_solve"
+    assert r.formula == "x * x - 5 * x + 6"
+    assert r.second_formula == "0"
+
+
+def test_extract_equation_solve_quadratic_rhs():
+    r = extract("Solve x^2 = 4y + 1 for x.")
+    assert r is not None and r.predicate == "equation_solve"
+    # Either side capture is acceptable; just verify both formulas are extracted
+    assert r.formula and r.second_formula
+
+
+def test_extract_smallest_with():
+    r = extract("Find the smallest positive integer n such that n^2 > 1000.")
+    assert r is not None and r.predicate == "smallest_with"
+    assert "n * n > 1000" in r.formula
+    assert r.variables == ["n"]
+
+
+def test_extract_smallest_with_factorial_ge():
+    r = extract("What is the smallest n with n! >= 100?")
+    assert r is not None and r.predicate == "smallest_with"
+    # `>=` must NOT be split by the operator-spacing normaliser
+    assert ">=" in r.formula
+
+
+def test_extract_largest_with():
+    r = extract("Find the largest integer x with x^2 < 50.")
+    assert r is not None and r.predicate == "largest_with"
+    assert "x * x < 50" in r.formula
+    assert r.variables == ["x"]
+
+
+# ── Render templates for the new predicates ──────────────────────────────
+
+def test_render_equation_solve_includes_both_sides():
+    r = ExtractResult(
+        predicate="equation_solve",
+        formula="x * x - 5 * x + 6",
+        second_formula="0",
+        variables=["x"],
+    )
+    out = render_template(r)
+    assert "(x * x - 5 * x + 6) == (0)" in out
+    assert "find_all" in out
+
+
+def test_render_smallest_with_uses_min_optimization():
+    r = ExtractResult(
+        predicate="smallest_with",
+        formula="n * n > 1000",
+        variables=["n"],
+    )
+    out = render_template(r)
+    assert 'direction="min"' in out
+    assert 'objective="n"' in out
+    assert "n * n > 1000" in out
+
+
+def test_render_largest_with_uses_max_optimization():
+    r = ExtractResult(
+        predicate="largest_with",
+        formula="x * x < 50",
+        variables=["x"],
+    )
+    out = render_template(r)
+    assert 'direction="max"' in out
+    assert 'objective="x"' in out
+
+
+# ── Normalizer regression: multi-char comparison ops ────────────────────
+
+def test_normalize_preserves_gte():
+    assert ">=" in _normalize_for_z3("n! >= 100")
+
+
+def test_normalize_preserves_lte():
+    assert "<=" in _normalize_for_z3("x <= 10")
+
+
+def test_normalize_preserves_eq_eq():
+    assert "==" in _normalize_for_z3("x == 5")
+
+
 # ── Negative cases ───────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("msg", [

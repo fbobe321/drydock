@@ -56,6 +56,16 @@ notify_on_change() {
     log "TELEGRAM: $msg"
 }
 
+# Operator pause sentinel — when present, do not restart a dead harness
+# and do not interfere. Used during HLE burndown trips so the single
+# llama.cpp slot stays free for HLE. Remove the file (or set to empty)
+# to resume.
+PAUSE_FILE=/data3/drydock/.pause_stress
+if [ -f "$PAUSE_FILE" ]; then
+    log "PAUSED via $PAUSE_FILE"
+    exit 0
+fi
+
 if [ ! -f "$PID_FILE" ]; then
     log "no PID file at $PID_FILE — nothing to monitor"
     notify_on_change "nopid" "no PID file — stress run not tracked"

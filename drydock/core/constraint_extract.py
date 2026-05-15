@@ -43,6 +43,9 @@ PredicateKind = Literal[
     "divisible_by",       # is f(x) divisible by k?
     "equals_constant",    # f(x) == c (Diophantine)
     "boolean_equiv",      # is formula A equivalent to formula B?
+    "equation_solve",     # find x such that f(x) == g(x)
+    "smallest_with",      # smallest x such that P(x)
+    "largest_with",       # largest x such that P(x)
 ]
 
 
@@ -150,9 +153,11 @@ def _normalize_for_z3(formula: str) -> str:
             return "*".join([var] * n)
         return m.group(0)
     s = re.sub(r'([A-Za-z_][A-Za-z0-9_]*)\*\*(\d+)', _expand_pow, s)
-    # Clean stray spaces around operators. Treat `**` as a single token
-    # so we don't split power operators into ` * * `.
-    s = re.sub(r'\s*(\*\*|[+\-*/=<>])\s*', r' \1 ', s)
+    # Clean stray spaces around operators. Treat `**`, `>=`, `<=`, `==`,
+    # `!=` as single tokens so we don't split them into space-separated
+    # pairs ('>=' must NOT become '> ='). Order matters in the alternation:
+    # multi-char ops first.
+    s = re.sub(r'\s*(\*\*|>=|<=|==|!=|[+\-*/=<>])\s*', r' \1 ', s)
     s = re.sub(r'\s+', ' ', s).strip()
     return s
 
@@ -189,6 +194,36 @@ _RE_DIVISIBLE = re.compile(
 # Diophantine "x1^2 + x2^2 + ... == N"
 _RE_EQUALS_CONSTANT = re.compile(
     r'(?P<f>[\w\^\{\}+\-*/().\s\\]+?)\s*=\s*(?P<c>\d{2,})\b',
+    re.IGNORECASE | re.DOTALL,
+)
+
+# "find x such that f(x) == g(x)" / "solve f(x) = g(x) for x"
+_RE_EQUATION_SOLVE = re.compile(
+    r'(?:find\s+(?:all\s+)?(?:integers?|values?|x|y|n|k|m|the\s+\w+)'
+    r'|solve(?:\s+for\s+\w+)?)\s+(?:such\s+that\s+)?'
+    r'(?P<lhs>[\w\^\{\}+\-*/().\\\s]{3,150}?)\s*=\s*'
+    r'(?P<rhs>[\w\^\{\}+\-*/().\\\s]{1,150}?)(?:\s*[.,?\n]|\s*$)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+# "smallest / largest n such that P" — P often follows.
+# The variable name may appear between the noun and the connective:
+# "smallest positive integer n such that P" — so allow an optional
+# bare variable token (e.g. "n", "x", "k") between them.
+_RE_SMALLEST = re.compile(
+    r'(?:smallest|minimum|min)\s+(?:positive\s+)?'
+    r'(?:integer|number|natural|n|x|k|m|value)\s+'
+    r'(?:[a-zA-Z]\w*\s+)?'  # optional variable name like "n " between noun and connective
+    r'(?:such\s+that|with|satisfying|so\s+that)\s+'
+    r'(?P<f>[\w\^\{\}+\-*/().\\\s=<>!]+?)(?:\s*[.,?\n]|\s*$)',
+    re.IGNORECASE | re.DOTALL,
+)
+_RE_LARGEST = re.compile(
+    r'(?:largest|maximum|max)\s+(?:positive\s+)?'
+    r'(?:integer|number|natural|n|x|k|m|value)\s+'
+    r'(?:[a-zA-Z]\w*\s+)?'
+    r'(?:such\s+that|with|satisfying|so\s+that)\s+'
+    r'(?P<f>[\w\^\{\}+\-*/().\\\s=<>!]+?)(?:\s*[.,?\n]|\s*$)',
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -260,7 +295,7 @@ def extract(question: str) -> ExtractResult | None:
         return None
     cleaned = _clean_latex(question)
 
-    # Try predicates in specificity order
+    # Try predicates in specificity order. Single-formula predicates first.
     for kind, pat in [
         ("perfect_square", _RE_PERFECT_SQUARE),
         ("perfect_cube",   _RE_PERFECT_CUBE),
@@ -294,6 +329,53 @@ def extract(question: str) -> ExtractResult | None:
         if re.search(r'[{}\\]', f_norm):
             result.confidence = 0.4
         return result
+
+    # Two-sided equations: "find x such that f(x) = g(x)"
+    m = _RE_EQUATION_SOLVE.search(cleaned)
+    if m:
+        lhs = _truncate_formula_after_predicate(m.group("lhs"))
+        rhs = m.group("rhs").strip()
+        # Reject if either side is bare or lacks any expression character
+        if (len(lhs) >= 1 and len(rhs) >= 1 and
+                re.search(r'\w', lhs) and re.search(r'\w', rhs) and
+                # At least one side must have an operator OR a variable
+                (re.search(r'[+\-*/^]', lhs + rhs))):
+            lhs_norm = _normalize_for_z3(lhs)
+            rhs_norm = _normalize_for_z3(rhs)
+            vs = _extract_variables(lhs_norm + " " + rhs_norm)
+            if vs:
+                conf = 1.0
+                if re.search(r'[{}\\]', lhs_norm + rhs_norm):
+                    conf = 0.4
+                return ExtractResult(
+                    predicate="equation_solve",
+                    formula=lhs_norm,
+                    variables=vs,
+                    second_formula=rhs_norm,
+                    confidence=conf,
+                    raw_match=m.group(0)[:200],
+                )
+
+    # Range bounds
+    for kind, pat in [("smallest_with", _RE_SMALLEST),
+                      ("largest_with",  _RE_LARGEST)]:
+        m = pat.search(cleaned)
+        if not m:
+            continue
+        f_raw = _truncate_formula_after_predicate(m.group("f"))
+        if len(f_raw) < 3:
+            continue
+        f_norm = _normalize_for_z3(f_raw)
+        vs = _extract_variables(f_norm)
+        if not vs:
+            continue
+        conf = 1.0
+        if re.search(r'[{}\\]', f_norm):
+            conf = 0.4
+        return ExtractResult(
+            predicate=kind, formula=f_norm, variables=vs,
+            confidence=conf, raw_match=m.group(0)[:200],
+        )
 
     return None
 
@@ -353,5 +435,40 @@ def render_template(extr: ExtractResult) -> str:
             f'# adjust range to problem\n'
             f'      ], limit=100)\n'
             f'→ len(models) is the count of solutions in the range.'
+        )
+    if extr.predicate == "equation_solve":
+        return (
+            f'solve(op="find_all",\n'
+            f'      variables="{vars_csv}",\n'
+            f'      constraints=[\n'
+            f'        "({extr.formula}) == ({extr.second_formula})",\n'
+            f'        "{main_var} >= -200", "{main_var} <= 200",  '
+            f'# adjust bounds to problem scale\n'
+            f'      ], limit=50, timeout_ms=15000)\n'
+            f'→ Each `model` is a solution. For "find a unique x" use op="solve".'
+        )
+    if extr.predicate == "smallest_with":
+        return (
+            f'solve(op="optimize",\n'
+            f'      variables="{vars_csv}",\n'
+            f'      constraints=[\n'
+            f'        "{extr.formula}",                # the property P\n'
+            f'        "{main_var} >= 1",               # search range floor\n'
+            f'        "{main_var} <= 1000",            # adjust ceiling\n'
+            f'      ],\n'
+            f'      objective="{main_var}", direction="min")\n'
+            f'→ The optimal model is the smallest {main_var} satisfying P.'
+        )
+    if extr.predicate == "largest_with":
+        return (
+            f'solve(op="optimize",\n'
+            f'      variables="{vars_csv}",\n'
+            f'      constraints=[\n'
+            f'        "{extr.formula}",                # the property P\n'
+            f'        "{main_var} >= 1", "{main_var} <= 1000",  '
+            f'# adjust bounds\n'
+            f'      ],\n'
+            f'      objective="{main_var}", direction="max")\n'
+            f'→ The optimal model is the largest {main_var} satisfying P.'
         )
     return ""
