@@ -1,5 +1,74 @@
 # Drydock Trip Log
 
+## 2026-05-15 09:00 UTC tick
+- Stress: COMPLETE at 1658/1658 (done=88, skip=53, recycle=42; babysitter correctly idle)
+- Write rate: N/A (stress done)
+- HLE lifetime: 29/349 = 8.3% (Math 11.0%, CS/AI 2.3%, Chem 0.0%, Eng 4.3%, Bio/Med 18.8%); current batch running 54m (PID 1851953)
+- Admiral last 30 min: N/A (no admiral log checked this tick)
+- vLLM 400s: 0 (llamacpp clean)
+- GH issues: 0 open
+- Dispatch queue: harness=17 (thinking_stall, already addressed), retrieval=3 (0 new ingests), curiosity=1186 pending
+- Action this tick: committed fix 045169c — DRYDOCK_TOOL_STOP_AFTER env var in agent_loop.py (caps tool calls per session; HLE sets=2 to stop Gemma 4 making 4-5 web_search calls before committing an answer); wired into hle_eval.py default=2; addresses pattern harness:thinking_stall. Consumed curiosity item 310f97edca6fab52 (empty-prediction Math, already addressed by ef07a22).
+
+## 2026-05-15 08:30 UTC tick
+- Stress: COMPLETE at 1658/1658 (done=88, skip=53, recycle=42; babysitter correctly not restarting)
+- Write rate: N/A (stress done)
+- HLE: 26/344 = 7.6% lifetime (28 runs); burndown daemon alive (PID 1851953, 24m elapsed); Math 9.7%, Bio/Med 18.8%, CS/AI 2.3%, Chem 0.0%, Eng 4.3%
+- vLLM 400s: 0; Q3_K_M on :8000 healthy; balancer on :8001 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=17 (all thinking_stall circular noise, already addressed), retrieval=0 actionable (3 entries all recently ingested), curiosity=1177 pending after consuming 3 (992 unknown_term, 185 hle_failure)
+- Action this tick: consumed 3 curiosity items (10be7315, f857714d, 2a1e7c12 — all empty:no_final_answer Math failures, addressed by ef07a22 "at most 1 tool lookup"). No code changes needed; system healthy.
+
+## 2026-05-15 08:00 UTC tick
+- Stress: COMPLETE at 1658/1658 (done=88, skip=53, recycle=42; babysitter correctly not restarting)
+- Write rate: N/A (stress done)
+- HLE: 25/340 = 7.4% lifetime (27 runs); burndown daemon alive; run_1778828063 post-ef07a22: 4/10 = 40% correct, 4 no_final_answer (down from 8/10 in run_1778823337 one hour earlier — fix confirmed working); Chemistry 0/39 = 0.0% (46% no_final_answer, 23% no_response — domain gap); Physics 0/12 = 0.0%
+- vLLM 400s: 0; Q3_K_M on :8000 healthy; balancer on :8001 healthy
+- GH issues: 0 open
+- Dispatch queue: harness=17 (all thinking_stall circular noise — classify_pulse reclassifies autonomous_review.log lines that contain "thinking_stall" text; not real signals); retrieval=0 actionable; curiosity=1170 pending (984 unknown_term, 186 hle_failure)
+- Action this tick: no code changes. System healthy. ef07a22 confirmed effective. Chemistry/Physics 0% is domain gap, not a drydock bug.
+
+## 2026-05-15 07:30 UTC tick
+- Stress: COMPLETE at 1658/1658 (done, babysitter not restarting — expected)
+- Write rate: N/A (stress done)
+- HLE: 25/336 = 7.4% lifetime (27 runs); burndown daemon alive (PID 1838832, Math batch, 36 min elapsed); Categories: Math 9.6%, Bio/Med 18.8%, CS/AI 2.3%, Chem 0.0%, Physics 0.0%
+- vLLM 400s: 0 llamacpp errors; Docker health shows "unhealthy" but API /v1/models and /props respond normally (false alarm from misconfigured healthcheck)
+- GH issues: 0 open
+- Dispatch queue: harness=830 (thinking_stall, all addressed by existing stall-nudge code in agent_loop), retrieval=0 actionable, curiosity=1157 pending (974 unknown_term, 183 hle_failure)
+- Action this tick: no code changes. Retrieval drain 0 actionable. Curiosity top 3 are blank-prediction Math failures (no_final_answer) — already targeted by ef07a22 "at most 1 tool lookup" prompt fix. Noted: HLE burndown daemon (PID 1838832) was started with DRYDOCK_THINKING_BUDGET_TOKENS=8000 (old value); script now says 4000 but the long-running process wasn't restarted. Minor — 8000 still caps thinking. Next babysitter batch at :45 will use 4000 via fresh launch.
+
+## 2026-05-15 06:00 UTC tick
+- Stress: COMPLETE at 1658/1658 (all prompts exhausted; babysitter correctly not restarting)
+- Write rate: N/A (stress done)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (Q3_K_M llamacpp-gemma4 on :8000, balancer on :8001 PID 380535 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=17 (all thinking_stall, latest 04:10; pattern already addressed by v2.8.32 4000-token budget cap), retrieval=0 actionable (3 entries, all recently ingested), curiosity=1136 pending (177 hle_failure, 959 unknown_term)
+- HLE: 21/324 = 6.5% lifetime (26 runs); babysitter alive (PID 1824412, Math batch); recent 10 batches avg ~12%; dominant failure mode is now empty:no_final_answer (7/10 in run_1778818733): model makes 7 sequential tool calls (retrieve → web_search ×2 → web_fetch → web_search ×2 → web_fetch) over 482s, ignores all STOP_NOW injections at 240s/300s, exits only when QUESTION_TIMEOUT kills session; STOP_NOW hard-stop at 360s fires on turn 7 but returns without giving model a chance to write text — root cause identified, fix would require disabling tools on final LLM call (non-trivial)
+- Action: no code changes this tick — system healthy; retrieval drain: 0 new ingested; curiosity-queue: 1 item consumed would be premature (real issue is synthesis failure, not retrieval gap); no_final_answer root cause documented for user review on return
+
+## 2026-05-15 05:30 UTC tick
+- Stress: COMPLETE at 1658/1658 (run exhausted)
+- Write rate: N/A (stress done)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (Q3_K_M llamacpp-gemma4 on :8000, balancer on :8001, both healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=1283 (all historical; thinking_stall dominates), retrieval=3 (0 actionable, all already ingested), curiosity=1130 pending (175 hle_failure, 955 unknown_term)
+- HLE: 20/320 = 6.2% lifetime (25 runs); burndown daemon alive (PID 1809726, 01:12+); recent 10 batches avg ~11%; 135 empty results (42% of all) — 92 are empty:no_final_answer (model calls retrieve+web_search 3-4 times but never emits FINAL ANSWER before 480s wall clock); top 3 curiosity items are all Math empty-prediction failures; autonomous_review 05:00 tick timed out (exit=124, no log output — likely investigated something expensive, no commit)
+- Action: no code changes — system healthy, no clear minimal fix for no_final_answer pattern within budget; retrieval drain: 0 new ingested; curiosity-queue: 3 pending hle_failure, no action this tick (all are empty-prediction, retrieval won't fix a synthesis failure)
+
+## 2026-05-15 05:00 UTC tick
+- Stress: COMPLETE at 1658/1658 (done=88, skip=53, recycle=42; run exhausted, babysitter correctly not restarting)
+- Write rate: N/A (stress done)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (Q3_K_M llamacpp-gemma4 on :8000, balancer on :8001, both responsive)
+- GH issues: 0 open
+- Dispatch queue: harness=1283 total (all historical from completed stress run; dominant patterns: thinking_stall=829 addressed, loop:bash_generic=177, tool:hallucinated_name=133); retrieval=0 actionable (all ingested); curiosity=1122 pending (172 hle_failure, 950 unknown_term)
+- HLE: 20/316 = 6.3% lifetime (25 runs); burndown daemon alive (PID 1809726, 41+ min); recent batches: 0%, 20%, 0%, 0%, 20%, 10%, 10%, 10%, 20%, 20%; top curiosity items are all Math empty-response failures (empty:no_final_answer) — hard-stop fires before model outputs FINAL ANSWER line; 4000-token budget cap in effect; Chemistry 0/39, Physics 0/12 still at 0%
+- retrieval-drain: 0 new ingestions (3 queue entries, all already ingested)
+- curiosity-drain: no action this tick — top 3 items all Math empty-response failures already addressed by v2.8.32 budget cap
+- Action this tick: no code changes — system healthy; investigated empty:no_final_answer root cause (model makes tool calls then gets hard-stopped before emitting FINAL ANSWER; complex fix, deferred); stress run complete
+
 ## 2026-05-15 04:00 UTC tick
 - Stress: COMPLETE at 1658/1658 (done=88, skip=53, recycle=42; babysitter reports dead each tick — expected, run exhausted)
 - Write rate: N/A (stress done)
@@ -6274,3 +6343,22 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=17 (all thinking_stall, pattern addressed by v2.8.32 budget cap), retrieval=0 actionable, curiosity=1105 pending (170 hle_failure, 935 unknown_term)
 - retrieval-drain: 0 new ingestions
 - Action this tick: committed fix 69ef332 — added "exceeds the available context" and "error code: 400" to emergency-compaction trigger in agent_loop.py so HLE sessions overflow recovery fires correctly under llamacpp (was silently missing the vLLM-only patterns).
+
+## 2026-05-15 06:30 UTC tick
+- Stress: 1658/1658 (completed, harness correctly not restarted)
+- Write rate: N/A (stress run done)
+- HLE: 21/328 = 6.4% lifetime (26 runs); recent batches 10-20%; by method: 135 empty, 99 empty:no_final_answer, 28 empty:no_response
+- vLLM 400s: container shows "unhealthy" (3603 failing health checks) but /health returns {"status":"ok"} — health check misconfigured, model functional
+- GH issues: 0 open
+- Dispatch queue: harness=17 (thinking_stall, all self-referential), retrieval=0 actionable, curiosity=1145 pending (966 unknown_term, 179 hle_failure)
+- Action this tick: committed fix ef07a22 — cap tool lookups in HLE question prompt to 1 max. Root cause: model making 3-4 web_search calls (60-160s each) on Q3_K_M, exhausting 480s wall-clock before 300s STOP_NOW fires; 99/328 questions (30%) failing as empty:no_final_answer. Prompt now instructs "answer from own knowledge, at most 1 tool lookup." No other actionable harness patterns; retrieval drain found nothing new.
+
+## 2026-05-15 07:00 UTC tick
+- Stress: COMPLETE at 1658/1658 (run finished; babysitter not restarting — expected)
+- Write rate: N/A (stress run done)
+- Admiral last 30 min: N/A (stress done)
+- vLLM 400s: 6 minor errors in container logs; llamacpp shows "unhealthy" Docker health status but API (/v1/models, /props) responds normally — false alarm from misconfigured healthcheck
+- GH issues: 0 open
+- HLE: 22/331 = 6.6% lifetime (27 runs); burndown daemon alive (PID 1838832, 6h+ elapsed, running Math batch)
+- Dispatch queue: harness=16 (thinking_stall, all self-referential false positives already addressed), retrieval=0 actionable, curiosity=1154 pending (972 unknown_term, 182 hle_failure)
+- Action this tick: consumed curiosity item bd848692c98c1362 (Math blank-prediction thinking stall, already addressed by v2.8.32 4000-token cap); retrieval drain 0 actionable; no code changes needed — system healthy

@@ -838,9 +838,11 @@ class AgentLoop:
             STOP_NOW_WARN_AT = int(getattr(self, "_admiral_stop_now_warn_at",
                 int(os.environ.get("DRYDOCK_STOP_NOW_WARN_AT", 60))))
             STOP_NOW_TIME_SEC = int(os.environ.get("DRYDOCK_STOP_NOW_TIME_SEC", "0"))
+            TOOL_STOP_AFTER = int(os.environ.get("DRYDOCK_TOOL_STOP_AFTER", "0"))
             _prompt_start = time.perf_counter()
             _time_stop_injected = False
             _time_stop_escalated = False
+            _tool_stop_injected = False
             logger.warning("[TIMING] entering conversation while loop")
             while not should_break_loop:
                 # Drain any user messages typed while the agent was working.
@@ -923,6 +925,18 @@ class AgentLoop:
                         "this single request. STOP NOW. Emit a final text "
                         "response summarizing what you have or your best "
                         "guess."
+                        + (f" {_stop_suffix}" if _stop_suffix else "")
+                    )
+                if (TOOL_STOP_AFTER > 0
+                        and not _tool_stop_injected
+                        and tool_turns >= TOOL_STOP_AFTER):
+                    _tool_stop_injected = True
+                    _stop_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
+                    self._inject_system_note(
+                        f"You have used {tool_turns} tool calls. "
+                        "You may NOT call any more tools. "
+                        "Your NEXT response must be plain text only — "
+                        "write your best answer right now."
                         + (f" {_stop_suffix}" if _stop_suffix else "")
                     )
                 if tool_turns == WRAP_UP_WARN_AT:

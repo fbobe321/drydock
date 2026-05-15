@@ -334,8 +334,9 @@ def _question_prompt(q: dict) -> str:
     detection race). Keeping this on one line until that's debugged.
     """
     return (
-        f"Answer this question. End your response with the literal string "
-        f"'FINAL ANSWER:' followed by your answer on the same line. "
+        f"Answer this question from your own knowledge. "
+        f"Use at most 1 tool lookup if truly needed, then commit to your answer. "
+        f"End your response with 'FINAL ANSWER:' followed by your answer on the same line. "
         f"QUESTION: {q['question']}"
     )
 
@@ -459,6 +460,7 @@ def run_one(q: dict, sk, run_dir: Path) -> dict:
            "DRYDOCK_WRAP_UP_WARN_AT": os.environ.get("DRYDOCK_WRAP_UP_WARN_AT", "8"),
            "DRYDOCK_STOP_NOW_WARN_AT": os.environ.get("DRYDOCK_STOP_NOW_WARN_AT", "12"),
            "DRYDOCK_STOP_NOW_TIME_SEC": os.environ.get("DRYDOCK_STOP_NOW_TIME_SEC", "300"),
+           "DRYDOCK_TOOL_STOP_AFTER": os.environ.get("DRYDOCK_TOOL_STOP_AFTER", "2"),
            "DRYDOCK_STOP_NOW_SUFFIX": "Write your best answer as 'FINAL ANSWER: <answer>' now."}
     start = time.time()
     # --dangerously-skip-permissions: HLE is batch eval against read-only
