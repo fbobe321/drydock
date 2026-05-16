@@ -227,3 +227,40 @@ def test_maybe_inject_skips_for_short_message():
     with patch.dict(os.environ, {"DRYDOCK_AUTO_SOLVE": "1"}, clear=False):
         ok = maybe_inject_auto_solve(msgs, "hi")
     assert ok is False
+
+
+# ── _formula_is_z3_friendly pre-flight ─────────────────────────────────
+
+@pytest.mark.parametrize("formula,expected", [
+    ("x * x * x - 1", True),
+    ("16 * x + 5", True),
+    ("(x + 1) * (x - 1)", True),
+    # Factorial — Z3 can't handle
+    ("n! - 1", False),
+    ("n * (n - 1)!", False),
+    # Variable exponents
+    ("2 ** n - 1", False),
+    ("3 ** k + 2", False),
+    # Transcendentals
+    ("sin(x) + cos(x)", False),
+    ("exp(x) - 1", False),
+    ("log(x)", False),
+    ("ln(x) + x", False),
+    ("sqrt(x) + 1", False),
+])
+def test_formula_pre_flight(formula: str, expected: bool):
+    from drydock.core.auto_solve import _formula_is_z3_friendly
+    assert _formula_is_z3_friendly(formula) is expected
+
+
+def test_maybe_inject_skips_factorial():
+    """Pre-flight should reject n! before launching Z3."""
+    msgs = _StubMessages()
+    # Need a question that triggers the extractor with a bad formula.
+    # "What is the smallest n with n! >= 100?" extracts to smallest_with
+    # with formula "n! >= 100" — Z3 can't handle factorial.
+    q = "What is the smallest n with n! >= 100?"
+    with patch.dict(os.environ, {"DRYDOCK_AUTO_SOLVE": "1"}, clear=False):
+        ok = maybe_inject_auto_solve(msgs, q)
+    assert ok is False
+    assert msgs.items == []

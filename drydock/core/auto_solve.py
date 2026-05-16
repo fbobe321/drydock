@@ -50,10 +50,32 @@ import asyncio
 import json
 import logging
 import os
+import time
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 logger = logging.getLogger("drydock.auto_solve")
+
+# Telemetry — appended JSONL so morning reports can answer:
+#   "did auto-solve actually fire? how often? how many produced
+#    a confident answer the model could use?"
+# Each line is one auto-solve fire (or rejection), one JSON object.
+_TELEMETRY_PATH = Path(os.environ.get(
+    "DRYDOCK_AUTO_SOLVE_TELEMETRY", "/tmp/auto_solve.jsonl",
+))
+
+
+def _emit_telemetry(record: dict) -> None:
+    """Append one telemetry record. Fail-silent — telemetry must never
+    break the agent loop."""
+    try:
+        record["ts"] = time.time()
+        _TELEMETRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _TELEMETRY_PATH.open("a") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError:
+        pass
 
 if TYPE_CHECKING:
     from drydock.core.constraint_extract import ExtractResult
@@ -150,6 +172,48 @@ def _build_args(extr: "ExtractResult") -> dict | None:
             "timeout_ms": 15000,
         }
     return None
+
+
+import re as _re_mod
+
+# Substring tokens (whitespace-insensitive when checked).
+_BAD_FORMULA_TOKENS = (
+    "!",       # factorial — n! is not a Z3 operator
+    "log(", "ln(", "sin(", "cos(", "tan(", "exp(", "sqrt(",
+    "∞", "inf",
+)
+
+# Variable-exponent pattern: ** followed by a single-letter identifier
+# (n, k, m, x, etc.). Catches "2 ** n - 1" even if normaliser added
+# spaces around the operator.
+_VAR_EXPONENT_RE = _re_mod.compile(r"\*\*\s*[a-zA-Z_]")
+
+
+def _formula_is_z3_friendly(*formulas: str) -> bool:
+    """Reject formulas that contain operators Z3 can't decide
+    symbolically. Returns False if any forbidden token is present;
+    saves us a 5-30s solver round-trip on doomed inputs.
+
+    Conservative: only flags tokens Z3 definitively can't handle in
+    its integer/real-arithmetic fragment. Anything that survives this
+    check may STILL fail at solve time (e.g. nonlinear arithmetic on
+    Real variables), in which case the existing exception-catch in
+    `_run_solve_sync` returns None.
+    """
+    for f in formulas:
+        if not f:
+            continue
+        low = f.lower()
+        # Whitespace-insensitive substring check for the simple tokens
+        compact = "".join(low.split())
+        for bad in _BAD_FORMULA_TOKENS:
+            bad_compact = "".join(bad.split())
+            if bad_compact in compact:
+                return False
+        # Variable exponent regex — independent of spacing
+        if _VAR_EXPONENT_RE.search(f):
+            return False
+    return True
 
 
 def _run_solve_sync(args_dict: dict) -> dict | None:
@@ -272,19 +336,50 @@ def maybe_inject_auto_solve(messages_obj, user_msg: str) -> bool:
         extr = extract(user_msg)
     except Exception as e:  # noqa: BLE001
         logger.warning("[AUTO-SOLVE] extract failed: %s", e)
+        _emit_telemetry({"event": "extract_failed", "error": str(e)[:200]})
         return False
-    if extr is None or extr.confidence < 0.5:
+    if extr is None:
+        _emit_telemetry({"event": "no_extract"})
+        return False
+    if extr.confidence < 0.5:
+        _emit_telemetry({
+            "event": "low_confidence", "predicate": extr.predicate,
+            "confidence": extr.confidence,
+        })
         return False
 
     args_dict = _build_args(extr)
     if args_dict is None:
         logger.warning("[AUTO-SOLVE] predicate %s not Z3-decidable", extr.predicate)
+        _emit_telemetry({
+            "event": "predicate_not_decidable",
+            "predicate": extr.predicate,
+        })
+        return False
+
+    # Pre-flight: skip Z3 entirely if the extracted formula contains
+    # tokens Z3 can't decide (factorial, transcendentals, variable
+    # exponents). Saves a 5-30s wasted solver call per HLE batch.
+    if not _formula_is_z3_friendly(extr.formula, extr.second_formula or ""):
+        _emit_telemetry({
+            "event": "formula_not_z3_friendly",
+            "predicate": extr.predicate,
+            "formula": extr.formula[:200],
+        })
         return False
 
     logger.warning("[AUTO-SOLVE] running Z3 for predicate=%s formula=%r",
                    extr.predicate, extr.formula[:80])
+    t0 = time.perf_counter()
     result_dict = _run_solve_sync(args_dict)
+    elapsed_ms = int((time.perf_counter() - t0) * 1000)
     if result_dict is None:
+        _emit_telemetry({
+            "event": "z3_failed",
+            "predicate": extr.predicate,
+            "formula": extr.formula[:200],
+            "elapsed_ms": elapsed_ms,
+        })
         return False
     status = result_dict.get("status", "?")
     if status not in ("sat", "optimal", "valid"):
@@ -292,6 +387,12 @@ def maybe_inject_auto_solve(messages_obj, user_msg: str) -> bool:
         # advisory template still works as a fallback and the model
         # might do better by reasoning differently.
         logger.warning("[AUTO-SOLVE] Z3 status=%s; not injecting", status)
+        _emit_telemetry({
+            "event": "z3_non_actionable",
+            "predicate": extr.predicate,
+            "status": status,
+            "elapsed_ms": elapsed_ms,
+        })
         return False
 
     # Build synthetic assistant + tool messages
@@ -326,4 +427,18 @@ def maybe_inject_auto_solve(messages_obj, user_msg: str) -> bool:
     messages_obj.append(synth_tool)
     logger.warning("[AUTO-SOLVE] injected synthetic solve call+result "
                    "(predicate=%s, status=%s)", extr.predicate, status)
+    # Telemetry: this is the success-path event. result_count helps the
+    # morning report distinguish "fired and got an answer" from "fired
+    # but got 0 solutions in the bounded range" (which is still useful
+    # for the model since it knows there's nothing in that range).
+    n_models = len(result_dict.get("models") or [])
+    _emit_telemetry({
+        "event": "injected",
+        "predicate": extr.predicate,
+        "formula": extr.formula[:200],
+        "status": status,
+        "n_models": n_models,
+        "objective_value": result_dict.get("objective_value", "")[:60],
+        "elapsed_ms": elapsed_ms,
+    })
     return True

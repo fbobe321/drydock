@@ -272,6 +272,56 @@ def main() -> int:
               "(empty prediction). Check thinking-budget / tool-stop-after / "
               "time-budget settings.")
 
+    # ── Auto-solve telemetry ────────────────────────────────────────
+    # Did v2.8.40's synthetic Z3 tool call actually fire? How often?
+    # Append-only JSONL at /tmp/auto_solve.jsonl per the auto_solve
+    # module — read it and aggregate by event type.
+    tele_path = Path("/tmp/auto_solve.jsonl")
+    if tele_path.is_file():
+        print()
+        print("=== Auto-solve telemetry (since v2.8.40) ===")
+        events: Counter = Counter()
+        injected_by_pred: Counter = Counter()
+        injected_n_models: list[int] = []
+        injected_elapsed: list[int] = []
+        # Optionally filter by --since
+        since_ts = since_dt.timestamp() if since_dt else 0
+        try:
+            with tele_path.open() as f:
+                for line in f:
+                    try:
+                        r = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if r.get("ts", 0) < since_ts:
+                        continue
+                    ev = r.get("event", "?")
+                    events[ev] += 1
+                    if ev == "injected":
+                        pred = r.get("predicate", "?")
+                        injected_by_pred[pred] += 1
+                        n = r.get("n_models")
+                        if isinstance(n, int):
+                            injected_n_models.append(n)
+                        el = r.get("elapsed_ms")
+                        if isinstance(el, int):
+                            injected_elapsed.append(el)
+        except OSError:
+            pass
+        for ev, n in events.most_common():
+            print(f"  {ev:28s}  {n}")
+        if injected_by_pred:
+            print()
+            print("  Injected by predicate:")
+            for pred, n in injected_by_pred.most_common():
+                print(f"    {pred:22s}  {n}")
+        if injected_n_models:
+            avg_n = sum(injected_n_models) / len(injected_n_models)
+            print(f"  Avg solutions per inject: {avg_n:.1f}")
+        if injected_elapsed:
+            avg_e = sum(injected_elapsed) / len(injected_elapsed)
+            print(f"  Avg Z3 elapsed:           {avg_e:.0f} ms")
+
     return 0
 
 
