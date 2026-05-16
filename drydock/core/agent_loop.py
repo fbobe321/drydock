@@ -4373,6 +4373,70 @@ or replace freely; future sessions will respect your edits._
     def set_user_input_callback(self, callback: UserInputCallback) -> None:
         self.user_input_callback = callback
 
+    async def undo_last_turn(self) -> tuple[bool, str]:
+        """Rewind history past the LAST user message, dropping the
+        assistant turn (and any tool results) it triggered AND the
+        user message itself. Use case: the last user prompt set off
+        a chain that wedged the conversation; the user wants to back
+        out and try a different prompt.
+
+        Returns (success, info_message).
+
+        Why this is safer than `/clear`:
+          - Preserves the system message (index 0)
+          - Preserves all prior good user+assistant exchanges
+          - Resets the sticky error counters so the new prompt
+            won't immediately re-trip the lockout
+
+        Why drop the user message too (not just the assistant turn):
+          - If the user repeats the same prompt, they'll re-trigger
+            the same bad assistant response. The point of /undo is
+            to escape; the user can always re-type the prompt if
+            they really want it.
+        """
+        # Find the last user message — walk backward
+        last_user_idx = -1
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i].role == Role.user:
+                last_user_idx = i
+                break
+
+        if last_user_idx <= 0:
+            # No user message to rewind past (only the system message
+            # is present), or the user message is at idx 0 which we
+            # never drop. Nothing to undo.
+            return (False, "Nothing to undo — no prior user turn in history.")
+
+        dropped = len(self.messages) - last_user_idx
+        kept = list(self.messages[:last_user_idx])
+        try:
+            await self.session_logger.save_interaction(
+                self.messages,
+                self.stats,
+                self._base_config,
+                self.tool_manager,
+                self.agent_profile,
+            )
+        except Exception as e:  # noqa: BLE001 — never block /undo on a save failure
+            logger.warning("[undo] session save failed (continuing): %s", e)
+        self.messages.reset(kept)
+        # Clear the sticky error counters so the next prompt starts fresh.
+        if hasattr(self, "_total_error_rounds"):
+            self._total_error_rounds = 0
+        if hasattr(self, "_consecutive_circuit_breaker_fires"):
+            self._consecutive_circuit_breaker_fires = 0
+        if hasattr(self, "_consecutive_empty_turns"):
+            self._consecutive_empty_turns = 0
+        logger.warning(
+            "[undo] rolled back: kept %d messages (dropped %d after last user idx=%d)",
+            len(kept), dropped, last_user_idx,
+        )
+        return (
+            True,
+            f"Rolled back the last turn — dropped {dropped} message(s). "
+            f"Type your next prompt to continue from the prior state.",
+        )
+
     async def clear_history(self) -> None:
         await self.session_logger.save_interaction(
             self.messages,

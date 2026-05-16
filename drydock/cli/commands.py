@@ -36,6 +36,17 @@ class CommandRegistry:
                 description="Clear conversation history",
                 handler="_clear_history",
             ),
+            "undo": Command(
+                aliases=frozenset(["/undo", "/back"]),
+                description=(
+                    "Roll back the last turn — drop the most recent user "
+                    "prompt and the assistant turn it triggered. Use when "
+                    "an API error or bad tool call wedged the conversation "
+                    "and you want to retry from the previous good state "
+                    "without losing the rest of the history (unlike /clear)."
+                ),
+                handler="_undo_last_turn",
+            ),
             "log": Command(
                 aliases=frozenset(["/log"]),
                 description="Show path to current interaction log file",

@@ -147,3 +147,49 @@ def test_conversation_loop_resets_total_error_rounds_on_entry():
     assert "_total_error_rounds" in src
     assert "= 0" in src
     assert "fresh user turn" in src or "Reset sticky error" in src
+
+
+# ── /undo slash command ────────────────────────────────────────────────
+
+def test_undo_command_registered_with_aliases():
+    """The /undo command must be in the registry with /back as alias."""
+    from drydock.cli.commands import CommandRegistry
+    r = CommandRegistry()
+    cmd = r.commands.get("undo")
+    assert cmd is not None
+    assert "/undo" in cmd.aliases
+    assert "/back" in cmd.aliases
+    assert cmd.handler == "_undo_last_turn"
+
+
+def test_agent_loop_undo_last_turn_method_exists():
+    """The agent loop must expose undo_last_turn for the TUI handler."""
+    from drydock.core.agent_loop import AgentLoop
+    assert callable(getattr(AgentLoop, "undo_last_turn", None))
+
+
+def test_undo_keeps_system_and_truncates_to_before_last_user():
+    """Validate the rewind shape: drop the last user msg + everything
+    after it; keep the system message and all prior turns."""
+    import inspect
+    from drydock.core.agent_loop import AgentLoop
+    src = inspect.getsource(AgentLoop.undo_last_turn)
+    # The implementation must walk backward to find the last user idx,
+    # then slice the messages to keep only [:last_user_idx].
+    assert "last_user_idx" in src
+    assert "Role.user" in src
+    assert ".reset(" in src
+    # It must also clear the sticky error counters so the next prompt
+    # doesn't immediately re-trip the lockout.
+    assert "_total_error_rounds" in src
+
+
+def test_undo_returns_failure_when_only_system_message():
+    """If there's no user message to rewind past, undo should return
+    (False, info) rather than wiping the system message."""
+    import inspect
+    from drydock.core.agent_loop import AgentLoop
+    src = inspect.getsource(AgentLoop.undo_last_turn)
+    # Guard condition for "no user message" or "only system message"
+    assert "last_user_idx <= 0" in src or "last_user_idx == -1" in src
+    assert "Nothing to undo" in src

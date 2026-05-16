@@ -2204,6 +2204,41 @@ class DrydockApp(App):  # noqa: PLR0904
                 )
             )
 
+    async def _undo_last_turn(self) -> None:
+        """Roll back the last user→assistant turn without wiping the
+        whole session. Safer alternative to /clear when an error
+        wedges the conversation."""
+        if self._agent_running:
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    "Cannot /undo while the agent is processing. "
+                    "Press Esc to cancel first, then /undo.",
+                    collapsed=self._tools_collapsed,
+                )
+            )
+            return
+        try:
+            ok, info = await self.agent_loop.undo_last_turn()
+            if not ok:
+                await self._mount_and_scroll(
+                    ErrorMessage(info, collapsed=self._tools_collapsed)
+                )
+                return
+            # The conversation history is now rolled back. We don't try
+            # to selectively remove rendered UI widgets — that's fragile
+            # since the assistant turn we dropped may have produced
+            # multiple widgets (text, tool calls, tool results). Instead,
+            # emit a clear marker so the user sees where the rollback
+            # happened. Subsequent prompts will start fresh against the
+            # truncated message history.
+            await self._mount_and_scroll(UserCommandMessage(info))
+        except Exception as e:  # noqa: BLE001
+            await self._mount_and_scroll(
+                ErrorMessage(
+                    f"Undo failed: {e}", collapsed=self._tools_collapsed
+                )
+            )
+
     async def _clear_history(self) -> None:
         try:
             self._reset_ui_state()
