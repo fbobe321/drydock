@@ -191,27 +191,13 @@ class OpenAIAdapter(APIAdapter):
         )
 
         # Enable thinking for models that support it (Gemma 4)
-        _budget_env = os.environ.get("DRYDOCK_THINKING_BUDGET_TOKENS")
         if thinking and thinking not in ("off", ""):
             payload["chat_template_kwargs"] = {"enable_thinking": True}
-            # Cap thinking length (llama.cpp). Prevents runaway thinking stalls
-            # on hard HLE questions (model can think >480s without this).
-            # Set DRYDOCK_THINKING_BUDGET_TOKENS=8000 in HLE batch launches.
-            if _budget_env:
-                try:
-                    # llama.cpp requires thinking_budget inside chat_template_kwargs,
-                    # not as a top-level field (top-level is silently ignored → INT32_MAX).
-                    payload["chat_template_kwargs"]["thinking_budget"] = int(_budget_env)
-                except ValueError:
-                    pass
-        elif _budget_env:
-            # llama.cpp activates reasoning with budget=INT32_MAX by default even
-            # when thinking="off". Always cap it when the env var is set so that
-            # "off"-mode requests don't stall for 480s on hard questions.
-            try:
-                payload.setdefault("chat_template_kwargs", {})["thinking_budget"] = int(_budget_env)
-            except ValueError:
-                pass
+        # NOTE: thinking budget (max thinking tokens) is a llamacpp SERVER startup
+        # flag (--reasoning-budget N / LLAMA_ARG_THINK_BUDGET), not an API parameter.
+        # The Gemma4 jinja template does not expose a thinking_budget variable, so
+        # chat_template_kwargs.thinking_budget is silently ignored. Update
+        # start_gemma4_llamacpp.sh to set --reasoning-budget on the next container start.
 
         if enable_streaming:
             payload["stream"] = True

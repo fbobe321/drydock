@@ -802,9 +802,10 @@ class AgentLoop:
         # template the model can specialize. Off under pytest, on by default
         # in production. Opt out via DRYDOCK_CONSTRAINT_HINT=0.
         _constraint_hint_default = "0" if _under_pytest else "1"
-        if os.environ.get(
+        _constraint_hint_on = os.environ.get(
             "DRYDOCK_CONSTRAINT_HINT", _constraint_hint_default
-        ).strip().lower() not in ("0", "false", "no"):
+        ).strip().lower() not in ("0", "false", "no")
+        if _constraint_hint_on:
             try:
                 from drydock.core.constraint_hint import (
                     detect_constraint_shape, build_hint,
@@ -820,6 +821,26 @@ class AgentLoop:
             except Exception as _e:
                 logger.warning(
                     "constraint hint failed (skipped): %s", _e, exc_info=True
+                )
+
+        # === AUTO-SOLVE (synthetic Z3 tool call) ===
+        # The escalation level above the advisory constraint hint: when
+        # the extractor produces a high-confidence ExtractResult AND Z3
+        # can actually decide it, we run Z3 ourselves and inject a
+        # synthetic solve() call + tool result. Models trust tool output
+        # as authoritative — much stronger signal than a system note.
+        # Same pattern as _auto_prefetch_retrieve for GraphRAG.
+        # Off under pytest. Opt out via DRYDOCK_AUTO_SOLVE=0.
+        _auto_solve_default = "0" if _under_pytest else "1"
+        if _constraint_hint_on and os.environ.get(
+            "DRYDOCK_AUTO_SOLVE", _auto_solve_default
+        ).strip().lower() not in ("0", "false", "no"):
+            try:
+                from drydock.core.auto_solve import maybe_inject_auto_solve
+                maybe_inject_auto_solve(self.messages, user_msg or "")
+            except Exception as _e:
+                logger.warning(
+                    "auto-solve failed (skipped): %s", _e, exc_info=True
                 )
 
         try:

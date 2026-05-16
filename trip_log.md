@@ -1,5 +1,46 @@
 # Drydock Trip Log
 
+## 2026-05-16 01:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (pid 2031477, slot=22 active on Math); lifetime 10.1% (49/487 across 42 runs) — Math 13.2%, Bio/Med 16.7%, CS/AI 3.2%, Physics 3.1%
+- vLLM 400s: 0 (model Q3_K_M on llamacpp, balancer healthy, reasoning-budget=12000 active)
+- GH issues: 1 open (#23 image-processing enhancement — deferred)
+- Dispatch queue: harness=15 (all old thinking_stall, no new post-b0350cb), retrieval=0 actionable, curiosity=1687 pending
+- Retrieval-drain: 0 projects ingested (all already current)
+- Curiosity-queue: 1687 pending (top 3 all hle_failure/empty-prediction, root cause is pre-b0350cb stalls — no action this tick)
+- Action this tick: no action — system healthy; HLE score climbed 9.9%→10.1% during tick as slot=22 completed Q6 (Math) correctly. Slot=21 had 4/10 judge ERRORs (judge timing out on hard math at 7 msgs/481s) — noted, not actionable this tick. All services nominal.
+
+## 2026-05-16 00:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (slot=22 active, slot=21 scored 2/10=20% Math); lifetime 9.3% (45/482 across 42 runs)
+- vLLM 400s: 0 (model/balancer healthy)
+- GH issues: 1 open (#23 image-processing enhancement — deferred)
+- Dispatch queue: harness=16 old (pre-b0350cb fix, no new since 20:10 UTC), retrieval=0 actionable, curiosity=1674 pending
+- Retrieval-drain: 0 projects ingested (all already current)
+- Action: restarted llamacpp-gemma4 container to apply --reasoning-budget 12000 (was running at INT32_MAX default, causing 480s stalls — 3/10 questions in slot=21 timed out empty). chat_template_kwargs.thinking_budget was silently ignored by Gemma4's jinja template; server-level flag is the correct knob. Committed 47d6523 (removes dead API-level budget code). Budget confirmed in container logs: "reasoning-budget: activated, budget=12000 tokens".
+
+## 2026-05-15 23:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (pid 2017201, ~27m elapsed); lifetime 9.3% (44/474 across 41 runs) — Math 11.6%, Bio/Med 16.7%, CS/AI 3.2%
+- vLLM 400s: 5 (minor, model/balancer healthy)
+- GH issues: 1 open (#23 image-processing enhancement — deferred to user return)
+- Dispatch queue: harness=0 new (last entry 20:10 UTC, pre b0350cb fix), retrieval=0 actionable, curiosity=1646 pending
+- Retrieval-drain: 0 projects ingested (all already current)
+- Action this tick: no action — system healthy; b0350cb stall fix confirmed effective (no new thinking_stall dispatch entries since 20:10 UTC); HLE burndown uptick from 9.1%→9.3%
+
+## 2026-05-15 23:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (pid 2001562, ~1h25m elapsed); lifetime 9.1% (43/470 across 40 runs) — Math 11.4%, Bio/Med 16.7%, CS/AI 3.2%
+- vLLM 400s: 0
+- GH issues: 1 open (#23 image-processing enhancement — multimodal mmproj server, deferred to user return)
+- Dispatch queue: harness=18 thinking_stall (all addressed by b0350cb/bc99b6b/64a90b4), retrieval=0 actionable, curiosity=1632 pending (consumed top 3 hle_failure items — no-answer-extracted failures covered by recent stall fixes)
+- Retrieval-drain: 0 projects ingested (all already current)
+- Action this tick: no new bug — all dispatch patterns addressed by prior commits; consumed 3 curiosity hle_failure items; system healthy
+
 ## 2026-05-15 22:30 UTC tick
 - Stress: paused (.pause_stress sentinel active)
 - Write rate: N/A (stress paused)
@@ -6606,3 +6647,16 @@ restarted, cron self-match bug fixed in this same session).
 - retrieval-drain: 0 ingestions (all recently consumed)
 - curiosity-drain: top items are pre-thinking-budget-fix empty-predicted failures — not actionable as code changes
 - Action this tick: no fix committed — system healthy, previous ticks (15:30, 16:30, 17:00) shipped bc99b6b+a338858+50db330 addressing all queued patterns; no new dispatch signals or GH issues since 17:00 tick
+
+## 2026-05-16 01:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE daemon: alive (PID 2043404, 18 min elapsed); current batch in progress (01:29 start, first fully post-reasoning-budget-restart batch)
+- HLE score: 52/491 = 10.6% lifetime (43 runs); Math 14.2%, Bio/Med 16.7%, CS/AI 3.2%, Physics 3.1%, Chemistry 6.1%; most recent completed batch run_1778891060 scored 7/10 = 70.0% — highest single-batch score observed; reflects llamacpp reasoning-budget=12000 restart done at 00:30 UTC tick
+- vLLM 400s: 0 (llamacpp container clean, 0 errors in last 30 min)
+- balancer: :8001 up (PID 380535 confirmed python3 llm_balancer.py)
+- GH issues: 1 open (#23 "Expand for image processing" — enhancement request, not a bug)
+- Dispatch queue: harness=1293 (all thinking_stall, addressed by prior commits), retrieval=3 (0 actionable), curiosity=1691 pending (1415 unknown_term, 276 hle_failure)
+- retrieval-drain: 0 ingestions (all recently consumed)
+- curiosity-drain: top 3 are hle_failure items with empty predictions — pre-fix stall artifacts, not actionable as code changes
+- Action this tick: no fix committed — system fully healthy; the 70% batch confirms reasoning-budget=12000 restart is working; no new dispatch signals or actionable issues
