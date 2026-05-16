@@ -1,5 +1,46 @@
 # Drydock Trip Log
 
+## 2026-05-16 04:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown daemon: alive (PID 2069350, slot 25 running); lifetime 62/512 = 12.1% (Math 43/253 = 17.0%, Bio/Med 6/36 = 16.7%, CS/AI 2/63 = 3.2%, Chem 3/49 = 6.1%, Eng 2/33 = 6.1%); recent math batches scoring 30-70% (slots 22-24)
+- vLLM 400s: 0 (llamacpp Q3_K_M on :8000, balancer on :8001 healthy)
+- GH issues: 1 open (#23 image-processing enhancement, not a bug)
+- Dispatch queue (24h): harness=13 (all thinking_stall, fully addressed by d5cfd79+b0350cb+47d6523), retrieval=0 actionable, curiosity=1714 pending (283 hle_failure, 1431 unknown_term)
+- Auto-solve telemetry (lifetime): 27 events — 21 no_extract (78%), 2 injected (7%), 2 predicate_not_decidable, 2 formula_not_z3_friendly; adoption gap persists but auto-solve fired correctly 2/4 eligible questions
+- Action this tick: no action — system healthy; recent HLE math batches trending up; no actionable bugs in dispatch queue or GH issues
+
+## 2026-05-16 03:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown daemon: alive (PID 2057071, elapsed ~50m); lifetime 57/507 = 11.2% (Math 38/248 = 15.3%, Bio/Med 6/36 = 16.7%, CS/AI 2/63 = 3.2%, Chem 3/49 = 6.1%, Eng 2/33 = 6.1%)
+- vLLM 400s: 0 (llamacpp Q3_K_M on :8000 + reasoning-budget=12000, balancer on :8001 healthy)
+- GH issues: 1 open (#23 image-processing enhancement, not a bug)
+- Dispatch queue: harness=13 (all thinking_stall, last at 00:40 UTC — pattern addressed by b0350cb + d5cfd79 + 47d6523), retrieval=3 entries 0 actionable, curiosity=1709 pending (283 hle_failure, 1426 unknown_term)
+- Auto-solve audit (12h window): 85 questions answered, 21 YES / 47 NO / 17 ERROR; 13 wrong math — detector matched 1/13 (7%), extractor fired 0/13 (0%); total injected=2 (perfect_square predicate only); no_extract dominates at 16/23 events (questions lack extractable formulas)
+- Action this tick: no action — system healthy. Thinking stall fully addressed by recent commits. Auto-solve adoption gap (7% detector coverage on wrong math) noted but requires seeing live question text to add patterns; leaving for user review on return.
+
+## 2026-05-16 02:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown daemon: alive (PID 2043404, elapsed ~1h); lifetime 54/500 = 10.8% (Math 35/241 = 14.5%, Bio/Med 6/36 = 16.7%)
+- vLLM 400s: 0 (llamacpp Q3_K_M on :8000 clean, balancer on :8001 healthy)
+- GH issues: 1 open (#23 image-processing enhancement, not a bug)
+- Dispatch queue: harness=13 (all thinking_stall, last at 00:40 UTC, addressed by b0350cb), retrieval=3 entries 0 actionable, curiosity=1705 pending
+- Auto-solve telemetry (last ~5h): 15 events total — 2 injected (perfect_square), 8 no_extract, 2 formula_not_z3_friendly (factorial/var-exp), 2 predicate_not_decidable (prime); adoption low but expected given extractor only handles specific shapes
+- Action this tick: consumed curiosity item 282490593dc7df3a (pre-fix hle_failure/Physics stall artifact); no code changes — system healthy
+
+## 2026-05-16 02:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown daemon: alive (PID 2043404, elapsed ~30 min); lifetime 53/495 = 10.7%
+- Admiral last 30 min: N/A (no stress)
+- vLLM 400s: 0 (llamacpp Q3_K_M clean)
+- GH issues: 1 open (#23 image-processing enhancement, not a bug)
+- Dispatch queue: harness=14 (all thinking_stall, last at 00:40 UTC, addressed by prior commits), retrieval=0 actionable, curiosity=1697 pending (top items are pre-fix stall artifacts, not actionable this tick)
+- Auto-solve telemetry: 10 events total (4 no_extract, 2 injected, 2 formula_not_z3_friendly, 2 predicate_not_decidable); adoption low but working
+- Action this tick: no fix committed — system healthy; 01:30 tick confirmed 70% single-batch HLE score after reasoning-budget=12000 restart, stall fix holding
+
 ## 2026-05-16 01:00 UTC tick
 - Stress: paused (.pause_stress sentinel active)
 - Write rate: N/A (stress paused)
@@ -6660,3 +6701,15 @@ restarted, cron self-match bug fixed in this same session).
 - retrieval-drain: 0 ingestions (all recently consumed)
 - curiosity-drain: top 3 are hle_failure items with empty predictions — pre-fix stall artifacts, not actionable as code changes
 - Action this tick: no fix committed — system fully healthy; the 70% batch confirms reasoning-budget=12000 restart is working; no new dispatch signals or actionable issues
+
+## 2026-05-16 03:00 UTC tick
+- Stress: paused (.pause_stress sentinel present)
+- Write rate: N/A (stress paused)
+- HLE daemon: running (PID 2057071, 20min, batch slot=24, Math category)
+- HLE lifetime: 56/503 = 11.1% (Math 37/244 = 15.2%)
+- vLLM 400s: 0
+- GH issues: 1 open (#23 "Expand for image processing" — enhancement, no action needed)
+- Dispatch queue: harness=13 (all thinking_stall, addressed by prior commits), curiosity=1706 pending
+- Retrieval drain: 0 ingested (all 3 entries already consumed)
+- Auto-solve telemetry: 2 injected (perfect_square) in 12h; detector matched 1/11 wrong Math answers (9%)
+- Action this tick: committed fix d5cfd79 — judge_with_gemma was calling model with max_tokens=200 and no chat_template_kwargs, producing ~40% ERROR verdicts (4/10 in batch 23). Fixed: added enable_thinking=False to suppress thinking tokens in judge calls + bumped max_tokens 200→1024 (first call), 256→512 (retry). Should recover ~2-4 wrong verdicts per 10-question batch.
