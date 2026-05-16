@@ -967,6 +967,12 @@ class AgentLoop:
                         "write your best answer right now."
                         + (f" {_stop_suffix}" if _stop_suffix else "")
                     )
+                elif (TOOL_STOP_AFTER > 0
+                        and _tool_stop_injected
+                        and tool_turns > TOOL_STOP_AFTER):
+                    # Model called another tool after the stop note — force
+                    # text-only on the next LLM call so it must emit an answer.
+                    self._hle_force_text_only = True
                 if tool_turns == WRAP_UP_WARN_AT:
                     self._inject_system_note(
                         f"You have used {tool_turns} tool calls on this "
@@ -2605,7 +2611,11 @@ class AgentLoop:
         # The hot-path flag is consumed (cleared) here so it's a one-turn
         # mute. If the model goes back to looping next turn, we'll re-detect
         # and re-mute.
-        if getattr(self, "_loop_detected", False) and getattr(self, "_loop_signal", "") == "FORCE_STOP":
+        if getattr(self, "_hle_force_text_only", False):
+            tool_choice = "none"
+            self._hle_force_text_only = False
+            logger.info("[TOOL-STOP] model ignored stop note — forcing tool_choice=none for 1 turn")
+        elif getattr(self, "_loop_detected", False) and getattr(self, "_loop_signal", "") == "FORCE_STOP":
             hot = getattr(self, "_hot_tool_path", None)
             if hot and hot[0] and available_tools:
                 hot_tool_name, hot_path = hot

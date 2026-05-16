@@ -54,8 +54,23 @@ _TEMPLATE_NOISE: frozenset[str] = frozenset(
         "CONSIDER", "RESPONSE", "RESULT", "VERIFIED",
         # Common prose openers that pass acronym + title-case regexes
         "CHAPTER", "SECTION", "PART", "INTRODUCTION", "CONCLUSION",
+        # HLE multiple-choice format boilerplate — 2026-05-16 queue audit
+        # found "Answer Choices" (95×), "None of the" (13×), etc. leaking
+        # through because they match the title-case phrase regex.
+        "ANSWER CHOICES", "ANSWER CHOICE",
+        "NONE OF THE", "NONE OF THE ABOVE", "NONE OF THESE",
+        "ALL OF THE", "ALL OF THE ABOVE", "ALL OF THESE",
+        "ALL OF ABOVE", "NONE OF ABOVE",
+        "CHOOSE ONE", "SELECT ONE", "WHICH OF THE",
+        "WHICH OF THE FOLLOWING",
     }
 )
+
+# Words that are only ever connectors — a Title-Case phrase composed
+# entirely of these (after stripping the leading word) is prose filler.
+_CONNECTOR_WORDS: frozenset[str] = frozenset({
+    "of", "the", "and", "for", "in", "de", "von", "a", "an",
+})
 
 
 def _is_template_noise(candidate: str) -> bool:
@@ -69,6 +84,11 @@ def _is_template_noise(candidate: str) -> bool:
     # gets fragmented and "the" / "is" leak through the quoted-string
     # path with 3-char minimum length).
     if norm in {sw.lower() for sw in _STOPWORDS}:
+        return True
+    # A multi-word phrase whose non-first words are all connectors is
+    # prose filler, not an entity ("None of the", "All of the", etc.).
+    words = norm.split()
+    if len(words) >= 2 and all(w in _CONNECTOR_WORDS for w in words[1:]):
         return True
     return False
 
