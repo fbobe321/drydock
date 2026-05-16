@@ -1513,7 +1513,17 @@ class AgentLoop:
                         "your plan in text."
                     )
             elif _stall_attempt == 1:
-                if prev_tool_name == "ralph_repo_index":
+                if _tool_stop_injected:
+                    _fa_suffix = os.environ.get(
+                        "DRYDOCK_STOP_NOW_SUFFIX",
+                        "End with 'FINAL ANSWER: <answer>'.",
+                    )
+                    note = (
+                        "STOP. Do NOT call any tools. "
+                        "Write your answer as plain text RIGHT NOW. "
+                        + _fa_suffix
+                    )
+                elif prev_tool_name == "ralph_repo_index":
                     note = (
                         "You sent an empty response after indexing the repository. "
                         "Respond in TEXT now — answer the user's question directly, "
@@ -1556,7 +1566,17 @@ class AgentLoop:
                         "OR explicitly say you are done with this task."
                     )
             else:
-                if prev_tool_name == "ralph_repo_index":
+                if _tool_stop_injected:
+                    _fa_suffix = os.environ.get(
+                        "DRYDOCK_STOP_NOW_SUFFIX",
+                        "End with 'FINAL ANSWER: <answer>'.",
+                    )
+                    note = (
+                        "FINAL WARNING. You have sent multiple empty responses. "
+                        "Do NOT use any tools. Write your answer NOW. "
+                        + _fa_suffix
+                    )
+                elif prev_tool_name == "ralph_repo_index":
                     note = (
                         "THIRD empty response after ralph_repo_index. "
                         "Stop — write a text reply to the user RIGHT NOW. "
@@ -1605,6 +1625,13 @@ class AgentLoop:
                 "Empty-response stall (inline retry %d/%d, prev=%s)",
                 _stall_attempt + 1, MAX_STALL_RETRIES, prev_role,
             )
+            # When tool-stop is active, force text-only again on the
+            # stall-retry LLM call.  _hle_force_text_only was consumed
+            # (cleared) at the previous LLM call boundary, so without
+            # this the stall-retry call gets tool_choice="auto" and the
+            # model loops back to calling tools instead of answering.
+            if _tool_stop_injected:
+                self._hle_force_text_only = True
             # Loop back to re-call the LLM.
             continue
 
