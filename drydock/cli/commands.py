@@ -47,6 +47,20 @@ class CommandRegistry:
                 ),
                 handler="_undo_last_turn",
             ),
+            "goal": Command(
+                aliases=frozenset(["/goal"]),
+                description=(
+                    "Set a completion condition and auto-continue across "
+                    "turns until met. Usage:\n"
+                    "  /goal <condition>   — set a goal\n"
+                    "  /goal               — show current goal status\n"
+                    "  /goal clear         — cancel the active goal\n"
+                    "After each turn, a small evaluator checks the "
+                    "condition. If not met, drydock injects a continuation "
+                    "prompt and runs another turn (capped at 20 iterations)."
+                ),
+                handler="_goal_command",
+            ),
             "log": Command(
                 aliases=frozenset(["/log"]),
                 description="Show path to current interaction log file",

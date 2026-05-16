@@ -1,5 +1,18 @@
 # Drydock Trip Log
 
+## 2026-05-16 13:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE: 74/603 = 12.3% lifetime; burndown running (PID 2169324, physics batch, 10+ min elapsed)
+- Admiral last 30 min: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp healthy, Q3_K_M + reasoning-budget=12000 + mmproj loaded)
+- GH issues: 0 open (GH #23 closed by 4ef879a mmproj vision feat)
+- Dispatch queue: harness=20 (all thinking_stall false-positives from autonomous_review.log re-classification; already addressed by 23f3530), curiosity=1977 pending
+- Retrieval drain: 0 projects (all already ingested)
+- Curiosity action: consumed 5168c5160c15cdf3 (robot arm timeout — empty prediction, addressed by TOOL_STOP_AFTER + reasoning-budget=12000 existing fixes; 320 hle_failure remain pending)
+- Auto-solve: 120 no_extract events — Z3 hook running but geometry/visual HLE questions don't have extractable formulas (expected)
+- Action this tick: no new fix committed — system healthy
+
 ## 2026-05-16 12:00 UTC tick
 - Stress: paused (.pause_stress sentinel active)
 - Write rate: N/A (stress paused)

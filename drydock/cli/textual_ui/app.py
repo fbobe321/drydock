@@ -851,6 +851,21 @@ class DrydockApp(App):  # noqa: PLR0904
                         loading_widget=self._loading_widget,
                     )
 
+            # /goal post-turn hook — if a goal is active, ask the
+            # evaluator whether the condition is met. Met → clear and
+            # tell the user. Not met → queue a continuation prompt so
+            # the next turn fires automatically. The hook only runs on
+            # the success path (skipped on exception below) so a broken
+            # turn doesn't trigger an auto-continuation that re-trips
+            # the same failure.
+            try:
+                await self._check_goal_continuation()
+            except Exception as _goal_e:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).warning(
+                    "[goal] post-turn hook failed (skipped): %s", _goal_e,
+                )
+
         except asyncio.CancelledError:
             if self._loading_widget and self._loading_widget.parent:
                 await self._loading_widget.remove()
@@ -2203,6 +2218,143 @@ class DrydockApp(App):  # noqa: PLR0904
                     f"Failed to reload config: {e}", collapsed=self._tools_collapsed
                 )
             )
+
+    async def _check_goal_continuation(self) -> None:
+        """Called from `_handle_agent_loop_turn` after the agent's turn
+        finishes. If a goal is active, run the evaluator and either
+        clear (met) or queue a continuation prompt (not met).
+        """
+        loop = self.agent_loop
+        goal = getattr(loop, "goal", None)
+        if goal is None or not goal.active:
+            return
+
+        # Cap check first — never call the evaluator past the cap.
+        if goal.iterations >= goal.max_iterations:
+            await self._mount_and_scroll(UserCommandMessage(
+                f"**Goal hit iteration cap** ({goal.max_iterations}). "
+                f"Stopping auto-continuation for: _{goal.condition}_.\n\n"
+                f"Last verdict: {goal.last_verdict or '(none)'}. "
+                f"Re-issue `/goal <condition>` to restart, or send a "
+                f"normal prompt to continue manually."
+            ))
+            loop.clear_goal()
+            return
+
+        # If the user typed something while we were processing, defer
+        # to their input — don't pre-empt with an auto-continuation.
+        # The queued message will run via _process_queued_message in
+        # the `finally` block below, and the goal will re-evaluate
+        # after THAT turn.
+        if hasattr(self, "_pending_messages") and self._pending_messages:
+            return
+
+        verdict, reasoning = await loop.evaluate_goal()
+        goal.iterations += 1
+
+        if verdict == "YES":
+            await self._mount_and_scroll(UserCommandMessage(
+                f"**Goal met** after {goal.iterations} turn(s): "
+                f"_{goal.condition}_.\n\n"
+                f"Evaluator reasoning: {reasoning or '—'}\n\n"
+                f"Auto-continuation cleared."
+            ))
+            loop.clear_goal()
+            return
+
+        if verdict == "ERROR":
+            # Repeated evaluator errors are not the model's fault and
+            # shouldn't lock the user in. Three errors → stop.
+            err_key = "_goal_eval_error_streak"
+            n = getattr(self, err_key, 0) + 1
+            setattr(self, err_key, n)
+            if n >= 3:
+                await self._mount_and_scroll(UserCommandMessage(
+                    f"**Goal evaluator failing repeatedly** (3 errors in a "
+                    f"row). Last reason: {reasoning}. Clearing the goal — "
+                    f"re-issue `/goal` to retry."
+                ))
+                loop.clear_goal()
+                setattr(self, err_key, 0)
+                return
+            # On a single error, keep the goal but don't auto-continue —
+            # safer than running another turn blind.
+            await self._mount_and_scroll(UserCommandMessage(
+                f"Goal evaluator returned an error: {reasoning}. "
+                f"Pausing auto-continuation for this turn; goal still "
+                f"active. Type any prompt to continue manually."
+            ))
+            return
+
+        # NO — queue a continuation prompt so the next turn fires.
+        setattr(self, "_goal_eval_error_streak", 0)
+        from drydock.core.goal import make_continuation_prompt
+        cont_prompt = make_continuation_prompt(goal)
+        if not hasattr(self, "_pending_messages"):
+            self._pending_messages = []
+        self._pending_messages.append(cont_prompt)
+        await self._mount_and_scroll(UserCommandMessage(
+            f"_Auto-continuing toward goal (turn {goal.iterations}/"
+            f"{goal.max_iterations}): {reasoning or 'not yet met'}_"
+        ))
+
+    async def _goal_command(self, args: str = "") -> None:
+        """/goal — set / show / clear a session-scoped goal that drives
+        automatic turn-after-turn work toward a verifiable condition.
+
+        Usage:
+          /goal <condition>   set a goal (and start auto-continuation)
+          /goal               show the current goal's status
+          /goal clear         cancel the active goal
+        """
+        args = (args or "").strip()
+        loop = self.agent_loop
+
+        # Status (no args) — show whatever goal is active
+        if not args:
+            g = getattr(loop, "goal", None)
+            if g is None or not g.active:
+                await self._mount_and_scroll(UserCommandMessage(
+                    "No active goal. Set one with `/goal <condition>`."
+                ))
+                return
+            verdict = g.last_verdict or "(not yet evaluated)"
+            reason = g.last_evaluator_reasoning or ""
+            await self._mount_and_scroll(UserCommandMessage(
+                f"**Goal:** {g.condition}\n\n"
+                f"- Iterations: {g.iterations} / {g.max_iterations}\n"
+                f"- Last verdict: {verdict}\n"
+                f"- Reasoning: {reason or '—'}\n\n"
+                f"Use `/goal clear` to cancel."
+            ))
+            return
+
+        # Clear
+        if args.lower() in ("clear", "cancel", "stop", "off"):
+            loop.clear_goal()
+            await self._mount_and_scroll(UserCommandMessage(
+                "Goal cleared."
+            ))
+            return
+
+        # Set a new goal
+        # Read DRYDOCK_GOAL_MAX_ITERATIONS for the operator-overridable cap
+        import os
+        try:
+            cap = int(os.environ.get("DRYDOCK_GOAL_MAX_ITERATIONS", "20"))
+            if cap < 1:
+                cap = 20
+        except ValueError:
+            cap = 20
+        loop.set_goal(args, max_iterations=cap)
+        await self._mount_and_scroll(UserCommandMessage(
+            f"**Goal set:** {args}\n\n"
+            f"After each turn, a fast evaluator will check whether the "
+            f"condition holds. If not, drydock will keep working "
+            f"automatically (up to {cap} turns). The goal will clear "
+            f"once met. Use `/goal` to check status, `/goal clear` to "
+            f"cancel."
+        ))
 
     async def _undo_last_turn(self) -> None:
         """Roll back the last user→assistant turn without wiping the

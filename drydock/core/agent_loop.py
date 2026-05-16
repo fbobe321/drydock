@@ -4373,6 +4373,86 @@ or replace freely; future sessions will respect your edits._
     def set_user_input_callback(self, callback: UserInputCallback) -> None:
         self.user_input_callback = callback
 
+    # ------------------------------------------------------------------
+    # Goal pursuit (Claude Code /goal feature) — see drydock/core/goal.py
+    # ------------------------------------------------------------------
+
+    def set_goal(self, condition: str, max_iterations: int = 20) -> None:
+        """Activate goal-pursuit mode. The TUI calls this when the user
+        types `/goal <condition>`. The agent loop itself doesn't act on
+        the goal — the TUI's post-turn hook checks `self.goal` and
+        decides whether to inject a continuation prompt."""
+        from drydock.core.goal import GoalState
+        self.goal = GoalState(
+            condition=condition.strip(),
+            max_iterations=max_iterations,
+        )
+        logger.warning(
+            "[goal] activated: %r (cap=%d turns)",
+            condition[:80], max_iterations,
+        )
+
+    def clear_goal(self) -> None:
+        """Cancel goal-pursuit. Idempotent."""
+        if getattr(self, "goal", None) is not None:
+            logger.warning("[goal] cleared")
+        self.goal = None
+
+    async def evaluate_goal(self) -> tuple[str, str]:
+        """Ask the model whether the active goal has been met.
+
+        Returns (verdict, reasoning) where verdict ∈ {"YES", "NO", "ERROR"}.
+        ERROR means the call itself failed or the response couldn't be
+        parsed — caller should treat as NO and continue (or, after a
+        threshold of ERRORs in a row, clear the goal as a safety hatch).
+        """
+        from drydock.core.goal import (
+            EVALUATOR_SYSTEM_PROMPT,
+            build_evaluator_prompt,
+            collect_recent_message_snippets,
+            parse_verdict,
+        )
+        goal = getattr(self, "goal", None)
+        if goal is None or not goal.active:
+            return ("ERROR", "no active goal")
+
+        snippets = collect_recent_message_snippets(self.messages, n=8)
+        user_prompt = build_evaluator_prompt(goal, snippets)
+
+        eval_messages = [
+            LLMMessage(role=Role.system, content=EVALUATOR_SYSTEM_PROMPT),
+            LLMMessage(role=Role.user, content=user_prompt),
+        ]
+        active_model = self.config.get_active_model()
+        try:
+            # Tight budget — evaluator returns ~30 tokens at most.
+            # Temperature low for determinism. No tools.
+            result = await self.backend.complete(
+                model=active_model,
+                messages=eval_messages,
+                temperature=0.0,
+                tools=[],
+                tool_choice=None,
+                extra_headers=self._get_extra_headers(
+                    self.config.get_active_provider()
+                ),
+                max_tokens=120,
+                metadata=None,
+            )
+        except Exception as e:  # noqa: BLE001 — never crash the TUI on eval error
+            logger.warning("[goal] evaluator call failed: %s", e)
+            return ("ERROR", f"evaluator backend error: {e!s}"[:200])
+
+        raw = (result.message.content or "").strip()
+        verdict, reasoning = parse_verdict(raw)
+        goal.last_verdict = verdict
+        goal.last_evaluator_reasoning = reasoning
+        logger.warning(
+            "[goal] verdict=%s iter=%d/%d reason=%r",
+            verdict, goal.iterations, goal.max_iterations, reasoning[:120],
+        )
+        return (verdict, reasoning)
+
     async def undo_last_turn(self) -> tuple[bool, str]:
         """Rewind history past the LAST user message, dropping the
         assistant turn (and any tool results) it triggered AND the
@@ -4479,6 +4559,10 @@ or replace freely; future sessions will respect your edits._
         self._empty_nudge_last_user_idx = -1
         self._total_error_rounds = 0
         self._read_file_state = {}
+        # /goal state: None means no active goal. Cleared by /clear and
+        # /compact since the goal is session-scoped and a fresh session
+        # shouldn't inherit the prior pursuit.
+        self.goal = None
 
     async def compact(self) -> str:
         try:
