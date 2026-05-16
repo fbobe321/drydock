@@ -18,6 +18,15 @@ Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
   AWQ-4bit on vLLM is the historical alternate path and stays available
   via `/data3/Models/start_gemma4.sh` (the vLLM script — NOT the
   llama.cpp one). Speed: ~64 tok/s e2e on Q3.
+- **Vision (2026-05-16, GH #23):** `/data3/Models/mmproj-F16.gguf`
+  (1.2 GB, unsloth/gemma-4-26B-A4B-it-GGUF). Loaded via
+  `--mmproj /models/mmproj-F16.gguf` in `start_gemma4_llamacpp.sh`.
+  Container reports `projector: gemma4v` and accepts OpenAI-style
+  multimodal messages (`content: [{type:text}, {type:image_url}]`).
+  Verified with a base64 test image — model received 284 prompt tokens
+  for `text + 1×1 image`. Server-side ONLY; drydock TUI does not yet
+  have an image-attach affordance — the server-side capability is the
+  prereq for that work.
 - **The honest test:** `scripts/shakedown_interactive.py` — drives the real TUI
   via pexpect with a multi-step user conversation (24 steps per PRD: plan,
   build, test, add features, debug, review code, edge cases, README).

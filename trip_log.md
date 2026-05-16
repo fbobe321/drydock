@@ -1,5 +1,53 @@
 # Drydock Trip Log
 
+## 2026-05-16 12:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (PID 2157358, slot 33 "other" category); lifetime 12.1% (72/594): Math 17.1%, Bio/Med 14.3%, CS/AI 2.4%, Chemistry 6.1%, Engineering 6.1%, Physics 3.1%
+- Recent batches declining (60%→0%) as burndown cycles into hard CS/AI questions — not a regression; CS/AI 2.4% is baseline for this model on symbolic/graph-theory problems; earlier Math 6/10 batch confirms Math loop is healthy
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, reasoning-budget=12000 confirmed in container config)
+- GH issues: 1 open (#23 image-processing multimodal enhancement — not actionable this tick)
+- Dispatch queue: harness=8 (all thinking_stall, fully addressed by prior commits), retrieval=0 actionable, curiosity=1950 pending (316 hle_failure, 1635 unknown_term)
+- Retrieval drain: 0 projects ingested (all already ingested recently)
+- Curiosity: consumed 30cceb0645e3c41e (JS timeout hle_failure — pre-fix thinking stall, addressed by reasoning-budget=12000 + STOP_NOW fixes)
+- Action this tick: no code changes — all dispatch patterns addressed, CS/AI 0% is model capability not a drydock bug
+
+## 2026-05-16 12:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (PID 2157358, 43m elapsed); lifetime 12.3% (74/600): Math 17.1%, Bio/Med 14.3%, CS/AI 2.4%, Chemistry 6.1%, Other 18.2%
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, Q3_K_M, reasoning-budget=12000)
+- GH issues: 1 open (#23 image-processing enhancement — not actionable)
+- Dispatch queue: harness=8 (all thinking_stall, fully addressed), retrieval=0 actionable, curiosity=1971 pending (319 hle_failure, 1652 unknown_term)
+- Retrieval drain: 0 projects ingested (all already ingested recently)
+- Curiosity: consumed 21fc1bf2f3913021 (directed multigraph cycle cover — model used tools but no FINAL ANSWER; addressed by 23f3530 force tool_choice=none + b0350cb stall nudge)
+- Action this tick: no code changes — system nominal; all harness:thinking_stall patterns addressed by prior 24h commits; HLE score holding steady at 12.3%
+
+## 2026-05-16 11:30 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: alive (PID 2144966, 52 min), lifetime 71/589 = 12.1% (Math 50/292 = 17.1%, CS/AI 2/81 = 2.5%)
+- Recent batch trend: scores dropped 60%→0% over last 8 batches — NOT a regression. Category rotation has been hitting CS/AI (10:40 UTC 0/10, 10:46 UTC 0/8 ongoing) and Biology (10%). CS/AI is historically 2.5% for this model; both recent CS/AI batches are consistent with baseline. Earlier 6/10 Math batch confirms Math is healthy at ~17%.
+- vLLM (llamacpp-gemma4): healthy, Q3_K_M, reasoning-budget=12000 confirmed active
+- Balancer: healthy on :8001
+- Autonomous review: started 11:30 UTC (prior tick ended 11:05 UTC exit=0)
+- GH issues: 1 open (#23 image processing enhancement, non-critical)
+- Dispatch queue: harness=12 (thinking_stall, all addressed per evidence), retrieval=0 actionable (3 entries, already ingested), curiosity=1945 pending (1632 unknown_term, 314 hle_failure)
+- Action this tick: consumed curiosity d287eae28286f71b (Make 24 no-FINAL-ANSWER case, addressed by 23f3530 force-tool_choice-none fix). No code change — system healthy, HLE running, all loops nominal.
+
+## 2026-05-16 11:00 UTC tick
+- Stress: paused (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: alive (PID 2144966, 19h+ elapsed), lifetime 71/584 = 12.2% (Math 50/292 = 17.1%, CS/AI 2/76 = 2.6%)
+- Recent batch trend: score drop from ~30% (Math) to 0% (CS/AI) is category-rotation driven — model historically 2.6% on CS/AI vs 17.1% Math; empty:no_response on two coding questions is thinking-budget exhaustion (12000-token budget × ~50 tok/s ≈ 240s, plus prompt overhead)
+- vLLM (llamacpp-gemma4): healthy, Q3_K_M, reasoning-budget=12000
+- Balancer: healthy on :8001
+- Autonomous review: started 11:00 UTC (prior run ended 10:35 UTC)
+- GH issues: 1 open (#23 image processing enhancement, non-critical)
+- Dispatch queue: harness=12 (thinking_stall, all addressed per prior commits), retrieval=0 actionable, curiosity=1925 pending
+- Retrieval drain: 0 ingested (3 entries, all recently ingested)
+- Action this tick: consumed 3 stale curiosity items (chemistry no_final_answer from pre-v2.8.42 era, before judge fix e3a3a9d and stall fixes b0350cb/23f3530 — no code change needed)
+
 ## 2026-05-16 10:30 UTC tick
 - Stress: paused (.pause_stress sentinel active)
 - Write rate: N/A (stress paused)

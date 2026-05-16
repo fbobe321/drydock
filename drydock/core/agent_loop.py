@@ -729,6 +729,23 @@ class AgentLoop:
         if user_message.message_id is None:
             raise AgentLoopError("User message must have a message_id")
 
+        # Reset sticky error counters on every fresh user turn. Without
+        # this, once `_total_error_rounds` hits the 3-round stop ceiling
+        # (~45 API errors), it stays at 3 forever — every subsequent
+        # user message immediately re-trips the ceiling on its first
+        # API error and aborts. Users were stuck typing /clear (which
+        # wipes the whole session) just to recover. The user has
+        # manually intervened by typing again; they earn a fresh
+        # error budget. The bad messages may also have been
+        # dropped/compacted by the previous round's recovery path, so
+        # the new turn often succeeds where the prior round couldn't.
+        if getattr(self, "_total_error_rounds", 0) > 0:
+            logger.warning(
+                "[recovery] resetting _total_error_rounds=%d → 0 on new user turn",
+                self._total_error_rounds,
+            )
+            self._total_error_rounds = 0
+
         # Flush the user message to disk RIGHT NOW, before the LLM call.
         # Without this, messages.jsonl only updates after the model yields
         # — for silent/slow prompts the user message is invisible to any
@@ -1050,8 +1067,44 @@ class AgentLoop:
                             self._total_error_rounds = 0
                         self._total_error_rounds += 1
                         if self._total_error_rounds >= 3:
+                            # Hard-stop after 3 rounds of recovery attempts.
+                            # Drop the LAST user→assistant block so the next
+                            # user message doesn't immediately re-trigger the
+                            # same broken state. Counter resets on the next
+                            # _conversation_loop entry, so the user can just
+                            # type the next message and continue without
+                            # losing their entire context.
+                            try:
+                                # Find the last user message; truncate to it.
+                                # Keep everything up to AND INCLUDING that
+                                # message; drop the assistant garbage after.
+                                last_user_idx = -1
+                                for i in range(len(self.messages) - 1, -1, -1):
+                                    if self.messages[i].role == Role.user:
+                                        last_user_idx = i
+                                        break
+                                if last_user_idx >= 0 and last_user_idx < len(self.messages) - 1:
+                                    kept = list(self.messages[: last_user_idx + 1])
+                                    self.messages.reset(kept)
+                                    logger.warning(
+                                        "[recovery] hard-stop: dropped %d messages "
+                                        "after last user turn (idx=%d)",
+                                        len(self.messages) - last_user_idx - 1,
+                                        last_user_idx,
+                                    )
+                            except Exception as _drop_err:  # noqa: BLE001
+                                logger.warning(
+                                    "[recovery] hard-stop drop failed: %s",
+                                    _drop_err,
+                                )
                             yield AssistantEvent(
-                                content=f"\n\n[Stopping: {self._total_error_rounds * MAX_API_ERRORS}+ API errors. The model cannot process this request. Try /compact or /clear to free context.]\n",
+                                content=(
+                                    f"\n\n[Stopping after {self._total_error_rounds * MAX_API_ERRORS}+ "
+                                    f"API errors. Conversation rolled back to your "
+                                    f"last message — just type your next request "
+                                    f"to continue. (Use /compact if context is "
+                                    f"genuinely too long, /clear only to fully reset.)]\n"
+                                ),
                             )
                             return
 
