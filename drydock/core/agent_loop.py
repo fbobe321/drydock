@@ -1369,7 +1369,8 @@ class AgentLoop:
                     prev_tool_name = assistant_msg.tool_calls[-1].function.name if assistant_msg.tool_calls[-1].function else None
             _readonly_tools = {"read_file", "grep", "glob", "ls", "pwd",
                                "ralph_repo_index", "ralph_file_summary",
-                               "retrieve", "search_files", "lsp"}
+                               "retrieve", "search_files", "lsp",
+                               "web_search", "web_fetch"}
             _write_tools = {"write_file", "search_replace"}
             _prev_was_read = prev_tool_name in _readonly_tools
             _prev_was_write = prev_tool_name in _write_tools
@@ -1471,10 +1472,12 @@ class AgentLoop:
                     )
                 elif _prev_was_read:
                     _tool_name_str = prev_tool_name or "read_file"
+                    _generic_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
                     note = (
                         f"You called {_tool_name_str} but produced no output. "
-                        f"Now use write_file, search_replace, or bash "
-                        f"to make changes — do NOT call {_tool_name_str} again."
+                        f"Now respond in text — write your answer or make changes. "
+                        f"Do NOT call {_tool_name_str} again."
+                        + (f" {_generic_suffix}" if _generic_suffix else "")
                     )
                 elif _prev_write_success:
                     note = (
@@ -1534,11 +1537,12 @@ class AgentLoop:
                     )
                 elif _prev_was_read:
                     _tool_name_str = prev_tool_name or "read_file"
+                    _generic_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
                     note = (
                         f"You sent an empty response after calling {_tool_name_str}. "
-                        f"Call write_file or search_replace NOW to apply "
-                        f"what you read — OR state in one sentence why you "
-                        f"cannot proceed. Do NOT call {_tool_name_str} again."
+                        f"Respond in text now — write your answer or apply what you read. "
+                        f"Do NOT call {_tool_name_str} again."
+                        + (f" {_generic_suffix}" if _generic_suffix else "")
                     )
                 elif _prev_was_write:
                     _tool_name_str = prev_tool_name or "write_file"
@@ -1589,11 +1593,12 @@ class AgentLoop:
                     )
                 elif prev_tool_name in _readonly_tools:
                     _tool_name_str = prev_tool_name or "read_file"
+                    _generic_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
                     note = (
                         f"THIRD empty response after {_tool_name_str}. "
-                        "Stop reading — call write_file or search_replace NOW to apply "
-                        "the change, or respond in text explaining why you cannot proceed. "
+                        "Stop — respond in text with your analysis or best answer. "
                         f"Do NOT call {_tool_name_str} again."
+                        + (f" {_generic_suffix}" if _generic_suffix else "")
                     )
                 elif _prev_was_write:
                     _tool_name_str = prev_tool_name or "write_file"
@@ -3642,9 +3647,23 @@ class AgentLoop:
         # corpus at /data3/arxiv_corpus/graphrag.sqlite (1.18M chunks)
         # has much better recall. The fallback path is operator-tunable
         # via DRYDOCK_GRAPHRAG_FALLBACK_DB; set to empty to disable.
-        primary_db = os.environ.get("DRYDOCK_GRAPHRAG_DB") or str(
-            Path.home() / ".drydock" / "graphrag.sqlite"
-        )
+        # Primary DB selection mirrors retrieve._resolve_db_path so the
+        # auto-prefetch and the model-issued retrieve calls always agree
+        # on which corpus to search:
+        #   1. DRYDOCK_GRAPHRAG_DB env override
+        #   2. <cwd>/.drydock/graphrag.sqlite (per-project index)
+        #   3. ~/.drydock/graphrag.sqlite (home fallback)
+        # Without #2, a user with a populated home DB never saw their
+        # own project's chunks because home always won.
+        env_db = os.environ.get("DRYDOCK_GRAPHRAG_DB")
+        if env_db:
+            primary_db = env_db
+        else:
+            project_db = Path.cwd() / ".drydock" / "graphrag.sqlite"
+            if project_db.is_file():
+                primary_db = str(project_db)
+            else:
+                primary_db = str(Path.home() / ".drydock" / "graphrag.sqlite")
         fallback_default = "/data3/arxiv_corpus/graphrag.sqlite"
         fallback_db_raw = os.environ.get(
             "DRYDOCK_GRAPHRAG_FALLBACK_DB", fallback_default

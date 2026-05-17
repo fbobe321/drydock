@@ -326,7 +326,7 @@ wheels = [
 
 [[package]]
 name = "drydock-cli"
-version = "2.8.42"
+version = "2.8.49"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -347,6 +347,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pypdf" },
     { name = "pyperclip" },
+    { name = "pytholog" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "textual" },
@@ -400,6 +401,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pypdf", specifier = ">=4.0.0" },
     { name = "pyperclip", specifier = ">=1.11.0" },
+    { name = "pytholog", specifier = ">=2.4.1" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "rich", specifier = ">=14.0.0" },
     { name = "textual", specifier = ">=7.4.0" },
@@ -1420,6 +1422,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/78/b4/439b179d1ff526791eb921115fca8e44e596a13efeda518b9d845a619450/pytest_xdist-3.8.0.tar.gz", hash = "sha256:7e578125ec9bc6050861aa93f2d59f1d8d085595d6551c2c90b6f4fad8d3a9f1", size = 88069, upload-time = "2025-07-01T13:30:59.346Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ca/31/d4e37e9e550c2b92a9cbc2e4d0b7420a27224968580b5a447f420847c975/pytest_xdist-3.8.0-py3-none-any.whl", hash = "sha256:202ca578cfeb7370784a8c33d6d05bc6e13b4f25b5053c30a152269fd10f0b88", size = 46396, upload-time = "2025-07-01T13:30:56.632Z" },
+]
+
+[[package]]
+name = "pytholog"
+version = "2.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "more-itertools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/01/87/cffd13adb88483ac677ad2d3bbde3156790cf71db8e9436ac66c2fb8ede9/pytholog-2.4.1.tar.gz", hash = "sha256:ef9b379dd21f755ee5e097e80ce1475e5581eb07d014157e1a76295faeded39f", size = 24680, upload-time = "2020-11-16T02:28:11.867Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6f/d2/f432427a58986ce8ea9f9d2ac6b35dd9657e523dcc562048c19491b4980b/pytholog-2.4.1-py3-none-any.whl", hash = "sha256:b726af28476df5935d8561ce964b7f7e1ba17e9d070b8c9b3da3fe993458893d", size = 16630, upload-time = "2020-11-16T02:28:10.243Z" },
 ]
 
 [[package]]

@@ -43,57 +43,61 @@ Drydock is a local CLI coding agent (fork of mistral-vibe, Apache 2.0).
 - **370 PRDs** at /data3/drydock_test_projects/ — the benchmark suite
 - **Current version:** v2.8.27 on PyPI (auto-released every 6h from `main`)
 - **Active continuous loops:** stress harness (hourly), autonomous_review
-  (30-min), classify_pulse (10-min), telegram_bot keepalive (2-min),
-  hle_babysitter (hourly @ :45 — 10-Q HLE batch per tick, see
-  HLE_PRD §"Continuous HLE evaluation"), **hle_burndown daemon** (back-to-back
-  batches, runs as background process via `scripts/hle_burndown.sh start`;
-  keepalive cron at `*/15` resurrects if it dies). Both HLE loops share
-  `/tmp/hle_continuous.pid` — whichever owns the lock keeps it; the other
-  exits/skips. Anything new the operator adds should not run at :00 or
-  :30 (autonomous_review owns those).
+  (30-min), classify_pulse (10-min), telegram_bot keepalive (2-min).
+  HLE eval loops were removed 2026-05-17 per operator directive — see
+  the "NO CUSTOM EVAL HARNESSES" rule below.
+- 🚨 **NO CUSTOM EVAL HARNESSES (2026-05-17).** The user has banned
+  bespoke evaluation infrastructure (HLE eval scripts, burndown
+  daemons, batch runners, judge-prompt pipelines, telemetry-aggregator
+  cron jobs, etc.). Even when such a harness drives the real TUI via
+  pexpect, the *concept* tempts the agent to fix harness-specific
+  issues (timeout tuning, env-var-gated behaviour, judge edge cases)
+  that don't help real users. Improving drydock comes from USING
+  drydock interactively as a real user does — the operator notices
+  pain, the agent fixes the pain. If you need a regression check,
+  write a unit test against the drydock library. If you need a
+  benchmark, run prompts through the TUI by hand and observe. Do
+  NOT spin up background eval daemons. Archived scripts at
+  `scripts/_archived_eval_harness/` — leave them archived.
 
-## Current plan (2026-05-14)
+## Current plan (2026-05-17)
 
-Three vectors moving in parallel. Each has a queue of concrete fixes
-tracked as TaskCreate items; the high-level shape is:
+Focus is on **TUI experience** — the operator uses drydock interactively;
+the agent fixes what the operator hits. No HLE eval loops, no custom
+benchmark daemons (see the "NO CUSTOM EVAL HARNESSES" rule above).
 
-1. **HLE** — keep pushing the floor up from 6.7% on Math. The
-   `scripts/hle_babysitter.sh` cron runs 10-Q Math batches every hour.
-   Open work: rotate categories beyond Math; build a multi-batch
-   aggregator (`scripts/hle_aggregate.py`); produce a clean Q3 vs Q4
-   stall-rate comparison once 30+ Q3 Math attempts have accumulated;
-   verify the gemma4.md tool-inventory change (e47cc4e) actually
-   lifted math/count/memory/verify call rates.
+1. **TUI bugs the operator notices in real use** — error recovery
+   paths, slash commands, tool reliability. Recent ships: /undo,
+   /back, /goal, vision (--mmproj), recovery meta-fix.
 
-2. **GraphRAG** — the auto-prefetch hook is shipping good chunks on
-   trivia but not on hard symbolic Math. Two concrete moves: lower
+2. **GraphRAG** — the auto-prefetch hook ships good chunks on trivia
+   but not on hard symbolic Math. Two concrete moves: lower
    `QUALITY_THRESHOLD` (currently 8.0 in `agent_loop.py:3391`) once
-   we know the real score distribution, and add an arxiv-corpus
-   fallback (`/data3/arxiv_corpus/graphrag.sqlite`) when the primary
-   index returns nothing above threshold.
+   we know the real score distribution, and the arxiv-corpus
+   fallback (`/data3/arxiv_corpus/graphrag.sqlite`) is wired.
 
 3. **Deep Noir** — sidecar/hooks/capture/train all coded; the
    `apply_chat_template` API-drift fix shipped 2026-05-14 (f02aa4b).
-   Real blocker for v1 vectors: contrastive-pair extraction is
-   currently broken — admiral records full UUIDs (e.g.
-   `5b55aacd-3606-4656-ad4b-eacf86506eda`) but session dirs are named
-   `session_<date>_<time>_<short_uuid>` where the `short_uuid` is the
-   first 8 chars of the SESSION's own UUID, not admiral's recorded
-   one. `extract_pairs._find_session_dir` matches on session_dir name
-   endswith(admiral_short) which only succeeds for the rare case
-   where both happen to match. Yield on `empty_after_tool:bash`:
-   2 / 88 derailed sessions found. Needs a real mapping layer
-   (meta.json → admiral) or admiral has to be fixed to record the
-   short hash used by session dirs.
+   Contrastive-pair extraction was fixed by **706f226 (2026-05-10)**:
+   admiral now records the live `agent_loop.session_id` (which IS the
+   short hash used by session dirs), and `extract_pairs._find_session_dir`
+   builds a `{meta.session_id → dir}` map from the on-disk
+   meta.json files. Both pieces work.
+   Real remaining issue: **admiral_state.json has ~3000 pre-fix
+   findings (recorded 2026-04-19 to 2026-05-10) whose UUIDs are
+   phantom — they don't resolve to any on-disk session_dir**.
+   `extract_pairs` correctly yields only the post-fix findings (~20
+   sessions across all categories as of 2026-05-17). The training
+   set will fill in as new findings accumulate. Pre-fix findings
+   are unrecoverable; consider GC'ing them out of admiral_state.json
+   so future audits aren't misleading.
 
 Operator controls for the continuous loops:
 
 ```bash
-touch /data3/drydock/.pause_hle_babysitter           # pause hourly HLE cron
-touch /data3/drydock/.pause_hle_burndown             # pause back-to-back burndown daemon
-touch /data3/drydock/.pause_hle_burndown_keepalive   # disable burndown auto-resurrection
 touch /data3/drydock_test_projects/.pause_watchdog
 touch /data3/drydock/.pause_auto_release             # pause 6h PyPI publish
+touch /data3/drydock/.pause_stress                   # pause stress harness restarts
 ```
 
 ## Build & Test

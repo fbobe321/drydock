@@ -78,6 +78,15 @@ def _resolve_db_path(arg: str) -> Path:
     project_db = Path.cwd() / ".drydock" / "graphrag.sqlite"
     if project_db.is_file():
         return project_db
+    # If we're inside a real project that doesn't yet have its own index,
+    # PREFER to create a per-project index over falling back to the home
+    # index (which is contaminated with other projects' content and
+    # answers wrong queries about THIS project). The home index is only
+    # the right answer for ad-hoc use outside any project — e.g. when
+    # the user runs drydock from their home dir.
+    cwd = Path.cwd()
+    if _looks_like_project(cwd):
+        return project_db  # will be auto-ingested by Retrieve.run
     return Path.home() / ".drydock" / "graphrag.sqlite"
 
 
