@@ -7465,3 +7465,12 @@ restarted, cron self-match bug fixed in this same session).
 - Dispatch queue: harness=9 (all stale thinking_stall, addressed by v2.8.47+v2.8.48), retrieval=0 actionable, curiosity=2468 pending (402 hle_failure, 2066 unknown_term)
 - HLE: lifetime 13.5% across 809 questions (Math 17.8%, CS/AI 6.8%, Bio/Med 13.2%); burndown daemon running (PID 2412661, physics batch)
 - Action this tick: committed fix (4909542) — readonly-tool stall-retry note was saying "call write_file or search_replace NOW" (wrong for HLE) and omitting DRYDOCK_STOP_NOW_SUFFIX; fixed to say "respond in text with analysis/best answer" and append the FINAL ANSWER suffix; consumed curiosity:87cf3274e4ba6912
+
+## 2026-05-17 16:30 UTC tick
+- Stress: running (PID 2487603, tool_agent PRD, step 27+, 18 min elapsed)
+- Write rate: N/A (no session log found for this run)
+- Admiral last 30 min: N/A
+- vLLM 400s: 12 context-overflow errors (two clusters of 6 retries) in last 30m; 33978-34373 tokens vs 32768 limit
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all stale thinking_stall, resolved), retrieval=0 actionable, curiosity=2548 pending (409 hle_failure paused, 2139 unknown_term noise)
+- Action this tick: committed fix 1bcd5d1 — removed search_replace exclusion from _truncate_old_tool_results(); old search_replace args (SEARCH/REPLACE blocks with full file content) were accumulating indefinitely past KEEP_RECENT=4 and pushing context over the 32768-token llama.cpp limit in long sessions with 20+ edits; truncated to JSON stub same as write_file args. auto_release will ship at next CDT tick.

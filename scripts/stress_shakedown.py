@@ -727,6 +727,21 @@ def run(cwd: Path, pkg: str, prompts_file: Path, max_per_prompt: float,
             child = _recycle_tui_child(child, watcher, log_path, cwd, env)
             consecutive_skips = 0
 
+        # Fast-fail: if the drydock subprocess died (crashed, OOM,
+        # operator-killed for a version upgrade), respawn immediately
+        # instead of waiting 90s × N SKIP cycles for the FORCE-RESET
+        # path to notice. Observed 2026-05-17: operator killed drydock
+        # at 11:34 to roll forward to v2.8.53; harness didn't recycle
+        # until 11:44 because nothing checks isalive between prompts.
+        try:
+            if not child.isalive():
+                print(f"\n┈┈┈ TUI child died unexpectedly (PID {child.pid}); "
+                      f"respawning ┈┈┈", flush=True)
+                child = _recycle_tui_child(child, watcher, log_path, cwd, env)
+                consecutive_skips = 0
+        except Exception:
+            pass
+
         # Adversarial-code-review pattern from asdlc.io: every N user
         # prompts, reset the session so context stays bounded.
         if i > 1 and (i - 1) % SESSION_RESET_EVERY == 0:

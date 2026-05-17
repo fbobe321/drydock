@@ -2528,11 +2528,6 @@ class AgentLoop:
                 for tc in msg.tool_calls:
                     if not tc.function or not tc.function.arguments:
                         continue
-                    # search_replace args contain SEARCH/REPLACE blocks the model
-                    # NEEDS to see in history (to know what edits it already applied).
-                    # Only write_file carries full file content worth truncating.
-                    if tc.function.name == "search_replace":
-                        continue
                     args = tc.function.arguments
                     if len(args) <= SOFT_CAP_BYTES:
                         continue

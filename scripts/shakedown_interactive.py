@@ -1443,6 +1443,40 @@ class SessionWatcher:
                         continue
             except Exception:
                 continue
+        # Also drain events.jsonl (added 2026-05-17 by SessionLogger.log_event)
+        # so queued-while-busy injections count toward "did the TUI accept
+        # my prompt?" — without this, the harness SKIPs every prompt typed
+        # during a multi-tool turn because the user message only lands in
+        # messages.jsonl at the NEXT drain (could be 5+ min later). The
+        # events file gets the user_injection_queued record immediately.
+        for events_file in sorted(sd.rglob("events.jsonl")):
+            key = str(events_file) + "::events"
+            try:
+                with events_file.open("rb") as f:
+                    f.seek(self._offsets.get(key, 0))
+                    chunk = f.read()
+                    self._offsets[key] = f.tell()
+                if not chunk:
+                    continue
+                for raw in chunk.decode("utf-8", errors="replace").split("\n"):
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except Exception:
+                        continue
+                    if ev.get("event") == "user_injection_queued":
+                        # Synthesise a user-role message so
+                        # count_user_messages() picks it up.
+                        self.messages.append({
+                            "role": "user",
+                            "content": ev.get("text", ""),
+                            "_from_events_jsonl": True,
+                        })
+                        new_msgs = True
+            except Exception:
+                continue
         # Cap the in-memory window so long sessions don't bloat RAM.
         if len(self.messages) > self.MAX_KEPT_MSGS:
             self.messages = self.messages[-self.MAX_KEPT_MSGS:]
