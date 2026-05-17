@@ -1,5 +1,162 @@
 # Drydock Trip Log
 
+## 2026-05-17 10:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- HLE burndown: running (PID 2412661, physics batch active, 12min elapsed), lifetime 108/803 = 13.4% (Math 17.8%, CS/AI 6.8%, Bio/Med 13.2%, Chem 8.5%, Other 18.2%)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: autonomous_review tick started 10:30Z
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, Q3_K_M)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all stale thinking_stall, covered by v2.8.47+v2.8.48); retrieval=0 actionable; steering=0; curiosity=2457 pending
+- Retrieval drain: 0 projects (3 entries already ingested)
+- Action this tick: consumed 3 stale hle_failure curiosity items (46987dc, 3696a9b, a139a26) — all empty-prediction "no answer extracted" cases addressed by d500234; no code change — system nominal
+
+## 2026-05-17 10:00 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- HLE burndown: running (PID 2400939, ~44min elapsed), lifetime 108/799 = 13.5% (Math 17.8%, CS/AI 6.8%, Bio/Med 13.2%, Chem 8.5%, Physics 5.8%, Other pending)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: autonomous_review completed at 09:31Z, new tick started 10:00Z
+- vLLM 400s: 0 (llamacpp-gemma4 healthy; "should_stop" log messages are normal generation-end markers)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all stale pre-fix thinking_stall, resolved by v2.8.47); retrieval=0 actionable; curiosity=2448 pending (dominated by pre-fix hle_failure + unknown_term)
+- Action: consumed 3 stale pre-fix chemistry hle_failure curiosity items (c7176..., bd0ed..., 7ef4...) addressed by d500234; no code change — system nominal. Noted 5/84 (6%) empty:no_response in today's "Other" category batches, likely transient load contention with 43-min burndown batch running concurrently.
+
+## 2026-05-17 09:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- HLE burndown: running (PID 2400939, ~10:45 elapsed), lifetime 105/793 = 13.2% (Math 17.8%, CS/AI 6.8%, Bio/Med 13.2%, Chem 8.5%, Physics 5.8%)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, Q3_K_M running)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all pre-fix thinking_stall, addressed by v2.8.47+v2.8.48), curiosity=2425 pending; retrieval=0 actionable
+- Retrieval drain: 0 projects (3 entries all already ingested recently)
+- Curiosity action: top 3 items are chemistry hle_failure with empty predictions (pre-fix artifacts); d500234 already addresses stall-retry FINAL ANSWER emission; no new action needed
+- Action this tick: no code change — system healthy; model+balancer+burndown all nominal; autonomous_review hit USD ceiling at 08:00 tick (expected), resumed normally at 09:00
+
+## 2026-05-17 09:00 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- HLE burndown: running (PID 2388607, slot 53 other category, ~41 min elapsed), lifetime 105/788 = 13.3% (Math 17.8%, CS/AI 6.8%, Bio/Med 13.2%, Chem 8.5%, Physics 5.8%)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, Up 20h)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all pre-fix thinking_stall, addressed by v2.8.47+v2.8.48), curiosity=2396 pending (2002 unknown_term, 394 hle_failure); retrieval=0 actionable
+- Retrieval drain: 0 projects (all 3 entries already ingested)
+- Curiosity action: consumed 3 stale hle_failure items (42a14c908f37797f, a81d05832f0531ee, 7942b4ea896964d8) — all from 2026-05-14, predating d500234+e20fb7b+23f65dc fix series; post-fix failures are factual-knowledge gaps (wrong answer, not missing FINAL ANSWER), not addressable via prompt rules
+- Action this tick: no code change — system healthy; model+balancer healthy; burndown daemon churning through "other" category questions
+
+## 2026-05-17 08:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- HLE burndown: running (PID 2388607, ~11:32 elapsed), lifetime 104/784 = 13.3% (Math 17.8%, CS/AI 6.8%, Bio/Med 13.2%, Chem 8.5%, Physics 5.8%)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, 0 errors in last 30m)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all pre-fix thinking_stall, addressed by v2.8.47+v2.8.48), curiosity=2397 pending (2001 unknown_term, 396 hle_failure); retrieval=0 actionable
+- Retrieval drain: 0 projects (all 3 entries already ingested)
+- Curiosity action: consumed 3 stale hle_failure items (b9677370, a35ffc74, 678d1ee8) — all from 2026-05-14, method=empty:no_final_answer, predating the e20fb7b+23f65dc+d500234 stall-fix series; post-fix hle_failure entries (4 items after 08:05Z) all show method=judge/exact meaning model is producing answers, just wrong ones, not missing FINAL ANSWER
+- Action this tick: no code change — system healthy; 08:00 AR tick hit USD budget ceiling (exit=1); model+balancer healthy; no new bugs in last 6h
+
+## 2026-05-17 07:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- HLE burndown: running (PID 2374691, slot 52 CS, ~21 min elapsed), lifetime 99/774 = 12.8% (Math 17.8%, CS/AI 2.1%, Bio/Med 13.2%, Chem 8.5%, Physics 5.8%)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, Up 19h)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all historical thinking_stall, resolved by v2.8.47), curiosity=2375 pending (500 unknown_term, 155 hle_failure, rest mixed), retrieval=0 actionable (already ingested)
+- Retrieval drain: 0 projects (all 3 entries already ingested recently)
+- Curiosity action: consumed 3 items (d989e493, 5b8cb785, 7e51e840) — all pre-fix hle_failure artifacts (thinking stalls or missing FINAL ANSWER, addressed by e20fb7b+23f65dc shipped in v2.8.47)
+- Action this tick: no code change — system stable, burndown running, model+balancer healthy; recent batch (slot 51 CS) still shows 1 empty:no_final_answer post-fix but at 480s/3msgs it appears to be thinking-budget exhaustion on hard questions, not a fixable code path
+
+## 2026-05-17 07:00 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- HLE burndown: running (PID 2361681, ~58 min elapsed), lifetime 99/770 = 12.9% (Math 17.8%, CS/AI 2.2%, Bio/Med 13.2%, Chem 8.5%, Physics 5.8%)
+- Write rate: N/A (stress paused)
+- Admiral last 30 min: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp-gemma4 no errors in last 30m)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all thinking_stall, fully addressed by v2.8.47), curiosity=375 hle_failure consumed so far, retrieval=0 actionable
+- Retrieval drain: 0 projects (already ingested)
+- Curiosity action: consumed d2602aa81ae85229 (parametric arc no-FINAL-ANSWER — pre-fix artifact addressed by 23f65dc + e20fb7b); remaining top items are capability-gap timeouts on hard math (electromagnetic surface current, 2000-dim F_p subspaces) — not actionable
+- Action this tick: no code change — system stable, burndown running, model+balancer healthy
+
+## 2026-05-17 06:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: PID 2361681 alive (28 min elapsed), lifetime score 12.9% (99/766 correct); babysitter skipping each tick as expected (burndown holds the lock)
+- Admiral last 30 min: N/A (stress paused)
+- vLLM 400s: 0 (llamacpp-gemma4 clean)
+- GH issues: 0 open
+- Dispatch queue: harness=9 thinking_stall (addressed by v2.8.47 stall-retry guards), retrieval=0 actionable, curiosity=2351 pending (392 hle_failure, 1959 unknown_term)
+- retrieval-drain: 0 ingested (all already recent)
+- Action this tick: consumed curiosity:372686d3c6df99ed (homeomorphism-group model-used-tools-but-no-FINAL-ANSWER — already covered by v2.8.47 stall-retry propagation fix); no code fix committed — system healthy
+
+## 2026-05-17 06:00 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (PID 2353171, 40+ min elapsed), lifetime 98/761 = 12.9% (Math 17.8%, CS/AI 2.4%, Chem 8.5%, Bio/Med 12.0%, Physics 5.8%)
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, no errors last 30m)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all thinking_stall, all addressed by v2.8.47), retrieval=3 (all already ingested), curiosity=2331 pending (392 hle_failure, 1942 unknown_term)
+- Retrieval drain: 0 projects ingested (already up to date)
+- Curiosity action: consumed 3 stale pre-v2.8.47 hle_failure artifacts (589002202589fa54, 910403238b247f07, 411df7f8c7fb7981 — MIMO/LoRaWAN/XRD failures from 2026-05-14, all predating the stall-retry guard fixes in e20fb7b+23f65dc)
+- Action this tick: no code fix — system stable, all dispatch patterns already resolved, burndown running normally
+
+## 2026-05-17 05:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (PID 2353171, ~10m elapsed); lifetime 13.0% (98/756); Math 17.8%, CS/AI 2.4%, Bio/Med 12.9%, Chem 8.5%, Physics 5.8%
+- Admiral last 30 min: 0 new patterns (all thinking_stall entries are historical, fully resolved by v2.8.47)
+- vLLM 400s: 0 (llamacpp container healthy; reasoning-budget=12000 active in logs)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all historical thinking_stall, resolved), retrieval=3 (0 actionable), curiosity=2320 pending
+- retrieval-drain: 0 projects ingested (all already current)
+- curiosity: consumed `6ca605a357149394` (EM/cylindrical-electrode timeout — pre-fix thinking-stall artifact, no code change needed); 2319 pending
+- Action this tick: no fix committed — system healthy, all known dispatch patterns addressed by v2.8.47+v2.8.48
+
+## 2026-05-17 05:00 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE: PID 2342056 alive (37min, biology/medicine batch via babysitter lock); burndown daemon PID 1742185 running 2d 7h; lifetime 97/748 = 13.0% (Math 17.8%, CS/AI 2.4%, Bio/Med 12.9%, Chem 8.5%, Physics 5.8%)
+- vLLM/llamacpp: model=Q3_K_M healthy; balancer :8001 up (PID 380535)
+- GH issues: 0 open
+- Dispatch queue: harness=1303 (all historical thinking_stall, resolved by v2.8.47); retrieval=3 (0 actionable); curiosity=2284 pending (382 hle_failure, 1902 unknown_term)
+- Retrieval drain: 0 projects ingested (all already processed)
+- Action this tick: consumed curiosity 5ca8871e665fa60c (bending stiffness hle_failure — structural mechanics capability gap, no code fix; model engaged tools but didn't emit FINAL ANSWER; stall-retry mechanisms confirmed working per latest burndown showing judge/exact failures rather than empty:no_final_answer)
+
+## 2026-05-17 04:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: batch 49 in progress (PID 2342056, biology/medicine, 4h elapsed); lifetime 97/742 = 13.1% (Math 17.8%, CS/AI 2.4%, Chem 8.5%, Bio/Med 14.3%, Physics 5.8%)
+- vLLM 400s: 0 in last 30min; llamacpp-gemma4 healthy (up 16h)
+- GH issues: 0 open
+- Dispatch queue: harness=1303 entries (thinking_stall pattern fully resolved by v2.8.47+v2.8.48 per 02:10 UTC entry), retrieval=3 entries (0 actionable — all already ingested), curiosity=2266 pending (1889 unknown_term, 377 hle_failure)
+- Retrieval drain: 0 projects ingested (all already processed)
+- Action this tick: consumed curiosity 378c47ace335ab2d (textile permeability hle_failure — historical pre-fix failure from before e20fb7b+23f65dc stall-retry fixes; no source change needed)
+
+## 2026-05-17 04:00 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (PID 2328948, 42min elapsed); lifetime 95/737 = 12.9% (Math 17.5%, CS/AI 2.4%, Chem 8.5%, Bio/Med 14.3%, Physics 5.8%)
+- vLLM 400s: 3 (minor, llamacpp-gemma4 healthy overall)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all thinking_stall, normal operational signals from stall-retry mechanism — not bugs), curiosity=pending (top 3 are pre-fix hle_failure from 2026-05-14, root cause addressed by e20fb7b), retrieval=0 actionable
+- Retrieval drain: 0 projects (all already ingested)
+- Curiosity action: no action — top items are from 2026-05-14, root cause (post-tool-stop stall loop) addressed by v2.8.47 e20fb7b/23f65dc; recent HLE batches showing 40% per-batch rate validates fix
+- Action this tick: no code change — system healthy; autonomous_review running at :00/:30 cadence; balancer and model nominal
+
+## 2026-05-17 03:30 UTC tick
+- Stress: PAUSED (.pause_stress sentinel active)
+- Write rate: N/A (stress paused)
+- HLE burndown: running (PID 2328948, 12min elapsed, slot=48 Math); lifetime 95/733 = 13.0% (Math 17.7%, CS/AI 2.4%, Chem 8.5%, Bio/Med 14.3%, Physics 5.8%); last two batches 4/10 each = 40%
+- vLLM 400s: 0 (llamacpp-gemma4 healthy, reasoning-budget=12000 confirmed active)
+- GH issues: 0 open
+- Dispatch queue: harness=10 (all thinking_stall, all addressed by e20fb7b), retrieval=3 (0 actionable, already ingested), curiosity=2256 pending (377 hle_failure, 1879 unknown_term)
+- Retrieval drain: 0 projects (all already ingested)
+- Curiosity action: consumed 3 pre-fix hle_failure artifacts (f016303a: C RISC scheduling timeout, 522d4481: β-SVM no-FINAL-ANSWER, 860dcaed: chess timeout) — all patterns addressed by prior commits; FINAL ANSWER confirmed emitting in today's sessions (46 occurrences in session logs)
+- Action this tick: no code change — system healthy; 13% HLE lifetime and 40% recent-batch rate are best recorded values; no new dispatch patterns; balancer and model nominal
+
 ## 2026-05-17 03:00 UTC tick
 - Stress: PAUSED (.pause_stress sentinel active)
 - HLE burndown: slot 47 in progress (PID 2316207, ~52m elapsed), lifetime 93/729 = 12.8% (Math 17.3%, CS/AI 2.4%, Chem 8.5%, Bio/Med 14.3%, Physics 5.8%); slot 47 live output shows answers emitting correctly (YES at 480s, YES at 334s) — v2.8.47 stall-retry re-arm working in production

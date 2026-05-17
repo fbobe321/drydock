@@ -1507,10 +1507,12 @@ class AgentLoop:
                         "to the user. Do NOT re-run the same command."
                     )
                 else:
+                    _generic_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
                     note = (
                         "Continue working. Use a tool (write_file, "
                         "search_replace, bash, glob, grep) or state "
                         "your plan in text."
+                        + (f" {_generic_suffix}" if _generic_suffix else "")
                     )
             elif _stall_attempt == 1:
                 if _tool_stop_injected:
@@ -1560,10 +1562,12 @@ class AgentLoop:
                         "Do NOT re-run the same command."
                     )
                 else:
+                    _generic_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
                     note = (
                         "You sent an empty response. Call a tool now "
                         "(write_file, search_replace, bash, read_file, glob) "
                         "OR explicitly say you are done with this task."
+                        + (f" {_generic_suffix}" if _generic_suffix else "")
                     )
             else:
                 if _tool_stop_injected:
@@ -1614,11 +1618,13 @@ class AgentLoop:
                         "Do NOT re-run the same command."
                     )
                 else:
+                    _generic_suffix = os.environ.get("DRYDOCK_STOP_NOW_SUFFIX", "")
                     note = (
                         "You have sent 3 empty responses in a row for "
                         "this user request. Respond with either (a) a "
                         "tool call to make progress, or (b) one "
                         "sentence explaining why you cannot proceed."
+                        + (f" {_generic_suffix}" if _generic_suffix else "")
                     )
             self._inject_system_note(note)
             logger.info(
