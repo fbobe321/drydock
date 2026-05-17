@@ -330,6 +330,13 @@ class SessionLogger:
         persisted. Previously the dir only appeared on the first
         persist_messages call — a race for any watcher polling between
         /clear and the next user message.
+
+        Also touches an empty messages.jsonl marker file. Watchers
+        commonly use the existence of messages.jsonl to identify a
+        "real" session dir (vs an in-progress one). Without the marker,
+        a watcher polling right after /clear would fall back to the
+        PREVIOUS session's dir as the most recent "real" one, and
+        miss messages routed to the new session.
         """
         if not self.enabled:
             return
@@ -340,6 +347,10 @@ class SessionLogger:
         self.session_metadata = self._initialize_session_metadata()
         try:
             self.session_dir.mkdir(parents=True, exist_ok=True)
+            # Touch the messages.jsonl marker so watchers see this as a
+            # discoverable session dir immediately, not after the first
+            # message lands.
+            (self.session_dir / MESSAGES_FILENAME).touch(exist_ok=True)
             self.log_event({
                 "event": "session_reset",
                 "session_id": session_id,

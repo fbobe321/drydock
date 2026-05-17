@@ -1,5 +1,23 @@
 # Drydock Trip Log
 
+## 2026-05-17 19:00 UTC tick
+- Stress: 192/1658 (PID 2501045, 02:04 elapsed, tool_agent suite, 154 done / 0 skip / 0 timeout since restart at 16:56 UTC)
+- Write rate: low (~2/92 steps show writes — normal for informational prompts on an existing package)
+- Admiral last 30 min: 1 harness:thinking_stall fire at 18:40 UTC (nudge injected, working as designed)
+- llamacpp 400s: 0 new (6 minor errors in container logs, none JSONDecode/400 class)
+- GH issues: 0 open
+- Dispatch queue: harness=10 last 24h (all thinking_stall, resolved by existing logic), retrieval=0 actionable (drained), curiosity=2625 pending (top items: hle_failure=409 banned, unknown_term=2215 noise, evidence_conflict=1 stale file-not-found)
+- Action this tick: no action — system healthy; autonomous_review also found no actionable items in 17:00/17:30/18:00/18:30 ticks; v2.8.56 is current with context-overflow fix holding
+
+## 2026-05-17 18:30 UTC tick
+- Stress: step ~676/1658, running (PID 2501045, ~97 min elapsed, tool_agent prompt suite; some SKIP/FORCE-RESET on API-server prompts per known modal-eat issue)
+- Write rate: N/A (log shows +7 writes/session typical)
+- Admiral last 30 min: 3 harness:thinking_stall fires at 18:20 UTC (empty_after_tool:bash; nudges injected as expected — working, not a new bug)
+- llamacpp 400s: 6 context-overflow errors in last hour (down from 34/hr pre-fix; residual from long sessions; 1bcd5d1 fix holding for new sessions)
+- GH issues: 0 open
+- Dispatch queue: harness=1308 total (10 in last 24h, all thinking_stall resolved by existing nudge logic), retrieval=3 (0 actionable, all recently ingested), curiosity=3021 total / 2615 pending (all HLE failures banned or unknown_term noise)
+- Action this tick: no action — system healthy; no actionable bugs; retrieval drain: 0 ingested (already up to date)
+
 ## 2026-05-17 18:00 UTC tick
 - Stress: step 114/1658, running (PID 2501045, ~64 min elapsed, tool_agent prompt suite, ~62 tok/s, healthy)
 - Write rate: N/A (no per-prompt write rate in stress output)
