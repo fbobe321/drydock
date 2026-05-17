@@ -58,6 +58,17 @@ from drydock.core.constraint_hint import (
     # structure-count
     ("How many associative and commutative binary operations can be defined on a set of 3 elements?", "structure-count"),
     ("How many distinct functions exist on a set of 4 elements?", "structure-count"),
+
+    # Coding-shape patterns (added 2026-05-17) — real-user prompts that
+    # should route through Z3/Prolog/solve when the developer asks
+    # drydock to find inputs, verify invariants, or check existence.
+    ("Find counterexamples to: for all positive n, n^2+n+41 is prime", "prove"),
+    ("Verify this loop terminates for all positive inputs", "prove"),
+    ("Find inputs to test_foo that trigger the early-return branch", "find-such-that"),
+    ("What inputs would cause this regex to backtrack?", "find-such-that"),
+    ("Is there an integer x where x^2 + 5*x + 6 = 0 has solutions?", "find-such-that"),
+    ("Generate a test case that exercises the overflow path", "find-such-that"),
+    ("For all positive n, does this invariant hold?", "prove"),
 ])
 def test_detector_positive_matches(msg: str, label: str) -> None:
     hit = detect_constraint_shape(msg)

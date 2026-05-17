@@ -1,5 +1,32 @@
 # Drydock Trip Log
 
+## 2026-05-17 18:00 UTC tick
+- Stress: step 114/1658, running (PID 2501045, ~64 min elapsed, tool_agent prompt suite, ~62 tok/s, healthy)
+- Write rate: N/A (no per-prompt write rate in stress output)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (model logs show normal slot/checkpoint activity, no decode errors)
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all stale thinking_stall, fully resolved by v2.8.47), retrieval=3 (all already ingested, no-op), curiosity=2569 pending (none actionable — HLE failures banned, unknown_term noise)
+- Action this tick: no action — system healthy; model Q3_K_M + balancer :8001 (pid 380535) up; stress advancing; all dispatch patterns historical and resolved
+
+## 2026-05-17 17:30 UTC tick
+- Stress: step 83/1658, running (PID 2501045, 35 min elapsed, tool_agent prompt suite, ~2.4 prompts/min)
+- Write rate: N/A (no per-prompt write rate in stress output)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 errors in last 30 min (context checkpoint activity is normal; 1bcd5d1 fix holding)
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all stale thinking_stall, resolved by v2.8.47), retrieval=0 actionable, curiosity=2569 pending (409 hle_failure paused, 2160 unknown_term noise)
+- Action this tick: no action — system healthy; model Q3_K_M + balancer :8001 up; stress steady; no new dispatch patterns; HLE paused per CLAUDE.md 2026-05-17 directive; curiosity items are HLE failures (banned) or unknown_term noise
+
+## 2026-05-17 17:00 UTC tick
+- Stress: step 38/1658, running (PID 2501045, ~5 min elapsed, tool_agent prompt suite)
+- Write rate: N/A (early in run)
+- Admiral last 30 min: N/A
+- vLLM 400s: 34 in last 30 min (all pre-fix context overflow at 41869>32768 tokens from previous run; 0 in last 5 min after stress restart with v2.8.54)
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all stale thinking_stall, resolved by v2.8.47), retrieval=3 entries (0 actionable, all recently ingested), curiosity=2549 pending (409 hle_failure, 2140 unknown_term — HLE paused per CLAUDE.md directive)
+- Action this tick: no action — system healthy; v2.8.54 shipped at 12:00 CDT with search_replace arg truncation fix; context overflow errors pre-date the fix and have stopped; no actionable dispatch or curiosity items
+
 ## 2026-05-17 16:00 UTC tick
 - Stress: step 26/1658, just restarted at 16:00 UTC by hourly babysitter (stress PID 2482864, .pause_stress sentinel present but stress running — babysitter may not check it)
 - Write rate: N/A (just restarted this tick)

@@ -192,10 +192,14 @@ _PATTERN_HINTS: list[tuple[re.Pattern[str], str, str]] = [
     ),
     (
         re.compile(
-            r"\b(prove|show\s+that|demonstrate|verify\s+that)\b"
+            r"\b(prove|show\s+that|demonstrate|verify\s+that|verify\b)\b"
             r"|\bif\s+and\s+only\s+if\b"
             r"|\biff\b"
-            r"|\bnecessary\s+and\s+sufficient\b",
+            r"|\bnecessary\s+and\s+sufficient\b"
+            # Coding-shaped variants — counterexamples + universal claims
+            r"|\b(find|construct)\s+(a\s+)?counterexamples?\b"
+            r"|\bfor\s+all\s+(positive\s+|integer|natural\s+|negative\s+)?\w+,\s*(does|is|prove)\b"
+            r"|\b(this|the)\s+(loop|function|invariant|method)\s+(terminates|holds|preserves)\b",
             re.IGNORECASE,
         ),
         "prove",
@@ -213,7 +217,12 @@ _PATTERN_HINTS: list[tuple[re.Pattern[str], str, str]] = [
             r"\bfind\s+(?:all\s+)?(?:x|y|n|k|m|the\s+(?:value|values|number|integer|integers|set|points?))\b"
             r"|\bfor\s+what\s+(?:value|values|x|y|n|k|m|integers?)\b"
             r"|\bexists\s+(?:a|an)\s+\w+\s+such\s+that\b"
-            r"|\bthere\s+(?:is|exists)\s+(?:a|an|some)\s+\w+\s+(?:such\s+that|with)\b"
+            r"|\bthere\s+(?:is|exists)\s+(?:a|an|some)\s+\w+\s+(?:such\s+that|with|where)\b"
+            r"|\bis\s+there\s+(?:a|an|some|any)\s+(?:\w+\s+){1,4}(?:such\s+that|with|where)\b"
+            # Coding-specific: branch-trigger inputs, test cases
+            r"|\bfind\s+(?:an?\s+)?inputs?\s+(?:that|where|to)\b"
+            r"|\bwhat\s+inputs?\s+(?:would|will|cause|trigger)\b"
+            r"|\b(generate|construct|design)\s+(?:a\s+)?(?:test|input)\s+(?:case|that)\b"
             # Counting questions: "for how many integers x is...", "how many ... satisfy"
             r"|\bfor\s+how\s+many\b"
             r"|\bhow\s+many\s+(?:integers?|values?|solutions?|positive|natural)\b"
