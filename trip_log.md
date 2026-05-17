@@ -1,5 +1,41 @@
 # Drydock Trip Log
 
+## 2026-05-17 21:00 UTC tick
+- Stress: ~680/1658 (PID 2501045, ~4h05m elapsed, tool_agent suite; consecutive SKIPs on API-shape prompts normal, FORCE-RESET recovering)
+- Write rate: tracking (no aggregated figure — recent prompts are API-heavy, SKIP-prone)
+- llamacpp 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=9 in last 24h (all thinking_stall, existing nudge resolves them per log evidence), retrieval=0 actionable, curiosity=2655 pending (all hle_failure/unknown_term; HLE paused per directive)
+- Model: Q3_K_M on llamacpp-gemma4 (:8000), balancer on :8001 (PID 380535) — both healthy
+- Action this tick: no action — system healthy, no new bugs, retrieval-drain: 0 ingested
+
+## 2026-05-17 20:30 UTC tick
+- Stress: 279/1658 (PID 2501045, ~3h36m elapsed, tool_agent suite, 195 done / 241 steps = ~81% write rate, 0 timeouts, 3 recycles)
+- Write rate: ~81% (done/attempted since restart at step 38)
+- Admiral last 30 min: 1019 total findings; recent-window check skipped (schema traversal error)
+- llamacpp 400s: 0 blocking 400s; 6 minor slot-management lines in last 30m (normal)
+- GH issues: 0 open
+- Dispatch queue: harness=1309 total (9 in last 24h, all thinking_stall — existing nudge logic covers), retrieval=0 actionable, curiosity=2655 pending (409 hle_failure paused, 2245 unknown_term noise)
+- Action this tick: no action — previous tick (20:00 UTC) already committed 332057d; system healthy; no new bugs found; retrieval-drain: 0 ingested (all already recent)
+
+## 2026-05-17 20:00 UTC tick
+- Stress: 238/1658 (PID 2501045, ~3h04m elapsed, tool_agent suite, running cleanly with 3 TUI recycles)
+- Write rate: N/A (no session write-rate metric available for this run)
+- Admiral last 30 min: N/A
+- vLLM 400s: 51 errors in last 60m from docker logs (mix of slot updates and JSON parse errors, none blocking)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all thinking_stall, already fixed), retrieval=0 actionable, curiosity=588 pending (473 unknown_term noise, 114 hle_failure paused, 1 evidence_conflict)
+- Action this tick: committed fix 332057d — added "error code: 500" to the 500-error recovery branch in agent_loop.py; llama.cpp returns "Error code: 500 - {..." not "500 internal server error", so the tool-call drop + truncation advice path was silently bypassed for all JSON-parse-error 500s; the bad tool call was re-sent unchanged on every retry; auto_release will ship at next CDT tick
+
+## 2026-05-17 19:30 UTC tick
+- Stress: PID 2501045, ~02:35 elapsed, tool_agent suite step ~250+/1658, running cleanly
+- Write rate: N/A
+- Admiral last 30 min: 3 harness:thinking_stall fires at 18:20, 1 at 18:40 (all informational — nudge-inject path working as designed)
+- llamacpp 400s: 6 minor errors in container logs (none JSONDecode/400-class)
+- GH issues: 0 open
+- Dispatch queue: harness=1309 (9 in last 24h, all thinking_stall resolved), retrieval=0 actionable (drain: 0 ingested), curiosity=2646 pending (top: hle_failure banned, unknown_term noise, evidence_conflict stale)
+- Action this tick: no action — system healthy; model Q3_K_M + balancer :8001 both up; stress advancing; HLE paused per directive; no actionable bugs found
+
 ## 2026-05-17 19:00 UTC tick
 - Stress: 192/1658 (PID 2501045, 02:04 elapsed, tool_agent suite, 154 done / 0 skip / 0 timeout since restart at 16:56 UTC)
 - Write rate: low (~2/92 steps show writes — normal for informational prompts on an existing package)

@@ -53,6 +53,12 @@ class SessionLogger:
         self.save_dir.mkdir(parents=True, exist_ok=True)
         self.session_dir = self.save_folder
         self.session_metadata = self._initialize_session_metadata()
+        # Publish current session dir at init too (not just on reset)
+        # so external watchers can find the very first session.
+        try:
+            self._publish_current_session()
+        except Exception:  # noqa: BLE001
+            pass
 
     @property
     def save_folder(self) -> Path:
@@ -327,16 +333,15 @@ class SessionLogger:
         Materializes the new session_dir on disk immediately so external
         watchers (drydock-using tools, dashboards, the stress harness)
         can discover the new session BEFORE the first message gets
-        persisted. Previously the dir only appeared on the first
-        persist_messages call — a race for any watcher polling between
-        /clear and the next user message.
+        persisted.
 
-        Also touches an empty messages.jsonl marker file. Watchers
-        commonly use the existence of messages.jsonl to identify a
-        "real" session dir (vs an in-progress one). Without the marker,
-        a watcher polling right after /clear would fall back to the
-        PREVIOUS session's dir as the most recent "real" one, and
-        miss messages routed to the new session.
+        Also publishes the new session_dir path to
+        ~/.drydock/current_session.txt — any external tool that wants to
+        know "which drydock session is active right now" can read this
+        single file instead of doing a heuristic mtime-sorted search of
+        all ~3k+ historical session dirs. Solves the post-/clear race
+        where a watcher polling between reset_session and the OS
+        filesystem flush would cache the OLD dir as "newest".
         """
         if not self.enabled:
             return
@@ -351,11 +356,31 @@ class SessionLogger:
             # discoverable session dir immediately, not after the first
             # message lands.
             (self.session_dir / MESSAGES_FILENAME).touch(exist_ok=True)
+            # Publish the active session_dir for external watchers.
+            self._publish_current_session()
             self.log_event({
                 "event": "session_reset",
                 "session_id": session_id,
             })
         except Exception:  # noqa: BLE001 — never block on disk
+            pass
+
+    def _publish_current_session(self) -> None:
+        """Write the active session_dir path to ~/.drydock/current_session.txt
+        so external watchers don't have to mtime-scan the whole history.
+
+        Atomic via write-then-rename. Fail-silent — publishing is an
+        observability convenience, never block the session on it.
+        """
+        if self.session_dir is None:
+            return
+        try:
+            pub_path = Path.home() / ".drydock" / "current_session.txt"
+            pub_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = pub_path.with_suffix(".txt.tmp")
+            tmp_path.write_text(str(self.session_dir) + "\n")
+            tmp_path.replace(pub_path)
+        except Exception:  # noqa: BLE001
             pass
 
     def resume_existing_session(self, session_id: str, session_dir: Path) -> None:

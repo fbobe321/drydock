@@ -1386,9 +1386,27 @@ class SessionWatcher:
     def find_session(self) -> Path | None:
         if self.session_dir is not None:
             return self.session_dir
-        # meta.json is only written at session EXIT (CLAUDE.md learning #37).
-        # For active sessions we fall back to: new dir (mtime > since) that
-        # has messages.jsonl. meta.json match is preferred when available.
+        # Fast path (added 2026-05-17 with v2.8.58): drydock now
+        # publishes the active session_dir to ~/.drydock/current_session.txt
+        # at session init and on every reset_session. This avoids the
+        # post-/clear race where mtime-scan returned the stale OLD dir
+        # because reset_session's mkdir hadn't flushed yet.
+        pub_path = Path.home() / ".drydock" / "current_session.txt"
+        try:
+            published = pub_path.read_text().strip()
+            if published:
+                p = Path(published)
+                # Only accept the published path if it's recent enough —
+                # protects against a leftover file from a previous run.
+                if p.is_dir() and p.stat().st_mtime >= self.since - 5:
+                    self.session_dir = p
+                    return p
+        except (FileNotFoundError, OSError):
+            pass
+        # Fallback: meta.json is only written at session EXIT (CLAUDE.md
+        # learning #37). For active sessions we fall back to: new dir
+        # (mtime > since) that has messages.jsonl. meta.json match is
+        # preferred when available.
         fallback: Path | None = None
         for entry in sorted(SESSION_ROOT.iterdir(), reverse=True):
             try:

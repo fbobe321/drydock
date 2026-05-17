@@ -1148,6 +1148,7 @@ class AgentLoop:
                           or "error code: 400" in error_str.lower()
                           or "500 internal server error" in error_str.lower()
                           or "status: 500" in error_str.lower()
+                          or "error code: 500" in error_str.lower()
                           or "llm backend error" in error_str.lower()):
                         # Context limit or malformed request — aggressive recovery
                         # Step 0 (added 2026-05-09): if the error looks like a
