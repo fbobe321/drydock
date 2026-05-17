@@ -480,9 +480,58 @@ class DrydockApp(App):  # noqa: PLR0904
 
         await self._handle_user_message(value)
 
+    async def on_approval_app_stray_key(
+        self, message: ApprovalApp.StrayKey
+    ) -> None:
+        """The approval modal forwarded a stray keystroke (user started
+        typing chat input while the modal was up). Buffer printable chars
+        into a scratch string; flush as one pending message on Enter.
+
+        Without this, real users hitting an approval modal mid-type lose
+        every character they tap — the modal swallows everything not in
+        its 1/y/2/3/n/up/down/enter bindings. Stress harness exposed it
+        as 30% SKIP rate; root cause is the same for real interactive
+        users."""
+        if not hasattr(self, "_stray_key_buffer"):
+            self._stray_key_buffer: str = ""
+        if not hasattr(self, "_pending_messages"):
+            self._pending_messages: list[str] = []
+
+        if message.is_enter:
+            buf = self._stray_key_buffer.strip()
+            if buf:
+                self._pending_messages.append(buf)
+                self._stray_key_buffer = ""
+                # Tell the user we caught their stray input
+                try:
+                    await self._mount_and_scroll(UserCommandMessage(
+                        f"_Queued chat input typed during approval modal "
+                        f"({len(buf)} chars): \"{buf[:60]}…\". Will run "
+                        f"after the modal closes._"
+                    ))
+                except Exception:
+                    pass
+            return
+
+        if message.text:
+            self._stray_key_buffer += message.text
+
+    def _flush_stray_key_buffer(self) -> None:
+        """Move any buffered stray-key text to _pending_messages.
+        Called from every approval-close path so chars typed during the
+        modal aren't lost even if the user didn't press Enter."""
+        buf = getattr(self, "_stray_key_buffer", "").strip()
+        if not buf:
+            return
+        if not hasattr(self, "_pending_messages"):
+            self._pending_messages = []
+        self._pending_messages.append(buf)
+        self._stray_key_buffer = ""
+
     async def on_approval_app_approval_granted(
         self, message: ApprovalApp.ApprovalGranted
     ) -> None:
+        self._flush_stray_key_buffer()
         if self._pending_approval and not self._pending_approval.done():
             self._pending_approval.set_result((ApprovalResponse.YES, None))
 
@@ -491,6 +540,7 @@ class DrydockApp(App):  # noqa: PLR0904
     async def on_approval_app_approval_granted_always_tool(
         self, message: ApprovalApp.ApprovalGrantedAlwaysTool
     ) -> None:
+        self._flush_stray_key_buffer()
         self._set_tool_permission_always(
             message.tool_name, save_permanently=message.save_permanently
         )
@@ -503,6 +553,7 @@ class DrydockApp(App):  # noqa: PLR0904
     async def on_approval_app_approval_rejected(
         self, message: ApprovalApp.ApprovalRejected
     ) -> None:
+        self._flush_stray_key_buffer()
         if self._pending_approval and not self._pending_approval.done():
             feedback = str(
                 get_user_cancellation_message(CancellationReason.OPERATION_CANCELLED)

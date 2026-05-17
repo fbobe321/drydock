@@ -1,5 +1,14 @@
 # Drydock Trip Log
 
+## 2026-05-17 16:00 UTC tick
+- Stress: step 26/1658, just restarted at 16:00 UTC by hourly babysitter (stress PID 2482864, .pause_stress sentinel present but stress running — babysitter may not check it)
+- Write rate: N/A (just restarted this tick)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 errors in llamacpp-gemma4 last 30m
+- GH issues: 0 open
+- Dispatch queue: harness=7 (all stale thinking_stall, resolved by v2.8.47+v2.8.48), retrieval=0 actionable, curiosity=2546 pending (409 hle_failure, 2137 unknown_term — all HLE-related, HLE paused via sentinels)
+- Action this tick: no action — system healthy; queued harness items all historical; top curiosity items are hard-math HLE timeouts which cannot be evaluated with HLE paused per operator directive (CLAUDE.md 2026-05-17); retrieval queue already up to date
+
 ## 2026-05-17 15:30 UTC tick
 - Stress: PAUSED (.pause_stress sentinel active)
 - HLE burndown: running (PID 2465533 engineering batch, slot 59, ~51 min elapsed), lifetime 115/848 = 13.6% (Math 17.8%, CS/AI 6.8%, Bio/Med 13.2%, Physics 8.3%, Chem 8.7%); babysitter skipping correctly while burndown active

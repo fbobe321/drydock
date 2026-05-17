@@ -45,6 +45,25 @@ class ApprovalApp(Container):
             self.tool_args = tool_args
             self.save_permanently = save_permanently
 
+    class StrayKey(Message):
+        """User started typing chat input while the modal was up.
+
+        Real users (and the pexpect-based stress harness) hit this when
+        an approval modal appears mid-conversation: their keystrokes get
+        routed to ApprovalApp, which only binds up/down/enter/1/y/2/3/n
+        and silently drops everything else. Before this fix, those
+        characters disappeared into the void; the user assumed the TUI
+        was ignoring them and re-typed (or gave up).
+
+        Now we forward stray printable characters AND Enter to the main
+        app, which appends them to `_pending_messages` so they replay
+        into the chat input after the modal closes.
+        """
+        def __init__(self, text: str, is_enter: bool = False) -> None:
+            super().__init__()
+            self.text = text
+            self.is_enter = is_enter
+
     class ApprovalRejected(Message):
         def __init__(self, tool_name: str, tool_args: BaseModel) -> None:
             super().__init__()
@@ -137,6 +156,30 @@ class ApprovalApp(Container):
                     widget.add_class("approval-option-yes")
                 else:
                     widget.add_class("approval-option-no")
+
+    async def on_key(self, event: events.Key) -> None:
+        """Catch printable characters that aren't in BINDINGS and forward
+        them to the main app's pending-messages queue instead of silently
+        dropping them. Without this, a user (or pexpect harness) who types
+        chat input while the modal is up loses every keystroke.
+
+        Bound keys (up/down/enter/1/y/2/3/n) are handled by Textual's
+        binding system BEFORE on_key fires for unmatched events — so we
+        only ever see the stray ones here.
+
+        We accept any single printable character. Enter is treated as a
+        message-send boundary: flush the buffered stray-key text as one
+        pending message. The flush boundary lives on the App side so we
+        can preserve typing rhythm across multiple modals."""
+        if event.character and event.character.isprintable():
+            self.post_message(self.StrayKey(text=event.character, is_enter=False))
+            event.stop()
+        elif event.key == "enter":
+            # Enter without any pending stray text means the user
+            # confirmed the focused option — let the BINDINGS handle it.
+            # (This on_key won't fire for "enter" if the binding consumed
+            # it first.) Forward as flush marker just in case.
+            self.post_message(self.StrayKey(text="", is_enter=True))
 
     def action_move_up(self) -> None:
         self.selected_option = (self.selected_option - 1) % 3
