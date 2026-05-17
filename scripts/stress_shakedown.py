@@ -429,8 +429,16 @@ def _spawn_tui_child(log_path: Path, cwd: Path,
     spawn configuration. Appends to the existing log (don't wipe the
     history — the watcher is polling it and the prior content is useful
     for post-mortem)."""
-    child = pexpect.spawn(DRYDOCK_BIN, encoding="utf-8", timeout=5,
-                          maxread=100000, env=env, cwd=str(cwd))
+    # Match the operator's real daily-driver config: they run drydock
+    # with --dangerously-skip-permissions, so the stress harness should
+    # too. Without this, every tool call that requires approval pops a
+    # modal that the harness can't dismiss → SKIP cascade. The user's
+    # real TUI never hits this path because approvals are pre-granted.
+    child = pexpect.spawn(
+        DRYDOCK_BIN, args=["--dangerously-skip-permissions"],
+        encoding="utf-8", timeout=5,
+        maxread=100000, env=env, cwd=str(cwd),
+    )
     child.logfile_read = open(log_path, "a", buffering=1)
     child.expect([r">", r"Drydock", r"┌"], timeout=30)
     time.sleep(2)

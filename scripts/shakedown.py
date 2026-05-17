@@ -362,8 +362,14 @@ class DrydockDriver:
             "COLUMNS": "120",
             "LINES": "30",
         }
+        # Match the operator's real daily-driver: `drydock
+        # --dangerously-skip-permissions`. Without this flag, every
+        # tool call that would prompt for approval pops a modal the
+        # harness can't dismiss, leading to a SKIP cascade. The real
+        # user has approvals pre-granted via this flag.
         self.child = pexpect.spawn(
             DRYDOCK_BIN,
+            args=["--dangerously-skip-permissions"],
             encoding="utf-8",
             timeout=5,
             maxread=100000,

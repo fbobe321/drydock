@@ -322,10 +322,24 @@ class AgentLoop:
         per-turn iteration in `act()` and surfaced to the model as a SYSTEM
         note on the last tool result so message ordering stays valid for
         vLLM/Mistral.
+
+        Side-effect: logs the queue event via the session logger so a
+        replay (or a harness/watcher) can see that the message was
+        accepted, even though it won't appear in `self.messages` until
+        the drain runs. Without this, debugging "did my queued message
+        land?" requires waiting for the next turn boundary.
         """
         cleaned = (text or "").strip()
         if cleaned:
             self._pending_user_injections.append(cleaned)
+            try:
+                self.session_logger.log_event({
+                    "event": "user_injection_queued",
+                    "text": cleaned[:1000],
+                    "pending_count": len(self._pending_user_injections),
+                })
+            except Exception as _e:  # noqa: BLE001 — never block queueing on logger failure
+                logger.debug("[injection] session log_event failed: %s", _e)
 
     def _drain_user_injections(self) -> None:
         """Pull any queued user messages into the current turn's context.

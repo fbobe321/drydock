@@ -81,6 +81,30 @@ class SessionLogger:
             )
         return self.session_dir / MESSAGES_FILENAME
 
+    def log_event(self, event: dict) -> None:
+        """Append a structured event to <session_dir>/events.jsonl.
+
+        Used for things that aren't conversation messages but ARE
+        worth recording for replay/debugging — e.g.
+        user_injection_queued (typed during agent run), tool_recycled,
+        modal_opened, etc. Fail-silent: never raise.
+
+        Creates session_dir on first call if it doesn't exist yet
+        (early-session events can fire before persist_messages
+        materialises the dir).
+        """
+        if self.session_dir is None:
+            return
+        try:
+            import json as _json
+            import time as _time
+            event_with_ts = {"ts": _time.time(), **event}
+            self.session_dir.mkdir(parents=True, exist_ok=True)
+            with (self.session_dir / "events.jsonl").open("a") as f:
+                f.write(_json.dumps(event_with_ts) + "\n")
+        except Exception:  # noqa: BLE001 — never block on logging
+            pass
+
     @property
     def git_commit(self) -> str | None:
         try:
