@@ -180,8 +180,9 @@ _RE_PERFECT_CUBE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 # "is f(x) prime" or "f(x) is prime" or "such that f(x) is prime"
+# or "for all positive n, f(n) is prime" (universal claim — find counterexample)
 _RE_PRIME = re.compile(
-    r'(?:\bis\s+|\bsuch\s+that\s+)(?P<f>[\w\s\^\{\}+\-*/().\\]{3,200}?)\s+(?:is\s+)?prime\b',
+    r'(?:\bis\s+|\bsuch\s+that\s+|,\s+)(?P<f>[\w\s\^\{\}+\-*/().\\]{3,200}?)\s+(?:is\s+)?prime\b',
     re.IGNORECASE | re.DOTALL,
 )
 # "f(x) is divisible by k". Capture permissively; `_truncate_formula_after_predicate`
@@ -198,11 +199,13 @@ _RE_EQUALS_CONSTANT = re.compile(
 )
 
 # "find x such that f(x) == g(x)" / "solve f(x) = g(x) for x"
+# Also: "is there an X where f(x) = g" — existence questions.
 _RE_EQUATION_SOLVE = re.compile(
     r'(?:find\s+(?:all\s+)?(?:integers?|values?|x|y|n|k|m|the\s+\w+)'
-    r'|solve(?:\s+for\s+\w+)?)\s+(?:such\s+that\s+)?'
+    r'|solve(?:\s+for\s+\w+)?'
+    r'|is\s+there\s+(?:a|an|some|any)\s+(?:\w+\s+){1,4}where)\s+(?:such\s+that\s+)?'
     r'(?P<lhs>[\w\^\{\}+\-*/().\\\s]{3,150}?)\s*=\s*'
-    r'(?P<rhs>[\w\^\{\}+\-*/().\\\s]{1,150}?)(?:\s*[.,?\n]|\s*$)',
+    r'(?P<rhs>[\w\^\{\}+\-*/().\\\s]{1,150}?)(?:\s*[.,?\n]|\s+has\s+|\s*$)',
     re.IGNORECASE | re.DOTALL,
 )
 
