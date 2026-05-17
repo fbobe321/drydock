@@ -322,7 +322,15 @@ class SessionLogger:
             self.maybe_cleanup_tmp_files()
 
     def reset_session(self, session_id: str) -> None:
-        """Clear existing session info and setup a new session"""
+        """Clear existing session info and setup a new session.
+
+        Materializes the new session_dir on disk immediately so external
+        watchers (drydock-using tools, dashboards, the stress harness)
+        can discover the new session BEFORE the first message gets
+        persisted. Previously the dir only appeared on the first
+        persist_messages call — a race for any watcher polling between
+        /clear and the next user message.
+        """
         if not self.enabled:
             return
 
@@ -330,6 +338,14 @@ class SessionLogger:
         self.session_start_time = utc_now().isoformat()
         self.session_dir = self.save_folder
         self.session_metadata = self._initialize_session_metadata()
+        try:
+            self.session_dir.mkdir(parents=True, exist_ok=True)
+            self.log_event({
+                "event": "session_reset",
+                "session_id": session_id,
+            })
+        except Exception:  # noqa: BLE001 — never block on disk
+            pass
 
     def resume_existing_session(self, session_id: str, session_dir: Path) -> None:
         if not self.enabled:
