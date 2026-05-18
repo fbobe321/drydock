@@ -152,7 +152,10 @@ class ReadMcpResource(
         servers = config.mcp_servers or []
 
         if not servers:
-            raise ToolError("No MCP servers configured. Add servers to ~/.drydock/config.toml")
+            raise ToolError(
+                "No MCP servers configured. "
+                "For local files use read_file; for shell commands use bash."
+            )
 
         from drydock.core.tools.mcp.tools import read_resource_http, read_resource_stdio
         from drydock.core.config import MCPStdio, MCPHttp
@@ -188,7 +191,8 @@ class ReadMcpResource(
                 last_error = e
                 continue
 
+        hint = " Use read_file for local paths instead." if args.uri.startswith("file://") else ""
         raise ToolError(
-            f"Could not read resource '{args.uri}' from any MCP server. "
-            f"Last error: {last_error}"
+            f"Could not read resource '{args.uri}' from any configured MCP server. "
+            f"Last error: {last_error}.{hint}"
         )

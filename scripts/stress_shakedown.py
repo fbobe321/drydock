@@ -268,7 +268,14 @@ def _env_float(name: str, default: float) -> float:
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 _RAW_MARKDOWN_PATTERNS = [
     re.compile(r"\*\*\w[^*]{1,80}\*\*"),            # **bold words**
-    re.compile(r"(?m)^#{1,6}\s+\w"),                 # ##heading
+    # `^##\s+\w` — REQUIRE 2+ `#` for the heading pattern. The earlier
+    # `^#{1,6}` matched Python code comments like `# Instantiate GCS
+    # backend` inside code blocks the model emits, causing systematic
+    # false positives (raw_md=10+ on code-heavy prompts). Real markdown
+    # H1 is rare in conversational replies — the model uses **bold** or
+    # `## H2` for emphasis/sections — so requiring 2+ #s drops the
+    # false-positive rate without missing real leaks.
+    re.compile(r"(?m)^#{2,6}\s+\w"),                 # ##heading (2+ #s)
     re.compile(r"\[[^\]]{1,40}\]\([^)]{1,80}\)"),    # [link](url)
 ]
 

@@ -1,5 +1,102 @@
 # Drydock Trip Log
 
+## 2026-05-18 04:00 UTC tick
+- Stress: 793/1658, 164 done, 0 skip, 0 timeout (PID 2666472, 1h49m uptime, RSS=618MB)
+- Write rate: normal (sessions completing, no stalls)
+- Admiral last 30 min: 0 new fires (harness:bash_generic last at 2026-05-17T23:50, thinking_stall at 18:40)
+- vLLM 400s: 0 new (llama.cpp on :8000 healthy, Q3_K_M confirmed)
+- GH issues: 0 open
+- Dispatch queue: harness=9 total (6 thinking_stall + 3 bash_generic, all addressed by existing commits), retrieval=0 actionable (all already ingested), curiosity=2690 pending (mostly unknown_term + hle_failure; HLE paused per operator)
+- Action this tick: no fix — system healthy; retrieval-drain 0 actionable; bash_generic loop was isolated incident (one import-check loop in tool_agent session, existing FORCE_STOP detection handled it, model resumed after mute which is expected advisory-only behavior)
+
+## 2026-05-18 03:00 UTC tick
+- Stress: PID 2666472 alive (49+ min, cycling through PRDs normally — API: OpenAPI generation at tick time)
+- Write rate: sessions completing (session_025001 ran 126 messages on tool_agent/MinIO PRD)
+- Admiral last 30 min: 0 new fires (bash_generic last at 23:50, thinking_stall last at 18:40)
+- vLLM 400s: 6 context-overflow errors (33388 > 32768 tokens; emergency compaction handled; session continued)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (6 thinking_stall + 3 bash_generic, both patterns already addressed by commits 1191431 / source), retrieval=0 actionable, curiosity=2674 pending (all hle_failure/unknown_term; HLE babysitter paused per operator directive)
+- Action this tick: no fix — system healthy; 2 post-v2.8.58 fixes (1191431, 77275c2) in source pending next auto-release at ~05:00 UTC; retrieval-drain 0 actionable; curiosity queue all HLE-pattern (paused)
+
+## 2026-05-18 02:30 UTC tick
+- Stress: PID 2666472 (babysitter restarted, now at step 629/1658, tool_agent PRD, healthy)
+- Write rate: N/A (session cycling normally)
+- Admiral last 30 min: thinking_stall last at 18:40, bash_generic 3x at 23:50 (addressed by 1191431)
+- vLLM 400s: 0 context errors in last 30m (1bcd5d1 search_replace truncation fix holding)
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all addressed), retrieval=0 actionable, curiosity=2665 pending (409 hle_failure paused, 2254 unknown_term noise)
+- Action this tick: no action — system healthy; all dispatch patterns addressed by recent commits; curiosity queue is HLE/unknown_term noise (babysitter paused per operator directive); retrieval-drain: 0 projects ingested
+
+## 2026-05-18 02:00 UTC tick
+- Stress: PID 2501045 alive (9h+), at prompt 620/1658 (storage backend cycle, +0 writes normal for context-less follow-on prompts)
+- Write rate: 0 writes/prompt (expected post-session-reset for storage backend prompts without prior context)
+- Admiral last 30 min: thinking_stall fired once, outcome=unstuck (working correctly)
+- llamacpp 400s: 5 context overflow errors (33668 > 32768 token limit) — multiple concurrent sessions each failing once; emergency compaction truncates and recovers; no drydock bug
+- GH issues: 0 open
+- Dispatch queue: harness=10 (thinking_stall + bash_generic), retrieval=0 actionable, curiosity=2665 pending (all hle_failure/unknown_term — babysitter paused)
+- Sentinels: hle_babysitter, hle_burndown, hle_burndown_keepalive, vllm_failover, watchdog all paused
+- Action this tick: no fix committed — last tick (01:30) shipped 1191431 (bash_generic loop-break via tool-error detection); retrieval drain: 0 actionable; curiosity top 3 all HLE-failure with babysitter paused — no action taken; model+balancer healthy
+
+## 2026-05-18 01:30 UTC tick
+- Stress: PID 2501045 alive (8h34m on tool_agent PRD step 38+, sessions cycling every ~15 min — healthy)
+- Write rate: N/A
+- Admiral last 30 min: 3 bash_generic fires at 23:50 (model repeating import-check bash call; addressed by commit 1191431 last tick)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M on :8000, balancer on :8001 both healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=1312 total (17 thinking_stall + 3 bash_generic in last 20; bash_generic addressed; no new patterns since 23:50), retrieval=3 (all stale, already ingested), curiosity=2665 pending (409 hle_failure, 2254 unknown_term — HLE paused per directive)
+- Action this tick: no action — system healthy; retrieval-drain: 0 actionable; top curiosity items are hle_failure (babysitter paused) and unknown_term noise; bash_generic pattern already addressed by 1191431; autonomous_review started at 01:30 UTC
+
+## 2026-05-18 01:00 UTC tick
+- Stress: 562/1658 (tool_agent storage backends, PID 2501045, 9h elapsed, healthy)
+- Write rate: N/A (storage-backend add prompts produce mostly text responses)
+- Admiral last 30 min: N/A
+- vLLM 400s: 6 log lines in 30m (normal llamacpp slot-checkpoint output, not errors)
+- GH issues: 0 open
+- Dispatch queue: harness=11 (8 thinking_stall informational, 3 bash_generic from 23:48 loop — all handled by existing mechanisms; intervention on bash_generic at 23:48 failed but FORCE_STOP at 5 runs covers it), retrieval=0 actionable, curiosity=494 pending (88 hle_failure paused, 405 unknown_term noise)
+- Action this tick: no action — system healthy. 00:35 UTC autonomous_review shipped `_looks_empty` tool_error match fix (v2.8.58, already released). Bash_generic loop pattern reviewed; existing 5-run repetition loop-breaker in bash.py covers import-check loops. No new actionable bugs.
+
+## 2026-05-18 00:00 UTC tick
+- Stress: 486/1658 (tool_agent storage backend prompts, PID 2501045, 12h elapsed)
+- Write rate: 14% (7/50 last steps had write_file calls — storage backend adds expected to be low)
+- Admiral last 30 min: 22 fires (23:xx UTC window)
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M clean)
+- GH issues: 0 open
+- Dispatch queue: harness=11 (3 new loop:bash_generic at 23:48 from single session, outcome=failed then FORCE_STOP took over; 8 stale thinking_stall), retrieval=0 actionable, curiosity=2664 pending (HLE babysitter paused per sentinel)
+- Action this tick: no action — system healthy. loop:bash_generic pattern examined; existing 3-consecutive-identical FORCE_STOP in agent_loop.py is catching it correctly. HLE curiosity items not actionable (babysitter paused). Retrieval drain: 0 ingested.
+
+## 2026-05-17 23:30 UTC tick
+- Stress: PID 2501045 running (tool_agent PRD, 6h34m elapsed, healthy); new sessions created at 23:13, 23:15, 23:24 UTC — progressing normally
+- Write rate: N/A (no session log linked to stress pid)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (44 grep hits are informational slot-update lines, not errors)
+- GH issues: 0 open
+- Dispatch queue: harness=8 (thinking_stall, stale — already addressed), retrieval=0 actionable (3 queue entries, all recently ingested), curiosity=2664 pending (409 hle_failure paused per operator directive, 2254 unknown_term noise)
+- Action this tick: no action — system healthy; autonomous_review.sh started its 23:30 tick; top curiosity items are hle_failure (HLE babysitter paused per CLAUDE.md 2026-05-17 directive) and unknown_term noise not worth acting on
+
+## 2026-05-17 22:30 UTC tick
+- Stress: PID 2501045 running 5h37m, stress_shakedown.py on tool_agent PRD (--resume-from-step 38), 181 sessions today; current session 48ba8dd6 writing plugin files (secret_scanning_tool.py, pii_redaction_tool.py) — healthy
+- Write rate: N/A (tool log shows writes in current session, exploration in prior)
+- Admiral last 30 min: N/A (HLE paused)
+- vLLM 400s: ~102 log lines in 6h (normal for llamacpp, not error class)
+- GH issues: 0 open
+- Dispatch queue: harness=8 (all thinking_stall, no new patterns), retrieval=0 actionable (all already ingested), curiosity=2664 pending (409 hle_failure w/ HLE paused, 2254 unknown_term noise — top items are math capability gaps, not prompt or infra bugs)
+- Action this tick: no code change — system stable; all queued harness patterns addressed by recent commits; autonomous_review started at 22:30; curiosity items are HLE capability gaps not actionable while babysitter paused
+
+## 2026-05-17 22:00 UTC tick
+- Stress: PID 2501045 running 5h+, tool_agent suite (step 38 resume), session 214835 active at 106 messages — healthy
+- vLLM 400s: 0 (model Q3_K_M, llamacpp-gemma4 healthy 33h, 62 tok/s)
+- GH issues: 0 open
+- Dispatch queue: harness=1309 (thinking_stall only, admiral nudge self-resolves per log), retrieval=3 drained (1 project ingested: 403_tool_agent), curiosity=2660 pending (HLE loops paused per directive — not actionable)
+- Action this tick: retrieval-drain: 1 project ingested; no source fix needed — system healthy
+
+## 2026-05-17 21:30 UTC tick
+- Stress: PID 2501045 running 4h34m, tool_agent stress_shakedown.py resuming from step 38 — active and healthy
+- llamacpp 400s: 0
+- GH issues: 0 open
+- Dispatch queue: harness=9 (all thinking_stall, admiral nudge resolving — latest log shows "unstuck"), retrieval=0 actionable, curiosity=2659 pending (2249 unknown_term, 409 hle_failure, 1 evidence_conflict; HLE paused per directive)
+- Model: Q3_K_M on llamacpp-gemma4 (:8000), balancer on :8001 — both healthy, 0 errors
+- Action this tick: no action — system fully healthy, no queued patterns unaddressed by recent commits
+
 ## 2026-05-17 21:00 UTC tick
 - Stress: ~680/1658 (PID 2501045, ~4h05m elapsed, tool_agent suite; consecutive SKIPs on API-shape prompts normal, FORCE-RESET recovering)
 - Write rate: tracking (no aggregated figure — recent prompts are API-heavy, SKIP-prone)
@@ -7555,3 +7652,40 @@ restarted, cron self-match bug fixed in this same session).
 - GH issues: 0 open
 - Dispatch queue: harness=7 (all stale thinking_stall, resolved), retrieval=0 actionable, curiosity=2548 pending (409 hle_failure paused, 2139 unknown_term noise)
 - Action this tick: committed fix 1bcd5d1 — removed search_replace exclusion from _truncate_old_tool_results(); old search_replace args (SEARCH/REPLACE blocks with full file content) were accumulating indefinitely past KEEP_RECENT=4 and pushing context over the 32768-token llama.cpp limit in long sessions with 20+ edits; truncated to JSON stub same as write_file args. auto_release will ship at next CDT tick.
+
+## 2026-05-17 23:00 UTC tick
+- Stress: PID 2501045 (tool_agent, step 38+, 6h+ elapsed, healthy)
+- Write rate: N/A (no session log for current run)
+- Admiral last 30 min: N/A
+- vLLM 400s: 0 (llamacpp-gemma4 Q3_K_M, no errors in last 30m)
+- GH issues: 0 open
+- Dispatch queue: harness=8 (all thinking_stall, stale — already addressed in agent_loop.py), retrieval=0 actionable, curiosity=2664 pending (409 hle_failure, 2254 unknown_term — HLE babysitter paused per operator directive)
+- Action this tick: no action — system healthy; retrieval-drain: 0 projects ingested; thinking_stall dispatch pattern already handled in source; top curiosity items are hle_failure (paused) and unknown_term noise; autonomous_review confirmed healthy at 22:30 UTC same findings
+
+## 2026-05-18 00:30 UTC tick
+- Stress: PID 2501045 alive (7h+ on tool_agent PRD, step 38+, sessions cycling normally)
+- Write rate: session dirs updating ~every 10-15 min
+- Admiral last 30 min: 3 bash_generic fires at 23:50, thinking_stall last at 18:40
+- vLLM 400s: 0 (model on Q3_K_M at :8000, balancer at :8001 healthy)
+- GH issues: 0 open
+- Dispatch queue: harness=11, retrieval=0 actionable, curiosity=2664 pending
+- Sentinels: hle_babysitter, hle_burndown, hle_burndown_keepalive, vllm_failover, watchdog all paused
+- Action this tick: committed fix — _looks_empty now matches <tool_error> so Check 0 loop detection fires after 3 repeated failing tool calls (was 8 via Check 1); also improved read_mcp_resource error messages to suggest read_file/bash when file:// URI fails with no MCP servers configured. Addresses pattern harness:loop:bash_generic. Retrieval drain: 0 actionable (already ingested). All 72 loop detection tests pass.
+
+## 2026-05-18 03:30 UTC tick
+- Stress: 749/1658
+- Write rate: N/A (current prompts are API knowledge questions with 0 writes expected)
+- Admiral last 30 min: 0 fires
+- vLLM 400s: 47 in 30 min (all context-overflow: 34K–35K token requests against 32K ctx)
+- GH issues: 0 open
+- Dispatch queue: harness=9 pending (thinking_stall×6 pre-fix, bash_generic×3 addressed by 1191431), retrieval=0 actionable, curiosity=2681 pending (mostly unknown_term/hle_failure, HLE paused)
+- Action this tick: committed fix 64587fa — context-overflow recovery was silently failing because the llm_balancer wraps backend 400s as "HTTP Error 400: Bad Request" (with colon), but the recovery condition checked for "400 bad request" (no colon). Added "400: bad request" and "both backends failed" to the elif. All other services healthy.
+
+## 2026-05-18 04:30 UTC tick
+- Stress: PID 2666472 alive (2h19m uptime)
+- Write rate: N/A (stress harness running)
+- Admiral last 30 min: 3 fires (harness:loop:bash_generic, 2026-05-17T23:50)
+- vLLM 400s: N/A (llama.cpp on :8000, balancer on :8001 — both healthy)
+- GH issues: no output (gh command returned empty)
+- Dispatch queue: harness=9, retrieval=0 actionable, curiosity=2694 pending (unknown_term dominant)
+- Action this tick: committed fix — escalate bash identical-call WARNING to FORCE_STOP (addresses pattern harness:loop:bash_generic). Model was running `python3 -c "from tool_agent.storage.factory import get_storag..."` 3+ times after import check passed; WARNING path only bumped temperature which the model ignored. 4+ identical bash calls now force text-only for 1 turn. All 72 loop-detection tests pass.

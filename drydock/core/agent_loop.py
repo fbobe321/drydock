@@ -1143,9 +1143,11 @@ class AgentLoop:
                     elif ("context length" in error_str.lower()
                           or "maximum context" in error_str.lower()
                           or "400 bad request" in error_str.lower()
+                          or "400: bad request" in error_str.lower()
                           or "status: 400" in error_str.lower()
                           or "exceeds the available context" in error_str.lower()
                           or "error code: 400" in error_str.lower()
+                          or "both backends failed" in error_str.lower()
                           or "500 internal server error" in error_str.lower()
                           or "status: 500" in error_str.lower()
                           or "error code: 500" in error_str.lower()
@@ -3374,7 +3376,8 @@ class AgentLoop:
                       'total_count: 0', 'retrieved 0 todos',
                       'no todos', '0 tasks', 'no tasks',
                       'no results', 'no matches', '0 matches',
-                      'no relevant information found'):
+                      'no relevant information found',
+                      '<tool_error>', 'tool_error'):
                 if p in s:
                     return True
             return False
@@ -3498,6 +3501,14 @@ class AgentLoop:
             len(sigs) >= REPEAT_WARNING_THRESHOLD
             and all(s == sigs[-1] for s in sigs[-REPEAT_WARNING_THRESHOLD:])
         ):
+            if last_tool in ("bash", "run_command"):
+                # Bash identical-call loops (e.g. repeated import checks) are
+                # never legitimate — escalate to FORCE_STOP (text-only for 1
+                # turn) so the model must summarise instead of looping.
+                # Temperature bump alone doesn't break these; the model needs
+                # to be unable to call bash.
+                self._hot_tool_path = None
+                return "FORCE_STOP"
             return f"WARNING|{last_tool}"
 
         # Check 2: Same tool called N+ times consecutively with different args
