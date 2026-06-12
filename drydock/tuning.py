@@ -34,6 +34,32 @@ GEMMA_DISABLED_TOOLS: frozenset[str] = frozenset({
 _THINKING_RE = re.compile(r"<\|channel>.*?<channel\|>", re.DOTALL)
 _THINKING_BARE = ("<|channel>", "<channel|>")
 
+# Gemma sometimes emits a tool call as TEXT instead of a structured call —
+# `<|tool_call>call:write_file{...}<tool_call|>` — which the API layer can't
+# turn into a real call, so nothing runs and the raw blob lands in the chat.
+# We detect this, hide the blob, and let the agent loop nudge a clean retry.
+_LEAKED_CALL_RE = re.compile(r"<\|tool_call>.*?<tool_call\|>", re.DOTALL)
+_LEAKED_CALL_BARE = ("<|tool_call>", "<tool_call|>")
+
+
+def strip_leaked_tool_calls(text: str) -> tuple[str, bool]:
+    """Return (text without text-form tool-call blobs, whether any were found).
+
+    Conservative: only the unambiguous ``<|tool_call>`` markers trigger it, so
+    ordinary prose that mentions "tool call" is never touched.
+    """
+    if not text or "tool_call" not in text:
+        return text, False
+    found = bool(_LEAKED_CALL_RE.search(text)) or any(
+        m in text for m in _LEAKED_CALL_BARE
+    )
+    if not found:
+        return text, False
+    cleaned = _LEAKED_CALL_RE.sub("", text)
+    for marker in _LEAKED_CALL_BARE:
+        cleaned = cleaned.replace(marker, "")
+    return cleaned.strip(), True
+
 _DEFAULT_SYSTEM_PROMPT = (
     "You are Drydock, a coding agent operating in a terminal. You have tools "
     "to read, write, edit, and search files and to run shell commands. Work "

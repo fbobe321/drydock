@@ -82,11 +82,17 @@ class DrydockApp(App):
         super().__init__()
         self.config = config
         self.state = AgentState()
-        self.system = system_prompt_for_model(config.get("model"))
+        self.system = self._build_system(config.get("model"))
         self._current_assistant: AssistantMessage | None = None
         self._last_card: ToolCard | None = None
         self._busy = False
         self._queue: list[str] = []  # prompts submitted while a turn is running
+
+    def _build_system(self, model: str | None) -> str:
+        # The TUI must honor AGENTS.md/DRYDOCK.md like the CLI does — it's the
+        # primary surface, and project instructions carry the user's tool/style
+        # conventions. cli.main() loads them into config after ensure_agents_md.
+        return system_prompt_for_model(model) + self.config.get("project_instructions", "")
 
     # ── layout ────────────────────────────────────────────────────────────
 
@@ -218,7 +224,7 @@ class DrydockApp(App):
             self._info(f"model: {self.config.get('model')}")
             return
         self.config["model"] = name
-        self.system = system_prompt_for_model(name)  # prompt may be model-specific
+        self.system = self._build_system(name)  # prompt may be model-specific
         self._refresh_status()
         self._info(f"switched model → {name}")
 

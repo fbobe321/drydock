@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from typing import Generator
 
-from drydock.tuning import strip_thinking_tokens, use_streaming
+from drydock.tuning import strip_leaked_tool_calls, strip_thinking_tokens, use_streaming
 
 # ── Provider registry ─────────────────────────────────────────────────────
 
@@ -83,6 +83,7 @@ class AssistantTurn:
     tool_calls: list  # [{id, name, input}, ...]
     input_tokens: int
     output_tokens: int
+    had_leaked_call: bool = False  # model emitted a tool call as text, not a call
 
 
 # ── Message format conversion ─────────────────────────────────────────────
@@ -267,6 +268,9 @@ def _complete_nonstreaming(
     msg = choice.message
 
     text = strip_thinking_tokens(msg.content or "")
+    # Hide any text-form tool-call blob before it reaches the UI; the flag on
+    # AssistantTurn lets the agent loop nudge a clean retry.
+    text, had_leak = strip_leaked_tool_calls(text)
     if text.strip():
         yield TextChunk(text)
 
@@ -287,4 +291,9 @@ def _complete_nonstreaming(
     in_tok = usage.prompt_tokens if usage else 0
     out_tok = usage.completion_tokens if usage else 0
 
-    yield AssistantTurn(text, tool_calls, in_tok, out_tok)
+    # Only flag a leak when the blob did NOT also produce real structured
+    # calls — if the model gave us a usable call, there's nothing to recover.
+    yield AssistantTurn(
+        text, tool_calls, in_tok, out_tok,
+        had_leaked_call=had_leak and not tool_calls,
+    )

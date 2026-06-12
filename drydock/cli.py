@@ -229,6 +229,10 @@ def main():
     }
 
     ensure_agents_md()
+    # Loaded after ensure_agents_md so the auto-created AGENTS.md is included.
+    # The TUI reads this from config; CLI modes call load_project_instructions
+    # directly (see run_interactive/run_oneshot).
+    config["project_instructions"] = load_project_instructions()
 
     if args.prompt:
         run_oneshot(args.prompt, config)

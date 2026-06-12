@@ -9,6 +9,14 @@ from typing import Generator
 
 from drydock.providers import stream, AssistantTurn, TextChunk
 from drydock.tool_registry import schemas, execute
+from drydock.tools import register_all
+
+# Register the built-in tools as a side effect of importing the agent. This is
+# explicit (not a bare side-effect import) so a linter can't "helpfully" delete
+# it: without it the registry is empty, the model is offered no tools, and it
+# emits tool calls as TEXT — which is exactly how the empty-registry regression
+# manifested. register_all() is idempotent.
+register_all()
 from drydock.compaction import maybe_compact, emergency_compact
 from drydock.loop_detect import LoopTracker
 from drydock.tuning import filter_tool_schemas
@@ -61,6 +69,7 @@ def run(
     max_tool_calls = config.get("max_tool_calls", 0)  # 0 = unlimited
     tool_call_count = 0
     session_has_edited = False
+    leaked_call_retries = 0
     loop_tracker = LoopTracker()
 
     while state.turn_count < max_turns:
@@ -118,8 +127,23 @@ def run(
         state.total_output_tokens += assistant_turn.output_tokens
         yield TurnDone(assistant_turn.input_tokens, assistant_turn.output_tokens)
 
-        # No tool calls = conversation complete
+        # No tool calls = conversation complete — UNLESS the model emitted a
+        # tool call as text (a Gemma quirk the API can't structure). In that
+        # case nudge it to use the real function interface and retry, instead
+        # of ending the turn with nothing done. Capped so it can never spin.
         if not assistant_turn.tool_calls:
+            if assistant_turn.had_leaked_call and leaked_call_retries < 2:
+                leaked_call_retries += 1
+                state.messages.append({
+                    "role": "user",
+                    "content": (
+                        "[SYSTEM] Your tool call came through as plain text, so "
+                        "it did not run. Call the tool using the function/tool "
+                        "interface — not text, no <|tool_call> markers. Use the "
+                        "exact tool names (Write, Read, Edit, Bash). Try again."
+                    ),
+                })
+                continue
             break
 
         # Execute each tool call

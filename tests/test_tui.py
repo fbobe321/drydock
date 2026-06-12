@@ -134,6 +134,17 @@ def test_app_mounts_and_handles_slash():
     asyncio.run(main())
 
 
+def test_tui_includes_project_instructions_in_system_prompt():
+    cfg = {
+        "model": "gemma4", "provider": "vllm", "cwd": "/tmp",
+        "project_instructions": "\n\n## Project Instructions\n\nUse tabs not spaces.",
+    }
+    app = DrydockApp(cfg)
+    assert "Use tabs not spaces." in app.system
+    # A model switch rebuilds via the same path, so instructions are kept.
+    assert "Use tabs not spaces." in app._build_system("qwen")
+
+
 def test_transcript_renders_bracket_text_without_markup_error():
     # A tool result / model output with unbalanced brackets would raise a
     # Textual MarkupError if markup were enabled on the transcript widgets.
