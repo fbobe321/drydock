@@ -9,10 +9,9 @@ from typing import Generator
 
 from drydock.providers import stream, AssistantTurn, TextChunk
 from drydock.tool_registry import schemas, execute
-from drydock.compaction import maybe_compact, emergency_compact, estimate_tokens
+from drydock.compaction import maybe_compact, emergency_compact
 from drydock.loop_detect import LoopTracker
 from drydock.tuning import filter_tool_schemas
-import drydock.tools  # register built-in tools on import
 
 
 # ── Event types ───────────────────────────────────────────────────────────
@@ -124,11 +123,9 @@ def run(
             break
 
         # Execute each tool call
-        has_edited = False
         for tc in assistant_turn.tool_calls:
             tool_call_count += 1
             if tc["name"] in ("Edit", "Write"):
-                has_edited = True
                 session_has_edited = True
 
             # Check tool call limit

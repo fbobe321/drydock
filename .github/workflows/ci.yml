@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + dev tools
+        # Installing the package resolves third-party imports (textual, openai)
+        # so pyright doesn't false-flag them as missing.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff (undefined names, unused imports, syntax errors)
+        run: ruff check drydock/ tests/
+
+      - name: Pyright (UndefinedVariable / PossiblyUnbound / OptionalMemberAccess)
+        run: pyright drydock/
+
+      - name: Pytest
+        run: pytest tests/ -q --timeout=60

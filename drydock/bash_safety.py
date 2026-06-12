@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import re
 
-# Each entry: (compiled pattern, human reason). Patterns match against the
-# whitespace-normalized command string. Keep them narrow — a false positive
-# blocks legitimate work and erodes trust in the agent.
-_RULES: list[tuple[re.Pattern[str], str]] = [
+# Each entry: (compiled pattern, human reason). A reason of None marks the
+# special rm rule, which needs a second check on the delete target (below).
+# Patterns match against the whitespace-normalized command string. Keep them
+# narrow — a false positive blocks legitimate work and erodes trust.
+_RULES: list[tuple[re.Pattern[str], str | None]] = [
     # rm -rf targeting the filesystem root, home, or a root-level wildcard.
     # Matches: rm -rf /, rm -fr /*, rm -rf ~, rm -rf $HOME, rm -rf /  (trailing).
     (

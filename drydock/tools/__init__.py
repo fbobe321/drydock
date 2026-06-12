@@ -187,7 +187,6 @@ def tool_write(params: dict, config: dict) -> str:
 
 def _fuzzy_find(content: str, target: str) -> str | None:
     """Try to find target in content with whitespace normalization."""
-    import re
     # Normalize whitespace: collapse multiple spaces/tabs, strip trailing
     def normalize(s):
         lines = s.split('\n')

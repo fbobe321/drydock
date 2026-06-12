@@ -17,3 +17,22 @@ include = ["drydock*"]
 
 [project.scripts]
 drydock = "drydock.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-timeout", "ruff", "pyright"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# Pyflakes (F) + syntax-error checks (E9) catch the time-bombs that matter:
+# undefined names, unused imports, redefinitions. Kept lean to avoid churn.
+select = ["F", "E9"]
+
+[tool.pyright]
+include = ["drydock"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+# CI installs the package first, so third-party imports resolve.
+reportMissingImports = true
