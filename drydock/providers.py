@@ -44,6 +44,33 @@ PROVIDERS: dict[str, dict] = {
 }
 
 
+class LLMUnreachable(RuntimeError):
+    """The configured LLM endpoint could not be reached. Carries a
+    user-facing message with remediation steps (shown verbatim in the TUI)."""
+
+
+def _friendly_unreachable(base_url: str, provider: str) -> str:
+    return (
+        f"Cannot reach the LLM at {base_url} (provider: {provider}).\n"
+        f"  1. Make sure your model server is running and listening on that port.\n"
+        f"  2. Wrong URL? Override with --base-url, or set base_url in "
+        f"~/.drydock/config.toml.\n"
+        f"  3. Start a local server (llama.cpp / vLLM / Ollama / LM Studio) on "
+        f"that port, then send your message again."
+    )
+
+
+def _safe_create(client, kwargs: dict, base_url: str, provider: str):
+    """Call chat.completions.create, mapping a connection failure to a clean
+    LLMUnreachable instead of a raw traceback / 12-minute hang."""
+    import openai
+
+    try:
+        return client.chat.completions.create(**kwargs)
+    except openai.APIConnectionError as e:
+        raise LLMUnreachable(_friendly_unreachable(base_url, provider)) from e
+
+
 # ── Event types ───────────────────────────────────────────────────────────
 
 @dataclass
@@ -121,6 +148,7 @@ def stream(
     Yields TextChunk during streaming, then AssistantTurn at the end.
     Works with vLLM, Ollama, LM Studio, OpenAI, or any compatible endpoint.
     """
+    import httpx
     from openai import OpenAI
 
     provider = config.get("provider", "vllm")
@@ -131,7 +159,15 @@ def stream(
         prov.get("api_key_env", ""), "dummy"
     )
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    # Fail fast on a dead endpoint: a 10s connect timeout and no retries surface
+    # an unreachable server in seconds. Generation itself can still take minutes
+    # (long read timeout).
+    client = OpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        max_retries=0,
+        timeout=httpx.Timeout(600.0, connect=10.0),
+    )
 
     oai_messages = messages_to_openai(messages, system)
 
@@ -162,14 +198,14 @@ def stream(
         # Non-streaming: one request, parse the complete message. This is the
         # reliable path for local models whose tool-call JSON breaks under
         # streaming.
-        yield from _complete_nonstreaming(client, kwargs)
+        yield from _complete_nonstreaming(client, kwargs, base_url, provider)
         return
 
     text = ""
     tool_buf: dict = {}  # index → {id, name, args}
     in_tok = out_tok = 0
 
-    response = client.chat.completions.create(**kwargs)
+    response = _safe_create(client, kwargs, base_url, provider)
     for chunk in response:
         if not chunk.choices:
             if hasattr(chunk, "usage") and chunk.usage:
@@ -220,11 +256,13 @@ def stream(
     yield AssistantTurn(text, tool_calls, in_tok, out_tok)
 
 
-def _complete_nonstreaming(client, kwargs: dict) -> Generator:
+def _complete_nonstreaming(
+    client, kwargs: dict, base_url: str = "", provider: str = ""
+) -> Generator:
     """Single non-streaming completion. Yields one TextChunk (if any text)
     then the AssistantTurn. Used when streaming would corrupt tool-call JSON.
     """
-    resp = client.chat.completions.create(**kwargs)
+    resp = _safe_create(client, kwargs, base_url, provider)
     choice = resp.choices[0]
     msg = choice.message
 
