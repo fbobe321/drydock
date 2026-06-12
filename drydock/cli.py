@@ -179,23 +179,31 @@ def _summarize(inputs: dict) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="DryDock v3 — local coding agent")
+    # Config-backed flags default to None so an unset flag falls through to the
+    # config file (see drydock.config). Runtime-only flags keep real defaults.
     parser.add_argument("-p", "--prompt", help="One-shot mode: run prompt and exit")
-    parser.add_argument("--model", default="gemma4", help="Model name (default: gemma4)")
-    parser.add_argument("--provider", default="vllm", help="Provider: vllm, ollama, lmstudio, openai")
-    parser.add_argument("--base-url", help="Override API base URL")
-    parser.add_argument("--max-tokens", type=int, default=4096, help="Max response tokens")
-    parser.add_argument("--temperature", type=float, default=0.2)
+    parser.add_argument("--model", help="Model name (default: gemma4)")
+    parser.add_argument("--provider", help="Provider: vllm, ollama, lmstudio, openai")
+    parser.add_argument("--base-url", dest="base_url", help="Override API base URL")
+    parser.add_argument("--max-tokens", dest="max_tokens", type=int, help="Max response tokens")
+    parser.add_argument("--temperature", type=float)
     parser.add_argument("--max-tool-calls", type=int, default=0, help="Max tool calls (0=unlimited)")
     parser.add_argument("--force-first-tool", action="store_true", help="Force tool_choice=required on first turn")
     parser.add_argument("--cli", action="store_true", help="Plain readline mode instead of the TUI")
     args = parser.parse_args()
 
-    config = {
+    from drydock import config as cfgmod
+
+    cfg = cfgmod.resolve({
         "model": args.model,
         "provider": args.provider,
         "base_url": args.base_url,
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
+    })
+
+    config = {
+        **cfg,
         "context_limit": 131072,
         "max_tool_calls": args.max_tool_calls,
         "force_first_tool": args.force_first_tool,
