@@ -89,12 +89,19 @@ def merge(file_cfg: dict, cli_overrides: dict) -> dict:
 
 
 def resolve(cli_overrides: dict, path: Path | None = None) -> dict:
-    """Load the file, merge precedence, and self-heal the file if it was
-    missing keys. Returns the merged persistent config."""
+    """Load the file, merge precedence, and return the runtime config.
+
+    A NON-existent file is created once with pure DEFAULTS (no CLI flags — a
+    transient --base-url for one run must not be baked in permanently). An
+    EXISTING file is never modified: missing keys are backfilled only in the
+    returned dict, never written back. This is deliberately conservative —
+    the file may be shared or hand-edited, so we never reorder, reformat, or
+    drop keys we don't recognize.
+    """
     path = path or default_config_path()
-    file_cfg = load_file(path)
-    cfg = merge(file_cfg, cli_overrides)
-    # Backfill: if the file lacked any current key, rewrite it complete.
-    if any(k not in file_cfg for k in DEFAULTS):
-        save_file(cfg, path)
-    return cfg
+    if not path.exists():
+        save_file(dict(DEFAULTS), path)
+        file_cfg = {}
+    else:
+        file_cfg = load_file(path)
+    return merge(file_cfg, cli_overrides)

@@ -134,6 +134,62 @@ def test_app_mounts_and_handles_slash():
     asyncio.run(main())
 
 
+def test_transcript_renders_bracket_text_without_markup_error():
+    # A tool result / model output with unbalanced brackets would raise a
+    # Textual MarkupError if markup were enabled on the transcript widgets.
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            from drydock.tui.widgets import AssistantMessage, ToolCard
+
+            msg = AssistantMessage()
+            app.query_one("#transcript").mount(msg)
+            msg.append("here is some code: list[int] and a tag [not_closed")
+            card = ToolCard("Grep", "x")
+            app.query_one("#transcript").mount(card)
+            await pilot.pause()
+            card.finish("match at [line 3] foo[bar baz]", ok=True)
+            await pilot.pause()  # forces a render; must not raise
+
+    asyncio.run(main())
+
+
+def test_slash_commands_model_cwd_status_undo(tmp_path):
+    async def main():
+        cfg = {"model": "gemma4", "provider": "vllm", "cwd": str(tmp_path)}
+        app = DrydockApp(cfg)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            inp = app.query_one("#prompt")
+
+            async def slash(value):
+                inp.value = value
+                await pilot.press("enter")
+                await pilot.pause()
+
+            # /model with no arg shows current; with arg switches.
+            await slash("/model")
+            await slash("/model qwen")
+            assert app.config["model"] == "qwen"
+
+            # /cwd to a real dir switches; bad dir is rejected.
+            sub = tmp_path / "work"
+            sub.mkdir()
+            await slash(f"/cwd {sub}")
+            assert app.config["cwd"] == str(sub.resolve())
+            await slash("/cwd /no/such/dir/here")
+            assert app.config["cwd"] == str(sub.resolve())  # unchanged
+
+            # /undo with nothing in the journal is a friendly no-op.
+            await slash("/undo")
+
+            # unknown command does not crash.
+            await slash("/bogus")
+
+    asyncio.run(main())
+
+
 def test_busy_input_is_queued_and_drained():
     async def main():
         app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})

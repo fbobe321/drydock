@@ -165,8 +165,14 @@ class DrydockApp(App):
         self._refresh_status()
         self._run_agent(text)
 
+    def _info(self, text: str) -> None:
+        # markup=False so bracketed help/paths (e.g. "/model [name]") render literally.
+        self._mount(Static(text, classes="assistant-msg", markup=False))
+
     def _handle_slash(self, text: str) -> None:
-        cmd = text.split()[0].lower()
+        parts = text.split(maxsplit=1)
+        cmd = parts[0].lower()
+        arg = parts[1].strip() if len(parts) > 1 else ""
         if cmd in ("/quit", "/exit", "/q"):
             self.exit()
         elif cmd == "/clear":
@@ -174,14 +180,59 @@ class DrydockApp(App):
             self._scroll.remove_children()
             self._current_assistant = None
             self._refresh_status()
+        elif cmd == "/model":
+            self._cmd_model(arg)
+        elif cmd == "/cwd":
+            self._cmd_cwd(arg)
+        elif cmd == "/undo":
+            from drydock.tools import undo_last
+
+            self._info(undo_last(self.config))
+        elif cmd == "/status":
+            t = self.state
+            self._info(
+                f"model: {self.config.get('model')}  ·  cwd: {self.config.get('cwd')}\n"
+                f"turns: {t.turn_count}  ·  messages: {len(t.messages)}  ·  "
+                f"tokens: {t.total_input_tokens}in/{t.total_output_tokens}out"
+            )
         elif cmd == "/help":
-            self._mount(Static(
-                "Commands: /help  /clear  /quit\n"
-                "Type a task and press Enter. Ctrl+O expands tool output.",
-                classes="assistant-msg",
-            ))
+            self._info(
+                "Commands:\n"
+                "  /help            this help\n"
+                "  /model [name]    show or switch the model\n"
+                "  /cwd [path]      show or change the working directory\n"
+                "  /undo            revert the last file write/edit\n"
+                "  /status          session model, cwd, turns, tokens\n"
+                "  /clear           reset the conversation\n"
+                "  /quit            exit\n"
+                "Type a task and press Enter. ↑/↓ recall history · Ctrl+O expands tools."
+            )
         else:
-            self._mount(ErrorMessage(f"unknown command: {cmd}"))
+            self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))
+
+    def _cmd_model(self, name: str) -> None:
+        if not name:
+            self._info(f"model: {self.config.get('model')}")
+            return
+        self.config["model"] = name
+        self.system = system_prompt_for_model(name)  # prompt may be model-specific
+        self._refresh_status()
+        self._info(f"switched model → {name}")
+
+    def _cmd_cwd(self, path: str) -> None:
+        if not path:
+            self._info(f"cwd: {self.config.get('cwd')}")
+            return
+        from pathlib import Path
+
+        target = Path(path).expanduser()
+        if not target.is_absolute():
+            target = Path(self.config.get("cwd", ".")) / target
+        if not target.is_dir():
+            self._mount(ErrorMessage(f"not a directory: {target}"))
+            return
+        self.config["cwd"] = str(target.resolve())
+        self._info(f"cwd → {self.config['cwd']}")
 
     def action_toggle_tools(self) -> None:
         cards = self.query(ToolCard)

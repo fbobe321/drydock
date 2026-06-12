@@ -129,16 +129,51 @@ def tool_read(params: dict, config: dict) -> str:
         return f"Error reading {fp}: {e}"
 
 
+def _record_undo(config: dict, fp: str, prev: str | None) -> None:
+    """Push (path, prior-content) onto the session undo journal. prev=None
+    means the file did not exist before, so undo deletes it."""
+    config.setdefault("_undo", []).append((fp, prev))
+
+
+def _snapshot(fp: str) -> str | None:
+    """Prior content of fp, or None if it doesn't exist / can't be read."""
+    p = Path(fp)
+    if not p.exists():
+        return None
+    try:
+        return p.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def undo_last(config: dict) -> str:
+    """Revert the most recent Write/Edit. User-facing (called by /undo)."""
+    journal = config.get("_undo") or []
+    if not journal:
+        return "Nothing to undo."
+    fp, prev = journal.pop()
+    try:
+        if prev is None:
+            Path(fp).unlink(missing_ok=True)
+            return f"Undid write — removed {fp}"
+        Path(fp).write_text(prev, encoding="utf-8")
+        return f"Undid last change — restored {fp}"
+    except OSError as e:
+        return f"Could not undo {fp}: {e}"
+
+
 def tool_write(params: dict, config: dict) -> str:
     fp = params.get("file_path")
     if not fp:
         return "Error: Write requires a non-empty file_path."
     fp = _resolve_path(fp, config)
     content = params.get("content", "")
+    prev = _snapshot(fp)
     try:
         Path(fp).parent.mkdir(parents=True, exist_ok=True)
         with open(fp, "w", encoding="utf-8") as f:
             f.write(content)
+        _record_undo(config, fp, prev)
         lines = content.count("\n") + 1
         result = f"Wrote {lines} lines to {fp}"
         # Advisory post-write checks (never block the write).
@@ -205,6 +240,7 @@ def tool_edit(params: dict, config: dict) -> str:
             return f"Error: old_string found {count} times in {fp}. Add more context to make it unique."
         updated = content.replace(old, new, 1)
         Path(fp).write_text(updated, encoding="utf-8")
+        _record_undo(config, fp, content)
         result = f"Edited {fp}: replaced {len(old)} chars with {len(new)} chars"
         # Advisory post-edit syntax check.
         warn = python_syntax_warning(fp, updated)

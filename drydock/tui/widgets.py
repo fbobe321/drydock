@@ -122,18 +122,23 @@ class PromptInput(Input):
         event.prevent_default()
 
 
+# markup=False everywhere in the transcript: user prompts, model output, tool
+# results and file paths routinely contain brackets (list[int], [INFO], tracebacks)
+# that Textual would otherwise parse as console markup — mangling text or raising
+# MarkupError on malformed tags.
+
 class UserMessage(Static):
     """A user's prompt."""
 
     def __init__(self, text: str) -> None:
-        super().__init__(f"❯ {text}", classes="user-msg")
+        super().__init__(f"❯ {text}", classes="user-msg", markup=False)
 
 
 class AssistantMessage(Static):
     """Streamed assistant text; grows as chunks arrive."""
 
     def __init__(self) -> None:
-        super().__init__("", classes="assistant-msg")
+        super().__init__("", classes="assistant-msg", markup=False)
         self._buf = ""
 
     def append(self, text: str) -> None:
@@ -147,14 +152,14 @@ class AssistantMessage(Static):
 
 class ErrorMessage(Static):
     def __init__(self, text: str) -> None:
-        super().__init__(f"⚠ {text}", classes="error-msg")
+        super().__init__(f"⚠ {text}", classes="error-msg", markup=False)
 
 
 class ToolCard(Collapsible):
     """A tool call: compact header (name + summary), expandable full output."""
 
     def __init__(self, name: str, summary: str) -> None:
-        self._body = Static("…running", classes="tool-body")
+        self._body = Static("…running", classes="tool-body", markup=False)
         super().__init__(
             self._body,
             title=f"⚓ {name}  ·  {summary}",
