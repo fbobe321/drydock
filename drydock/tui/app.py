@@ -107,6 +107,9 @@ class DrydockApp(App):
             from drydock.tui.widgets import PromptHistory
 
             prompt.history = PromptHistory(Path(hist_path))
+        onboarding = self.config.get("onboarding")
+        if onboarding:
+            self._info(onboarding)
         prompt.focus()
 
     def _status_text(self) -> str:

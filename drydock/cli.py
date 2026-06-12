@@ -194,13 +194,29 @@ def main():
 
     from drydock import config as cfgmod
 
+    cfg_path = cfgmod.default_config_path()
+    first_run = not cfg_path.exists()
     cfg = cfgmod.resolve({
         "model": args.model,
         "provider": args.provider,
         "base_url": args.base_url,
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
-    })
+    }, cfg_path)
+
+    # First-launch autodetect: if no config existed and the user didn't pin an
+    # endpoint, probe localhost for a running local LLM and wire up the first
+    # one found (persisted, so subsequent runs skip detection).
+    onboarding = ""
+    if first_run and not args.provider and not args.base_url:
+        from drydock import detect
+
+        found = detect.detect_local_llms()
+        onboarding = detect.onboarding_message(found)
+        if found:
+            cfg["provider"] = found[0]["provider"]
+            cfg["base_url"] = found[0]["base_url"]
+            cfgmod.save_file(cfg, cfg_path)
 
     config = {
         **cfg,
@@ -209,6 +225,7 @@ def main():
         "force_first_tool": args.force_first_tool,
         "cwd": os.getcwd(),
         "history_path": str(Path.home() / ".drydock" / "history"),
+        "onboarding": onboarding,
     }
 
     ensure_agents_md()
