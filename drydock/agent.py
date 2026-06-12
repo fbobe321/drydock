@@ -10,6 +10,8 @@ from typing import Generator
 from drydock.providers import stream, AssistantTurn, TextChunk
 from drydock.tool_registry import schemas, execute
 from drydock.compaction import maybe_compact, emergency_compact, estimate_tokens
+from drydock.loop_detect import LoopTracker
+from drydock.tuning import filter_tool_schemas
 import drydock.tools  # register built-in tools on import
 
 
@@ -60,6 +62,7 @@ def run(
     max_tool_calls = config.get("max_tool_calls", 0)  # 0 = unlimited
     tool_call_count = 0
     session_has_edited = False
+    loop_tracker = LoopTracker()
 
     while state.turn_count < max_turns:
         state.turn_count += 1
@@ -82,7 +85,7 @@ def run(
                     model=turn_config["model"],
                     system=system_prompt,
                     messages=state.messages,
-                    tool_schemas=schemas(),
+                    tool_schemas=filter_tool_schemas(schemas(), turn_config.get("model")),
                     config=turn_config,
                 ):
                     if isinstance(event, TextChunk):
@@ -141,6 +144,9 @@ def run(
             yield ToolStart(tc["name"], tc["input"])
 
             result = execute(tc["name"], tc["input"], config)
+            # Guide (never block) on exact-repeat tool calls: prepend an
+            # advisory note when the same call is made again.
+            result = loop_tracker.annotate(tc["name"], tc["input"], result)
 
             yield ToolEnd(tc["name"], result)
 

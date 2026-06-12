@@ -1,0 +1,108 @@
+"""Model-specific tuning for Drydock.
+
+Drydock's primary target is a local Gemma-4-26B-A4B served by llama.cpp.
+That model needs a handful of accommodations that we learned from real use:
+
+  * its tool-call JSON is corrupted by token streaming, so tool turns must
+    be non-streaming;
+  * it leaks ``<|channel>…<channel|>`` "thinking" tokens that must be
+    stripped before the text is shown or stored;
+  * a few interaction-heavy tools send it into loops, so they are gated off;
+  * a short, imperative system prompt beats a long capabilities prompt.
+
+These are *behaviours*, expressed here as small pure functions so the agent
+loop and provider stay model-agnostic. All logic is original to Drydock.
+"""
+from __future__ import annotations
+
+import re
+
+# Tools that reliably send small local models into loops or validation
+# errors. None of v3's built-ins are in this set yet; the gate exists so
+# that adding interaction-heavy tools later doesn't regress Gemma.
+GEMMA_DISABLED_TOOLS: frozenset[str] = frozenset({
+    "ask_user_question",
+    "todo",
+    "task_create",
+    "task_update",
+    "task",
+    "invoke_skill",
+    "tool_search",
+})
+
+# Matches Gemma's leaked thinking-channel markers and their contents.
+_THINKING_RE = re.compile(r"<\|channel>.*?<channel\|>", re.DOTALL)
+_THINKING_BARE = ("<|channel>", "<channel|>")
+
+_DEFAULT_SYSTEM_PROMPT = (
+    "You are Drydock, a coding agent operating in a terminal. You have tools "
+    "to read, write, edit, and search files and to run shell commands. Work "
+    "directly: inspect what you need, make the change, and verify it. Prefer "
+    "doing over explaining. When the task is complete, stop and give a short "
+    "summary."
+)
+
+# Short, imperative prompt. Small local models do better with "act now" than
+# with a long capabilities essay.
+_GEMMA_SYSTEM_PROMPT = (
+    "You are Drydock, a coding agent in a terminal. ACT IMMEDIATELY using "
+    "tools — do not narrate what you are about to do. Read a file before you "
+    "edit it. Make the edit with the Edit or Write tool. Run a command to "
+    "check your work. One clear action per step. Stop when the task is done "
+    "and give a one-line summary."
+)
+
+
+def is_gemma(model: str | None) -> bool:
+    """True if the model name looks like a Gemma model."""
+    return bool(model) and "gemma" in model.lower()
+
+
+def strip_thinking_tokens(text: str) -> str:
+    """Remove Gemma's leaked ``<|channel>…<channel|>`` thinking markers.
+
+    Removes whole marked spans first, then any stray bare markers. Safe to
+    call on any text (no-op when the markers are absent).
+    """
+    if not text or "channel" not in text:
+        return text
+    text = _THINKING_RE.sub("", text)
+    for marker in _THINKING_BARE:
+        text = text.replace(marker, "")
+    return text
+
+
+def use_streaming(model: str | None, has_tools: bool) -> bool:
+    """Whether to stream tokens for this turn.
+
+    Gemma corrupts tool-call JSON when streamed, so any turn that offers
+    tools to Gemma must be non-streaming. Text-only turns may stream.
+    """
+    if has_tools and is_gemma(model):
+        return False
+    return True
+
+
+def filter_tool_schemas(tool_schemas: list, model: str | None) -> list:
+    """Drop loop-prone tools when serving Gemma; pass through otherwise."""
+    if not is_gemma(model):
+        return tool_schemas
+    return [t for t in tool_schemas if t.get("name") not in GEMMA_DISABLED_TOOLS]
+
+
+def system_prompt_for_model(model: str | None) -> str:
+    """Return the system prompt best suited to the model."""
+    return _GEMMA_SYSTEM_PROMPT if is_gemma(model) else _DEFAULT_SYSTEM_PROMPT
+
+
+def thinking_level_for_turn(turn_count: int, is_user_turn: bool) -> str:
+    """Adaptive reasoning budget: HIGH for planning, LOW for recovery, OFF
+    for routine continuation.
+
+    Returns one of "high" | "low" | "off". The provider maps the level to a
+    concrete request parameter (or ignores it for endpoints without a
+    reasoning knob). Keeping it a label here keeps the policy in one place.
+    """
+    if is_user_turn or turn_count <= 1:
+        return "high"
+    return "off"
