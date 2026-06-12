@@ -200,6 +200,7 @@ def main():
         "max_tool_calls": args.max_tool_calls,
         "force_first_tool": args.force_first_tool,
         "cwd": os.getcwd(),
+        "history_path": str(Path.home() / ".drydock" / "history"),
     }
 
     ensure_agents_md()

@@ -97,7 +97,17 @@ class DrydockApp(App):
         yield PromptInput(placeholder="Type a task and press Enter… (/help)", id="prompt")
 
     def on_mount(self) -> None:
-        self.query_one("#prompt", PromptInput).focus()
+        prompt = self.query_one("#prompt", PromptInput)
+        # Persist history across sessions when the CLI provides a path (tests
+        # omit it and stay in-memory, so they never touch the real home dir).
+        hist_path = self.config.get("history_path")
+        if hist_path:
+            from pathlib import Path
+
+            from drydock.tui.widgets import PromptHistory
+
+            prompt.history = PromptHistory(Path(hist_path))
+        prompt.focus()
 
     def _status_text(self) -> str:
         model = self.config.get("model", "?")
@@ -134,10 +144,10 @@ class DrydockApp(App):
         prompt.value = ""
         if not text:
             return
-        prompt.history.add(text)
         if text.startswith("/"):
-            self._handle_slash(text)
+            self._handle_slash(text)  # meta commands stay out of history
             return
+        prompt.history.add(text)
         # Show the user turn immediately, in order. If a turn is already
         # running, queue this one and drain it when the current turn finishes
         # instead of dropping it on the floor.

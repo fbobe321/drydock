@@ -51,6 +51,40 @@ def test_prompt_history_down_noop_when_not_navigating():
     assert h.down("typing") == "typing"
 
 
+def test_prompt_history_persists_across_sessions(tmp_path):
+    path = tmp_path / "sub" / "history"  # parent dir does not exist yet
+    h1 = PromptHistory(path)
+    h1.add("build the thing")
+    h1.add("run the tests")
+    # A fresh instance pointed at the same file recalls prior entries.
+    h2 = PromptHistory(path)
+    assert h2.up("") == "run the tests"
+    assert h2.up("run the tests") == "build the thing"
+
+
+def test_prompt_history_caps_file_length(tmp_path):
+    path = tmp_path / "history"
+    h = PromptHistory(path, max_entries=3)
+    for i in range(10):
+        h.add(f"cmd {i}")
+    lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
+    assert lines == ["cmd 7", "cmd 8", "cmd 9"]
+
+
+def test_prompt_history_collapses_newlines_in_persisted_entry(tmp_path):
+    path = tmp_path / "history"
+    h = PromptHistory(path)
+    h.add("line one\nline two")
+    assert path.read_text().splitlines()[0] == "line one line two"
+
+
+def test_prompt_history_survives_unreadable_file(tmp_path):
+    path = tmp_path  # a directory, not a file → read/write raise OSError
+    h = PromptHistory(path)
+    h.add("noop")  # must not raise
+    assert h.up("") == "noop"  # still works in memory
+
+
 def test_result_is_ok_marks_failures():
     assert result_is_ok("Wrote 11 lines")
     assert result_is_ok("apple: 3\nbanana: 2")

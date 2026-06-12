@@ -1,6 +1,8 @@
 """Transcript widgets: user turns, streaming assistant text, tool cards."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.widgets import Collapsible, Input, Static
 
@@ -32,17 +34,50 @@ class PromptHistory:
     Up walks toward older entries, Down toward newer; stepping past the
     newest restores whatever draft the user was typing before they started
     navigating. Consecutive duplicate submissions collapse to one entry.
+
+    If `path` is given, history persists across sessions: existing entries are
+    loaded on construction and the (capped) list is rewritten on every add.
+    Persistence failures are swallowed — a broken history file must never stop
+    the agent from running.
     """
 
-    def __init__(self) -> None:
-        self._items: list[str] = []
+    def __init__(self, path: Path | None = None, max_entries: int = 1000) -> None:
+        self._path = path
+        self._max = max_entries
+        self._items: list[str] = self._load()
         self._idx: int | None = None  # None ⇒ not navigating (on the draft)
         self._draft: str = ""
 
+    def _load(self) -> list[str]:
+        if not self._path or not self._path.exists():
+            return []
+        try:
+            lines = self._path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+        return [ln for ln in lines if ln.strip()][-self._max:]
+
+    def _persist(self) -> None:
+        if not self._path:
+            return
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.write_text(
+                "\n".join(self._items) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            pass
+
     def add(self, text: str) -> None:
-        text = text.strip()
+        # Persisted format is line-based; collapse any newlines so a pasted
+        # multi-line prompt can't corrupt the file (and the entry stays
+        # recallable as one line).
+        text = " ".join(text.split())
         if text and not (self._items and self._items[-1] == text):
             self._items.append(text)
+            if len(self._items) > self._max:
+                self._items = self._items[-self._max:]
+            self._persist()
         self._idx = None
         self._draft = ""
 
