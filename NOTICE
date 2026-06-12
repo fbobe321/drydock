@@ -1,0 +1,11 @@
+Drydock
+Copyright 2026 Frank Bobe III
+
+This product is an original, clean-room implementation. It contains no source
+code from Anthropic's Claude Code, from Mistral's mistral-vibe, or from any
+other third-party project. UX conventions common to terminal coding agents
+were emulated from first principles; no third-party code, prompt text, or
+branding was copied.
+
+Licensed under the Apache License, Version 2.0 (the "License"); see the
+LICENSE file for the full text.

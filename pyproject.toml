@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drydock"
+version = "3.0.0"
+description = "Drydock — a local, provider-agnostic terminal coding agent for local LLMs"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Frank Bobe III" }]
+dependencies = ["openai>=1.0"]
+
+[tool.setuptools.packages.find]
+include = ["drydock*"]
+
+[project.scripts]
+drydock = "drydock.cli:main"
