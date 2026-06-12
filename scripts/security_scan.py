@@ -50,6 +50,7 @@ ALLOWED_HOST_SUFFIXES = (
     "api.github.com",
     "json-schema.org",
     "example.com",
+    "drydock.pages.dev",  # the project's own landing page (string-only refs)
 )
 
 RE_SECRET_READ = re.compile(

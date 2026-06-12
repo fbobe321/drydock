@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+# >=77 for PEP 639 SPDX `license` string + `license-files` support.
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
