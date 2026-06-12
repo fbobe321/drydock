@@ -14,6 +14,19 @@ from pathlib import Path
 from drydock.tool_registry import ToolDef, register
 from drydock.guards import write_warnings, python_syntax_warning
 
+
+def _resolve_path(path: str, config: dict) -> str:
+    """Resolve a relative path against the session working directory.
+
+    File tools must agree with Bash on what the working directory is —
+    otherwise Write creates a file Bash can't see. Relative paths are joined
+    to config['cwd']; absolute paths pass through.
+    """
+    cwd = config.get("cwd")
+    if cwd and not os.path.isabs(path):
+        return os.path.join(cwd, path)
+    return path
+
 # ── Schemas ───────────────────────────────────────────────────────────────
 
 SCHEMAS = [
@@ -97,7 +110,7 @@ SCHEMAS = [
 # ── Tool implementations ──────────────────────────────────────────────────
 
 def tool_read(params: dict, config: dict) -> str:
-    fp = params["file_path"]
+    fp = _resolve_path(params["file_path"], config)
     limit = params.get("limit", 2000)
     offset = params.get("offset", 0)
     try:
@@ -119,6 +132,7 @@ def tool_write(params: dict, config: dict) -> str:
     fp = params.get("file_path")
     if not fp:
         return "Error: Write requires a non-empty file_path."
+    fp = _resolve_path(fp, config)
     content = params.get("content", "")
     try:
         Path(fp).parent.mkdir(parents=True, exist_ok=True)
@@ -162,6 +176,7 @@ def tool_edit(params: dict, config: dict) -> str:
     fp = params.get("file_path")
     if not fp:
         return "Error: Edit requires a non-empty file_path."
+    fp = _resolve_path(fp, config)
     old = params.get("old_string", "")
     new = params.get("new_string", "")
     try:
@@ -223,7 +238,7 @@ def tool_bash(params: dict, config: dict) -> str:
 
 def tool_glob(params: dict, config: dict) -> str:
     pattern = params["pattern"]
-    base = params.get("path", ".")
+    base = params.get("path") or config.get("cwd") or "."
     try:
         matches = sorted(_glob.glob(os.path.join(base, pattern), recursive=True))
         if not matches:
@@ -237,7 +252,7 @@ def tool_glob(params: dict, config: dict) -> str:
 
 def tool_grep(params: dict, config: dict) -> str:
     pattern = params["pattern"]
-    path = params.get("path", ".")
+    path = params.get("path") or config.get("cwd") or "."
     include = params.get("include", "")
     try:
         cmd = ["grep", "-rn", "--color=never"]

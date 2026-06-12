@@ -103,3 +103,23 @@ def test_tool_edit_post_edit_syntax_warning(tmp_path):
         {"file_path": str(fp), "old_string": "return 1", "new_string": "return ("}, {}
     )
     assert "Edited" in out and "syntax error" in out
+
+
+# ── cwd consistency (file tools agree with Bash) ──────────────────────────
+
+def test_file_tools_honor_config_cwd(tmp_path):
+    from drydock.tools import tool_read, tool_bash
+    cfg = {"cwd": str(tmp_path)}
+    # Write a relative path; it must land in cwd, where Bash can see it.
+    tool_write({"file_path": "sub/x.py", "content": "v = 5\n"}, cfg)
+    assert (tmp_path / "sub" / "x.py").exists()
+    # Read with the same relative path resolves to the same file.
+    assert "v = 5" in tool_read({"file_path": "sub/x.py"}, cfg)
+    # Bash (which uses cwd) sees it too.
+    assert "x.py" in tool_bash({"command": "ls sub"}, cfg)
+
+
+def test_absolute_paths_pass_through(tmp_path):
+    fp = str(tmp_path / "abs.py")
+    tool_write({"file_path": fp, "content": "a=1\n"}, {"cwd": "/nonexistent"})
+    assert (tmp_path / "abs.py").exists()
