@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 
 from drydock.tui.app import DrydockApp
+from drydock.tui.messages import AgentFinished
 from drydock.tui.widgets import (
     PromptHistory,
     ToolCard,
@@ -95,5 +96,38 @@ def test_app_mounts_and_handles_slash():
             inp.value = ""
             await pilot.press("enter")
             await pilot.pause()
+
+    asyncio.run(main())
+
+
+def test_busy_input_is_queued_and_drained():
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            # Replace the agent worker with a recorder so nothing hits the LLM.
+            started: list[str] = []
+            app._run_agent = lambda text: started.append(text)  # type: ignore[method-assign]
+            inp = app.query_one("#prompt")
+
+            inp.value = "first task"
+            await pilot.press("enter")
+            await pilot.pause()
+            assert started == ["first task"]
+            assert app._busy and app._queue == []
+
+            # Second submit while busy → queued, not started.
+            inp.value = "second task"
+            await pilot.press("enter")
+            await pilot.pause()
+            assert started == ["first task"]
+            assert app._queue == ["second task"]
+            assert "1 queued" in app._status_text()
+
+            # When the first turn finishes, the queued one drains automatically.
+            app.post_message(AgentFinished())
+            await pilot.pause()
+            assert started == ["first task", "second task"]
+            assert app._queue == []
 
     asyncio.run(main())

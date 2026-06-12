@@ -86,6 +86,7 @@ class DrydockApp(App):
         self._current_assistant: AssistantMessage | None = None
         self._last_card: ToolCard | None = None
         self._busy = False
+        self._queue: list[str] = []  # prompts submitted while a turn is running
 
     # ── layout ────────────────────────────────────────────────────────────
 
@@ -102,7 +103,11 @@ class DrydockApp(App):
         model = self.config.get("model", "?")
         toks = f"{self.state.total_input_tokens}in/{self.state.total_output_tokens}out"
         flag = "⏳ working" if self._busy else "⚓ ready"
-        return f"{flag}  ·  model: {model}  ·  {toks}  ·  Ctrl+O details · Ctrl+C quit"
+        queued = f"  ·  {len(self._queue)} queued" if self._queue else ""
+        return (
+            f"{flag}  ·  model: {model}  ·  {toks}{queued}"
+            f"  ·  Ctrl+O details · Ctrl+C quit"
+        )
 
     def _refresh_status(self) -> None:
         self.query_one("#status", Static).update(self._status_text())
@@ -133,10 +138,18 @@ class DrydockApp(App):
         if text.startswith("/"):
             self._handle_slash(text)
             return
-        if self._busy:
-            self.bell()
-            return
+        # Show the user turn immediately, in order. If a turn is already
+        # running, queue this one and drain it when the current turn finishes
+        # instead of dropping it on the floor.
         self._mount(UserMessage(text))
+        if self._busy:
+            self._queue.append(text)
+            self._refresh_status()
+            return
+        self._begin(text)
+
+    def _begin(self, text: str) -> None:
+        """Start an agent turn for an already-displayed user prompt."""
         self._current_assistant = None
         self._busy = True
         self._refresh_status()
@@ -208,6 +221,9 @@ class DrydockApp(App):
     def on_agent_finished(self, m: AgentFinished) -> None:
         self._busy = False
         self._current_assistant = None
+        if self._queue:
+            self._begin(self._queue.pop(0))
+            return
         self._refresh_status()
         self.query_one("#prompt", PromptInput).focus()
 
