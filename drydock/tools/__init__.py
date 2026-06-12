@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 from drydock.tool_registry import ToolDef, register
+from drydock.guards import write_warnings, python_syntax_warning
 
 # ── Schemas ───────────────────────────────────────────────────────────────
 
@@ -115,14 +116,21 @@ def tool_read(params: dict, config: dict) -> str:
 
 
 def tool_write(params: dict, config: dict) -> str:
-    fp = params["file_path"]
-    content = params["content"]
+    fp = params.get("file_path")
+    if not fp:
+        return "Error: Write requires a non-empty file_path."
+    content = params.get("content", "")
     try:
         Path(fp).parent.mkdir(parents=True, exist_ok=True)
         with open(fp, "w", encoding="utf-8") as f:
             f.write(content)
         lines = content.count("\n") + 1
-        return f"Wrote {lines} lines to {fp}"
+        result = f"Wrote {lines} lines to {fp}"
+        # Advisory post-write checks (never block the write).
+        warnings = write_warnings(fp, content)
+        if warnings:
+            result += "\n" + "\n".join(warnings)
+        return result
     except Exception as e:
         return f"Error writing {fp}: {e}"
 
@@ -151,26 +159,44 @@ def _fuzzy_find(content: str, target: str) -> str | None:
 
 
 def tool_edit(params: dict, config: dict) -> str:
-    fp = params["file_path"]
-    old = params["old_string"]
-    new = params["new_string"]
+    fp = params.get("file_path")
+    if not fp:
+        return "Error: Edit requires a non-empty file_path."
+    old = params.get("old_string", "")
+    new = params.get("new_string", "")
     try:
         content = Path(fp).read_text(encoding="utf-8")
         if old not in content:
-            # Try fuzzy match (whitespace normalization)
+            # Fallback 1: already-applied — the replacement is already present
+            # and the original is gone. Treat as a no-op success, not an error,
+            # so the model doesn't retry in a loop.
+            if new and new in content:
+                return (
+                    f"No change: {fp} already contains the new text "
+                    f"(this edit appears to have been applied already)."
+                )
+            # Fallback 2: fuzzy match on whitespace.
             fuzzy = _fuzzy_find(content, old)
             if fuzzy:
-                old = fuzzy  # Use the actual text from the file
+                old = fuzzy
             else:
-                return f"Error: old_string not found in {fp}. Read the file first to get exact text."
+                return (
+                    f"Error: old_string not found in {fp}. Read the file first "
+                    f"to copy the exact text (including indentation)."
+                )
         count = content.count(old)
         if count > 1:
             return f"Error: old_string found {count} times in {fp}. Add more context to make it unique."
         updated = content.replace(old, new, 1)
         Path(fp).write_text(updated, encoding="utf-8")
-        return f"Edited {fp}: replaced {len(old)} chars with {len(new)} chars"
+        result = f"Edited {fp}: replaced {len(old)} chars with {len(new)} chars"
+        # Advisory post-edit syntax check.
+        warn = python_syntax_warning(fp, updated)
+        if warn:
+            result += "\n" + warn
+        return result
     except FileNotFoundError:
-        return f"Error: file not found: {fp}"
+        return f"Error: file not found: {fp}. Use Write to create it."
     except Exception as e:
         return f"Error editing {fp}: {e}"
 
