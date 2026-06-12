@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Frank Bobe III" }]
-dependencies = ["openai>=1.0"]
+dependencies = ["openai>=1.0", "textual>=0.80"]
 
 [tool.setuptools.packages.find]
 include = ["drydock*"]

@@ -187,6 +187,7 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--max-tool-calls", type=int, default=0, help="Max tool calls (0=unlimited)")
     parser.add_argument("--force-first-tool", action="store_true", help="Force tool_choice=required on first turn")
+    parser.add_argument("--cli", action="store_true", help="Plain readline mode instead of the TUI")
     args = parser.parse_args()
 
     config = {
@@ -205,8 +206,11 @@ def main():
 
     if args.prompt:
         run_oneshot(args.prompt, config)
-    else:
+    elif args.cli:
         run_interactive(config)
+    else:
+        from drydock.tui import run_tui
+        run_tui(config)
 
 
 if __name__ == "__main__":
