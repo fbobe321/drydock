@@ -11,7 +11,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
-from textual.widgets import Input, Static
+from textual.widgets import Static
 
 from drydock.agent import (
     AgentState,
@@ -32,6 +32,7 @@ from drydock.tui.messages import (
 from drydock.tui.widgets import (
     AssistantMessage,
     ErrorMessage,
+    PromptInput,
     ToolCard,
     UserMessage,
     result_is_ok,
@@ -92,10 +93,10 @@ class DrydockApp(App):
         yield Static(BANNER, id="banner")
         yield VerticalScroll(id="transcript")
         yield Static(self._status_text(), id="status")
-        yield Input(placeholder="Type a task and press Enter… (/help)", id="prompt")
+        yield PromptInput(placeholder="Type a task and press Enter… (/help)", id="prompt")
 
     def on_mount(self) -> None:
-        self.query_one("#prompt", Input).focus()
+        self.query_one("#prompt", PromptInput).focus()
 
     def _status_text(self) -> str:
         model = self.config.get("model", "?")
@@ -122,12 +123,13 @@ class DrydockApp(App):
 
     # ── input ─────────────────────────────────────────────────────────────
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
+    def on_input_submitted(self, event: PromptInput.Submitted) -> None:
         text = event.value.strip()
-        prompt = self.query_one("#prompt", Input)
+        prompt = self.query_one("#prompt", PromptInput)
         prompt.value = ""
         if not text:
             return
+        prompt.history.add(text)
         if text.startswith("/"):
             self._handle_slash(text)
             return
@@ -207,7 +209,7 @@ class DrydockApp(App):
         self._busy = False
         self._current_assistant = None
         self._refresh_status()
-        self.query_one("#prompt", Input).focus()
+        self.query_one("#prompt", PromptInput).focus()
 
     def on_agent_error(self, m: AgentError) -> None:
         self._mount(ErrorMessage(m.error))

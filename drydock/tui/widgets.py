@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.widgets import Collapsible, Static
+from textual.widgets import Collapsible, Input, Static
 
 
 # Tools report failure by returning a string with one of these prefixes
@@ -24,6 +24,67 @@ def summarize_inputs(inputs: dict) -> str:
             return val[:80] + ("…" if len(val) > 80 else "")
     s = str(inputs)
     return s[:80] + ("…" if len(s) > 80 else "")
+
+
+class PromptHistory:
+    """Shell-style command history for the prompt box.
+
+    Up walks toward older entries, Down toward newer; stepping past the
+    newest restores whatever draft the user was typing before they started
+    navigating. Consecutive duplicate submissions collapse to one entry.
+    """
+
+    def __init__(self) -> None:
+        self._items: list[str] = []
+        self._idx: int | None = None  # None ⇒ not navigating (on the draft)
+        self._draft: str = ""
+
+    def add(self, text: str) -> None:
+        text = text.strip()
+        if text and not (self._items and self._items[-1] == text):
+            self._items.append(text)
+        self._idx = None
+        self._draft = ""
+
+    def up(self, current: str) -> str:
+        """Older entry. `current` is saved as the draft on first step up."""
+        if not self._items:
+            return current
+        if self._idx is None:
+            self._draft = current
+            self._idx = len(self._items) - 1
+        elif self._idx > 0:
+            self._idx -= 1
+        return self._items[self._idx]
+
+    def down(self, current: str) -> str:
+        """Newer entry, or the saved draft once past the newest."""
+        if self._idx is None:
+            return current  # not navigating — leave the line alone
+        if self._idx < len(self._items) - 1:
+            self._idx += 1
+            return self._items[self._idx]
+        self._idx = None
+        return self._draft
+
+
+class PromptInput(Input):
+    """Single-line prompt with Up/Down command-history recall."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.history = PromptHistory()
+
+    def on_key(self, event) -> None:
+        if event.key not in ("up", "down"):
+            return
+        self.value = (
+            self.history.up(self.value) if event.key == "up"
+            else self.history.down(self.value)
+        )
+        self.cursor_position = len(self.value)
+        event.stop()
+        event.prevent_default()
 
 
 class UserMessage(Static):

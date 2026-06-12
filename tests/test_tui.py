@@ -4,7 +4,50 @@ from __future__ import annotations
 import asyncio
 
 from drydock.tui.app import DrydockApp
-from drydock.tui.widgets import ToolCard, result_is_ok, summarize_inputs
+from drydock.tui.widgets import (
+    PromptHistory,
+    ToolCard,
+    result_is_ok,
+    summarize_inputs,
+)
+
+
+def test_prompt_history_up_down_recall():
+    h = PromptHistory()
+    h.add("first")
+    h.add("second")
+    # Up from an empty draft walks newest → oldest.
+    assert h.up("") == "second"
+    assert h.up("second") == "first"
+    assert h.up("first") == "first"  # clamps at oldest
+    # Down walks back toward the draft.
+    assert h.down("first") == "second"
+    assert h.down("second") == ""    # past newest → restored draft ("")
+
+
+def test_prompt_history_preserves_draft():
+    h = PromptHistory()
+    h.add("ls")
+    # User has typed "half-typed" then presses Up.
+    assert h.up("half-typed") == "ls"
+    # Down past the newest restores the in-progress draft.
+    assert h.down("ls") == "half-typed"
+
+
+def test_prompt_history_skips_consecutive_dupes_and_empty():
+    h = PromptHistory()
+    h.add("same")
+    h.add("same")
+    h.add("   ")  # blank ignored
+    assert h.up("") == "same"
+    assert h.up("same") == "same"  # only one entry stored
+
+
+def test_prompt_history_down_noop_when_not_navigating():
+    h = PromptHistory()
+    h.add("x")
+    # Pressing Down without having pressed Up leaves the line untouched.
+    assert h.down("typing") == "typing"
 
 
 def test_result_is_ok_marks_failures():
