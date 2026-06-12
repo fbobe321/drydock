@@ -5,6 +5,17 @@ from textual.app import ComposeResult
 from textual.widgets import Collapsible, Static
 
 
+# Tools report failure by returning a string with one of these prefixes
+# (they return rather than raise, so the agent loop never crashes on a bad
+# command). The TUI uses this to mark a card ✓ or ✗.
+_FAILURE_PREFIXES = ("Error", "REFUSED")
+
+
+def result_is_ok(result: str) -> bool:
+    """Whether a tool result should render as success (✓) vs failure (✗)."""
+    return not result.lstrip().startswith(_FAILURE_PREFIXES)
+
+
 def summarize_inputs(inputs: dict) -> str:
     """Short one-line summary of tool inputs for a card header."""
     for key in ("command", "file_path", "pattern", "path"):

@@ -34,6 +34,7 @@ from drydock.tui.widgets import (
     ErrorMessage,
     ToolCard,
     UserMessage,
+    result_is_ok,
     summarize_inputs,
 )
 from drydock.tuning import system_prompt_for_model
@@ -196,8 +197,7 @@ class DrydockApp(App):
 
     def on_agent_tool_end(self, m: AgentToolEnd) -> None:
         if self._last_card is not None:
-            ok = not m.result.lstrip().startswith("Error")
-            self._last_card.finish(m.result, ok=ok)
+            self._last_card.finish(m.result, ok=result_is_ok(m.result))
         self._scroll.scroll_end(animate=False)
 
     def on_agent_turn_done(self, m: AgentTurnDone) -> None:

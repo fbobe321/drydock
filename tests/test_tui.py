@@ -4,7 +4,15 @@ from __future__ import annotations
 import asyncio
 
 from drydock.tui.app import DrydockApp
-from drydock.tui.widgets import ToolCard, summarize_inputs
+from drydock.tui.widgets import ToolCard, result_is_ok, summarize_inputs
+
+
+def test_result_is_ok_marks_failures():
+    assert result_is_ok("Wrote 11 lines")
+    assert result_is_ok("apple: 3\nbanana: 2")
+    assert not result_is_ok("Error: nope")
+    assert not result_is_ok("REFUSED: this command reformats a filesystem...")
+    assert not result_is_ok("  Error: leading whitespace still counts")
 
 
 def test_summarize_inputs_prefers_meaningful_keys():

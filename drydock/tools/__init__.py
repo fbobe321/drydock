@@ -13,6 +13,7 @@ from pathlib import Path
 
 from drydock.tool_registry import ToolDef, register
 from drydock.guards import write_warnings, python_syntax_warning
+from drydock import bash_safety
 
 
 def _resolve_path(path: str, config: dict) -> str:
@@ -219,6 +220,9 @@ def tool_edit(params: dict, config: dict) -> str:
 def tool_bash(params: dict, config: dict) -> str:
     cmd = params["command"]
     timeout = params.get("timeout", 30)
+    reason = bash_safety.dangerous_command(cmd)
+    if reason is not None:
+        return bash_safety.refusal_message(cmd, reason)
     try:
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True,
