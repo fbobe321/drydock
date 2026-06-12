@@ -17,7 +17,7 @@ from drydock.tools import register_all
 # emits tool calls as TEXT — which is exactly how the empty-registry regression
 # manifested. register_all() is idempotent.
 register_all()
-from drydock.compaction import maybe_compact, emergency_compact
+from drydock.compaction import maybe_compact, emergency_compact, is_context_length_error
 from drydock.loop_detect import LoopTracker
 from drydock.tuning import filter_tool_schemas
 
@@ -103,7 +103,7 @@ def run(
                 break  # success
             except Exception as e:
                 err = str(e)
-                if "context length" in err.lower() or "maximum context" in err.lower():
+                if is_context_length_error(err):
                     retries += 1
                     limit = config.get("context_limit", 131072)
                     state.messages = emergency_compact(state.messages, limit)

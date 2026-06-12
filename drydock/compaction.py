@@ -8,6 +8,32 @@ DryDock v3 — layered compaction:
 from __future__ import annotations
 
 
+# Substrings that mark a context-overflow 400 across providers/servers
+# (llama.cpp, vLLM, Ollama, OpenAI all phrase it differently).
+_CONTEXT_ERROR_HINTS = (
+    "context length",
+    "maximum context",
+    "context window",
+    "context size",
+    "exceed context",
+    "exceeds the context",
+    "n_ctx",
+    "too many tokens",
+    "maximum number of tokens",
+    "reduce the length",
+)
+
+
+def is_context_length_error(err: str) -> bool:
+    """Whether a provider error looks like a context-overflow 400, so the
+    agent loop knows to emergency-compact and retry rather than surface it."""
+    e = (err or "").lower()
+    if any(h in e for h in _CONTEXT_ERROR_HINTS):
+        return True
+    # Catch generic phrasings like "... exceeds the model's context ..." too.
+    return "context" in e and ("exceed" in e or "too long" in e or "too large" in e)
+
+
 def estimate_tokens(messages: list) -> int:
     """Rough token estimate: chars / 3.5"""
     total = 0
@@ -58,7 +84,9 @@ def compact(messages: list, context_limit: int = 131072) -> list:
             if messages[i]["role"] == "tool":
                 droppable.append(i)
 
-        for i in reversed(droppable):
+        # Drop OLDEST first so the most recent context survives. (Iterating in
+        # ascending index order = oldest-to-newest.)
+        for i in droppable:
             messages[i]["content"] = "[tool result removed]"
             current = estimate_tokens(messages)
             if current <= target:
