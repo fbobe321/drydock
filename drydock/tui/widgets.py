@@ -17,6 +17,16 @@ def result_is_ok(result: str) -> bool:
     return not result.lstrip().startswith(_FAILURE_PREFIXES)
 
 
+def flatten_pasted_text(text: str) -> str:
+    """Collapse a multi-line paste into one line without losing content.
+
+    Each line is right-stripped and the lines are joined with single spaces,
+    dropping blank lines. The result keeps every token the user pasted (unlike
+    Textual's default, which discards everything after the first line)."""
+    parts = [ln.strip() for ln in text.splitlines()]
+    return " ".join(p for p in parts if p)
+
+
 def summarize_inputs(inputs: dict) -> str:
     """Short one-line summary of tool inputs for a card header."""
     for key in ("command", "file_path", "pattern", "path"):
@@ -119,6 +129,21 @@ class PromptInput(Input):
         self.cursor_position = len(self.value)
         event.stop()
         event.prevent_default()
+
+    def _on_paste(self, event) -> None:
+        # Textual's Input keeps only the FIRST line of a paste and silently
+        # drops the rest. For a coding agent that's real data loss (pasted
+        # errors, tracebacks, snippets). Flatten line breaks to spaces so the
+        # whole paste survives in this single-line box; proper multi-line
+        # composition is a TextArea follow-up.
+        if event.text:
+            flat = flatten_pasted_text(event.text)
+            sel = self.selection
+            if sel.is_empty:
+                self.insert_text_at_cursor(flat)
+            else:
+                self.replace(flat, *sel)
+        event.stop()
 
 
 # markup=False everywhere in the transcript: user prompts, model output, tool

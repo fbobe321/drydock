@@ -8,9 +8,23 @@ from drydock.tui.messages import AgentFinished
 from drydock.tui.widgets import (
     PromptHistory,
     ToolCard,
+    flatten_pasted_text,
     result_is_ok,
     summarize_inputs,
 )
+
+
+def test_flatten_pasted_text_keeps_all_lines():
+    pasted = "Traceback (most recent call last):\n  File 'x.py', line 3\nValueError: boom"
+    flat = flatten_pasted_text(pasted)
+    assert "\n" not in flat
+    assert "Traceback" in flat and "ValueError: boom" in flat  # nothing dropped
+    assert flat == "Traceback (most recent call last): File 'x.py', line 3 ValueError: boom"
+
+
+def test_flatten_pasted_text_drops_blank_lines():
+    assert flatten_pasted_text("a\n\n\nb") == "a b"
+    assert flatten_pasted_text("single line") == "single line"
 
 
 def test_prompt_history_up_down_recall():
