@@ -201,6 +201,48 @@ def sibling_imports_warning(path: str, content: str) -> str | None:
     )
 
 
+def bare_raise_warning(path: str, content: str) -> str | None:
+    """Warn on a bare `raise` (no exception) outside any except block.
+
+    A bare `raise` re-raises the active exception and is only valid inside an
+    except handler; elsewhere it fails at runtime with 'No active exception to
+    reraise'. A common Gemma mistake: `if not found: raise` where
+    `raise SomeError(...)` was intended. Ported from v2. Advisory only.
+    """
+    if not _is_python(path) or not content.strip():
+        return None
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return None
+
+    problems: list[int] = []
+
+    class _Visitor(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.in_except = 0
+
+        def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+            self.in_except += 1
+            self.generic_visit(node)
+            self.in_except -= 1
+
+        def visit_Raise(self, node: ast.Raise) -> None:
+            if node.exc is None and self.in_except == 0:
+                problems.append(node.lineno)
+            self.generic_visit(node)
+
+    _Visitor().visit(tree)
+    if not problems:
+        return None
+    lines = ", ".join(str(n) for n in problems)
+    return (
+        f"[WARNING: {path} has a bare `raise` outside any except block "
+        f"(line {lines}). It will fail at runtime with 'No active exception to "
+        f"reraise' — raise a specific exception, e.g. raise ValueError(...).]"
+    )
+
+
 def write_warnings(path: str, content: str) -> list[str]:
     """All advisory warnings for a freshly written file (order: syntax first).
     Syntax error short-circuits the rest (they'd be noise)."""
@@ -212,6 +254,7 @@ def write_warnings(path: str, content: str) -> list[str]:
         main_entry_warning(path, content),
         stub_warning(path, content),
         sibling_imports_warning(path, content),
+        bare_raise_warning(path, content),
     ):
         if w:
             out.append(w)

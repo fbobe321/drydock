@@ -4,12 +4,29 @@ from __future__ import annotations
 from pathlib import Path
 
 from drydock.guards import (
+    bare_raise_warning,
     main_entry_warning,
     python_syntax_warning,
     sibling_imports_warning,
     stub_warning,
     write_warnings,
 )
+
+
+def test_bare_raise_outside_except_warns():
+    src = "def f(found):\n    if not found:\n        raise\n"
+    w = bare_raise_warning("x.py", src)
+    assert w and "bare `raise`" in w
+
+
+def test_bare_raise_inside_except_is_ok():
+    src = "try:\n    f()\nexcept Exception:\n    raise\n"
+    assert bare_raise_warning("x.py", src) is None
+
+
+def test_raise_with_exception_is_ok():
+    src = "def f(found):\n    if not found:\n        raise ValueError('x')\n"
+    assert bare_raise_warning("x.py", src) is None
 from drydock.tools import tool_edit, tool_write
 
 
@@ -144,6 +161,14 @@ def test_tool_edit_refuses_conflict_marker_new_string(tmp_path):
     )
     assert out.startswith("REFUSED")
     assert fp.read_text() == "x = 1\n"  # unchanged
+
+
+def test_tool_write_appends_bare_raise_warning(tmp_path):
+    fp = str(tmp_path / "br.py")
+    out = tool_write(
+        {"file_path": fp, "content": "def f(x):\n    if not x:\n        raise\n"}, {}
+    )
+    assert "Wrote" in out and "bare `raise`" in out
 
 
 def test_tool_write_appends_sibling_imports_warning(tmp_path):
