@@ -167,6 +167,30 @@ def test_tool_edit_already_applied_is_noop(tmp_path):
     assert "already" in out.lower()
 
 
+def test_tool_edit_infers_file_from_directory(tmp_path):
+    (tmp_path / "a.py").write_text("print('hello')\n")
+    (tmp_path / "target.py").write_text("UNIQUE_MARKER_LINE = 123\n")
+    # Pass the DIRECTORY as file_path; old_string only lives in target.py.
+    out = tool_edit(
+        {"file_path": str(tmp_path), "old_string": "UNIQUE_MARKER_LINE = 123",
+         "new_string": "UNIQUE_MARKER_LINE = 456"},
+        {},
+    )
+    assert "Edited" in out
+    assert (tmp_path / "target.py").read_text() == "UNIQUE_MARKER_LINE = 456\n"
+
+
+def test_tool_edit_directory_ambiguous_errors(tmp_path):
+    (tmp_path / "a.py").write_text("shared_text_here_long\n")
+    (tmp_path / "b.py").write_text("shared_text_here_long\n")
+    out = tool_edit(
+        {"file_path": str(tmp_path), "old_string": "shared_text_here_long",
+         "new_string": "x"},
+        {},
+    )
+    assert "Error" in out and "directory" in out
+
+
 def test_tool_edit_missing_path():
     assert "Error" in tool_edit({"old_string": "a", "new_string": "b"}, {})
 

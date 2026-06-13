@@ -214,6 +214,29 @@ def _fuzzy_find(content: str, target: str) -> str | None:
     return None
 
 
+def _infer_edit_target(directory: Path, old: str) -> Path | None:
+    """If a directory was passed instead of a file, find the single file under
+    it whose content contains old_string. Returns None if zero or many match
+    (ambiguous), or if old is too short to match reliably. Ported from v2's
+    directory→file inference, which stopped a 'is a directory' retry loop."""
+    if not old or len(old.strip()) < 10:
+        return None
+    matches: list[Path] = []
+    checked = 0
+    for f in sorted(directory.rglob("*")):
+        if checked > 200:
+            break
+        if not f.is_file() or "__pycache__" in f.parts or ".git" in f.parts:
+            continue
+        checked += 1
+        try:
+            if old in f.read_text(encoding="utf-8", errors="ignore"):
+                matches.append(f)
+        except OSError:
+            continue
+    return matches[0] if len(matches) == 1 else None
+
+
 def tool_edit(params: dict, config: dict) -> str:
     fp = params.get("file_path")
     if not fp:
@@ -223,6 +246,16 @@ def tool_edit(params: dict, config: dict) -> str:
     new = params.get("new_string", "")
     if has_conflict_markers(new):
         return conflict_marker_refusal(fp)
+    # If a directory was passed, try to infer the intended file (avoids a
+    # 'is a directory' retry loop). Only when exactly one file matches old.
+    if Path(fp).is_dir():
+        inferred = _infer_edit_target(Path(fp), old)
+        if inferred is None:
+            return (
+                f"Error: {fp} is a directory, not a file. Pass the exact file "
+                f"path. (Could not unambiguously infer which file you meant.)"
+            )
+        fp = str(inferred)
     try:
         content = Path(fp).read_text(encoding="utf-8")
         if old not in content:
