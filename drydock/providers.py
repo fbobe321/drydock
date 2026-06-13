@@ -267,10 +267,11 @@ def _complete_nonstreaming(
     choice = resp.choices[0]
     msg = choice.message
 
-    text = strip_thinking_tokens(msg.content or "")
-    # Hide any text-form tool-call blob before it reaches the UI; the flag on
-    # AssistantTurn lets the agent loop nudge a clean retry.
-    text, had_leak = strip_leaked_tool_calls(text)
+    # Order matters: remove <|tool_call> blobs FIRST (sets had_leak for the
+    # retry nudge), THEN strip channel/special-token markers — otherwise the
+    # generic special-token pass would eat the tool_call markers.
+    text, had_leak = strip_leaked_tool_calls(msg.content or "")
+    text = strip_thinking_tokens(text)
     if text.strip():
         yield TextChunk(text)
 

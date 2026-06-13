@@ -38,6 +38,28 @@ def test_strip_thinking_tokens_noop_when_absent():
     assert strip_thinking_tokens("") == ""
 
 
+def test_strip_thinking_channel_closing_with_tool_call_marker():
+    # A thought running into a malformed call closes with <tool_call|>.
+    assert strip_thinking_tokens("a<|channel>thought<tool_call|>b") == "ab"
+
+
+def test_strip_generic_special_tokens():
+    assert strip_thinking_tokens('path<|"|>.py') == "path.py"
+    assert strip_thinking_tokens("x<|start|>y<|end|>z") == "xyz"
+    assert strip_thinking_tokens("a<|endoftext|>b") == "ab"
+
+
+def test_strip_does_not_mangle_normal_code():
+    # Real code with comparisons / bitwise ops must be untouched.
+    for src in [
+        "if a < b | c > d: pass",
+        "x = [1, 2, 3]\nprint(x)",
+        "result = func(a, b) > 0",
+        "# divider =======================",
+    ]:
+        assert strip_thinking_tokens(src) == src
+
+
 def test_use_streaming_off_for_gemma_with_tools():
     assert use_streaming("gemma4", has_tools=True) is False
     # text-only turn may stream even on gemma

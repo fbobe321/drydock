@@ -30,9 +30,19 @@ GEMMA_DISABLED_TOOLS: frozenset[str] = frozenset({
     "tool_search",
 })
 
-# Matches Gemma's leaked thinking-channel markers and their contents.
-_THINKING_RE = re.compile(r"<\|channel>.*?<channel\|>", re.DOTALL)
+# Gemma's leaked thinking-channel block. The closer may be <channel|> OR — when
+# a thought runs straight into a (mal)formed tool call — <tool_call|>.
+_THINKING_RE = re.compile(r"<\|channel>.*?(?:<channel\|>|<tool_call\|>)", re.DOTALL)
 _THINKING_BARE = ("<|channel>", "<channel|>")
+
+# Generic leaked special tokens: <|x|>, <|x>, <x|> (e.g. <|"|>, <|start|>,
+# <|endoftext|>). Bounded length and the required pipe make false positives on
+# real text/code very unlikely; these are never legitimate model output.
+_SPECIAL_TOKEN_RES = (
+    re.compile(r"<\|[^>]{0,200}\|>"),
+    re.compile(r"<\|[^>]{0,200}>"),
+    re.compile(r"<[^>]{0,200}\|>"),
+)
 
 # Gemma sometimes emits a tool call as TEXT instead of a structured call —
 # `<|tool_call>call:write_file{...}<tool_call|>` — which the API layer can't
@@ -85,16 +95,21 @@ def is_gemma(model: str | None) -> bool:
 
 
 def strip_thinking_tokens(text: str) -> str:
-    """Remove Gemma's leaked ``<|channel>…<channel|>`` thinking markers.
+    """Remove Gemma's leaked channel/thinking markers and stray special tokens.
 
-    Removes whole marked spans first, then any stray bare markers. Safe to
-    call on any text (no-op when the markers are absent).
+    Handles the <|channel>…<channel|> (or …<tool_call|>) block, stray bare
+    channel markers, and generic leaked <|…|> / <|…> / <…|> special tokens.
+    Safe to call on any text (no-op when no markers are present). NOTE: call
+    AFTER strip_leaked_tool_calls so the <|tool_call> blocks are consumed first
+    (otherwise the generic pass would eat their markers and break leak recovery).
     """
-    if not text or "channel" not in text:
+    if not text or ("<|" not in text and "|>" not in text):
         return text
     text = _THINKING_RE.sub("", text)
     for marker in _THINKING_BARE:
         text = text.replace(marker, "")
+    for rx in _SPECIAL_TOKEN_RES:
+        text = rx.sub("", text)
     return text
 
 
