@@ -132,6 +132,26 @@ def test_tool_write_missing_path():
     assert "Error" in tool_write({"content": "x"}, {})
 
 
+def test_tool_write_blank_path_rejected(tmp_path):
+    cfg = {"cwd": str(tmp_path)}
+    for bad in ["", "   ", "\t", "\n"]:
+        out = tool_write({"file_path": bad, "content": "x"}, cfg)
+        assert out.startswith("Error") and "file_path" in out
+    # No stray file got created from a blank path.
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_tool_write_directory_path_rejected(tmp_path):
+    sub = tmp_path / "adir"
+    sub.mkdir()
+    out = tool_write({"file_path": str(sub), "content": "x"}, {})
+    assert out.startswith("Error") and "directory" in out
+
+
+def test_tool_edit_blank_path_rejected():
+    assert tool_edit({"file_path": "   ", "old_string": "a", "new_string": "b"}, {}).startswith("Error")
+
+
 def test_conflict_markers_detected_and_refused(tmp_path):
     from drydock.guards import has_conflict_markers
 

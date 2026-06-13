@@ -169,9 +169,17 @@ def undo_last(config: dict) -> str:
 
 def tool_write(params: dict, config: dict) -> str:
     fp = params.get("file_path")
-    if not fp:
-        return "Error: Write requires a non-empty file_path."
-    fp = _resolve_path(fp, config)
+    # Empty/whitespace path is the canonical real-use loop bug — reject it
+    # clearly (with the content length, so the model knows the write was seen)
+    # instead of writing a file literally named " " or looping.
+    if not fp or not str(fp).strip():
+        return (
+            "Error: Write needs a real file_path (the path was empty or blank). "
+            "Pass the path you want to create, e.g. 'src/main.py'."
+        )
+    fp = _resolve_path(str(fp).strip(), config)
+    if Path(fp).is_dir():
+        return f"Error: {fp} is a directory, not a file. Pass a file path."
     content = params.get("content", "")
     if has_conflict_markers(content):
         return conflict_marker_refusal(fp)
@@ -239,9 +247,9 @@ def _infer_edit_target(directory: Path, old: str) -> Path | None:
 
 def tool_edit(params: dict, config: dict) -> str:
     fp = params.get("file_path")
-    if not fp:
-        return "Error: Edit requires a non-empty file_path."
-    fp = _resolve_path(fp, config)
+    if not fp or not str(fp).strip():
+        return "Error: Edit needs a real file_path (the path was empty or blank)."
+    fp = _resolve_path(str(fp).strip(), config)
     old = params.get("old_string", "")
     new = params.get("new_string", "")
     if has_conflict_markers(new):
