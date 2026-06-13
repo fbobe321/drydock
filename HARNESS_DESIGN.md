@@ -27,44 +27,49 @@ inherited cloud/phone-home code that got the PyPI account quarantined
    our own attribution — no Mistral/Anthropic notices, because no
    Mistral/Anthropic code is present.
 
-## What v3 already has (the clean spine, ~1k LOC)
+## What v3 has (the clean spine + TUI + ported hardening)
 
-- `agent.py` — agent loop, event stream (ToolStart/ToolEnd/TurnDone).
-- `providers.py` — OpenAI-compatible streaming client (works against
-  llama.cpp's OpenAI server).
-- `compaction.py` — two-tier compaction (normal + emergency). Keep.
-- `tool_registry.py` — tool plugin registry.
-- `tools/__init__.py` — read, write, edit (fuzzy), bash, glob, grep.
-- `cli.py` — plain interactive/oneshot CLI (to be superseded by the TUI).
+- `agent.py` — agent loop, event stream (ToolStart/ToolEnd/TurnDone),
+  adaptive reasoning per turn, hallucinated-tool redirect, text-form tool-call
+  recovery, `/back` support (drop_last_turn).
+- `providers.py` — OpenAI-compatible client; non-streaming for Gemma tool
+  turns; fast unreachable-endpoint error; forwards `reasoning_effort`.
+- `compaction.py` — two-tier compaction (normal + emergency), oldest-first
+  drop, robust context-overflow detection.
+- `tool_registry.py` / `tools/__init__.py` — Read/Write/Edit/Bash/Glob/Grep,
+  with the safety + guard layers below; undo journal (`/undo`).
+- `bash_safety.py` — catastrophic-command denylist + sensitive-command
+  approval tier.
+- `guards.py` — advisory write guards (syntax, main-entry, stub, sibling
+  imports, bare-raise) + conflict-marker refusal.
+- `loop_detect.py` — exact-repeat nudges + same-path write-thrash advisory.
+- `tuning.py` — Gemma tuning (non-streaming, token stripping, tool gating,
+  adaptive-thinking policy, simplified prompt).
+- `config.py` / `detect.py` — `~/.drydock/config.toml` + first-launch
+  local-LLM autodetection.
+- `tui/` — Textual TUI: transcript, streamed text, tool cards, multi-line
+  prompt with history, slash commands, approval modal.
+- `cli.py` — `--cli` plain mode + `-p` one-shot (the TUI is the default).
 
-## Gemma-26B lessons to reimplement (from v2 real-use, all our own logic)
+## Gemma-26B lessons — reimplemented (from v2 real-use, all our own logic)
 
-These are *behaviors we learned the model needs*, to be re-expressed in v3's
-style — not pasted from v2:
+All implemented in v3's own style (not pasted from v2):
 
-- **Non-streaming for tool calls.** Gemma-4 corrupts tool-call JSON when
-  streamed; use non-streaming whenever tools are offered.
-- **Adaptive thinking budget.** HIGH for planning/first-user-turn, OFF for
-  routine writes, LOW for error recovery. HIGH-on-every-turn burns
-  30–120 s/turn for no gain.
-- **Strip thinking tokens.** The model leaks `<|channel>…<channel|>`
-  variants; filter them out of stored history before the next call.
-- **Disable loop-prone tools for Gemma.** `ask_user_question`, `todo`,
-  `task_*`, `invoke_skill`, `tool_search` cause loops/validation errors.
-- **Simplified system prompt.** A short "act immediately" prompt beats a
-  long capabilities prompt for this model.
-- **write overwrite=True by default.** Gemma re-writes the same file; refusing
-  caused error loops.
-- **Hardened edits.** search/replace fails three ways — drops the path, sends
-  raw code without markers, retries an already-applied edit — each needs a
-  fallback rather than an error.
-- **Write guards.** Refuse known-broken outputs (main-module entry mistakes,
-  missing-sibling imports, stub classes) with actionable feedback.
-- **Loop detection guides, never blocks.** Prune exact repeats and inject an
-  advisory nudge; the only hard stop is a max-tool-turns ceiling. Circuit
-  breakers were net-negative in v2 and are banned.
-- **Loop-breakers return a result, never raise.** Raising a tool error on a
-  long task spawns its own loop.
+- **Non-streaming for tool calls** (Gemma corrupts tool-call JSON streamed). ✔
+- **Adaptive reasoning budget** — HIGH to plan, LOW for routine continuation;
+  wired via `reasoning_effort`, verified correctness-preserving. ✔
+- **Strip thinking/special tokens** — `<|channel>…</`, `<|tool_call>…`, and
+  generic `<|…|>` leaks. ✔
+- **Disable loop-prone tools for Gemma** + redirect hallucinated tool names. ✔
+- **Simplified "act immediately" system prompt.** ✔
+- **write overwrite=True by default**; reject blank/dir paths. ✔
+- **Hardened edits** — already-applied no-op, fuzzy match, directory→file
+  inference, conflict-marker refusal. ✔
+- **Write guards** — main-entry, missing-sibling imports, stub-only, bare
+  raise; all advisory. ✔
+- **Loop detection guides, never blocks** — exact-repeat + write-thrash
+  nudges; only hard stop is max-tool-turns. Circuit breakers banned. ✔
+- **Loop-breakers return a result, never raise.** ✔
 
 ## UX target: Claude-Code *feel*, nautical *identity*, clean implementation
 
@@ -86,11 +91,14 @@ branding, no "Claude" naming, no copied ASCII art or message strings.
 
 ## Roadmap
 
-- **Phase 0 (now):** LICENSE/NOTICE, pyproject license, security scanner +
+- **Phase 0 — done.** LICENSE/NOTICE, pyproject license, security scanner +
   release gate, this doc.
-- **Phase 1:** reliability core (loop detection, edit/write guards,
-  non-streaming + adaptive thinking + token strip + simplified prompt for
-  Gemma).
-- **Phase 2:** Textual TUI with the UX above + nautical theme.
-- **Phase 3 (as earned):** selective extras (graphrag, more tools, more slash
-  commands) — only what real use justifies.
+- **Phase 1 — done.** Reliability core: loop detection, edit/write guards,
+  non-streaming + adaptive thinking + token strip + simplified prompt, plus
+  the full v2 hardening port (sibling/bare-raise/conflict-marker guards,
+  hallucinated-tool redirect, write-thrash advisory, blank-path guard).
+- **Phase 2 — done.** Textual TUI: transcript, tool cards, multi-line prompt
+  with history, slash commands (`/model /cwd /undo /back /status /clear /help`),
+  approval modal, config + first-launch autodetect, nautical theme.
+- **Phase 3 (as earned):** selective extras (retrieval, more tools) — only what
+  real use justifies. PyPI/Docker distribution returns on account reinstatement.

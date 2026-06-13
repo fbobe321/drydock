@@ -20,22 +20,56 @@ your box.
 
 ## Status
 
-Rebuild in progress. The clean spine works (agent loop, OpenAI-compatible
-provider for llama.cpp, two-tier compaction, core tools). Reliability
-hardening for Gemma and the Textual TUI are landing next. PyPI/Docker
-distribution returns once the rebuild lands.
+Working. The Textual TUI is the default surface: a scrolling transcript with
+streamed assistant text, collapsible tool cards, and a multi-line prompt. The
+agent loop, OpenAI-compatible provider, two-tier compaction, and the core tools
+(Read/Write/Edit/Bash/Glob/Grep) are in. Reliability hardening for Gemma is
+ported and verified. PyPI/Docker distribution returns once the PyPI account is
+reinstated.
 
-## Install (from source for now)
+## Install (from source)
 
 ```bash
-git clone https://github.com/fbobe321/drydock.git
-cd drydock
+git clone https://github.com/fbobe321/drydock-v3.git
+cd drydock-v3
 pip install -e .
 drydock
 ```
 
-Point it at a local OpenAI-compatible endpoint (e.g. llama.cpp's
-`server-cuda` serving Gemma 4 26B).
+On first launch with no config, Drydock probes localhost for a running local
+LLM (llama.cpp/vLLM `:8000`, Ollama `:11434`, LM Studio `:1234`) and wires up
+the first one it finds — no account or API-key prompt. Override anytime with
+`--model` / `--provider` / `--base-url` or `~/.drydock/config.toml`.
+
+## Using it
+
+Type a task and press **Enter**. Drydock reads/writes/edits files and runs
+commands to do the work, showing each as a collapsible tool card.
+
+- **Ctrl+J** — newline (compose multi-line prompts); **Enter** submits
+- **↑ / ↓** — recall command history (persists across sessions)
+- **Ctrl+O** — expand/collapse tool output
+- Slash commands: `/model [name]` · `/cwd [path]` · `/undo` (revert last write)
+  · `/back` (rewind last turn) · `/status` · `/clear` · `/help` · `/quit`
+
+It honors `AGENTS.md` / `DRYDOCK.md` in the working directory for project
+conventions.
+
+## Safety
+
+Two tiers, plus advisory guards — all designed so legitimate work is never
+blocked:
+
+- **Catastrophic denylist** — commands like `rm -rf /`, `mkfs`, raw block-device
+  writes, and fork bombs are refused outright (never run).
+- **Approval prompt** — sensitive-but-legitimate commands (`sudo`, package
+  installs, network fetches, `git push`) pause for **Allow / Always / Deny**.
+- **Advisory write guards** — Drydock flags (never blocks) Python syntax errors,
+  stub-only files, imports of sibling modules that don't exist yet, bare
+  `raise` outside an except, and refuses to write git conflict-marker content.
+
+Point it at a local OpenAI-compatible endpoint (e.g. llama.cpp's `server-cuda`
+serving Gemma 4 26B).
 
 ## Principles
 
