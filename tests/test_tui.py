@@ -9,9 +9,27 @@ from drydock.tui.widgets import (
     PromptHistory,
     ToolCard,
     flatten_pasted_text,
+    format_tool_body,
     result_is_ok,
     summarize_inputs,
 )
+
+
+def test_format_tool_body_expands_tabs():
+    out = format_tool_body("M\tfile.py\nA\tnew.py")
+    assert "\t" not in out
+    assert "M   file.py" in out  # tab → 4-space stop
+
+
+def test_format_tool_body_caps_long_output():
+    out = format_tool_body("x" * 20000)
+    assert "truncated for display" in out
+    assert len(out) < 9000
+
+
+def test_format_tool_body_empty():
+    assert format_tool_body("   ") == "(no output)"
+    assert format_tool_body("") == "(no output)"
 
 
 def test_flatten_pasted_text_keeps_all_lines():

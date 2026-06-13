@@ -18,6 +18,25 @@ def result_is_ok(result: str) -> bool:
     return not result.lstrip().startswith(_FAILURE_PREFIXES)
 
 
+_TOOL_BODY_MAX = 8000
+
+
+def format_tool_body(result: str) -> str:
+    """Prepare a tool result for display in a card.
+
+    Expands tabs to 4-space stops (Rich renders mid-line tabs inconsistently, so
+    git status / table output jumbles otherwise) and caps very long output with
+    a clear marker so a huge file read can't blow up the card."""
+    body = (result or "").expandtabs(4).strip()
+    if not body:
+        return "(no output)"
+    if len(body) > _TOOL_BODY_MAX:
+        return body[:_TOOL_BODY_MAX] + (
+            f"\n[... {len(body) - _TOOL_BODY_MAX} more chars truncated for display]"
+        )
+    return body
+
+
 def flatten_pasted_text(text: str) -> str:
     """Collapse a multi-line paste into one line without losing content.
 
@@ -214,7 +233,7 @@ class ToolCard(Collapsible):
         self.add_class("tool-card")
 
     def finish(self, result: str, ok: bool = True) -> None:
-        self._body.update(result.strip() or "(no output)")
+        self._body.update(format_tool_body(result))
         mark = "✓" if ok else "✗"
         self.title = f"{mark} {self._tool_name}  ·  {self._tool_summary}"
         self.add_class("ok" if ok else "fail")
