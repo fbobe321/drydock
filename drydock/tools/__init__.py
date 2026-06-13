@@ -258,6 +258,21 @@ def tool_bash(params: dict, config: dict) -> str:
     reason = bash_safety.dangerous_command(cmd)
     if reason is not None:
         return bash_safety.refusal_message(cmd, reason)
+    # Approval tier: sensitive-but-legitimate commands (sudo, installs, network)
+    # run only after the user okays them. config["request_approval"] is the
+    # UI callback; absent it (headless/tests) the command runs.
+    approval_reason = bash_safety.requires_approval(cmd)
+    if approval_reason and not config.get("_approve_all"):
+        approver = config.get("request_approval")
+        if approver is not None:
+            decision = approver(cmd, approval_reason)
+            if decision == "always":
+                config["_approve_all"] = True
+            elif decision != "allow":
+                return (
+                    f"REFUSED: you declined to approve this command "
+                    f"({approval_reason}).\nCommand: {cmd.strip()}"
+                )
     try:
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True,

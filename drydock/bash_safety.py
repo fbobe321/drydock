@@ -116,3 +116,52 @@ def refusal_message(command: str, reason: str) -> str:
         f"If this was a mistake, run a narrower command scoped to the specific "
         f"files or directory you intend to change."
     )
+
+
+# ── Approval tier ───────────────────────────────────────────────────────────
+# Commands that are legitimate but consequential: they should RUN, but only
+# after the user okays them. This is distinct from the catastrophic denylist
+# above (which is never run). Each entry: (pattern, human reason).
+_APPROVAL_RULES: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"\b(?:sudo|doas)\b", re.IGNORECASE),
+        "runs with elevated privileges (sudo)",
+    ),
+    (
+        re.compile(
+            r"\b(?:apt|apt-get|dnf|yum|pacman|zypper|apk|brew)\b\s+"
+            r"(?:install|remove|purge|upgrade|update|add)\b",
+            re.IGNORECASE,
+        ),
+        "installs or removes system packages",
+    ),
+    (
+        re.compile(
+            r"\b(?:pip|pip3|pipx|npm|pnpm|yarn|cargo|gem|go)\b\s+"
+            r"(?:install|add|i)\b",
+            re.IGNORECASE,
+        ),
+        "installs packages from a network index",
+    ),
+    (
+        re.compile(r"\b(?:curl|wget)\b", re.IGNORECASE),
+        "fetches content from the network",
+    ),
+    (
+        re.compile(r"\bgit\s+push\b", re.IGNORECASE),
+        "pushes commits to a remote repository",
+    ),
+]
+
+
+def requires_approval(command: str) -> str | None:
+    """Return a reason if the command is sensitive enough to need user
+    approval before running, else None. Assumes the catastrophic denylist
+    (dangerous_command) has already passed."""
+    if not command or not command.strip():
+        return None
+    cmd = " ".join(command.split())
+    for pattern, reason in _APPROVAL_RULES:
+        if pattern.search(cmd):
+            return reason
+    return None

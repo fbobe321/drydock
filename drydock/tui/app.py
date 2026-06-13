@@ -88,6 +88,21 @@ class DrydockApp(App):
         self._busy = False
         self._queue: list[str] = []  # prompts submitted while a turn is running
 
+        # The agent (worker thread) calls this to gate a sensitive command on
+        # user approval. Bridges to the UI thread and blocks until the user
+        # chooses; returns "allow" / "always" / "deny".
+        self.config["request_approval"] = self._request_approval
+
+    def _request_approval(self, command: str, reason: str) -> str:
+        from drydock.tui.approval import ApprovalModal
+
+        try:
+            return self.call_from_thread(
+                self.push_screen_wait, ApprovalModal(command, reason)
+            )
+        except Exception:  # noqa: BLE001 — if the UI can't ask, fail safe to deny
+            return "deny"
+
     def _build_system(self, model: str | None) -> str:
         # The TUI must honor AGENTS.md/DRYDOCK.md like the CLI does — it's the
         # primary surface, and project instructions carry the user's tool/style
