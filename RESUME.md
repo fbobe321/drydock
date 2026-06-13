@@ -1,7 +1,19 @@
 # Drydock v3 — Session Resume / Handoff
 
-Paste this as the first message of a new session to pick up where the last one
-left off.
+The work runs on the workstation; you steer it remotely via Claude Code's
+Remote Control.
+
+- **Resume the actual conversation (full context):** on the workstation,
+  `cd /data3/drydock-v3 && claude --resume "drydock"` (or `claude --continue`).
+  History lives in `~/.claude/projects/…` and comes back intact.
+- **Control it from a phone/laptop:** enable once via `claude` → `/config` →
+  "Enable Remote Control for all sessions" → true; then a resumed session shows
+  up at claude.ai/code (or the Claude app → Code). Execution stays on this box;
+  the remote device is just the UI. Needs a claude.ai subscription + `/login`
+  (API keys don't work); the box must stay on with the `claude` process running.
+
+This file is the **fallback primer** for starting a brand-new session without
+that history — paste it as the first message.
 
 ---
 
@@ -13,41 +25,10 @@ agent** for local LLMs. It is NOT a fork — it replaces the v2 line (a
 quarantined). The whole point of v3 is clean IP provenance owned end to end.
 
 - **Repo:** `https://github.com/fbobe321/drydock-v3` (PRIVATE), branch `master`.
+- **Checkout:** `/data3/drydock-v3` on the workstation.
 - **Primary model:** Gemma-4-26B-A4B served by llama.cpp at
   `http://localhost:8000/v1` (model name `gemma4`). Uses harmony/gpt-oss
   `<|channel>` tokens, so it accepts `reasoning_effort`.
-
-> The previous session ran on the workstation (`/data3/drydock-v3`, miniconda
-> python, the model on local `:8000`). **This is a DIFFERENT machine** — see
-> "Remote machine setup" below; ignore the workstation-only paths/flags noted
-> later.
-
-## Remote machine setup (you are here)
-
-```bash
-git clone https://github.com/fbobe321/drydock-v3.git
-cd drydock-v3
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"        # openai, textual + pytest, ruff, pyright
-```
-
-**The model is the key dependency** — v3 only runs against an OpenAI-compatible
-LLM endpoint. Editing + tests + lint work offline anywhere; *driving the TUI*
-needs an endpoint. Pick one:
-
-- **Tunnel to the workstation's model** (reuse the existing gemma4):
-  ```bash
-  ssh -N -L 8000:localhost:8000 <user>@<workstation-host>   # keep open
-  drydock        # default base_url is localhost:8000 → now the tunnel
-  ```
-- **Point at any reachable endpoint:** `drydock --base-url http://HOST:PORT/v1 --model NAME`
-  (or set `base_url`/`model` in `~/.drydock/config.toml`). Use `--provider
-  ollama|lmstudio|vllm` for the known local servers.
-- **Run a model locally on this box** (llama.cpp/Ollama/LM Studio); first launch
-  autodetects it on :8000/:11434/:1234.
-
-On this machine there's no v2 install, so `~/.drydock/` is v3's own — safe to
-use directly (the HOME-isolation rule below was a workstation concern).
 
 ## Current state (as of HEAD 956e017)
 
@@ -86,20 +67,23 @@ Edit/Bash/Glob/Grep + undo journal) · `tui/{app,widgets,approval,messages}.py`.
 
 ## How to run / test / verify
 
-With the venv active (`pip install -e ".[dev]"` done), `drydock` and the tools
-are on PATH:
+On the **workstation** (this is where it runs — Python at
+`/home/bobef/miniconda3/bin/python3`, has textual/openai):
 
 ```bash
-drydock                       # run the TUI (in a project dir; needs an endpoint)
-pytest tests/ -q              # full suite (177 tests)
-ruff check drydock/ tests/
-pyright drydock/              # deps are installed, so imports resolve
-./scripts/release.sh          # build + security scan, stops before PyPI
+cd /data3/drydock-v3
+# Run the TUI (in a project dir; model on local :8000)
+PYTHONPATH=/data3/drydock-v3 /home/bobef/miniconda3/bin/python3 -m drydock --model gemma4 --provider vllm
+# Tests — the local pytest_cov plugin is broken, so disable it:
+/home/bobef/miniconda3/bin/python3 -m pytest tests/ -q -o addopts= -p no:cov -p no:cacheprovider   # 177 pass
+/home/bobef/miniconda3/bin/python3 -m ruff check drydock/ tests/
+/home/bobef/miniconda3/bin/python3 -m pyright --pythonpath /home/bobef/miniconda3/bin/python3 drydock/
+DRYDOCK_PY=/home/bobef/miniconda3/bin/python3 ./scripts/release.sh   # build + security scan
 ```
 
-(On the original workstation only: pytest needs `-o addopts= -p no:cov` to skip
-a broken local pytest_cov plugin, and tools were invoked via
-`/home/bobef/miniconda3/bin/python3`. A clean venv here needs neither.)
+(Fresh clone elsewhere instead: `python3 -m venv .venv && . .venv/bin/activate
+&& pip install -e ".[dev]"`, then `drydock` / `pytest tests/ -q` / `ruff` /
+`pyright` are on PATH and need none of the workstation flags.)
 
 ## NON-NEGOTIABLE working rules (learned the hard way)
 
@@ -107,11 +91,10 @@ a broken local pytest_cov plugin, and tools were invoked via
    `tmux new-session -d -s v3 -x 200 -y 50 'cd <dir> && PYTHONPATH=/data3/drydock-v3 /home/bobef/miniconda3/bin/python3 -m drydock --model gemma4 --provider vllm'`,
    then `tmux send-keys` a real prompt, `tmux capture-pane -p` to read it, and
    run the built code functionally. `--help` is NOT a test.
-2. **(Workstation-only) Isolate `HOME` for TUI tests** — there v3's
-   `~/.drydock/` was shared with a running v2 install and a test once leaked
-   `base_url` into it. On THIS machine there's no v2, so `~/.drydock/` is v3's
-   own and you can use it directly. Still fine to sandbox with
-   `HOME=/tmp/ddtest` if you want test runs kept out of your real config.
+2. **Isolate `HOME` for TUI tests:** prepend `HOME=/tmp/v3_home` (mkdir it).
+   This box also runs the operator's v2 install, and both share
+   `~/.drydock/{config.toml,history}` — a dead-port test once leaked `base_url`
+   into the operator's real config. Always sandbox HOME for test runs.
 3. **Never let ruff/lint autofix delete side-effect imports.** `ruff --fix` once
    removed `import drydock.tools` from agent.py (it registers the tools), leaving
    an empty registry → the model emitted tool calls as TEXT and nothing ran.
@@ -123,13 +106,13 @@ a broken local pytest_cov plugin, and tools were invoked via
    loop on long tasks).
 7. `scripts/security_scan.py` gates every release (exit 2 = HIGH = block).
 
-## Credentials / env
-- **This machine:** use your own git auth to push (the repo is private under
-  `fbobe321`). Python 3.12+ in the venv.
-- **Workstation-only (ignore here):** GitHub token at
-  `~/.config/drydock/github_token`, `gh` at `/home/bobef/miniconda3/bin/gh`,
-  tbench notification pause flags at `/data3/drydock/.pause_tbench_*`, and the
-  PyPI appeal draft at `/data3/drydock/docs/pypi_reinstatement_appeal.md`.
+## Credentials / env (workstation)
+- GitHub: token at `~/.config/drydock/github_token` (user `fbobe321`); `gh` at
+  `/home/bobef/miniconda3/bin/gh`. To push, set `GH_TOKEN` and use a one-shot
+  credential helper (the repo has no stored creds).
+- Dev/test Python: `/home/bobef/miniconda3/bin/python3` (3.12, has textual/openai).
+- tbench notifications paused via `/data3/drydock/.pause_tbench_*` flags.
+- PyPI reinstatement appeal draft: `/data3/drydock/docs/pypi_reinstatement_appeal.md`.
 
 ## Suggested next steps (pick up here)
 - Operator review of the v3 hardening port.
