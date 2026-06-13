@@ -32,7 +32,7 @@ from drydock.tui.messages import (
 from drydock.tui.widgets import (
     AssistantMessage,
     ErrorMessage,
-    PromptInput,
+    PromptArea,
     ToolCard,
     UserMessage,
     result_is_ok,
@@ -67,7 +67,9 @@ class DrydockApp(App):
     .tool-body { color: #9bb4c0; padding: 0 1; }
     #prompt {
         dock: bottom; margin: 1 2; border: round #2e5a6b; background: #0e2731;
+        height: auto; min-height: 3; max-height: 12;
     }
+    #prompt:focus { border: round #58c4dc; }
     #status {
         dock: bottom; height: 1; color: #5e7a88; padding: 0 2; background: #0b1f2a;
     }
@@ -115,10 +117,10 @@ class DrydockApp(App):
         yield Static(BANNER, id="banner")
         yield VerticalScroll(id="transcript")
         yield Static(self._status_text(), id="status")
-        yield PromptInput(placeholder="Type a task and press Enter… (/help)", id="prompt")
+        yield PromptArea(id="prompt")
 
     def on_mount(self) -> None:
-        prompt = self.query_one("#prompt", PromptInput)
+        prompt = self.query_one("#prompt", PromptArea)
         # Persist history across sessions when the CLI provides a path (tests
         # omit it and stay in-memory, so they never touch the real home dir).
         hist_path = self.config.get("history_path")
@@ -127,7 +129,7 @@ class DrydockApp(App):
 
             from drydock.tui.widgets import PromptHistory
 
-            prompt.history = PromptHistory(Path(hist_path))
+            prompt.cmd_history = PromptHistory(Path(hist_path))
         onboarding = self.config.get("onboarding")
         if onboarding:
             self._info(onboarding)
@@ -162,16 +164,16 @@ class DrydockApp(App):
 
     # ── input ─────────────────────────────────────────────────────────────
 
-    def on_input_submitted(self, event: PromptInput.Submitted) -> None:
-        text = event.value.strip()
-        prompt = self.query_one("#prompt", PromptInput)
-        prompt.value = ""
+    def on_prompt_area_submitted(self, event: PromptArea.Submitted) -> None:
+        text = event.text.strip()
+        prompt = self.query_one("#prompt", PromptArea)
+        prompt.clear()
         if not text:
             return
         if text.startswith("/"):
             self._handle_slash(text)  # meta commands stay out of history
             return
-        prompt.history.add(text)
+        prompt.cmd_history.add(text)
         # Show the user turn immediately, in order. If a turn is already
         # running, queue this one and drain it when the current turn finishes
         # instead of dropping it on the floor.
@@ -310,7 +312,7 @@ class DrydockApp(App):
             self._begin(self._queue.pop(0))
             return
         self._refresh_status()
-        self.query_one("#prompt", PromptInput).focus()
+        self.query_one("#prompt", PromptArea).focus()
 
     def on_agent_error(self, m: AgentError) -> None:
         self._mount(ErrorMessage(m.error))

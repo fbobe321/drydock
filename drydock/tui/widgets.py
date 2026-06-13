@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from textual.widgets import Collapsible, Input, Static
+from textual.message import Message
+from textual.widgets import Collapsible, Static, TextArea
 
 
 # Tools report failure by returning a string with one of these prefixes
@@ -112,38 +113,56 @@ class PromptHistory:
         return self._draft
 
 
-class PromptInput(Input):
-    """Single-line prompt with Up/Down command-history recall."""
+class PromptArea(TextArea):
+    """Multi-line prompt box.
+
+    Enter submits; Ctrl+J inserts a newline so multi-line prompts can be
+    composed/pasted. Up/Down navigate within the text normally, EXCEPT when the
+    cursor is already on the first line (Up) or last line (Down), where they
+    recall command history — the standard editor convention that lets a
+    single key serve both jobs without conflict. Multi-line paste is preserved
+    natively by TextArea.
+    """
+
+    class Submitted(Message):
+        """Posted when the user presses Enter to submit the prompt."""
+
+        def __init__(self, text: str) -> None:
+            super().__init__()
+            self.text = text
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.history = PromptHistory()
+        self.cmd_history = PromptHistory()
+        self.show_line_numbers = False
 
-    def on_key(self, event) -> None:
-        if event.key not in ("up", "down"):
+    def _recall(self, new_text: str) -> None:
+        self.text = new_text
+        self.move_cursor(self.document.end)
+
+    async def _on_key(self, event) -> None:
+        key = event.key
+        if key == "enter":
+            event.stop()
+            event.prevent_default()
+            self.post_message(self.Submitted(self.text))
             return
-        self.value = (
-            self.history.up(self.value) if event.key == "up"
-            else self.history.down(self.value)
-        )
-        self.cursor_position = len(self.value)
-        event.stop()
-        event.prevent_default()
-
-    def _on_paste(self, event) -> None:
-        # Textual's Input keeps only the FIRST line of a paste and silently
-        # drops the rest. For a coding agent that's real data loss (pasted
-        # errors, tracebacks, snippets). Flatten line breaks to spaces so the
-        # whole paste survives in this single-line box; proper multi-line
-        # composition is a TextArea follow-up.
-        if event.text:
-            flat = flatten_pasted_text(event.text)
-            sel = self.selection
-            if sel.is_empty:
-                self.insert_text_at_cursor(flat)
-            else:
-                self.replace(flat, *sel)
-        event.stop()
+        if key == "ctrl+j":
+            event.stop()
+            event.prevent_default()
+            self.insert("\n")
+            return
+        if key == "up" and self.cursor_at_first_line:
+            event.stop()
+            event.prevent_default()
+            self._recall(self.cmd_history.up(self.text))
+            return
+        if key == "down" and self.cursor_at_last_line:
+            event.stop()
+            event.prevent_default()
+            self._recall(self.cmd_history.down(self.text))
+            return
+        await super()._on_key(event)
 
 
 # markup=False everywhere in the transcript: user prompts, model output, tool

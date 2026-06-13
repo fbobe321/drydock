@@ -134,14 +134,14 @@ def test_app_mounts_and_handles_slash():
             assert app.query_one("#banner")
             assert app.query_one("#status")
             inp = app.query_one("#prompt")
-            inp.value = "/help"
+            inp.text = "/help"
             await pilot.press("enter")
             await pilot.pause()
-            inp.value = "/clear"
+            inp.text = "/clear"
             await pilot.press("enter")
             await pilot.pause()
             # empty submit is a no-op, not a crash
-            inp.value = ""
+            inp.text = ""
             await pilot.press("enter")
             await pilot.pause()
 
@@ -189,7 +189,7 @@ def test_slash_commands_model_cwd_status_undo(tmp_path):
             inp = app.query_one("#prompt")
 
             async def slash(value):
-                inp.value = value
+                inp.text = value
                 await pilot.press("enter")
                 await pilot.pause()
 
@@ -215,6 +215,49 @@ def test_slash_commands_model_cwd_status_undo(tmp_path):
     asyncio.run(main())
 
 
+def test_multiline_compose_with_ctrl_j_then_enter_submits_full_text():
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            started: list[str] = []
+            app._run_agent = lambda text: started.append(text)  # type: ignore[method-assign]
+            await pilot.press("l", "i", "n", "e", "1")
+            await pilot.press("ctrl+j")            # newline, does NOT submit
+            await pilot.press("l", "i", "n", "e", "2")
+            await pilot.pause()
+            inp = app.query_one("#prompt")
+            assert inp.text == "line1\nline2"       # composed two lines
+            assert started == []                     # ctrl+j didn't submit
+            await pilot.press("enter")               # now submit
+            await pilot.pause()
+            assert started == ["line1\nline2"]       # full multi-line text sent
+            assert inp.text == ""                    # box cleared
+
+    asyncio.run(main())
+
+
+def test_up_recalls_history_only_on_first_line():
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            inp = app.query_one("#prompt")
+            inp.cmd_history.add("earlier prompt")
+            # Two-line draft; cursor on the LAST line → Up moves cursor, no recall.
+            inp.text = "top\nbottom"
+            inp.move_cursor(inp.document.end)
+            await pilot.press("up")
+            await pilot.pause()
+            assert inp.text == "top\nbottom"          # unchanged (cursor moved)
+            # Now cursor is on the first line → Up recalls history.
+            await pilot.press("up")
+            await pilot.pause()
+            assert inp.text == "earlier prompt"
+
+    asyncio.run(main())
+
+
 def test_busy_input_is_queued_and_drained():
     async def main():
         app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
@@ -225,14 +268,14 @@ def test_busy_input_is_queued_and_drained():
             app._run_agent = lambda text: started.append(text)  # type: ignore[method-assign]
             inp = app.query_one("#prompt")
 
-            inp.value = "first task"
+            inp.text = "first task"
             await pilot.press("enter")
             await pilot.pause()
             assert started == ["first task"]
             assert app._busy and app._queue == []
 
             # Second submit while busy → queued, not started.
-            inp.value = "second task"
+            inp.text = "second task"
             await pilot.press("enter")
             await pilot.pause()
             assert started == ["first task"]
