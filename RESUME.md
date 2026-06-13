@@ -12,6 +12,23 @@ Remote Control.
   the remote device is just the UI. Needs a claude.ai subscription + `/login`
   (API keys don't work); the box must stay on with the `claude` process running.
 
+- **Keep it alive untended — run it in `tmux`** so closing the terminal or an
+  SSH drop doesn't kill the `claude` process:
+  ```bash
+  tmux new -s dd                                   # start a named session
+  cd /data3/drydock-v3 && claude --resume "drydock"   # remote control auto-on if enabled
+  # detach (leave it running):  Ctrl-b then d
+  # later, reattach from an SSH login:  tmux attach -t dd
+  ```
+  Detaching keeps `claude` running, so the phone/web link stays live. Only an
+  actual reboot or `tmux kill-session` stops it — and even then your code is
+  committed/pushed and the conversation is resumable, so nothing is lost.
+
+> **Nothing here is lost by stopping.** Code = committed + pushed to the private
+> repo. Conversation = saved under `~/.claude/projects/…`, replayed by
+> `claude --resume`. Only the live remote-control *link* needs the process up;
+> restart `claude --resume` to get a fresh one.
+
 This file is the **fallback primer** for starting a brand-new session without
 that history — paste it as the first message.
 
