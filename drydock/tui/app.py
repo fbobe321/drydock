@@ -214,6 +214,17 @@ class DrydockApp(App):
             from drydock.tools import undo_last
 
             self._info(undo_last(self.config))
+        elif cmd == "/back":
+            from drydock.agent import drop_last_turn
+
+            if drop_last_turn(self.state.messages):
+                self._refresh_status()
+                self._info(
+                    "↩ rewound the last turn (removed it from the model's context). "
+                    "Files were NOT reverted — use /undo for that."
+                )
+            else:
+                self._info("Nothing to go back to.")
         elif cmd == "/status":
             t = self.state
             self._info(
@@ -228,6 +239,7 @@ class DrydockApp(App):
                 "  /model [name]    show or switch the model\n"
                 "  /cwd [path]      show or change the working directory\n"
                 "  /undo            revert the last file write/edit\n"
+                "  /back            rewind the last turn from the model's context\n"
                 "  /status          session model, cwd, turns, tokens\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"

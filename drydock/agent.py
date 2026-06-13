@@ -48,6 +48,21 @@ class AgentState:
     turn_count: int = 0
 
 
+def drop_last_turn(messages: list) -> bool:
+    """Remove the last user message and everything after it (the assistant
+    replies + tool results for that turn). Returns True if a turn was dropped.
+
+    Cutting at a user-message boundary keeps the history valid — the remaining
+    list ends with a complete prior turn and never leaves an orphaned tool
+    result (those all followed the removed user message).
+    """
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") == "user":
+            del messages[i:]
+            return True
+    return False
+
+
 # ── Agent loop ────────────────────────────────────────────────────────────
 
 def run(
