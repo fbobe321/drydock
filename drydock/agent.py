@@ -19,7 +19,7 @@ from drydock.tools import register_all
 register_all()
 from drydock.compaction import maybe_compact, emergency_compact, is_context_length_error
 from drydock.loop_detect import LoopTracker
-from drydock.tuning import filter_tool_schemas
+from drydock.tuning import filter_tool_schemas, hallucinated_tool_message
 
 
 # ── Event types ───────────────────────────────────────────────────────────
@@ -164,7 +164,10 @@ def run(
 
             yield ToolStart(tc["name"], tc["input"])
 
-            result = execute(tc["name"], tc["input"], config)
+            # Redirect hallucinated tool names to a benign hint instead of a
+            # "tool not found" error the model would loop on.
+            halluc = hallucinated_tool_message(tc["name"])
+            result = halluc if halluc is not None else execute(tc["name"], tc["input"], config)
             # Guide (never block) on exact-repeat tool calls: prepend an
             # advisory note when the same call is made again.
             result = loop_tracker.annotate(tc["name"], tc["input"], result)

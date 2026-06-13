@@ -98,6 +98,29 @@ def strip_thinking_tokens(text: str) -> str:
     return text
 
 
+# Tool names small models hallucinate (from training on other agents' prompts).
+# Returning "tool not found" makes them loop; instead we hand back a benign,
+# directive result that points at the real tools. Ported from v2's
+# hallucinated-tool dropping.
+_HALLUCINATED_TOOLS: dict[str, str] = {
+    "exit_plan_mode": "Drydock has no plan mode. Proceed directly with the real tools.",
+    "enter_plan_mode": "Drydock has no plan mode. Proceed directly with the real tools.",
+    "plan": "Drydock has no plan mode. Proceed directly with the real tools.",
+    "lsp": "No LSP tool. To find code use Grep; to read a file use Read.",
+    "ralph_repo_index": "No such tool. Use Glob to list files and Grep to search them.",
+    "read_mcp_resource": "No MCP resources here. Use Read for files, Grep/Glob to search.",
+    "list_mcp_resources": "No MCP resources here. Use Glob to list files.",
+    "todo": "No todo tool. Just do the work with the real tools.",
+    "task": "No task tool. Do the work directly with Read/Write/Edit/Bash.",
+}
+
+
+def hallucinated_tool_message(name: str) -> str | None:
+    """A benign redirect for a hallucinated tool name, or None if `name` is a
+    real tool the model should actually be allowed to call."""
+    return _HALLUCINATED_TOOLS.get(name)
+
+
 def use_streaming(model: str | None, has_tools: bool) -> bool:
     """Whether to stream tokens for this turn.
 
