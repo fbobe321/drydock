@@ -71,6 +71,26 @@ def test_importing_agent_registers_builtin_tools():
     assert {"Read", "Write", "Edit", "Bash"} <= names
 
 
+def test_adaptive_reasoning_high_to_plan_then_low(monkeypatch):
+    efforts = []
+
+    def fake_stream(model, system, messages, tool_schemas, config):
+        efforts.append(config.get("reasoning_effort"))
+        if len(efforts) == 1:
+            # planning turn → makes a tool call, forcing a continuation turn
+            yield AssistantTurn("", [{"id": "1", "name": "Bash", "input": {"command": "ls"}}], 1, 1)
+        else:
+            yield AssistantTurn("done", [], 1, 1)
+
+    monkeypatch.setattr(agent_mod, "stream", fake_stream)
+    # execute() would run a real Bash; stub it to keep the test hermetic.
+    monkeypatch.setattr(agent_mod, "execute", lambda name, inp, cfg: "ok")
+    st = AgentState()
+    list(run("go", st, {"model": "gemma4"}, "sys"))
+    # First (planning) turn high, the continuation that consumes the tool result low.
+    assert efforts == ["high", "low"]
+
+
 def test_agent_retry_is_capped(monkeypatch):
     calls = {"n": 0}
 

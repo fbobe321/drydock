@@ -195,6 +195,12 @@ def stream(
     if config.get("temperature") is not None:
         kwargs["temperature"] = config["temperature"]
 
+    # Adaptive reasoning budget (harmony/gpt-oss style models accept this;
+    # endpoints without the knob ignore the extra field). Set per turn by the
+    # agent loop: high for planning, low for routine continuation.
+    if config.get("reasoning_effort"):
+        kwargs["reasoning_effort"] = config["reasoning_effort"]
+
     if not do_stream:
         # Non-streaming: one request, parse the complete message. This is the
         # reliable path for local models whose tool-call JSON breaks under

@@ -19,7 +19,11 @@ from drydock.tools import register_all
 register_all()
 from drydock.compaction import maybe_compact, emergency_compact, is_context_length_error
 from drydock.loop_detect import LoopTracker
-from drydock.tuning import filter_tool_schemas, hallucinated_tool_message
+from drydock.tuning import (
+    filter_tool_schemas,
+    hallucinated_tool_message,
+    thinking_level_for_turn,
+)
 
 
 # ── Event types ───────────────────────────────────────────────────────────
@@ -85,10 +89,12 @@ def run(
     tool_call_count = 0
     session_has_edited = False
     leaked_call_retries = 0
+    run_iteration = 0  # stream calls within THIS run() (resets per user message)
     loop_tracker = LoopTracker()
 
     while state.turn_count < max_turns:
         state.turn_count += 1
+        run_iteration += 1
         assistant_turn: AssistantTurn | None = None
 
         # Compact context if approaching limit
@@ -98,6 +104,14 @@ def run(
         turn_config = dict(config)
         if state.turn_count == 1 and config.get("force_first_tool", False):
             turn_config["tool_choice"] = "required"
+        # Adaptive reasoning budget: high to PLAN the response to the user's new
+        # message (first iteration of this run), low for routine continuation
+        # turns that just consume tool results — cuts latency without hurting
+        # correctness (verified: same answer, fewer tokens). The provider only
+        # forwards it to endpoints that accept reasoning_effort.
+        if "reasoning_effort" not in turn_config:
+            level = thinking_level_for_turn(run_iteration, is_user_turn=(run_iteration == 1))
+            turn_config["reasoning_effort"] = "high" if level == "high" else "low"
         # After many calls without editing, don't force but the nudge message handles it
 
         # Stream from LLM — with retry on context-length 400 error
