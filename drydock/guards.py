@@ -125,6 +125,32 @@ def stub_warning(path: str, content: str) -> str | None:
     return None
 
 
+# Git/SEARCH-REPLACE conflict markers at the start of a line. We key on the
+# 7-angle-bracket markers (essentially never legitimate file content) and NOT
+# on `=======`, which appears in decorative comment dividers.
+_CONFLICT_MARKER_RE = re.compile(r"^(?:<{7}|>{7})", re.MULTILINE)
+
+
+def has_conflict_markers(content: str) -> bool:
+    """True if content contains git / SEARCH-REPLACE conflict markers.
+
+    Gemma sometimes emits a malformed edit block as raw file content; writing
+    `<<<<<<< SEARCH` / `>>>>>>> REPLACE` verbatim corrupts the file and triggers
+    a retry loop. Ported from v2's search_replace conflict-marker guard."""
+    return bool(content) and bool(_CONFLICT_MARKER_RE.search(content))
+
+
+def conflict_marker_refusal(path: str) -> str:
+    """The string returned in place of writing conflict-marker content."""
+    return (
+        f"REFUSED: the content for {path} contains conflict markers "
+        f"(<<<<<<< / >>>>>>>). That looks like a malformed edit block, not real "
+        f"file content — writing it would corrupt the file. Send the final file "
+        f"content (or a clean Edit with old_string/new_string), without any "
+        f"<<<<<<< SEARCH / ======= / >>>>>>> REPLACE markers."
+    )
+
+
 def sibling_imports_warning(path: str, content: str) -> str | None:
     """Warn when a file imports a sibling module that doesn't exist on disk yet.
 

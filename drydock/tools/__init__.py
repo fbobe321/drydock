@@ -12,7 +12,12 @@ import subprocess
 from pathlib import Path
 
 from drydock.tool_registry import ToolDef, register
-from drydock.guards import write_warnings, python_syntax_warning
+from drydock.guards import (
+    conflict_marker_refusal,
+    has_conflict_markers,
+    python_syntax_warning,
+    write_warnings,
+)
 from drydock import bash_safety
 
 
@@ -168,6 +173,8 @@ def tool_write(params: dict, config: dict) -> str:
         return "Error: Write requires a non-empty file_path."
     fp = _resolve_path(fp, config)
     content = params.get("content", "")
+    if has_conflict_markers(content):
+        return conflict_marker_refusal(fp)
     prev = _snapshot(fp)
     try:
         Path(fp).parent.mkdir(parents=True, exist_ok=True)
@@ -214,6 +221,8 @@ def tool_edit(params: dict, config: dict) -> str:
     fp = _resolve_path(fp, config)
     old = params.get("old_string", "")
     new = params.get("new_string", "")
+    if has_conflict_markers(new):
+        return conflict_marker_refusal(fp)
     try:
         content = Path(fp).read_text(encoding="utf-8")
         if old not in content:

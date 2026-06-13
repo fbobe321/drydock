@@ -115,6 +115,37 @@ def test_tool_write_missing_path():
     assert "Error" in tool_write({"content": "x"}, {})
 
 
+def test_conflict_markers_detected_and_refused(tmp_path):
+    from drydock.guards import has_conflict_markers
+
+    assert has_conflict_markers("<<<<<<< SEARCH\nfoo\n=======\nbar\n>>>>>>> REPLACE\n")
+    assert has_conflict_markers("ok\n>>>>>>> REPLACE\n")
+    # Decorative `=======` dividers must NOT trip it (common in real code).
+    assert not has_conflict_markers("# =======================\nx = 1\n")
+    assert not has_conflict_markers("def f():\n    return 1\n")
+
+
+def test_tool_write_refuses_conflict_marker_content(tmp_path):
+    fp = str(tmp_path / "c.py")
+    out = tool_write(
+        {"file_path": fp, "content": "<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE\n"},
+        {},
+    )
+    assert out.startswith("REFUSED") and "conflict markers" in out
+    assert not Path(fp).exists()  # the corrupt write did not happen
+
+
+def test_tool_edit_refuses_conflict_marker_new_string(tmp_path):
+    fp = tmp_path / "e.py"
+    fp.write_text("x = 1\n")
+    out = tool_edit(
+        {"file_path": str(fp), "old_string": "x = 1", "new_string": ">>>>>>> REPLACE"},
+        {},
+    )
+    assert out.startswith("REFUSED")
+    assert fp.read_text() == "x = 1\n"  # unchanged
+
+
 def test_tool_write_appends_sibling_imports_warning(tmp_path):
     pkg = tmp_path / "proj"
     pkg.mkdir()
