@@ -54,11 +54,28 @@ def loop_note(name: str, count: int) -> str | None:
     )
 
 
+def path_thrash_note(path: str, count: int) -> str | None:
+    """Advisory for the *count*-th write/edit to the same path this session.
+
+    Distinct from exact-repeat detection: this fires even when the CONTENT
+    differs each time — the signal that the model is thrashing one file instead
+    of making one correct change. Quiet until the 3rd write to avoid noise.
+    """
+    if count < 3:
+        return None
+    return (
+        f"[NOTE: this is write #{count} to {path} this session. Repeatedly "
+        f"rewriting the same file usually means a wrong approach — re-read the "
+        f"current file, make ONE correct change, then move on.]"
+    )
+
+
 class LoopTracker:
     """Counts identical tool calls across a run and produces advisory notes."""
 
     def __init__(self) -> None:
         self._counts: dict[str, int] = {}
+        self._path_writes: dict[str, int] = {}
 
     def record(self, name: str, inputs: dict) -> int:
         """Record a call; return how many times this exact call has occurred."""
@@ -66,10 +83,22 @@ class LoopTracker:
         self._counts[sig] = self._counts.get(sig, 0) + 1
         return self._counts[sig]
 
+    def record_path_write(self, name: str, inputs: dict) -> str | None:
+        """Track Write/Edit per target path and return a thrash note if the
+        same path has now been written 3+ times (regardless of content)."""
+        if name not in ("Write", "Edit"):
+            return None
+        path = inputs.get("file_path")
+        if not path:
+            return None
+        self._path_writes[path] = self._path_writes.get(path, 0) + 1
+        return path_thrash_note(path, self._path_writes[path])
+
     def annotate(self, name: str, inputs: dict, result: str) -> str:
-        """Record the call and prepend an advisory note to its result if it
-        is a repeat. Returns the (possibly annotated) result — never raises.
+        """Record the call and prepend advisory note(s) to its result for an
+        exact repeat and/or same-path write thrash. Never raises.
         """
         count = self.record(name, inputs)
-        note = loop_note(name, count)
-        return f"{note}\n{result}" if note else result
+        notes = [loop_note(name, count), self.record_path_write(name, inputs)]
+        prefix = "\n".join(n for n in notes if n)
+        return f"{prefix}\n{result}" if prefix else result
