@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 import re
+from pathlib import Path
 
 
 def _is_python(path: str) -> bool:
@@ -124,6 +125,56 @@ def stub_warning(path: str, content: str) -> str | None:
     return None
 
 
+def sibling_imports_warning(path: str, content: str) -> str | None:
+    """Warn when a file imports a sibling module that doesn't exist on disk yet.
+
+    Catches the classic "wrote __init__.py with `from .cli import CLI` but never
+    wrote cli.py" bug. Only RELATIVE imports (`.x`) and absolute imports of the
+    SAME package (`pkg.x`, where pkg is the containing directory) are checked;
+    stdlib/third-party imports are ignored. Ported from v2's
+    _check_missing_sibling_imports, where it was earned from real package builds.
+    """
+    if not _is_python(path) or not content.strip():
+        return None
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return None  # syntax warning already covers this
+
+    pkg_dir = Path(path).parent
+    pkg_name = pkg_dir.name
+    if not pkg_name:
+        return None
+
+    missing: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level == 1:                      # from .x import Y
+            sub = node.module or ""
+        elif (node.level == 0 and node.module    # from pkg.x import Y
+              and node.module.startswith(pkg_name + ".")):
+            sub = node.module[len(pkg_name) + 1:]
+        else:
+            continue
+        first = sub.split(".")[0]
+        if not first or first == "__init__":
+            continue
+        if not (pkg_dir / f"{first}.py").exists() \
+                and not (pkg_dir / first / "__init__.py").exists():
+            missing.add(first)
+
+    if not missing:
+        return None
+    names = ", ".join(sorted(missing))
+    example = sorted(missing)[0]
+    return (
+        f"[WARNING: {path} imports sibling module(s) that don't exist yet: "
+        f"{names}. Create them (e.g. {pkg_name}/{example}.py) before relying on "
+        f"this import.]"
+    )
+
+
 def write_warnings(path: str, content: str) -> list[str]:
     """All advisory warnings for a freshly written file (order: syntax first).
     Syntax error short-circuits the rest (they'd be noise)."""
@@ -131,7 +182,11 @@ def write_warnings(path: str, content: str) -> list[str]:
     if syntax:
         return [syntax]
     out = []
-    for w in (main_entry_warning(path, content), stub_warning(path, content)):
+    for w in (
+        main_entry_warning(path, content),
+        stub_warning(path, content),
+        sibling_imports_warning(path, content),
+    ):
         if w:
             out.append(w)
     return out

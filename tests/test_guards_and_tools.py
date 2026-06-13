@@ -6,10 +6,53 @@ from pathlib import Path
 from drydock.guards import (
     main_entry_warning,
     python_syntax_warning,
+    sibling_imports_warning,
     stub_warning,
     write_warnings,
 )
 from drydock.tools import tool_edit, tool_write
+
+
+# ── sibling-imports guard (ported from v2) ──────────────────────────────────
+
+def test_sibling_imports_warns_on_missing_relative_module(tmp_path):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    init = pkg / "__init__.py"
+    w = sibling_imports_warning(str(init), "from .cli import CLI\n")
+    assert w and "cli" in w and "don't exist" in w
+
+
+def test_sibling_imports_quiet_when_module_exists(tmp_path):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    (pkg / "cli.py").write_text("class CLI: ...\n")
+    init = pkg / "__init__.py"
+    assert sibling_imports_warning(str(init), "from .cli import CLI\n") is None
+
+
+def test_sibling_imports_quiet_for_subpackage(tmp_path):
+    pkg = tmp_path / "mypkg"
+    (pkg / "sub").mkdir(parents=True)
+    (pkg / "sub" / "__init__.py").write_text("")
+    init = pkg / "__init__.py"
+    assert sibling_imports_warning(str(init), "from .sub import x\n") is None
+
+
+def test_sibling_imports_same_package_absolute(tmp_path):
+    pkg = tmp_path / "geom"
+    pkg.mkdir()
+    init = pkg / "__init__.py"
+    w = sibling_imports_warning(str(init), "from geom.shapes import area\n")
+    assert w and "shapes" in w
+
+
+def test_sibling_imports_ignores_stdlib_and_thirdparty(tmp_path):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    init = pkg / "__init__.py"
+    src = "import os\nimport sys\nfrom collections import OrderedDict\nimport requests\n"
+    assert sibling_imports_warning(str(init), src) is None
 
 
 # ── guards ────────────────────────────────────────────────────────────────
@@ -70,6 +113,16 @@ def test_tool_write_clean_no_warning(tmp_path):
 
 def test_tool_write_missing_path():
     assert "Error" in tool_write({"content": "x"}, {})
+
+
+def test_tool_write_appends_sibling_imports_warning(tmp_path):
+    pkg = tmp_path / "proj"
+    pkg.mkdir()
+    out = tool_write(
+        {"file_path": str(pkg / "__init__.py"), "content": "from .core import run\n"},
+        {},
+    )
+    assert "Wrote" in out and "core" in out and "don't exist" in out
 
 
 # ── tool_edit ─────────────────────────────────────────────────────────────
