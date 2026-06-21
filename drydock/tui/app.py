@@ -75,10 +75,37 @@ class DrydockApp(App):
     }
     """
 
+    # Text selection + clipboard copy is enabled (Textual default). The fix
+    # that matters: Ctrl+C must COPY the selected text, not quit — quitting on
+    # Ctrl+C made it impossible to copy an error off the screen. Quit moved to
+    # Ctrl+Q. Shift+drag also works (terminal-native selection) in most emulators.
+    ALLOW_SELECT = True
+
+    # Quit is Ctrl+D (or the /quit command). NOT Ctrl+Q — that's XON/XOFF flow
+    # control in many terminals and gets eaten before the app sees it. Ctrl+C is
+    # freed for copy (Textual copies the selection; our action adds feedback).
     BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit", priority=True),
+        Binding("ctrl+c", "copy_selection", "Copy", priority=True),
+        Binding("ctrl+d", "quit", "Quit", priority=True),
         Binding("ctrl+o", "toggle_tools", "Expand/collapse tools"),
     ]
+
+    def action_copy_selection(self) -> None:
+        """Copy the on-screen text selection to the system clipboard."""
+        try:
+            selected = self.screen.get_selected_text()
+        except Exception:  # noqa: BLE001
+            selected = None
+        if selected:
+            self.copy_to_clipboard(selected)
+            self.notify(f"Copied {len(selected)} chars to clipboard", timeout=2)
+        else:
+            self.notify(
+                "Nothing selected — drag to select text, then Ctrl+C. "
+                "(Shift+drag uses your terminal's own copy.)",
+                severity="warning",
+                timeout=4,
+            )
 
     def __init__(self, config: dict) -> None:
         super().__init__()
@@ -142,7 +169,7 @@ class DrydockApp(App):
         queued = f"  ·  {len(self._queue)} queued" if self._queue else ""
         return (
             f"{flag}  ·  model: {model}  ·  {toks}{queued}"
-            f"  ·  Ctrl+O details · Ctrl+C quit"
+            f"  ·  Ctrl+C copy · Ctrl+O tools · Ctrl+D quit"
         )
 
     def _refresh_status(self) -> None:
