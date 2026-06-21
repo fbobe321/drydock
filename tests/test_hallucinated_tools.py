@@ -8,12 +8,13 @@ from drydock.tuning import hallucinated_tool_message
 
 
 def test_known_hallucinated_names_get_redirect():
-    for name in ["exit_plan_mode", "lsp", "read_mcp_resource", "todo", "ralph_repo_index"]:
+    for name in ["exit_plan_mode", "lsp", "read_mcp_resource", "ralph_repo_index"]:
         assert hallucinated_tool_message(name) is not None
 
 
 def test_real_tools_are_not_redirected():
-    for name in ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]:
+    # `todo` and `task` are real tools now — they must NOT be redirected.
+    for name in ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "todo", "task"]:
         assert hallucinated_tool_message(name) is None
 
 

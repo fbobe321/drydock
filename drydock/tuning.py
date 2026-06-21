@@ -24,10 +24,12 @@ GEMMA_DISABLED_TOOLS: frozenset[str] = frozenset({
     # `todo` is re-enabled (v3.0.13): the new single-string checklist tool is
     # far simpler than the fork's nested task_* tools that looped/validation-
     # errored on Gemma, and repeat-pruning now starves any call-loop.
+    # `task` is re-enabled (v3.0.16) as a SINGLE read-only sub-agent call that
+    # returns a summary — not the fork's stateful task graph. It can't recurse
+    # (no `task` in its own toolset) and is hard-capped, so it can't loop.
     "ask_user_question",
     "task_create",
     "task_update",
-    "task",
     "invoke_skill",
     "tool_search",
 })
@@ -85,9 +87,10 @@ _DEFAULT_SYSTEM_PROMPT = (
     "inspect what you need, make the change, verify it, and prefer doing over "
     "explaining. When the task is complete, stop and give a short summary.\n"
     "For a task with several distinct steps, call the `todo` tool once at the "
-    "start to lay out the plan, then call it again to flip a step to done and "
-    "the next to in-progress as you finish each — don't write a TODO.md file "
-    "for this."
+    "start to lay out the plan, then START WORKING THROUGH IT IMMEDIATELY — do "
+    "NOT stop to ask whether to proceed. Call `todo` again to flip a step to "
+    "done and the next to in-progress as you finish each, and only stop when "
+    "every step is done. Don't write a TODO.md file for this."
 )
 
 # Short, imperative prompt. Small local models do better with "act now" than
@@ -106,8 +109,10 @@ _GEMMA_SYSTEM_PROMPT = (
     "check your work. One clear action per step. Stop when the task is done "
     "and give a one-line summary.\n"
     "If the task has several steps, FIRST call the `todo` tool with the plan "
-    "(one task per line, '[ ]'/'[~]'/'[x]'), then call `todo` again to update "
-    "it as you finish each step. Do not write a TODO.md file for this."
+    "(one task per line, '[ ]'/'[~]'/'[x]'), then IMMEDIATELY start doing the "
+    "steps — do NOT stop to ask whether to proceed. Call `todo` again to update "
+    "it as you finish each step, and only stop when every step is done. Do not "
+    "write a TODO.md file for this."
 )
 
 
@@ -147,8 +152,6 @@ _HALLUCINATED_TOOLS: dict[str, str] = {
     "ralph_repo_index": "No such tool. Use Glob to list files and Grep to search them.",
     "read_mcp_resource": "No MCP resources here. Use Read for files, Grep/Glob to search.",
     "list_mcp_resources": "No MCP resources here. Use Glob to list files.",
-    "todo": "No todo tool. Just do the work with the real tools.",
-    "task": "No task tool. Do the work directly with Read/Write/Edit/Bash.",
 }
 
 

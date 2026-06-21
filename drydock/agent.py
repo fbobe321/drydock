@@ -4,8 +4,20 @@ DryDock v3 — clean, provider-agnostic, no model-specific hacks.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Generator
+
+# Max CONSECUTIVE text-only stalls (counter resets on any real tool call) we
+# nudge through when the model leaves its own plan unfinished. Bounds a true
+# stall-loop while letting a long, productive plan run as far as it needs.
+PLAN_CONTINUE_CAP = 3
+
+
+def _plan_has_unfinished(config: dict) -> bool:
+    """True if the model laid out a `todo` plan that still has non-done items."""
+    todo = config.get("_todo")
+    return bool(todo) and any(status != "done" for _, status in todo)
 
 from drydock.providers import stream, AssistantTurn, TextChunk
 from drydock.tool_registry import schemas, execute
@@ -87,9 +99,14 @@ def run(
 
     max_turns = config.get("max_turns", 200)
     max_tool_calls = config.get("max_tool_calls", 0)  # 0 = unlimited
+    # When set (sub-agents pass this), the model is offered ONLY these tools and
+    # a call to anything else is refused — never executed. Keeps a read-only
+    # sub-agent read-only and stops it from recursing into `task`.
+    allow = config.get("tool_allowlist")
     tool_call_count = 0
     session_has_edited = False
     leaked_call_retries = 0
+    plan_continue_nudges = 0  # consecutive "you stopped mid-plan" nudges
     run_iteration = 0  # stream calls within THIS run() (resets per user message)
     loop_tracker = LoopTracker()
 
@@ -122,11 +139,14 @@ def run(
         retries = 0
         while retries < 2:
             try:
+                available = schemas()
+                if allow is not None:
+                    available = [s for s in available if s.get("name") in allow]
                 for event in stream(
                     model=turn_config["model"],
                     system=system_prompt,
                     messages=state.messages,
-                    tool_schemas=filter_tool_schemas(schemas(), turn_config.get("model")),
+                    tool_schemas=filter_tool_schemas(available, turn_config.get("model")),
                     config=turn_config,
                 ):
                     if isinstance(event, TextChunk):
@@ -177,6 +197,26 @@ def run(
                     ),
                 })
                 continue
+            # Don't stall mid-plan: if the model laid out a todo and still has
+            # unfinished steps, nudge it to keep going instead of waiting for
+            # the user to say "proceed". Capped (consecutive) + env-gated so it
+            # can never wedge; resets to 0 on any real tool call below.
+            if (
+                _plan_has_unfinished(config)
+                and plan_continue_nudges < PLAN_CONTINUE_CAP
+                and not os.environ.get("DRYDOCK_PLAN_AUTOCONTINUE_DISABLE")
+            ):
+                plan_continue_nudges += 1
+                state.messages.append({
+                    "role": "user",
+                    "content": (
+                        "[SYSTEM] Your plan still has unfinished steps. Keep "
+                        "going now — do the next step with a tool call; do NOT "
+                        "stop to ask whether to proceed. If every step is truly "
+                        "done, call `todo` once more marking them all [x]."
+                    ),
+                })
+                continue
             break
 
         # Execute each tool call
@@ -200,7 +240,16 @@ def run(
             # Redirect hallucinated tool names to a benign hint instead of a
             # "tool not found" error the model would loop on.
             halluc = hallucinated_tool_message(tc["name"])
-            result = halluc if halluc is not None else execute(tc["name"], tc["input"], config)
+            if halluc is not None:
+                result = halluc
+            elif allow is not None and tc["name"] not in allow:
+                result = (
+                    f"[The '{tc['name']}' tool is not available here. You may use "
+                    f"only: {', '.join(allow)}. Use one of those, or reply with "
+                    "your final summary.]"
+                )
+            else:
+                result = execute(tc["name"], tc["input"], config)
             # Guide (never block) on exact-repeat tool calls: prepend an
             # advisory note when the same call is made again.
             result = loop_tracker.annotate(tc["name"], tc["input"], result)
@@ -214,6 +263,11 @@ def run(
                 "name": tc["name"],
                 "content": result,
             })
+
+        # Real progress this turn — reset the consecutive stall-nudge counter so
+        # a long, productive plan can run as far as it needs (the cap only
+        # bounds back-to-back stalls).
+        plan_continue_nudges = 0
 
         # Nudge: if past 15 tool calls without any edits, inject gentle guidance
         if tool_call_count == 15 and not session_has_edited and config.get("force_first_tool"):

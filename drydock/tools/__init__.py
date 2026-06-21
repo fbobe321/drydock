@@ -134,6 +134,31 @@ SCHEMAS = [
             "required": ["tasks"],
         },
     },
+    {
+        "name": "task",
+        "description": (
+            "Delegate a focused, READ-ONLY investigation to a sub-agent that "
+            "runs in its OWN fresh context and can only Read/Glob/Grep/Bash. It "
+            "explores, then returns a concise summary — keeping a big search out "
+            "of your context. Use it for a self-contained question like 'where "
+            "is auth handled?' or 'how does module X work?'. It CANNOT edit "
+            "files, so act on its summary yourself. Give it one clear task."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The investigation task, stated fully and self-contained.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Optional 3-5 word label for the task.",
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
 ]
 
 # ── Tool implementations ──────────────────────────────────────────────────
@@ -504,6 +529,55 @@ def tool_todo(params: dict, config: dict) -> str:
     return f"Plan updated: {len(items)} tasks ({done} done, {doing} in progress)."
 
 
+# ── Read-only sub-agent (the `task` tool) ─────────────────────────────────
+
+# Tools a sub-agent may use. Excludes Write/Edit/todo (no silent mutations the
+# parent can't see) and `task` itself (no recursion). Bash is included for real
+# exploration (ls/cat/grep/find/git log) and is bounded by the same bash_safety.
+SUBAGENT_TOOLS = ("Read", "Glob", "Grep", "Bash")
+
+_SUBAGENT_SYSTEM = (
+    "You are a focused exploration sub-agent inside Drydock. You have read-only "
+    "tools: Read, Glob, Grep, and Bash (use Bash only to INSPECT — ls, cat, "
+    "grep, find, git log — never to modify files). Investigate the task you are "
+    "given, then STOP and reply with a concise, factual summary of what you "
+    "found: concrete file:line references and the key code, not narration. Do "
+    "NOT try to edit or create files — the main agent acts on your findings."
+)
+
+
+def tool_task(params: dict, config: dict) -> str:
+    """Spawn a read-only sub-agent with a FRESH context for a focused
+    exploration task, returning only its final summary. Keeps big searches out
+    of the main agent's context. Cannot recurse (no `task` tool) and cannot
+    write (no Write/Edit), so it can never corrupt the parent's work."""
+    prompt = (params.get("prompt") or params.get("description") or "").strip()
+    if not prompt:
+        return "Error: `task` needs a `prompt` describing what to investigate."
+    # Lazy import to avoid a tools <-> agent import cycle.
+    from drydock.agent import run as agent_run, AgentState, TurnDone
+
+    sub_state = AgentState()
+    sub_config = dict(config)
+    sub_config["tool_allowlist"] = list(SUBAGENT_TOOLS)
+    sub_config["force_first_tool"] = False
+    sub_config["max_turns"] = 24       # bound the helper hard
+    sub_config["max_tool_calls"] = 20
+    sub_config.pop("_todo", None)      # the sub-agent keeps no checklist of its own
+    sub_config.pop("_plan_autocontinue", None)
+    steps = 0
+    try:
+        for ev in agent_run(prompt, sub_state, sub_config, _SUBAGENT_SYSTEM):
+            if isinstance(ev, TurnDone):
+                steps += 1
+    except Exception as e:  # a sub-agent must never crash the parent turn
+        return f"[sub-agent error: {e}]"
+    for msg in reversed(sub_state.messages):
+        if msg.get("role") == "assistant" and (msg.get("content") or "").strip():
+            return msg["content"].strip()
+    return f"[sub-agent finished {steps} step(s) with no summary]"
+
+
 # ── Register all tools ────────────────────────────────────────────────────
 
 _TOOLS = [
@@ -514,6 +588,7 @@ _TOOLS = [
     ("Glob", tool_glob, True),
     ("Grep", tool_grep, True),
     ("todo", tool_todo, False),
+    ("task", tool_task, True),
 ]
 
 def register_all():
@@ -522,9 +597,10 @@ def register_all():
         func = {
             "Read": tool_read, "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
-            "todo": tool_todo,
+            "todo": tool_todo, "task": tool_task,
         }[name]
-        read_only = name in ("Read", "Glob", "Grep")
+        # `task` is read-only w.r.t. the parent's files (it can't Write/Edit).
+        read_only = name in ("Read", "Glob", "Grep", "task")
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
 
 register_all()
