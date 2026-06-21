@@ -235,7 +235,9 @@ def main():
 
     config = {
         **cfg,
-        "context_limit": 131072,
+        # Match the llama.cpp server's -c (gemma4 runs at 64k). Drives both the
+        # status-bar context gauge and when compaction kicks in.
+        "context_limit": 65536,
         "max_tool_calls": args.max_tool_calls,
         "force_first_tool": args.force_first_tool,
         "cwd": os.getcwd(),

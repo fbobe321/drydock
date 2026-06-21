@@ -123,7 +123,9 @@ class DrydockApp(App):
                 event.stop()
 
     def action_copy_selection(self) -> None:
-        """Copy the on-screen text selection to the system clipboard."""
+        """Ctrl+C: copy an in-app selection if there is one; otherwise it's the
+        exit key — press it twice in a row (within ~2s) to quit, matching the
+        familiar Ctrl+C-to-exit muscle memory. (Ctrl+D and /quit also exit.)"""
         try:
             selected = self.screen.get_selected_text()
         except Exception:  # noqa: BLE001
@@ -131,13 +133,18 @@ class DrydockApp(App):
         if selected:
             self.copy_to_clipboard(selected)
             self.notify(f"Copied {len(selected)} chars to clipboard", timeout=2)
-        else:
-            self.notify(
-                "Nothing selected — drag to select text, then Ctrl+C. "
-                "(Shift+drag uses your terminal's own copy.)",
-                severity="warning",
-                timeout=4,
-            )
+            self._ctrl_c_armed = False
+            return
+        # No selection → double-Ctrl+C to exit.
+        if self._ctrl_c_armed:
+            self.exit()
+            return
+        self._ctrl_c_armed = True
+        self.notify("Press Ctrl+C again to exit", timeout=2)
+        self.set_timer(2.0, self._disarm_ctrl_c)
+
+    def _disarm_ctrl_c(self) -> None:
+        self._ctrl_c_armed = False
 
     def __init__(self, config: dict) -> None:
         super().__init__()
@@ -148,6 +155,8 @@ class DrydockApp(App):
         self._last_card: ToolCard | None = None
         self._busy = False
         self._queue: list[str] = []  # prompts submitted while a turn is running
+        self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
+        self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
 
         # The agent (worker thread) calls this to gate a sensitive command on
         # user approval. Bridges to the UI thread and blocks until the user
@@ -196,12 +205,15 @@ class DrydockApp(App):
 
     def _status_text(self) -> str:
         model = self.config.get("model", "?")
-        toks = f"{self.state.total_input_tokens}in/{self.state.total_output_tokens}out"
+        limit = self.config.get("context_limit", 65536) or 65536
+        used = self._ctx_tokens
+        pct = min(100, round(used / limit * 100)) if limit else 0
+        ctx = f"ctx {used:,}/{limit // 1000}k ({pct}%)"
         flag = "⏳ working" if self._busy else "⚓ ready"
         queued = f"  ·  {len(self._queue)} queued" if self._queue else ""
         return (
-            f"{flag}  ·  model: {model}  ·  {toks}{queued}"
-            f"  ·  Ctrl+C copy · PgUp/PgDn scroll · Ctrl+O tools · Ctrl+D quit"
+            f"{flag}  ·  {model}  ·  Ctrl+C×2 quit · PgUp/PgDn scroll · "
+            f"Ctrl+O tools{queued}  ·  {ctx}"
         )
 
     def _refresh_status(self) -> None:
@@ -374,6 +386,8 @@ class DrydockApp(App):
         self._scroll.scroll_end(animate=False)
 
     def on_agent_turn_done(self, m: AgentTurnDone) -> None:
+        # The last turn's prompt tokens are the current context-window usage.
+        self._ctx_tokens = m.input_tokens
         self._refresh_status()
 
     def on_agent_finished(self, m: AgentFinished) -> None:
