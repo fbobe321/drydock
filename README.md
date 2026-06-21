@@ -20,21 +20,21 @@ your box.
 
 ## Status
 
-Working. The Textual TUI is the default surface: a scrolling transcript with
-streamed assistant text, collapsible tool cards, and a multi-line prompt. The
-agent loop, OpenAI-compatible provider, two-tier compaction, and the core tools
-(Read/Write/Edit/Bash/Glob/Grep) are in. Reliability hardening for Gemma is
-ported and verified. PyPI/Docker distribution returns once the PyPI account is
-reinstated.
+Shipping. Published on PyPI as **`drydock-cli`** (v3.x). The Textual TUI is the
+default surface: a scrolling transcript with streamed assistant text, collapsible
+tool cards, a live nautical activity line, and a multi-line prompt. The agent
+loop, OpenAI-compatible provider, two-tier compaction, and the core tools
+(Read/Write/Edit/Bash/Glob/Grep) are in, with Gemma reliability hardening verified.
 
-## Install (from source)
+## Install
 
 ```bash
-git clone https://github.com/fbobe321/drydock-v3.git
-cd drydock-v3
-pip install -e .
+pip install drydock-cli
 drydock
 ```
+
+Requires Python 3.12+. From source instead:
+`git clone https://github.com/fbobe321/drydock-v3.git && cd drydock-v3 && pip install -e .`
 
 On first launch with no config, Drydock probes localhost for a running local
 LLM (llama.cpp/vLLM `:8000`, Ollama `:11434`, LM Studio `:1234`) and wires up
@@ -46,9 +46,14 @@ the first one it finds — no account or API-key prompt. Override anytime with
 Type a task and press **Enter**. Drydock reads/writes/edits files and runs
 commands to do the work, showing each as a collapsible tool card.
 
-- **Ctrl+J** — newline (compose multi-line prompts); **Enter** submits
-- **↑ / ↓** — recall command history (persists across sessions)
-- **Ctrl+O** — expand/collapse tool output
+- **Enter** submits · **Ctrl+J** newline (multi-line prompts)
+- **↑ / ↓** recall command history (persists across sessions)
+- **PgUp / PgDn** (and **Ctrl+Home/End**) scroll the transcript
+- **Ctrl+O** expand/collapse tool output · **drag + Ctrl+C** copy a selection
+- **Ctrl+C twice** (or **Ctrl+D**, `/quit`) to exit
+- A live activity line shows progress while it works:
+  `◡ Keelhauling…  (12s · ↓ 6.2k tokens · thinking with high effort)`
+- Submit while it's working and the prompt **queues** (drains in order)
 - Slash commands: `/model [name]` · `/cwd [path]` · `/undo` (revert last write)
   · `/back` (rewind last turn) · `/status` · `/clear` · `/help` · `/quit`
 
@@ -70,6 +75,21 @@ blocked:
 
 Point it at a local OpenAI-compatible endpoint (e.g. llama.cpp's `server-cuda`
 serving Gemma 4 26B).
+
+## Model server (reference setup)
+
+Drydock is provider-agnostic, but it's tuned and measured against this rig:
+
+- **Model:** Gemma-4-26B-A4B-it (26B MoE, ~4B active/token), Unsloth `Q3_K_M`
+  GGUF, served by `ghcr.io/ggml-org/llama.cpp:server-cuda` with `--jinja`.
+- **GPUs:** 2× NVIDIA RTX 4060 Ti 16GB. The Q3_K_M weights (~13 GB) fit on a
+  **single 16 GB card**, so each GPU runs a **full, independent instance** —
+  two cards give two parallel instances for throughput; the model is **not**
+  tensor-split or "pooled" across both.
+- **Context:** 64k (`-c 65536`) with `q8_0` KV-cache quantization
+  (`-ctk q8_0 -ctv q8_0`) — 64k @ q8 fits roughly the same VRAM as 32k @ f16.
+- **Throughput:** ~**64 tok/s** decode, ~94 tok/s prompt (per instance, Q3_K_M).
+- **Minimum:** any single 16 GB+ CUDA card runs it.
 
 ## Principles
 

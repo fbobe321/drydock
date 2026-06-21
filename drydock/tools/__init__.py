@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import difflib
 import glob as _glob
 import subprocess
 from pathlib import Path
@@ -222,6 +223,26 @@ def _fuzzy_find(content: str, target: str) -> str | None:
     return None
 
 
+def _closest_snippet(content: str, old: str, max_chars: int = 700) -> str | None:
+    """The chunk of *content* most similar to *old*, so a failed Edit can show
+    the model the REAL current text to copy instead of guessing again. Returns
+    None if nothing is reasonably close (avoids misleading the model)."""
+    target = old.strip()
+    if not target:
+        return None
+    lines = content.split("\n")
+    window = max(1, target.count("\n") + 1)
+    best_ratio, best_i = 0.0, -1
+    for i in range(max(1, len(lines) - window + 1)):
+        cand = "\n".join(lines[i:i + window])
+        r = difflib.SequenceMatcher(None, target, cand).ratio()
+        if r > best_ratio:
+            best_ratio, best_i = r, i
+    if best_i >= 0 and best_ratio >= 0.5:
+        return "\n".join(lines[best_i:best_i + window])[:max_chars]
+    return None
+
+
 def _infer_edit_target(directory: Path, old: str) -> Path | None:
     """If a directory was passed instead of a file, find the single file under
     it whose content contains old_string. Returns None if zero or many match
@@ -280,6 +301,16 @@ def tool_edit(params: dict, config: dict) -> str:
             if fuzzy:
                 old = fuzzy
             else:
+                # Show the closest real text so the next edit is a copy, not a
+                # re-guess — this is what breaks the same-file edit-thrash loop.
+                snippet = _closest_snippet(content, old)
+                if snippet:
+                    return (
+                        f"Error: old_string not found in {fp}. The closest text "
+                        f"actually in the file is:\n---\n{snippet}\n---\n"
+                        f"Copy that EXACTLY (including indentation) as old_string, "
+                        f"or use Read to see the full current file."
+                    )
                 return (
                     f"Error: old_string not found in {fp}. Read the file first "
                     f"to copy the exact text (including indentation)."

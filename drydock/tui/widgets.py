@@ -1,6 +1,7 @@
 """Transcript widgets: user turns, streaming assistant text, tool cards."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from textual.message import Message
@@ -11,11 +12,16 @@ from textual.widgets import Collapsible, Static, TextArea
 # (they return rather than raise, so the agent loop never crashes on a bad
 # command). The TUI uses this to mark a card ✓ or ✗.
 _FAILURE_PREFIXES = ("Error", "REFUSED")
+# Advisory loop/thrash notes are PREPENDED to a tool result as one or more
+# "[NOTE: …]" lines (see loop_detect.annotate). Strip them before judging
+# success, or a failed Edit behind a "[NOTE: write #9…]" reads as ✓.
+_LEADING_NOTES = re.compile(r"^\s*(?:\[NOTE:[^\]]*\]\s*)+")
 
 
 def result_is_ok(result: str) -> bool:
     """Whether a tool result should render as success (✓) vs failure (✗)."""
-    return not result.lstrip().startswith(_FAILURE_PREFIXES)
+    cleaned = _LEADING_NOTES.sub("", result or "")
+    return not cleaned.lstrip().startswith(_FAILURE_PREFIXES)
 
 
 _TOOL_BODY_MAX = 8000
