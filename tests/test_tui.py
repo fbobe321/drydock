@@ -298,7 +298,7 @@ def test_busy_input_is_queued_and_drained():
             await pilot.pause()
             assert started == ["first task"]
             assert app._queue == ["second task"]
-            assert "1 queued" in app._status_text()
+            assert "1 queued" in app._working_text()
 
             # When the first turn finishes, the queued one drains automatically.
             app.post_message(AgentFinished())

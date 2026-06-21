@@ -13,7 +13,7 @@ import time
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 from drydock.agent import (
@@ -50,9 +50,9 @@ BANNER = (
     "  a local coding agent — your model, your machine\n"
 )
 
-# Animated "working" line: a sparkle spinner + a whimsical gerund + elapsed time
-# + streamed-token count, in the spirit of Claude Code's status line.
-_SPINNER = "✶✸✹✺✹✸"
+# Animated "working" line: a turning-helm arc spinner + a nautical gerund +
+# elapsed time + streamed-token count. Rendered in-line above the status bar.
+_SPINNER = "◜◠◝◞◡◟"
 _WORKING_WORDS = [
     "Battening", "Splicing", "Hoisting", "Heaving", "Trimming", "Tacking",
     "Mooring", "Charting", "Navigating", "Sounding", "Caulking", "Rigging",
@@ -90,14 +90,16 @@ class DrydockApp(App):
     .tool-card.ok { border-left: thick #2e8b6b; }
     .tool-card.fail { border-left: thick #b3503e; }
     .tool-body { color: #9bb4c0; padding: 0 1; }
+    /* One bottom-docked footer holds, top→bottom: working-line, prompt, status. */
+    #footer { dock: bottom; height: auto; background: #0b1f2a; }
     #prompt {
-        dock: bottom; margin: 1 2; border: round #2e5a6b; background: #0e2731;
+        margin: 1 2; border: round #2e5a6b; background: #0e2731;
         height: auto; min-height: 3; max-height: 12;
     }
     #prompt:focus { border: round #58c4dc; }
-    #status {
-        dock: bottom; height: 1; color: #5e7a88; padding: 0 2; background: #0b1f2a;
-    }
+    #status { height: 1; color: #5e7a88; padding: 0 2; background: #0b1f2a; }
+    /* In-line activity line; height auto → 0 lines when idle (empty content). */
+    #working { height: auto; color: #6fcfc0; padding: 0 2; background: #0b1f2a; }
     """
 
     # Text selection + clipboard copy is enabled (Textual default). The fix
@@ -213,8 +215,10 @@ class DrydockApp(App):
     def compose(self) -> ComposeResult:
         yield Static(BANNER, id="banner")
         yield VerticalScroll(id="transcript")
-        yield Static(self._status_text(), id="status")
-        yield PromptArea(id="prompt")
+        with Vertical(id="footer"):
+            yield Static("", id="working")  # in-line activity (empty when idle)
+            yield PromptArea(id="prompt")
+            yield Static(self._status_text(), id="status")
 
     def on_mount(self) -> None:
         prompt = self.query_one("#prompt", PromptArea)
@@ -240,27 +244,32 @@ class DrydockApp(App):
             self._refresh_status()
 
     def _status_text(self) -> str:
-        if self._busy:
-            spin = _SPINNER[self._spinner_i % len(_SPINNER)]
-            elapsed = _fmt_elapsed(time.monotonic() - self._work_start)
-            toks = _fmt_tokens(self._work_chars // 4)
-            queued = f" · {len(self._queue)} queued" if self._queue else ""
-            return (
-                f"{spin} {self._work_word}…  "
-                f"({elapsed} · ↓ {toks} tokens{queued})"
-            )
+        """The persistent footer — always shows the key commands + ctx, busy or
+        not (the live activity is the separate in-line #working line)."""
         model = self.config.get("model", "?")
         limit = self.config.get("context_limit", 65536) or 65536
         used = self._ctx_tokens
         pct = min(100, round(used / limit * 100)) if limit else 0
         ctx = f"ctx {used:,}/{limit // 1000}k ({pct}%)"
+        flag = "⚓ working" if self._busy else "⚓ ready"
         return (
-            f"⚓ ready  ·  {model}  ·  Ctrl+C×2 quit · PgUp/PgDn scroll · "
+            f"{flag}  ·  {model}  ·  Ctrl+C×2 quit · PgUp/PgDn scroll · "
             f"Ctrl+O details  ·  {ctx}"
         )
 
+    def _working_text(self) -> str:
+        """The in-line activity line (empty when idle, so it takes no space)."""
+        if not self._busy:
+            return ""
+        spin = _SPINNER[self._spinner_i % len(_SPINNER)]
+        elapsed = _fmt_elapsed(time.monotonic() - self._work_start)
+        toks = _fmt_tokens(self._work_chars // 4)
+        queued = f" · {len(self._queue)} queued" if self._queue else ""
+        return f"{spin} {self._work_word}…  ({elapsed} · ↓ {toks} tokens{queued})"
+
     def _refresh_status(self) -> None:
         self.query_one("#status", Static).update(self._status_text())
+        self.query_one("#working", Static).update(self._working_text())
 
     @property
     def _scroll(self) -> VerticalScroll:
