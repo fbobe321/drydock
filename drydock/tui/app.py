@@ -41,11 +41,11 @@ from drydock.tui.widgets import (
 from drydock.tuning import system_prompt_for_model
 from drydock import __version__
 
-BANNER = rf"""  ___      ___      ___
- |   \ ┌─┐ |   \    ⚓  DRYDOCK v{__version__}   a local coding agent
- | |) | ┌─┘ | |) |     dock · build · ship — your model, your machine
- |___/ └─┘  |___/
-"""
+BANNER = (
+    f"\n  ⚓  DRYDOCK  ·  v{__version__}\n"
+    "  ──────────────────────────────────────────────\n"
+    "  a local coding agent — your model, your machine\n"
+)
 
 
 class DrydockApp(App):
@@ -390,4 +390,9 @@ class DrydockApp(App):
 
 
 def run_tui(config: dict) -> None:
-    DrydockApp(config).run()
+    # mouse=False: do NOT capture the mouse, so the terminal keeps its own
+    # native text selection — plain click-drag selects (no Shift), and you copy
+    # with your terminal's normal copy. Copying errors out of the TUI matters
+    # more than in-app mouse; the lost affordances (wheel scroll, click-to-focus,
+    # click-to-expand) are covered by PgUp/PgDn scroll, type-anywhere, and Ctrl+O.
+    DrydockApp(config).run(mouse=False)
