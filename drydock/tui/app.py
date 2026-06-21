@@ -7,6 +7,9 @@ messages (see tui/messages.py). Nautical theme, original branding.
 """
 from __future__ import annotations
 
+import random
+import time
+
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -46,6 +49,28 @@ BANNER = (
     "  ──────────────────────────────────────────────\n"
     "  a local coding agent — your model, your machine\n"
 )
+
+# Animated "working" line: a sparkle spinner + a whimsical gerund + elapsed time
+# + streamed-token count, in the spirit of Claude Code's status line.
+_SPINNER = "✶✸✹✺✹✸"
+_WORKING_WORDS = [
+    "Flibbertigibbeting", "Noodling", "Pondering", "Conjuring", "Percolating",
+    "Ruminating", "Marinating", "Tinkering", "Finagling", "Cogitating",
+    "Whittling", "Brewing", "Wrangling", "Spelunking", "Galumphing",
+    "Hornswoggling", "Bamboozling", "Confabulating", "Discombobulating",
+    "Frobnicating", "Bewildering", "Mulling", "Scheming", "Puzzling",
+    "Forging", "Untangling", "Concocting", "Summoning", "Channeling",
+    "Divining", "Architecting", "Sculpting", "Tessellating", "Befuddling",
+]
+
+
+def _fmt_elapsed(secs: float) -> str:
+    s = int(secs)
+    return f"{s // 60}m {s % 60}s" if s >= 60 else f"{s}s"
+
+
+def _fmt_tokens(n: int) -> str:
+    return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
 
 
 class DrydockApp(App):
@@ -157,6 +182,11 @@ class DrydockApp(App):
         self._queue: list[str] = []  # prompts submitted while a turn is running
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
+        # Live "working" line state.
+        self._work_start = 0.0
+        self._work_word = ""
+        self._work_chars = 0   # streamed output chars this turn (→ ~tokens)
+        self._spinner_i = 0
 
         # The agent (worker thread) calls this to gate a sensitive command on
         # user approval. Bridges to the UI thread and blocks until the user
@@ -202,18 +232,32 @@ class DrydockApp(App):
         if onboarding:
             self._info(onboarding)
         prompt.focus()
+        # Drive the animated working line (only repaints while a turn is busy).
+        self.set_interval(0.18, self._tick_work)
+
+    def _tick_work(self) -> None:
+        if self._busy:
+            self._spinner_i += 1
+            self._refresh_status()
 
     def _status_text(self) -> str:
+        if self._busy:
+            spin = _SPINNER[self._spinner_i % len(_SPINNER)]
+            elapsed = _fmt_elapsed(time.monotonic() - self._work_start)
+            toks = _fmt_tokens(self._work_chars // 4)
+            queued = f" · {len(self._queue)} queued" if self._queue else ""
+            return (
+                f"{spin} {self._work_word}…  "
+                f"({elapsed} · ↓ {toks} tokens{queued})"
+            )
         model = self.config.get("model", "?")
         limit = self.config.get("context_limit", 65536) or 65536
         used = self._ctx_tokens
         pct = min(100, round(used / limit * 100)) if limit else 0
         ctx = f"ctx {used:,}/{limit // 1000}k ({pct}%)"
-        flag = "⏳ working" if self._busy else "⚓ ready"
-        queued = f"  ·  {len(self._queue)} queued" if self._queue else ""
         return (
-            f"{flag}  ·  {model}  ·  Ctrl+C×2 quit · PgUp/PgDn scroll · "
-            f"Ctrl+O details{queued}  ·  {ctx}"
+            f"⚓ ready  ·  {model}  ·  Ctrl+C×2 quit · PgUp/PgDn scroll · "
+            f"Ctrl+O details  ·  {ctx}"
         )
 
     def _refresh_status(self) -> None:
@@ -259,6 +303,10 @@ class DrydockApp(App):
         """Start an agent turn for an already-displayed user prompt."""
         self._current_assistant = None
         self._busy = True
+        self._work_start = time.monotonic()
+        self._work_word = random.choice(_WORKING_WORDS)
+        self._work_chars = 0
+        self._spinner_i = 0
         self._refresh_status()
         self._run_agent(text)
 
@@ -372,6 +420,7 @@ class DrydockApp(App):
 
     def on_agent_text(self, m: AgentText) -> None:
         self._ensure_assistant().append(m.text)
+        self._work_chars += len(m.text)
         self._scroll.scroll_end(animate=False)
 
     def on_agent_tool_start(self, m: AgentToolStart) -> None:
