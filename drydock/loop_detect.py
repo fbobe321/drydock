@@ -23,16 +23,32 @@ def tool_signature(name: str, inputs: dict) -> str:
     return f"{name}\x00{payload}"
 
 
-def loop_note(name: str, count: int) -> str | None:
+def loop_note(name: str, count: int, failed: bool = False) -> str | None:
     """Advisory note for the *count*-th identical call of this tool.
 
     count == 1  -> None   (first call, nothing to say)
-    count == 2  -> gentle reminder
-    count 3-4   -> firm: stop repeating, use the result you have
-    count >= 5  -> strong: this tool is going in circles, change approach
+    count >= 2  -> escalating reminders.
+
+    When *failed* is True the repeat returned an error, so "use that result" is
+    wrong advice — the model must CHANGE the call (e.g. copy the exact text from
+    the error) instead of repeating it. Failed repeats get fix-it phrasing.
     """
     if count <= 1:
         return None
+    if failed:
+        if count == 2:
+            return (
+                f"[NOTE: this {name} call FAILED with these exact arguments "
+                f"already — repeating it gives the same error. Do NOT repeat it. "
+                f"Fix the cause: for an edit, copy the EXACT current text from the "
+                f"error message (or a Read) as old_string; otherwise change the "
+                f"arguments or use a different tool.]"
+            )
+        return (
+            f"[NOTE: {name} has now FAILED {count} times with identical arguments "
+            f"— it will keep failing. STOP repeating it. Copy the exact text from "
+            f"the error/Read into your next call, or take a different approach.]"
+        )
     if count == 2:
         return (
             f"[NOTE: you have already called {name} with these exact arguments "
@@ -99,6 +115,18 @@ class LoopTracker:
         exact repeat and/or same-path write thrash. Never raises.
         """
         count = self.record(name, inputs)
-        notes = [loop_note(name, count), self.record_path_write(name, inputs)]
-        prefix = "\n".join(n for n in notes if n)
+        failed = (result or "").lstrip().startswith(("Error", "REFUSED"))
+        note = loop_note(name, count, failed=failed)
+        path_note = self.record_path_write(name, inputs)
+        # Prune the BODY of a repeated *successful* call (3rd+ identical): the
+        # model already has this content, and re-feeding it both wastes context
+        # and lets it mindlessly re-call. Replace the body with a stub so the
+        # repeat yields nothing new. Failures keep their text (it's the fix).
+        if note and not failed and count >= 3:
+            result = (
+                "(identical to your earlier call to this tool — body omitted. "
+                "Re-running it returns nothing new; act on the content you "
+                "already have, or take a different step.)"
+            )
+        prefix = "\n".join(n for n in (note, path_note) if n)
         return f"{prefix}\n{result}" if prefix else result
