@@ -264,8 +264,10 @@ class DrydockApp(App):
         spin = _SPINNER[self._spinner_i % len(_SPINNER)]
         elapsed = _fmt_elapsed(time.monotonic() - self._work_start)
         toks = _fmt_tokens(self._work_chars // 4)
+        effort = self.state.current_effort
+        eff = f" · thinking with {effort} effort" if effort else ""
         queued = f" · {len(self._queue)} queued" if self._queue else ""
-        return f"{spin} {self._work_word}…  ({elapsed} · ↓ {toks} tokens{queued})"
+        return f"{spin} {self._work_word}…  ({elapsed} · ↓ {toks} tokens{eff}{queued})"
 
     def _refresh_status(self) -> None:
         self.query_one("#status", Static).update(self._status_text())

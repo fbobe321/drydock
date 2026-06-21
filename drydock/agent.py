@@ -50,6 +50,7 @@ class AgentState:
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     turn_count: int = 0
+    current_effort: str = ""  # "high"/"low" of the in-flight LLM call (for the UI)
 
 
 def drop_last_turn(messages: list) -> bool:
@@ -112,6 +113,9 @@ def run(
         if "reasoning_effort" not in turn_config:
             level = thinking_level_for_turn(run_iteration, is_user_turn=(run_iteration == 1))
             turn_config["reasoning_effort"] = "high" if level == "high" else "low"
+        # Expose the in-flight effort to the UI (GIL-atomic string read in the
+        # status line; no message plumbing needed).
+        state.current_effort = turn_config.get("reasoning_effort", "")
         # After many calls without editing, don't force but the nudge message handles it
 
         # Stream from LLM — with retry on context-length 400 error
