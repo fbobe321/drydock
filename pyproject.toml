@@ -4,8 +4,10 @@ requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "drydock"
-version = "3.0.0"
+# PyPI distribution name is drydock-cli (the established install name, continued
+# from the retired v2 fork); the import package + CLI command stay `drydock`.
+name = "drydock-cli"
+version = "3.0.1"
 description = "Drydock — a local, provider-agnostic terminal coding agent for local LLMs"
 requires-python = ">=3.12"
 license = "Apache-2.0"

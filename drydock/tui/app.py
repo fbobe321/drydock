@@ -39,9 +39,10 @@ from drydock.tui.widgets import (
     summarize_inputs,
 )
 from drydock.tuning import system_prompt_for_model
+from drydock import __version__
 
-BANNER = r"""  ___      ___      ___
- |   \ ┌─┐ |   \    ⚓  DRYDOCK   a local coding agent
+BANNER = rf"""  ___      ___      ___
+ |   \ ┌─┐ |   \    ⚓  DRYDOCK v{__version__}   a local coding agent
  | |) | ┌─┘ | |) |     dock · build · ship — your model, your machine
  |___/ └─┘  |___/
 """
@@ -88,7 +89,38 @@ class DrydockApp(App):
         Binding("ctrl+c", "copy_selection", "Copy", priority=True),
         Binding("ctrl+d", "quit", "Quit", priority=True),
         Binding("ctrl+o", "toggle_tools", "Expand/collapse tools"),
+        # Scroll the transcript from the keyboard (focus stays on the prompt,
+        # and SSH sessions often don't forward the mouse wheel). priority=True
+        # so the prompt's TextArea doesn't swallow PageUp/PageDown first.
+        Binding("pageup", "scroll_up", "Scroll up", priority=True, show=False),
+        Binding("pagedown", "scroll_down", "Scroll down", priority=True, show=False),
+        Binding("ctrl+home", "scroll_top", "Top", priority=True, show=False),
+        Binding("ctrl+end", "scroll_bottom", "Bottom", priority=True, show=False),
     ]
+
+    def action_scroll_up(self) -> None:
+        self._scroll.scroll_page_up()
+
+    def action_scroll_down(self) -> None:
+        self._scroll.scroll_page_down()
+
+    def action_scroll_top(self) -> None:
+        self._scroll.scroll_home()
+
+    def action_scroll_bottom(self) -> None:
+        self._scroll.scroll_end()
+
+    def on_key(self, event) -> None:
+        """Type-anywhere: route printable keys to the prompt even if focus has
+        drifted (e.g. after clicking the transcript to select text), so the user
+        never has to click the input box to start typing."""
+        if event.is_printable and event.character:
+            prompt = self.query_one("#prompt", PromptArea)
+            if not prompt.has_focus:
+                prompt.focus()
+                prompt.insert(event.character)
+                event.prevent_default()
+                event.stop()
 
     def action_copy_selection(self) -> None:
         """Copy the on-screen text selection to the system clipboard."""
@@ -169,7 +201,7 @@ class DrydockApp(App):
         queued = f"  ·  {len(self._queue)} queued" if self._queue else ""
         return (
             f"{flag}  ·  model: {model}  ·  {toks}{queued}"
-            f"  ·  Ctrl+C copy · Ctrl+O tools · Ctrl+D quit"
+            f"  ·  Ctrl+C copy · PgUp/PgDn scroll · Ctrl+O tools · Ctrl+D quit"
         )
 
     def _refresh_status(self) -> None:

@@ -190,7 +190,10 @@ def _summarize(inputs: dict) -> str:
 # ── Entry point ───────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="DryDock v3 — local coding agent")
+    parser = argparse.ArgumentParser(description="DryDock — local coding agent")
+    parser.add_argument(
+        "--version", "-V", action="version", version=f"drydock {__version__}"
+    )
     # Config-backed flags default to None so an unset flag falls through to the
     # config file (see drydock.config). Runtime-only flags keep real defaults.
     parser.add_argument("-p", "--prompt", help="One-shot mode: run prompt and exit")
