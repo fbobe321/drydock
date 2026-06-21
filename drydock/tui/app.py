@@ -54,13 +54,12 @@ BANNER = (
 # + streamed-token count, in the spirit of Claude Code's status line.
 _SPINNER = "✶✸✹✺✹✸"
 _WORKING_WORDS = [
-    "Flibbertigibbeting", "Noodling", "Pondering", "Conjuring", "Percolating",
-    "Ruminating", "Marinating", "Tinkering", "Finagling", "Cogitating",
-    "Whittling", "Brewing", "Wrangling", "Spelunking", "Galumphing",
-    "Hornswoggling", "Bamboozling", "Confabulating", "Discombobulating",
-    "Frobnicating", "Bewildering", "Mulling", "Scheming", "Puzzling",
-    "Forging", "Untangling", "Concocting", "Summoning", "Channeling",
-    "Divining", "Architecting", "Sculpting", "Tessellating", "Befuddling",
+    "Battening", "Splicing", "Hoisting", "Heaving", "Trimming", "Tacking",
+    "Mooring", "Charting", "Navigating", "Sounding", "Caulking", "Rigging",
+    "Lashing", "Reefing", "Furling", "Unfurling", "Dredging", "Careening",
+    "Provisioning", "Helming", "Ballasting", "Swabbing", "Belaying",
+    "Fathoming", "Weighing anchor", "Bailing", "Voyaging", "Plumbing",
+    "Hauling", "Coiling", "Keelhauling", "Berthing", "Squalling", "Yawing",
 ]
 
 
