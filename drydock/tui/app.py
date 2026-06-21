@@ -404,9 +404,10 @@ class DrydockApp(App):
 
 
 def run_tui(config: dict) -> None:
-    # mouse=False: do NOT capture the mouse, so the terminal keeps its own
-    # native text selection — plain click-drag selects (no Shift), and you copy
-    # with your terminal's normal copy. Copying errors out of the TUI matters
-    # more than in-app mouse; the lost affordances (wheel scroll, click-to-focus,
-    # click-to-expand) are covered by PgUp/PgDn scroll, type-anywhere, and Ctrl+O.
-    DrydockApp(config).run(mouse=False)
+    # Mouse ON (default): the wheel scrolls the transcript and the scrollbar
+    # works. Text selection is in-app — drag to select (Textual highlights it),
+    # then Ctrl+C copies (no Shift needed). Shift+drag still does a terminal-
+    # native selection as a fallback. You can't have BOTH wheel-scroll and
+    # terminal-native plain-drag selection — the mouse can only go to one — and
+    # wheel scroll is the more-missed affordance, so the app keeps the mouse.
+    DrydockApp(config).run()
