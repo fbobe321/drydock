@@ -88,7 +88,7 @@ class DrydockApp(App):
     BINDINGS = [
         Binding("ctrl+c", "copy_selection", "Copy", priority=True),
         Binding("ctrl+d", "quit", "Quit", priority=True),
-        Binding("ctrl+o", "toggle_tools", "Expand/collapse tools"),
+        Binding("ctrl+o", "toggle_tools", "Expand/collapse details"),
         # Scroll the transcript from the keyboard (focus stays on the prompt,
         # and SSH sessions often don't forward the mouse wheel). priority=True
         # so the prompt's TextArea doesn't swallow PageUp/PageDown first.
@@ -213,7 +213,7 @@ class DrydockApp(App):
         queued = f"  ·  {len(self._queue)} queued" if self._queue else ""
         return (
             f"{flag}  ·  {model}  ·  Ctrl+C×2 quit · PgUp/PgDn scroll · "
-            f"Ctrl+O tools{queued}  ·  {ctx}"
+            f"Ctrl+O details{queued}  ·  {ctx}"
         )
 
     def _refresh_status(self) -> None:
