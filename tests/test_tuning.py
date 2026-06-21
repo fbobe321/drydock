@@ -69,11 +69,14 @@ def test_use_streaming_off_for_gemma_with_tools():
 
 
 def test_filter_tool_schemas_gates_only_for_gemma():
-    schemas = [{"name": "Read"}, {"name": "todo"}, {"name": "Write"}]
+    schemas = [{"name": "Read"}, {"name": "ask_user_question"}, {"name": "Write"}]
     gated = filter_tool_schemas(schemas, "gemma4")
     names = {s["name"] for s in gated}
-    assert "todo" not in names
+    assert "ask_user_question" not in names  # still a known looper
     assert names == {"Read", "Write"}
+    # `todo` is NOT gated anymore (the simple checklist tool, re-enabled v3.0.13)
+    assert "todo" in {s["name"] for s in filter_tool_schemas(
+        [{"name": "todo"}], "gemma4")}
     # non-gemma: untouched
     assert filter_tool_schemas(schemas, "gpt-4o") == schemas
 

@@ -112,6 +112,28 @@ SCHEMAS = [
             "required": ["pattern"],
         },
     },
+    {
+        "name": "todo",
+        "description": (
+            "Maintain a visible task checklist for a multi-step job. Pass the "
+            "WHOLE list each call as plain text, one task per line, each "
+            "prefixed with its status: '[ ]' to-do, '[~]' in progress (mark "
+            "exactly ONE), '[x]' done. Calling it REPLACES the previous list. "
+            "Plan up front, then call it again to flip a task to done and the "
+            "next to in-progress as you go. Skip it for trivial single-step "
+            "work, and don't call it twice with the same list."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "string",
+                    "description": "One task per line, each prefixed [ ] / [~] / [x].",
+                },
+            },
+            "required": ["tasks"],
+        },
+    },
 ]
 
 # ── Tool implementations ──────────────────────────────────────────────────
@@ -410,6 +432,43 @@ def tool_grep(params: dict, config: dict) -> str:
         return f"Error: {e}"
 
 
+_TODO_DONE = {"x", "X", "✓"}
+_TODO_DOING = {"~", "-", "/", "*"}
+
+
+def parse_todo(tasks: str) -> list[tuple[str, str]]:
+    """Parse a plain-text checklist into (text, status) pairs. Each non-empty
+    line is one task, optionally prefixed with [x] done / [~] in_progress /
+    [ ] pending. Deliberately forgiving (a bare line counts as pending)."""
+    out: list[tuple[str, str]] = []
+    for raw in (tasks or "").splitlines():
+        line = raw.strip().lstrip("-*•").strip()
+        if not line:
+            continue
+        status = "pending"
+        m = re.match(r"^\[\s*([^\]]?)\s*\]\s*(.*)$", line)
+        if m:
+            mark, line = m.group(1), m.group(2).strip()
+            if mark in _TODO_DONE:
+                status = "done"
+            elif mark in _TODO_DOING:
+                status = "in_progress"
+        if line:
+            out.append((line, status))
+    return out
+
+
+def tool_todo(params: dict, config: dict) -> str:
+    """Maintain the visible task checklist (replace semantics)."""
+    items = parse_todo(params.get("tasks", ""))
+    if not items:
+        return "Error: no tasks parsed. Pass one task per line, e.g. '[ ] do X'."
+    config["_todo"] = items  # the TUI reads this to render the panel
+    done = sum(1 for _, s in items if s == "done")
+    doing = sum(1 for _, s in items if s == "in_progress")
+    return f"Plan updated: {len(items)} tasks ({done} done, {doing} in progress)."
+
+
 # ── Register all tools ────────────────────────────────────────────────────
 
 _TOOLS = [
@@ -419,6 +478,7 @@ _TOOLS = [
     ("Bash", tool_bash, False),
     ("Glob", tool_glob, True),
     ("Grep", tool_grep, True),
+    ("todo", tool_todo, False),
 ]
 
 def register_all():
@@ -427,6 +487,7 @@ def register_all():
         func = {
             "Read": tool_read, "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
+            "todo": tool_todo,
         }[name]
         read_only = name in ("Read", "Glob", "Grep")
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))

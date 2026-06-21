@@ -90,6 +90,10 @@ class DrydockApp(App):
     .tool-card.ok { border-left: thick #2e8b6b; }
     .tool-card.fail { border-left: thick #b3503e; }
     .tool-body { color: #9bb4c0; padding: 0 1; }
+    .todo-panel {
+        margin: 1 0 0 2; padding: 0 1; color: #d7e6ee;
+        border-left: thick #c9a227; background: #14241c;
+    }
     /* One bottom-docked footer holds, top→bottom: working-line, prompt, status. */
     #footer { dock: bottom; height: auto; background: #0b1f2a; }
     #prompt {
@@ -188,6 +192,7 @@ class DrydockApp(App):
         self._work_word = ""
         self._work_chars = 0   # streamed output chars this turn (→ ~tokens)
         self._spinner_i = 0
+        self._todo_panel = None  # the live task-checklist widget (or None)
 
         # The agent (worker thread) calls this to gate a sensitive command on
         # user approval. Bridges to the UI thread and blocks until the user
@@ -435,9 +440,41 @@ class DrydockApp(App):
 
     def on_agent_tool_start(self, m: AgentToolStart) -> None:
         self._current_assistant = None  # end the current text block
+        if m.name == "todo":
+            self._render_todo(m.inputs.get("tasks", ""))
+            self._last_card = None  # tool_end is a no-op for the checklist
+            return
         card = ToolCard(m.name, summarize_inputs(m.inputs))
         self._last_card = card
         self._mount(card)
+
+    def _render_todo(self, tasks: str) -> None:
+        """Render/refresh the live task checklist (Claude-Code-style). Moves to
+        the bottom on each update so the current plan is always in view."""
+        from rich.markup import escape
+
+        from drydock.tools import parse_todo
+
+        items = parse_todo(tasks)
+        if not items:
+            return
+        glyph = {"done": "[green]✓[/]", "in_progress": "[yellow]▸[/]", "pending": "○"}
+        done = sum(1 for _, s in items if s == "done")
+        lines = [f"[b]Plan[/b]  [dim]({done}/{len(items)})[/]"]
+        for text, status in items:
+            text = escape(text)  # task text is model-supplied — don't let it inject markup
+            style = "dim strike" if status == "done" else (
+                "bold" if status == "in_progress" else "")
+            lines.append(f"  {glyph.get(status, '○')} [{style}]{text}[/]" if style
+                         else f"  {glyph.get(status, '○')} {text}")
+        body = "\n".join(lines)
+        if self._todo_panel is not None:
+            try:
+                self._todo_panel.remove()
+            except Exception:  # noqa: BLE001
+                pass
+        self._todo_panel = Static(body, classes="todo-panel")
+        self._mount(self._todo_panel)
 
     def on_agent_tool_end(self, m: AgentToolEnd) -> None:
         if self._last_card is not None:

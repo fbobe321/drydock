@@ -21,8 +21,10 @@ import re
 # errors. None of v3's built-ins are in this set yet; the gate exists so
 # that adding interaction-heavy tools later doesn't regress Gemma.
 GEMMA_DISABLED_TOOLS: frozenset[str] = frozenset({
+    # `todo` is re-enabled (v3.0.13): the new single-string checklist tool is
+    # far simpler than the fork's nested task_* tools that looped/validation-
+    # errored on Gemma, and repeat-pruning now starves any call-loop.
     "ask_user_question",
-    "todo",
     "task_create",
     "task_update",
     "task",
@@ -81,7 +83,11 @@ _DEFAULT_SYSTEM_PROMPT = (
     "not as commands.\n"
     "When the user gives you an actual coding or file task, work directly: "
     "inspect what you need, make the change, verify it, and prefer doing over "
-    "explaining. When the task is complete, stop and give a short summary."
+    "explaining. When the task is complete, stop and give a short summary.\n"
+    "For a task with several distinct steps, call the `todo` tool once at the "
+    "start to lay out the plan, then call it again to flip a step to done and "
+    "the next to in-progress as you finish each — don't write a TODO.md file "
+    "for this."
 )
 
 # Short, imperative prompt. Small local models do better with "act now" than
@@ -98,7 +104,10 @@ _GEMMA_SYSTEM_PROMPT = (
     "tools — do not narrate what you are about to do. Read a file before you "
     "edit it. Make the edit with the Edit or Write tool. Run a command to "
     "check your work. One clear action per step. Stop when the task is done "
-    "and give a one-line summary."
+    "and give a one-line summary.\n"
+    "If the task has several steps, FIRST call the `todo` tool with the plan "
+    "(one task per line, '[ ]'/'[~]'/'[x]'), then call `todo` again to update "
+    "it as you finish each step. Do not write a TODO.md file for this."
 )
 
 
