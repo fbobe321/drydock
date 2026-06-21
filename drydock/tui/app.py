@@ -90,8 +90,9 @@ class DrydockApp(App):
     .tool-card.ok { border-left: thick #2e8b6b; }
     .tool-card.fail { border-left: thick #b3503e; }
     .tool-body { color: #9bb4c0; padding: 0 1; }
-    .todo-panel {
-        margin: 1 0 0 2; padding: 0 1; color: #d7e6ee;
+    /* Pinned task checklist in the footer (height auto → 0 lines when empty). */
+    #todo {
+        height: auto; margin: 0 2 1 2; padding: 0 1; color: #d7e6ee;
         border-left: thick #c9a227; background: #14241c;
     }
     /* One bottom-docked footer holds, top→bottom: working-line, prompt, status. */
@@ -192,7 +193,6 @@ class DrydockApp(App):
         self._work_word = ""
         self._work_chars = 0   # streamed output chars this turn (→ ~tokens)
         self._spinner_i = 0
-        self._todo_panel = None  # the live task-checklist widget (or None)
 
         # The agent (worker thread) calls this to gate a sensitive command on
         # user approval. Bridges to the UI thread and blocks until the user
@@ -221,6 +221,7 @@ class DrydockApp(App):
         yield Static(BANNER, id="banner")
         yield VerticalScroll(id="transcript")
         with Vertical(id="footer"):
+            yield Static("", id="todo")     # pinned task checklist (empty = hidden)
             yield Static("", id="working")  # in-line activity (empty when idle)
             yield PromptArea(id="prompt")
             yield Static(self._status_text(), id="status")
@@ -339,6 +340,8 @@ class DrydockApp(App):
             self.state = AgentState()
             self._scroll.remove_children()
             self._current_assistant = None
+            self.config.pop("_todo", None)
+            self.query_one("#todo", Static).update("")  # clear the pinned plan
             self._refresh_status()
         elif cmd == "/model":
             self._cmd_model(arg)
@@ -449,14 +452,17 @@ class DrydockApp(App):
         self._mount(card)
 
     def _render_todo(self, tasks: str) -> None:
-        """Render/refresh the live task checklist (Claude-Code-style). Moves to
-        the bottom on each update so the current plan is always in view."""
+        """Update the PINNED task checklist (Claude-Code-style). It lives in the
+        footer above the prompt, so it stays in view as the transcript scrolls —
+        not mounted inline where new tool cards push it off-screen."""
         from rich.markup import escape
 
         from drydock.tools import parse_todo
 
         items = parse_todo(tasks)
+        panel = self.query_one("#todo", Static)
         if not items:
+            panel.update("")  # collapses to 0 height
             return
         glyph = {"done": "[green]✓[/]", "in_progress": "[yellow]▸[/]", "pending": "○"}
         done = sum(1 for _, s in items if s == "done")
@@ -467,14 +473,7 @@ class DrydockApp(App):
                 "bold" if status == "in_progress" else "")
             lines.append(f"  {glyph.get(status, '○')} [{style}]{text}[/]" if style
                          else f"  {glyph.get(status, '○')} {text}")
-        body = "\n".join(lines)
-        if self._todo_panel is not None:
-            try:
-                self._todo_panel.remove()
-            except Exception:  # noqa: BLE001
-                pass
-        self._todo_panel = Static(body, classes="todo-panel")
-        self._mount(self._todo_panel)
+        panel.update("\n".join(lines))
 
     def on_agent_tool_end(self, m: AgentToolEnd) -> None:
         if self._last_card is not None:

@@ -249,6 +249,34 @@ def test_tool_edit_not_found_guidance(tmp_path):
     assert "not found" in out and "Read the file" in out
 
 
+def test_tool_edit_fuzzy_applies_unique_near_miss(tmp_path):
+    # A weak model often can't reproduce a block verbatim. A high-confidence,
+    # unique, same-indent near-miss should APPLY (break the edit-loop) rather
+    # than error: here old_string drops the spaces in "(a, b, c)".
+    fp = tmp_path / "f.py"
+    fp.write_text('def f():\n    x = compute(a, b, c)\n    return x\n')
+    out = tool_edit(
+        {"file_path": str(fp),
+         "old_string": "    x = compute(a,b,c)\n    return x",
+         "new_string": "    x = compute2(a, b, c)\n    return x"}, {})
+    assert "Edited" in out
+    assert "compute2" in fp.read_text()
+
+
+def test_tool_edit_fuzzy_refuses_indent_mismatch(tmp_path):
+    # If the near-miss differs in INDENT, applying the model's new_string would
+    # corrupt the file — so it must error (and show the real text) instead.
+    fp = tmp_path / "f.py"
+    src = 'def f():\n    x = compute(a, b, c)\n    return x\n'
+    fp.write_text(src)
+    out = tool_edit(
+        {"file_path": str(fp),
+         "old_string": "x = compute(a,b,c)\n    return x",   # no leading indent
+         "new_string": "x = compute2(a, b, c)\n    return x"}, {})
+    assert "not found" in out
+    assert fp.read_text() == src  # untouched
+
+
 def test_tool_edit_post_edit_syntax_warning(tmp_path):
     fp = tmp_path / "f.py"
     fp.write_text("def f():\n    return 1\n")

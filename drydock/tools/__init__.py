@@ -265,6 +265,39 @@ def _closest_snippet(content: str, old: str, max_chars: int = 700) -> str | None
     return None
 
 
+def _fuzzy_apply_region(content: str, old: str, min_ratio: float = 0.90) -> str | None:
+    """Find the UNIQUE region of *content* that *old* is a near-miss for, so the
+    edit can be APPLIED there — a weak model often can't reproduce a long block
+    verbatim. Conservative on purpose: only when the best match is high-ratio,
+    clearly better than the runner-up, and appears exactly once (else None)."""
+    target = old.strip()
+    if not target or len(target) < 12:
+        return None  # too short to fuzzy-apply safely
+    lines = content.split("\n")
+    window = max(1, target.count("\n") + 1)
+    best_ratio, best_i, second = 0.0, -1, 0.0
+    for i in range(max(1, len(lines) - window + 1)):
+        cand = "\n".join(lines[i:i + window])
+        r = difflib.SequenceMatcher(None, target, cand).ratio()
+        if r > best_ratio:
+            second, best_ratio, best_i = best_ratio, r, i
+        elif r > second:
+            second = r
+    if best_i >= 0 and best_ratio >= min_ratio and (best_ratio - second) >= 0.04:
+        region = "\n".join(lines[best_i:best_i + window])
+        # Only apply when the FIRST-LINE INDENT matches: the model's new_string
+        # is indented to ITS old_string, so replacing a region with a different
+        # indent would shift the code and corrupt it. Require same leading ws.
+        def _indent(s: str) -> str:
+            first = next((ln for ln in s.split("\n") if ln.strip()), "")
+            return first[: len(first) - len(first.lstrip())]
+        if _indent(old) != _indent(region):
+            return None
+        if content.count(region) == 1:  # unique → safe to replace
+            return region
+    return None
+
+
 def _infer_edit_target(directory: Path, old: str) -> Path | None:
     """If a directory was passed instead of a file, find the single file under
     it whose content contains old_string. Returns None if zero or many match
@@ -318,8 +351,10 @@ def tool_edit(params: dict, config: dict) -> str:
                     f"No change: {fp} already contains the new text "
                     f"(this edit appears to have been applied already)."
                 )
-            # Fallback 2: fuzzy match on whitespace.
-            fuzzy = _fuzzy_find(content, old)
+            # Fallback 2: fuzzy match on whitespace, then a high-confidence
+            # unique near-match (so a weak model's not-quite-verbatim block still
+            # applies instead of looping).
+            fuzzy = _fuzzy_find(content, old) or _fuzzy_apply_region(content, old)
             if fuzzy:
                 old = fuzzy
             else:
