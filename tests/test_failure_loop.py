@@ -41,3 +41,37 @@ def test_changing_args_do_not_trip_valve(monkeypatch):
     list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
     assert any(m.get("role") == "assistant" and m.get("content") == "done"
                for m in st.messages)
+
+
+def test_identical_SUCCESS_streak_ends_turn(monkeypatch):
+    # The code-red case: a SUCCESSFUL command re-run identically (same args AND
+    # same output) — a passing `pytest` 92×. Must also stop, not just failures.
+    import tempfile
+    calls = {"n": 0}
+
+    def counting(**kw):
+        calls["n"] += 1
+        return iter([AssistantTurn(
+            "", [{"id": str(calls["n"]), "name": "Bash",
+                  "input": {"command": "echo hi"}}], 1, 1)])
+
+    monkeypatch.setattr(agent_mod, "stream", counting)
+    st = AgentState()
+    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
+    assert calls["n"] <= 12  # identical success → stopped at the cap, not 200
+
+
+def test_polling_with_changing_result_not_tripped(monkeypatch):
+    # Same command, DIFFERENT result each time (a poll) must NOT be stopped —
+    # the result changes, so the streak resets. Model finishes on its own.
+    import tempfile
+    seq = []
+    for i in range(3):
+        seq.append(AssistantTurn(
+            "", [{"id": str(i), "name": "Bash",
+                  "input": {"command": f"echo {i}"}}], 1, 1))  # different output
+    seq.append(AssistantTurn("done", [], 1, 1))
+    monkeypatch.setattr(agent_mod, "stream", lambda **kw: iter([seq.pop(0)]))
+    st = AgentState()
+    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
+    assert any(m.get("content") == "done" for m in st.messages)
