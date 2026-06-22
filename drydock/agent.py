@@ -114,6 +114,7 @@ def run(
     session_has_edited = False
     leaked_call_retries = 0
     plan_continue_nudges = 0  # consecutive "you stopped mid-plan" nudges
+    empty_response_nudges = 0  # consecutive "you returned nothing" nudges
     run_iteration = 0  # stream calls within THIS run() (resets per user message)
     loop_tracker = LoopTracker()
 
@@ -226,6 +227,22 @@ def run(
                     ),
                 })
                 continue
+            # A completely EMPTY response (no text, no tool call, no leaked call)
+            # is a non-answer, not a deliberate "done" — a weak model sometimes
+            # returns nothing on a hard task and the turn dead-ends silently.
+            # Nudge ONCE to produce output. Narrow (only empty text) and capped,
+            # so unlike a blanket auto-continue it can't loop on real answers.
+            if not (assistant_turn.text or "").strip() and empty_response_nudges < 1:
+                empty_response_nudges += 1
+                state.messages.append({
+                    "role": "user",
+                    "content": (
+                        "[SYSTEM] Your last response was empty. Produce your "
+                        "result now: either call a tool to do the work, or reply "
+                        "with text. Do not return an empty message."
+                    ),
+                })
+                continue
             break
 
         # Execute each tool call
@@ -282,6 +299,7 @@ def run(
         # a long, productive plan can run as far as it needs (the cap only
         # bounds back-to-back stalls).
         plan_continue_nudges = 0
+        empty_response_nudges = 0
 
         # Nudge: if past 15 tool calls without any edits, inject gentle guidance
         if tool_call_count == 15 and not session_has_edited and config.get("force_first_tool"):
