@@ -263,6 +263,19 @@ def test_tool_edit_fuzzy_applies_unique_near_miss(tmp_path):
     assert "compute2" in fp.read_text()
 
 
+def test_tool_edit_noop_when_old_equals_new(tmp_path):
+    # old_string == new_string changes nothing. Reporting "Edited" is a false
+    # success that loops a weak model; it must say "No change" and not write.
+    fp = tmp_path / "f.py"
+    fp.write_text("a = 1\n")
+    out = tool_edit(
+        {"file_path": str(fp), "old_string": "a = 1", "new_string": "a = 1"}, {}
+    )
+    assert "No change" in out and "Edited" not in out
+    assert "move on" in out.lower()
+    assert fp.read_text() == "a = 1\n"  # untouched
+
+
 def test_tool_edit_fuzzy_refuses_indent_mismatch(tmp_path):
     # If the near-miss differs in INDENT, applying the model's new_string would
     # corrupt the file — so it must error (and show the real text) instead.

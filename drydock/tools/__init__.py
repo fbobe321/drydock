@@ -401,6 +401,18 @@ def tool_edit(params: dict, config: dict) -> str:
         if count > 1:
             return f"Error: old_string found {count} times in {fp}. Add more context to make it unique."
         updated = content.replace(old, new, 1)
+        if updated == content:
+            # No-op edit (old_string == new_string, or the replacement changes
+            # nothing). Reporting "Edited" here is a false success that invites
+            # the model to re-issue the identical call forever. Tell it plainly
+            # that nothing changed and to move on — this is what breaks the
+            # same-file edit-thrash loop at its source.
+            return (
+                f"No change: that edit leaves {fp} byte-for-byte identical "
+                f"(old_string and new_string are effectively the same). Nothing "
+                f"was written. Do NOT repeat this edit — the file already has "
+                f"this content, so move on to your next step."
+            )
         Path(fp).write_text(updated, encoding="utf-8")
         _record_undo(config, fp, content)
         result = f"Edited {fp}: replaced {len(old)} chars with {len(new)} chars"
