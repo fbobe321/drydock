@@ -86,6 +86,33 @@ class AssistantTurn:
     had_leaked_call: bool = False  # model emitted a tool call as text, not a call
 
 
+# ── Tool-call argument parsing ────────────────────────────────────────────
+
+def _parse_tool_args(raw: str) -> dict:
+    """Parse a model's tool-call arguments tolerantly.
+
+    strict=False is the fix that matters: a Bash command built with a heredoc
+    (`cat <<EOF ...`) carries LITERAL newlines, which strict JSON rejects with
+    "Invalid control character". The call then degraded to {"_raw": ...} with no
+    usable args, Bash failed, and the model's corrections re-wrapped into nested
+    {"_raw": "{\"_raw\": ...}"} — a fatal loop. strict=False accepts control
+    chars inside strings (recovering the common multiline case); we also unwrap
+    a few layers of nested {"_raw": ...} the model may have echoed back.
+    """
+    if not raw:
+        return {}
+    for _ in range(4):  # peel nested _raw layers, then parse
+        try:
+            v = json.loads(raw, strict=False)
+        except (json.JSONDecodeError, TypeError):
+            return {"_raw": raw}
+        if isinstance(v, dict) and set(v) == {"_raw"} and isinstance(v["_raw"], str):
+            raw = v["_raw"]
+            continue
+        return v if isinstance(v, dict) else {"_raw": raw}
+    return {"_raw": raw}
+
+
 # ── Message format conversion ─────────────────────────────────────────────
 
 def messages_to_openai(messages: list, system: str) -> list:
@@ -250,10 +277,7 @@ def stream(
     tool_calls = []
     for idx in sorted(tool_buf):
         v = tool_buf[idx]
-        try:
-            inp = json.loads(v["args"]) if v["args"] else {}
-        except json.JSONDecodeError:
-            inp = {"_raw": v["args"]}
+        inp = _parse_tool_args(v["args"])
         tool_calls.append({
             "id": v["id"] or f"call_{idx}",
             "name": v["name"],
@@ -283,11 +307,7 @@ def _complete_nonstreaming(
 
     tool_calls = []
     for i, tc in enumerate(getattr(msg, "tool_calls", None) or []):
-        raw_args = tc.function.arguments or ""
-        try:
-            inp = json.loads(raw_args) if raw_args else {}
-        except json.JSONDecodeError:
-            inp = {"_raw": raw_args}
+        inp = _parse_tool_args(tc.function.arguments or "")
         tool_calls.append({
             "id": tc.id or f"call_{i}",
             "name": tc.function.name,

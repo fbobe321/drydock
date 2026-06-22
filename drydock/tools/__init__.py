@@ -428,7 +428,16 @@ def tool_edit(params: dict, config: dict) -> str:
 
 
 def tool_bash(params: dict, config: dict) -> str:
-    cmd = params["command"]
+    cmd = params.get("command")
+    if not cmd:
+        if "_raw" in params:
+            return (
+                "Error: your tool arguments were not valid JSON so the command "
+                "could not be read. Resend as ONE JSON object "
+                '{"command": "..."} with the whole command as a single string '
+                "(escape any newline as \\n; avoid raw line breaks in the JSON)."
+            )
+        return "Error: Bash needs a non-empty 'command'."
     timeout = params.get("timeout", 30)
     reason = bash_safety.dangerous_command(cmd)
     if reason is not None:
