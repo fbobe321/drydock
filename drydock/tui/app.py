@@ -373,6 +373,7 @@ class DrydockApp(App):
             self._current_assistant = None
             self.config.pop("_todo", None)
             self.query_one("#todo", Static).update("")  # clear the pinned plan
+            self._ctx_tokens = 0  # reset the context gauge — history is empty now
             self._refresh_status()
         elif cmd == "/model":
             self._cmd_model(arg)
