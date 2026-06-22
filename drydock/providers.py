@@ -253,7 +253,12 @@ def stream(
         if delta.content:
             # Strip any leaked thinking-token markers (best-effort per chunk).
             chunk_text = strip_thinking_tokens(delta.content)
-            if chunk_text.strip():
+            # Keep ANY non-empty chunk — including whitespace-only ones. A
+            # `.strip()` guard here used to DROP newline-only chunks (the blank
+            # line a model streams between markdown blocks arrives as its own
+            # chunk), mashing "para### Header" together. `if chunk_text:` still
+            # skips chunks that stripping emptied (e.g. a lone thinking marker).
+            if chunk_text:
                 text += chunk_text
                 yield TextChunk(chunk_text)
 
