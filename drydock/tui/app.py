@@ -405,7 +405,8 @@ class DrydockApp(App):
             self._info(
                 "Commands:\n"
                 "  /help            this help\n"
-                "  /model [name]    show or switch the model\n"
+                "  /model           show/set model, provider, endpoint URL\n"
+                "                   /model <name> · /model url <url> · /model provider <p>\n"
                 "  /cwd [path]      show or change the working directory\n"
                 "  /undo            revert the last file write/edit\n"
                 "  /back            rewind the last turn from the model's context\n"
@@ -418,14 +419,61 @@ class DrydockApp(App):
         else:
             self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))
 
-    def _cmd_model(self, name: str) -> None:
-        if not name:
-            self._info(f"model: {self.config.get('model')}")
+    def _persist_config(self) -> None:
+        """Save the persistable settings (model/provider/base_url/… — save_file
+        filters to those) to ~/.drydock/config.toml so setup survives restart."""
+        from drydock import config as cfgmod
+
+        ok = cfgmod.save_file(self.config, cfgmod.default_config_path())
+        if not ok:
+            self._mount(ErrorMessage("could not write ~/.drydock/config.toml"))
+
+    def _cmd_model(self, arg: str) -> None:
+        """Model + endpoint setup. Subcommands persist so they survive restart:
+          /model                      show model, provider, endpoint
+          /model <name>               set the model name
+          /model url <base_url>       set the server URL (e.g. http://host:8000/v1)
+          /model provider <name>      vllm | ollama | lmstudio | openai
+        """
+        arg = (arg or "").strip()
+        if not arg:
+            prov = self.config.get("provider") or "(default)"
+            url = self.config.get("base_url") or "(provider default)"
+            self._info(
+                f"model:    {self.config.get('model')}\n"
+                f"provider: {prov}\n"
+                f"endpoint: {url}\n"
+                "Set up:  /model <name>  ·  /model url <http://host:port/v1>  ·  "
+                "/model provider <vllm|ollama|lmstudio|openai>"
+            )
             return
-        self.config["model"] = name
-        self.system = self._build_system(name)  # prompt may be model-specific
+        parts = arg.split(maxsplit=1)
+        sub = parts[0].lower()
+        val = parts[1].strip() if len(parts) > 1 else ""
+        if sub == "url":
+            if not val:
+                self._info("usage: /model url <http://host:port/v1>")
+                return
+            self.config["base_url"] = val
+            self._persist_config()
+            self._info(f"endpoint → {val}  (saved). Send a prompt to test it.")
+            return
+        if sub == "provider":
+            from drydock.providers import PROVIDERS
+
+            if val not in PROVIDERS:
+                self._info(f"unknown provider {val!r}. Choose: {', '.join(PROVIDERS)}")
+                return
+            self.config["provider"] = val
+            self._persist_config()
+            self._info(f"provider → {val}  (saved)")
+            return
+        # Otherwise: set the model name (the whole arg, so names with spaces work).
+        self.config["model"] = arg
+        self.system = self._build_system(arg)  # prompt may be model-specific
+        self._persist_config()
         self._refresh_status()
-        self._info(f"switched model → {name}")
+        self._info(f"model → {arg}  (saved)")
 
     def _cmd_cwd(self, path: str) -> None:
         if not path:

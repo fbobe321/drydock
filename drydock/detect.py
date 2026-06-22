@@ -61,9 +61,11 @@ def onboarding_message(found: list[dict]) -> str:
     if not found:
         ports = ", ".join(b.split("//")[1] for _, b in CANDIDATES)
         return (
-            "No local LLM detected (" + ports + "). Start a server "
-            "(llama.cpp / vLLM / Ollama / LM Studio), or set base_url in "
-            "~/.drydock/config.toml, then restart."
+            "No local LLM detected (" + ports + "). Point Drydock at your model "
+            "right here:\n"
+            "  /model url <http://host:port/v1>     then     /model <model-name>\n"
+            "(saved to ~/.drydock/config.toml). Or start a local server "
+            "(llama.cpp / vLLM / Ollama / LM Studio) and restart."
         )
     best = found[0]
     model = best["models"][0] if best["models"] else "?"

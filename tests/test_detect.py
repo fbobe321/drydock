@@ -71,3 +71,5 @@ def test_onboarding_message_when_nothing_found():
     msg = detect.onboarding_message([])
     assert "No local LLM detected" in msg
     assert "config.toml" in msg
+    # New users must learn how to point Drydock at their model from the TUI.
+    assert "/model url" in msg and "/model" in msg

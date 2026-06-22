@@ -7,4 +7,4 @@ try:
     __version__ = _version("drydock-cli")
 except PackageNotFoundError:
     # Running from source before install (e.g. PYTHONPATH dev runs).
-    __version__ = "3.0.21"
+    __version__ = "3.0.22"
