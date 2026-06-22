@@ -168,6 +168,35 @@ def _summarize(inputs: dict) -> str:
 
 # ── Entry point ───────────────────────────────────────────────────────────
 
+def _first_run_setup(cfg: dict, cfg_path, cfgmod) -> tuple[dict, str]:
+    """Interactive first-launch: ask for the model server URL + model name and
+    persist them to config.toml. Autodetect (if anything is listening) supplies
+    the suggested defaults. Returns (updated cfg, onboarding line)."""
+    from drydock import detect
+
+    found = detect.detect_local_llms()
+    default_url = found[0]["base_url"] if found else "http://127.0.0.1:8000/v1"
+    default_model = (
+        found[0]["models"][0]
+        if found and found[0].get("models")
+        else (cfg.get("model") or "gemma4")
+    )
+    print("\n  ⚓ Drydock — first-time setup")
+    print("  Point Drydock at your local model server (any OpenAI-compatible URL).\n")
+    try:
+        url = input(f"  Model server URL [{default_url}]: ").strip() or default_url
+        model = input(f"  Model name [{default_model}]: ").strip() or default_model
+    except (EOFError, KeyboardInterrupt):
+        url, model = default_url, default_model
+        print()
+    cfg["base_url"] = url
+    cfg["model"] = model
+    cfg.setdefault("provider", found[0]["provider"] if found else "vllm")
+    cfgmod.save_file(cfg, cfg_path)
+    print(f"\n  Saved to {cfg_path} — change it anytime with /model or by editing that file.\n")
+    return cfg, f"⚓ Using {model} at {url}"
+
+
 def main():
     parser = argparse.ArgumentParser(description="DryDock — local coding agent")
     parser.add_argument(
@@ -198,19 +227,22 @@ def main():
         "temperature": args.temperature,
     }, cfg_path)
 
-    # First-launch autodetect: if no config existed and the user didn't pin an
-    # endpoint, probe localhost for a running local LLM and wire up the first
-    # one found (persisted, so subsequent runs skip detection).
+    # First launch: ask the user for their model server URL + model name and
+    # persist them to config.toml. Interactive only — when stdin isn't a TTY
+    # (piped / -p / cron) we fall back to silent autodetect so nothing blocks.
     onboarding = ""
     if first_run and not args.provider and not args.base_url:
-        from drydock import detect
+        if sys.stdin.isatty() and not args.prompt:
+            cfg, onboarding = _first_run_setup(cfg, cfg_path, cfgmod)
+        else:
+            from drydock import detect
 
-        found = detect.detect_local_llms()
-        onboarding = detect.onboarding_message(found)
-        if found:
-            cfg["provider"] = found[0]["provider"]
-            cfg["base_url"] = found[0]["base_url"]
-            cfgmod.save_file(cfg, cfg_path)
+            found = detect.detect_local_llms()
+            onboarding = detect.onboarding_message(found)
+            if found:
+                cfg["provider"] = found[0]["provider"]
+                cfg["base_url"] = found[0]["base_url"]
+                cfgmod.save_file(cfg, cfg_path)
 
     config = {
         **cfg,
