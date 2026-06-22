@@ -15,6 +15,40 @@ from drydock.compaction import (
 )
 
 
+def test_estimate_counts_tool_call_input_args():
+    # A full-file Write hides its bulk in tool_calls[].input.content. The
+    # estimate MUST see it (this was the bug: it read as ~0 tokens).
+    big = "x" * 40000
+    msgs = [{"role": "assistant", "content": "",
+             "tool_calls": [{"id": "1", "name": "Write",
+                             "input": {"file_path": "a.py", "content": big}}]}]
+    assert estimate_tokens(msgs) > 10000  # ~40000/3.0, not ~0
+
+
+def test_emergency_compact_shrinks_big_write_arg_below_limit():
+    # Reproduce the operator's crash shape: history dominated by an OLD
+    # full-file Write arg. Emergency compaction must get the estimate under the
+    # real 64k window (it returned the SAME oversized request before).
+    limit = 65536
+    big = "y" * 250000  # ~83k est tokens — over the window
+    msgs = [
+        {"role": "user", "content": "refactor cli.py"},
+        {"role": "assistant", "content": "",
+         "tool_calls": [{"id": "1", "name": "Write",
+                         "input": {"file_path": "cli.py", "content": big}}]},
+        {"role": "tool", "tool_call_id": "1", "name": "Write", "content": "ok"},
+        {"role": "user", "content": "now run tests"},
+        {"role": "assistant", "content": "",
+         "tool_calls": [{"id": "2", "name": "Bash", "input": {"command": "pytest"}}]},
+        {"role": "tool", "tool_call_id": "2", "name": "Bash", "content": "passed"},
+    ]
+    assert estimate_tokens(msgs) > limit
+    emergency_compact(msgs, limit)
+    assert estimate_tokens(msgs) < limit  # actually under the window now
+    # The recent Bash tool_call (last) is preserved intact.
+    assert msgs[4]["tool_calls"][0]["input"]["command"] == "pytest"
+
+
 def test_is_context_length_error_matches_provider_phrasings():
     for msg in [
         "This model's maximum context length is 131072 tokens",

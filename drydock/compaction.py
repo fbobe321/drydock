@@ -35,18 +35,52 @@ def is_context_length_error(err: str) -> bool:
 
 
 def estimate_tokens(messages: list) -> int:
-    """Rough token estimate: chars / 3.5"""
+    """Rough token estimate: chars / 3.5.
+
+    CRUCIAL: a tool call's arguments live in a nested ``input`` dict — e.g. a
+    full-file Write puts the whole file in tool_calls[].input.content. Counting
+    only top-level strings missed that entirely, so a 40k-char Write read as ~0
+    tokens, compaction never fired, and the real request blew past the context
+    window. Count nested strings so the estimate reflects what's actually sent.
+    """
     total = 0
     for m in messages:
         content = m.get("content", "")
         if isinstance(content, str):
             total += len(content)
-        for tc in m.get("tool_calls", []):
-            if isinstance(tc, dict):
-                for v in tc.values():
-                    if isinstance(v, str):
-                        total += len(v)
-    return int(total / 3.5)
+        for tc in m.get("tool_calls", []) or []:
+            total += _count_chars(tc)
+    # /3.0, not /3.5: code is symbol-dense and tokenizes to MORE tokens than
+    # prose, so a conservative (slightly high) estimate keeps us off the wall.
+    return int(total / 3.0)
+
+
+def _count_chars(v) -> int:
+    """Total length of every string nested in v (str / dict / list)."""
+    if isinstance(v, str):
+        return len(v)
+    if isinstance(v, dict):
+        return sum(_count_chars(x) for x in v.values())
+    if isinstance(v, (list, tuple)):
+        return sum(_count_chars(x) for x in v)
+    return 0
+
+
+def _truncate_tool_call_args(messages: list, max_len: int) -> None:
+    """Shrink oversized string arguments inside OLD assistant tool calls (a
+    full-file Write/Edit is a top bloat source and nothing else truncates it).
+    The most recent tool-call message is left intact; truncating only the
+    argument *values* keeps each call's id, so tool-result pairing stays valid."""
+    last = max((i for i, m in enumerate(messages) if m.get("tool_calls")), default=-1)
+    for i, m in enumerate(messages):
+        if i == last:
+            continue
+        for tc in m.get("tool_calls") or []:
+            inp = tc.get("input") if isinstance(tc, dict) else None
+            if isinstance(inp, dict):
+                for k, v in inp.items():
+                    if isinstance(v, str) and len(v) > max_len:
+                        inp[k] = v[: max_len // 2] + "\n[... arg truncated ...]"
 
 
 def compact(messages: list, context_limit: int = 131072) -> list:
@@ -92,6 +126,10 @@ def compact(messages: list, context_limit: int = 131072) -> list:
             if current <= target:
                 break
 
+    # Pass 3: shrink big old tool-call arguments (full-file Write/Edit bodies).
+    if estimate_tokens(messages) > target:
+        _truncate_tool_call_args(messages, max_len=1500)
+
     return messages
 
 
@@ -134,6 +172,11 @@ def emergency_compact(messages: list, context_limit: int = 131072) -> list:
                 content = messages[i].get("content", "")
                 if isinstance(content, str) and len(content) > 500:
                     messages[i]["content"] = content[:300] + "\n[... truncated ...]"
+
+    # Pass 4: shrink big tool-CALL arguments — a full-file Write/Edit puts the
+    # whole file in tool_calls[].input and nothing above touches it. This was
+    # THE leak that let the real request stay over the window after compaction.
+    _truncate_tool_call_args(messages, max_len=300)
 
     return messages
 

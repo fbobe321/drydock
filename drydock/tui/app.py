@@ -8,6 +8,7 @@ messages (see tui/messages.py). Nautical theme, original branding.
 from __future__ import annotations
 
 import random
+import threading
 import time
 
 from textual import work
@@ -119,6 +120,10 @@ class DrydockApp(App):
     BINDINGS = [
         Binding("ctrl+c", "copy_selection", "Copy", priority=True),
         Binding("ctrl+d", "quit", "Quit", priority=True),
+        # Escape stops a running turn (the agent ends cleanly, session kept) —
+        # the way out of a runaway task without quitting the whole app. "/stop"
+        # does the same. priority so it isn't swallowed by the focused prompt.
+        Binding("escape", "stop", "Stop the running turn", priority=True),
         Binding("ctrl+o", "toggle_tools", "Expand/collapse details"),
         # Scroll the transcript from the keyboard (focus stays on the prompt,
         # and SSH sessions often don't forward the mouse wheel). priority=True
@@ -128,6 +133,21 @@ class DrydockApp(App):
         Binding("ctrl+home", "scroll_top", "Top", priority=True, show=False),
         Binding("ctrl+end", "scroll_bottom", "Bottom", priority=True, show=False),
     ]
+
+    def action_stop(self) -> None:
+        """STOP the running turn: signal the agent loop to end at its next safe
+        point, drop any queued prompts, and hand control back. The session
+        (history, files) is preserved — this is not a quit."""
+        if not self._busy:
+            return
+        self._cancel.set()
+        dropped = len(self._queue)
+        self._queue.clear()
+        note = "⏹ stopping after the current step…"
+        if dropped:
+            note += f" (discarded {dropped} queued)"
+        self._info(note)
+        self._refresh_status()
 
     def action_scroll_up(self) -> None:
         self._scroll.scroll_page_up()
@@ -185,6 +205,11 @@ class DrydockApp(App):
         self._current_assistant: AssistantMessage | None = None
         self._last_card: ToolCard | None = None
         self._busy = False
+        # STOP signal: Escape / "/stop" sets it; the agent loop checks it at safe
+        # points and ends the turn cleanly (session preserved). Lives in config
+        # so run() — and any sub-agent that copies config — can see it.
+        self._cancel = threading.Event()
+        self.config["_cancel"] = self._cancel
         self._queue: list[str] = []  # prompts submitted while a turn is running
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
@@ -318,6 +343,7 @@ class DrydockApp(App):
     def _begin(self, text: str) -> None:
         """Start an agent turn for an already-displayed user prompt."""
         self._current_assistant = None
+        self._cancel.clear()  # fresh turn — clear any prior STOP
         self._busy = True
         self._work_start = time.monotonic()
         self._work_word = random.choice(_WORKING_WORDS)
@@ -336,6 +362,11 @@ class DrydockApp(App):
         arg = parts[1].strip() if len(parts) > 1 else ""
         if cmd in ("/quit", "/exit", "/q"):
             self.exit()
+        elif cmd in ("/stop", "/cancel"):
+            if self._busy:
+                self.action_stop()
+            else:
+                self._info("Nothing is running.")
         elif cmd == "/clear":
             self.state = AgentState()
             self._scroll.remove_children()
@@ -377,10 +408,11 @@ class DrydockApp(App):
                 "  /cwd [path]      show or change the working directory\n"
                 "  /undo            revert the last file write/edit\n"
                 "  /back            rewind the last turn from the model's context\n"
+                "  /stop            stop the running turn (or press Esc)\n"
                 "  /status          session model, cwd, turns, tokens\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
-                "Type a task and press Enter. ↑/↓ recall history · Ctrl+O expands tools."
+                "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
             )
         else:
             self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))

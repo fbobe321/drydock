@@ -103,6 +103,13 @@ def run(
     # a call to anything else is refused — never executed. Keeps a read-only
     # sub-agent read-only and stops it from recursing into `task`.
     allow = config.get("tool_allowlist")
+    # User STOP signal (a threading.Event the TUI sets on Escape / "/stop").
+    # Checked only at SAFE points — top of the loop and after a turn's tool
+    # results are all appended — so a stop never leaves an assistant tool_call
+    # without its matching tool result (which would corrupt the history).
+    cancel = config.get("_cancel")
+    def _stopped() -> bool:
+        return cancel is not None and cancel.is_set()
     tool_call_count = 0
     session_has_edited = False
     leaked_call_retries = 0
@@ -111,6 +118,8 @@ def run(
     loop_tracker = LoopTracker()
 
     while state.turn_count < max_turns:
+        if _stopped():
+            break
         state.turn_count += 1
         run_iteration += 1
         assistant_turn: AssistantTurn | None = None
@@ -263,6 +272,11 @@ def run(
                 "name": tc["name"],
                 "content": result,
             })
+
+        # Safe point (all tool results appended): honor a STOP requested while
+        # this turn's tools were running, before spending another LLM call.
+        if _stopped():
+            break
 
         # Real progress this turn — reset the consecutive stall-nudge counter so
         # a long, productive plan can run as far as it needs (the cap only
