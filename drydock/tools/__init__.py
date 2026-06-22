@@ -460,7 +460,12 @@ def tool_bash(params: dict, config: dict) -> str:
             output += f"\n[exit code: {result.returncode}]"
         return output.strip() or "(no output)"
     except subprocess.TimeoutExpired:
-        return f"Error: command timed out after {timeout}s"
+        bigger = min(timeout * 4, 600)
+        return (
+            f"Error: command timed out after {timeout}s. If it is legitimately "
+            f"slow (a big query, build, download, or test run), retry with a "
+            f"larger timeout — pass timeout: {bigger}. Otherwise it may be hung."
+        )
     except Exception as e:
         return f"Error: {e}"
 

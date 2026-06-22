@@ -313,6 +313,15 @@ def test_file_tools_honor_config_cwd(tmp_path):
     assert "x.py" in tool_bash({"command": "ls sub"}, cfg)
 
 
+def test_tool_bash_timeout_suggests_larger_timeout():
+    from drydock.tools import tool_bash
+    out = tool_bash({"command": "sleep 2", "timeout": 1}, {})
+    assert "timed out after 1s" in out
+    # Must tell the model it can retry with a bigger timeout (so a legitimately
+    # slow query/build doesn't dead-end — what derailed query-optimize).
+    assert "timeout: 4" in out
+
+
 def test_absolute_paths_pass_through(tmp_path):
     fp = str(tmp_path / "abs.py")
     tool_write({"file_path": fp, "content": "a=1\n"}, {"cwd": "/nonexistent"})
