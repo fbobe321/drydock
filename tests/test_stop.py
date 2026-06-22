@@ -62,3 +62,28 @@ def test_no_cancel_event_runs_normally(monkeypatch):
     st = AgentState()
     list(run("go", st, {"model": "m"}, "sys"))
     assert any(m.get("role") == "assistant" for m in st.messages)
+
+
+def test_create_abortable_raises_on_cancel():
+    """_create_abortable runs the blocking call off-thread and abandons it when
+    the cancel Event fires — so STOP doesn't wait out a long decode."""
+    import threading
+    import time
+    import pytest
+    from drydock.providers import _create_abortable, _StopRequested
+
+    cancel = threading.Event()
+
+    class _SlowClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    time.sleep(30)  # simulate a long decode (orphaned on cancel)
+                    return "never"
+
+    threading.Timer(0.3, cancel.set).start()
+    t0 = time.monotonic()
+    with pytest.raises(_StopRequested):
+        _create_abortable(_SlowClient(), {}, "", "", cancel)
+    assert time.monotonic() - t0 < 5  # returned promptly, didn't wait 30s

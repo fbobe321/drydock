@@ -7,10 +7,21 @@ DryDock v3 — clean rewrite, no model-specific tool call parsers.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 from dataclasses import dataclass
 from typing import Generator
+
+# Run blocking LLM calls here so STOP can ABANDON one mid-decode: closing the
+# HTTP client does NOT interrupt an in-flight blocking read, so instead we wait
+# on a future and, when the user cancels, return immediately and let the
+# orphaned request finish (and be discarded) in the background.
+_LLM_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="llm")
+
+
+class _StopRequested(Exception):
+    """Internal: STOP was pressed during a blocking LLM call."""
 
 from drydock.tuning import strip_leaked_tool_calls, strip_thinking_tokens, use_streaming
 
@@ -69,6 +80,57 @@ def _safe_create(client, kwargs: dict, base_url: str, provider: str):
         return client.chat.completions.create(**kwargs)
     except openai.APIConnectionError as e:
         raise LLMUnreachable(_friendly_unreachable(base_url, provider)) from e
+
+
+def _create_abortable(client, kwargs: dict, base_url: str, provider: str, cancel):
+    """Like _safe_create, but runs off-thread and polls a cancel Event so STOP
+    can abandon a blocked decode (raising _StopRequested). The orphaned request
+    runs to completion in the pool thread and its result is dropped."""
+    import openai
+
+    fut = _LLM_POOL.submit(client.chat.completions.create, **kwargs)
+    while True:
+        try:
+            return fut.result(timeout=0.2)
+        except concurrent.futures.TimeoutError:
+            if cancel is not None and cancel.is_set():
+                raise _StopRequested
+        except openai.APIConnectionError as e:
+            raise LLMUnreachable(_friendly_unreachable(base_url, provider)) from e
+
+
+def _stream_chunks(response, cancel):
+    """Yield streamed chunks, but pull them via a background thread + queue so a
+    STOP can abandon a read that's blocked waiting for the first token (the
+    thinking phase). On cancel we just stop reading; the orphaned producer
+    drains in the background."""
+    import queue as _queue
+
+    q: _queue.Queue = _queue.Queue()
+    _DONE = object()
+
+    def _produce():
+        try:
+            for ch in response:
+                q.put(ch)
+        except Exception as e:  # noqa: BLE001 — surface to the consumer
+            q.put(e)
+        finally:
+            q.put(_DONE)
+
+    _LLM_POOL.submit(_produce)
+    while True:
+        if cancel is not None and cancel.is_set():
+            return
+        try:
+            item = q.get(timeout=0.2)
+        except _queue.Empty:
+            continue
+        if item is _DONE:
+            return
+        if isinstance(item, Exception):
+            raise item
+        yield item
 
 
 # ── Event types ───────────────────────────────────────────────────────────
@@ -196,6 +258,13 @@ def stream(
         max_retries=0,
         timeout=httpx.Timeout(600.0, connect=10.0),
     )
+    # Expose the client so the TUI's STOP (Esc / Ctrl+C) can close it mid-call —
+    # closing the connection aborts an in-flight blocking decode immediately
+    # instead of waiting out the whole generation.
+    cancel = config.get("_cancel")
+    # Stash in the SHARED abort holder (a mutable dict that survives run()'s
+    # dict(config) shallow-copy) so the TUI's STOP can reach this exact client.
+    config.setdefault("_abort", {})["client"] = client
 
     oai_messages = messages_to_openai(messages, system)
 
@@ -231,16 +300,30 @@ def stream(
     if not do_stream:
         # Non-streaming: one request, parse the complete message. This is the
         # reliable path for local models whose tool-call JSON breaks under
-        # streaming.
-        yield from _complete_nonstreaming(client, kwargs, base_url, provider)
+        # streaming. If STOP closes the client mid-call the blocking request
+        # raises — swallow that as a clean cancel rather than an error.
+        try:
+            yield from _complete_nonstreaming(client, kwargs, base_url, provider, cancel)
+        except _StopRequested:
+            return  # STOP — abandon the in-flight request, clean stop
+        except Exception:
+            if cancel is not None and cancel.is_set():
+                return
+            raise
+        finally:
+            config.get("_abort", {}).pop("client", None)
         return
 
     text = ""
     tool_buf: dict = {}  # index → {id, name, args}
     in_tok = out_tok = 0
 
-    response = _safe_create(client, kwargs, base_url, provider)
-    for chunk in response:
+    try:
+        response = _create_abortable(client, kwargs, base_url, provider, cancel)
+    except _StopRequested:
+        config.get("_abort", {}).pop("client", None)
+        return
+    for chunk in _stream_chunks(response, cancel):
         if not chunk.choices:
             if hasattr(chunk, "usage") and chunk.usage:
                 in_tok = chunk.usage.prompt_tokens or in_tok
@@ -279,6 +362,9 @@ def stream(
             in_tok = chunk.usage.prompt_tokens or in_tok
             out_tok = chunk.usage.completion_tokens or out_tok
 
+    config.get("_abort", {}).pop("client", None)  # generation done — drop the abort handle
+    if cancel is not None and cancel.is_set():
+        return  # stopped mid-stream — don't emit a partial turn
     tool_calls = []
     for idx in sorted(tool_buf):
         v = tool_buf[idx]
@@ -293,12 +379,13 @@ def stream(
 
 
 def _complete_nonstreaming(
-    client, kwargs: dict, base_url: str = "", provider: str = ""
+    client, kwargs: dict, base_url: str = "", provider: str = "", cancel=None
 ) -> Generator:
     """Single non-streaming completion. Yields one TextChunk (if any text)
     then the AssistantTurn. Used when streaming would corrupt tool-call JSON.
+    Runs off-thread so STOP can abandon a blocked decode.
     """
-    resp = _safe_create(client, kwargs, base_url, provider)
+    resp = _create_abortable(client, kwargs, base_url, provider, cancel)
     choice = resp.choices[0]
     msg = choice.message
 

@@ -251,6 +251,18 @@ def run(
             if tc["name"] in ("Edit", "Write"):
                 session_has_edited = True
 
+            # STOP pressed: don't run the remaining tools, but still record a
+            # paired result for each (the assistant message already lists all
+            # tool_calls — leaving one without a tool result corrupts history).
+            if _stopped():
+                state.messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "name": tc["name"],
+                    "content": "[skipped — stopped by user]",
+                })
+                continue
+
             # Check tool call limit
             if max_tool_calls > 0 and tool_call_count > max_tool_calls:
                 state.messages.append({

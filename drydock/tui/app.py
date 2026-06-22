@@ -135,19 +135,39 @@ class DrydockApp(App):
     ]
 
     def action_stop(self) -> None:
-        """STOP the running turn: signal the agent loop to end at its next safe
-        point, drop any queued prompts, and hand control back. The session
-        (history, files) is preserved — this is not a quit."""
+        """STOP the running turn NOW (Esc or, while busy, a single Ctrl+C):
+        signal the loop AND forcibly abort the in-flight LLM call and any
+        running command so it stops immediately rather than after the current
+        step. Session (history, files) is preserved — this is not a quit."""
         if not self._busy:
             return
         self._cancel.set()
+        self._abort_inflight()
         dropped = len(self._queue)
         self._queue.clear()
-        note = "⏹ stopping after the current step…"
-        if dropped:
-            note += f" (discarded {dropped} queued)"
+        note = "⏹ stopped." + (f" (discarded {dropped} queued)" if dropped else "")
         self._info(note)
         self._refresh_status()
+
+    def _abort_inflight(self) -> None:
+        """Forcibly interrupt blocking work so STOP is immediate: close the LLM
+        HTTP client (aborts a long decode) and kill any running command. The
+        handles live in the shared config["_abort"] holder (a mutable dict that
+        survives run()'s dict(config) copy); missing ones just mean nothing is
+        in that state right now."""
+        abort = self.config.get("_abort") or {}
+        client = abort.get("client")
+        if client is not None:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+        proc = abort.get("proc")
+        if proc is not None:
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
 
     def action_scroll_up(self) -> None:
         self._scroll.scroll_page_up()
@@ -186,7 +206,12 @@ class DrydockApp(App):
             self.notify(f"Copied {len(selected)} chars to clipboard", timeout=2)
             self._ctrl_c_armed = False
             return
-        # No selection → double-Ctrl+C to exit.
+        # While a turn is running, a single Ctrl+C STOPS it (like Esc) — the
+        # interrupt key when you need to halt the TUI mid-task.
+        if self._busy:
+            self.action_stop()
+            return
+        # Idle, no selection → double-Ctrl+C to exit.
         if self._ctrl_c_armed:
             self.exit()
             return
@@ -210,6 +235,10 @@ class DrydockApp(App):
         # so run() — and any sub-agent that copies config — can see it.
         self._cancel = threading.Event()
         self.config["_cancel"] = self._cancel
+        # Shared abort-handle holder: the provider stashes the live LLM client
+        # and the bash tool its subprocess here, so STOP can force-abort them.
+        # A plain dict survives run()'s dict(config) shallow copy by reference.
+        self.config["_abort"] = {}
         self._queue: list[str] = []  # prompts submitted while a turn is running
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
@@ -283,8 +312,10 @@ class DrydockApp(App):
         pct = min(100, round(used / limit * 100)) if limit else 0
         ctx = f"ctx {used:,}/{limit // 1000}k ({pct}%)"
         flag = "⚓ working" if self._busy else "⚓ ready"
+        # Busy → show the interrupt keys; idle → the quit hint.
+        keys = "Esc/Ctrl+C stop" if self._busy else "Ctrl+C×2 quit"
         return (
-            f"{flag}  ·  {model}  ·  Ctrl+C×2 quit · PgUp/PgDn scroll · "
+            f"{flag}  ·  {model}  ·  {keys} · PgUp/PgDn scroll · "
             f"Ctrl+O details  ·  {ctx}"
         )
 

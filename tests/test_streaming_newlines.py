@@ -36,7 +36,7 @@ def test_streaming_preserves_newline_only_chunks(monkeypatch):
         _Chunk("\n\n"),
         _Chunk("body text"),
     ]
-    monkeypatch.setattr(P, "_safe_create", lambda *a, **k: iter(chunks))
+    monkeypatch.setattr(P, "_create_abortable", lambda *a, **k: iter(chunks))
 
     full = ""
     streamed = []
@@ -60,7 +60,7 @@ def test_streaming_still_drops_chunk_emptied_by_stripping(monkeypatch):
     # A chunk that is ONLY a thinking marker strips to "" and is skipped (so we
     # don't emit empty text), but real whitespace is kept.
     chunks = [_Chunk("hello"), _Chunk("<|channel>x<channel|>"), _Chunk("\n"), _Chunk("world")]
-    monkeypatch.setattr(P, "_safe_create", lambda *a, **k: iter(chunks))
+    monkeypatch.setattr(P, "_create_abortable", lambda *a, **k: iter(chunks))
     full = ""
     for ev in stream(model="gemma4", system="s",
                      messages=[{"role": "user", "content": "hi"}],

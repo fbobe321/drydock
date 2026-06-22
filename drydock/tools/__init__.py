@@ -10,6 +10,7 @@ import re
 import difflib
 import glob as _glob
 import subprocess
+import time
 from pathlib import Path
 
 from drydock.tool_registry import ToolDef, register
@@ -457,26 +458,46 @@ def tool_bash(params: dict, config: dict) -> str:
                     f"REFUSED: you declined to approve this command "
                     f"({approval_reason}).\nCommand: {cmd.strip()}"
                 )
+    # Run via Popen (not subprocess.run) so STOP can kill it mid-execution:
+    # the handle is stashed in config["_abort"]["proc"] for action_stop to .kill().
+    # We poll communicate() in short slices, checking the cancel Event and the
+    # overall timeout between slices.
+    cancel = config.get("_cancel")
+    proc = None
     try:
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True,
-            timeout=timeout, cwd=config.get("cwd"),
+        proc = subprocess.Popen(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, cwd=config.get("cwd"),
         )
-        output = result.stdout
-        if result.stderr:
-            output += "\n" + result.stderr if output else result.stderr
-        if result.returncode != 0:
-            output += f"\n[exit code: {result.returncode}]"
+        config.setdefault("_abort", {})["proc"] = proc
+        start = time.monotonic()
+        while True:
+            try:
+                out, _ = proc.communicate(timeout=0.5)
+                break
+            except subprocess.TimeoutExpired:
+                if cancel is not None and cancel.is_set():
+                    proc.kill()
+                    proc.communicate()
+                    return "[stopped by user]"
+                if time.monotonic() - start > timeout:
+                    proc.kill()
+                    proc.communicate()
+                    bigger = min(timeout * 4, 600)
+                    return (
+                        f"Error: command timed out after {timeout}s. If it is "
+                        f"legitimately slow (a big query, build, download, or "
+                        f"test run), retry with a larger timeout — pass "
+                        f"timeout: {bigger}. Otherwise it may be hung."
+                    )
+        output = out or ""
+        if proc.returncode != 0:
+            output += f"\n[exit code: {proc.returncode}]"
         return output.strip() or "(no output)"
-    except subprocess.TimeoutExpired:
-        bigger = min(timeout * 4, 600)
-        return (
-            f"Error: command timed out after {timeout}s. If it is legitimately "
-            f"slow (a big query, build, download, or test run), retry with a "
-            f"larger timeout — pass timeout: {bigger}. Otherwise it may be hung."
-        )
     except Exception as e:
         return f"Error: {e}"
+    finally:
+        config.get("_abort", {}).pop("proc", None)
 
 
 def tool_glob(params: dict, config: dict) -> str:
