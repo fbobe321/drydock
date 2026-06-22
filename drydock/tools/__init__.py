@@ -496,10 +496,16 @@ _TODO_DONE = {"x", "X", "✓"}
 _TODO_DOING = {"~", "-", "/", "*"}
 
 
-def parse_todo(tasks: str) -> list[tuple[str, str]]:
-    """Parse a plain-text checklist into (text, status) pairs. Each non-empty
-    line is one task, optionally prefixed with [x] done / [~] in_progress /
-    [ ] pending. Deliberately forgiving (a bare line counts as pending)."""
+def parse_todo(tasks) -> list[tuple[str, str]]:
+    """Parse a checklist into (text, status) pairs. Each non-empty line is one
+    task, optionally prefixed with [x] done / [~] in_progress / [ ] pending.
+    Deliberately forgiving: a bare line counts as pending, and `tasks` may be a
+    newline-joined string OR a list of lines (the model sometimes sends a JSON
+    array instead of one string — handle both rather than crash the TUI)."""
+    if isinstance(tasks, (list, tuple)):
+        tasks = "\n".join(str(t) for t in tasks)
+    elif tasks is not None and not isinstance(tasks, str):
+        tasks = str(tasks)
     out: list[tuple[str, str]] = []
     for raw in (tasks or "").splitlines():
         line = raw.strip().lstrip("-*•").strip()
