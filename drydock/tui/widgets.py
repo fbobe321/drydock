@@ -148,6 +148,25 @@ class PromptHistory:
         return self._draft
 
 
+# The slash commands offered for completion (typing "/m" → /model). Keep in
+# sync with app._handle_slash. Shown as a hint as the user types, and Tab
+# completes the prefix.
+SLASH_COMMANDS = [
+    "/help", "/model", "/cwd", "/undo", "/back", "/stop", "/status",
+    "/clear", "/quit",
+]
+
+
+def _common_prefix(strings: list[str]) -> str:
+    if not strings:
+        return ""
+    pre = strings[0]
+    for s in strings[1:]:
+        while not s.startswith(pre):
+            pre = pre[:-1]
+    return pre
+
+
 class PromptArea(TextArea):
     """Multi-line prompt box.
 
@@ -187,6 +206,20 @@ class PromptArea(TextArea):
             event.prevent_default()
             self.insert("\n")
             return
+        if key == "tab":
+            t = self.text
+            if t.startswith("/") and " " not in t and "\n" not in t:
+                matches = [c for c in SLASH_COMMANDS if c.startswith(t.lower())]
+                if matches:
+                    event.stop()
+                    event.prevent_default()
+                    # one match → complete it (+ space); several → common prefix.
+                    self.text = (
+                        matches[0] + " " if len(matches) == 1
+                        else _common_prefix(matches)
+                    )
+                    self.move_cursor(self.document.end)
+                    return
         if key == "up" and self.cursor_at_first_line:
             event.stop()
             event.prevent_default()

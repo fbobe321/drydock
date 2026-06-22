@@ -34,6 +34,7 @@ from drydock.tui.messages import (
     AgentTurnDone,
 )
 from drydock.tui.widgets import (
+    SLASH_COMMANDS,
     AssistantMessage,
     ErrorMessage,
     PromptArea,
@@ -350,6 +351,22 @@ class DrydockApp(App):
         return self._current_assistant
 
     # ── input ─────────────────────────────────────────────────────────────
+
+    def on_text_area_changed(self, event) -> None:
+        """As the user types a bare slash command, surface the matching commands
+        in the (idle) activity line — '/m' shows '/model'. Tab completes them."""
+        if self._busy:
+            return  # #working shows live activity while a turn is running
+        try:
+            text = self.query_one("#prompt", PromptArea).text
+        except Exception:  # noqa: BLE001 — widget not mounted yet
+            return
+        hint = ""
+        if text.startswith("/") and " " not in text and "\n" not in text:
+            matches = [c for c in SLASH_COMMANDS if c.startswith(text.lower())]
+            if matches:
+                hint = "  " + "   ".join(matches) + "   ·  Tab to complete"
+        self.query_one("#working", Static).update(hint)
 
     def on_prompt_area_submitted(self, event: PromptArea.Submitted) -> None:
         text = event.text.strip()
