@@ -123,6 +123,13 @@ def test_result_is_ok_marks_failures():
     assert not result_is_ok("Error: nope")
     assert not result_is_ok("REFUSED: this command reformats a filesystem...")
     assert not result_is_ok("  Error: leading whitespace still counts")
+    # A failed shell command (Bash appends "[exit code: N]" only on failure)
+    # must render ✗, not a green ✓ — otherwise the TUI hides real failures.
+    assert not result_is_ok("bash: sqlite3: command not found\n[exit code: 127]")
+    assert not result_is_ok("test.c:1: error\n[exit code: 1]")
+    # Successful command output (no exit-code marker) stays ✓, even if it
+    # happens to mention the word 'error' in normal output.
+    assert result_is_ok("0 errors, 0 warnings\nBuild succeeded")
 
 
 def test_summarize_inputs_prefers_meaningful_keys():

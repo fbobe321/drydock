@@ -210,9 +210,9 @@ class DrydockApp(App):
             return "deny"
 
     def _build_system(self, model: str | None) -> str:
-        # The TUI must honor AGENTS.md/DRYDOCK.md like the CLI does — it's the
-        # primary surface, and project instructions carry the user's tool/style
-        # conventions. cli.main() loads them into config after ensure_agents_md.
+        # The TUI honors a user's OWN AGENTS.md/DRYDOCK.md like the CLI does —
+        # cli.main() loads it into config["project_instructions"] as background
+        # context (drydock never auto-creates one).
         return system_prompt_for_model(model) + self.config.get("project_instructions", "")
 
     # ── layout ────────────────────────────────────────────────────────────

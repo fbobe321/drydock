@@ -16,12 +16,22 @@ _FAILURE_PREFIXES = ("Error", "REFUSED")
 # "[NOTE: …]" lines (see loop_detect.annotate). Strip them before judging
 # success, or a failed Edit behind a "[NOTE: write #9…]" reads as ✓.
 _LEADING_NOTES = re.compile(r"^\s*(?:\[NOTE:[^\]]*\]\s*)+")
+# Bash appends "[exit code: N]" only when a command FAILED (non-zero return).
+# Without this, a failed shell command (e.g. `command not found`, a compile
+# error, a failing test) renders as a green ✓ — which hides exactly the kind
+# of failure the operator relies on the TUI to surface.
+_BASH_EXIT = re.compile(r"\[exit code: (\d+)\]")
 
 
 def result_is_ok(result: str) -> bool:
     """Whether a tool result should render as success (✓) vs failure (✗)."""
     cleaned = _LEADING_NOTES.sub("", result or "")
-    return not cleaned.lstrip().startswith(_FAILURE_PREFIXES)
+    if cleaned.lstrip().startswith(_FAILURE_PREFIXES):
+        return False
+    m = _BASH_EXIT.search(cleaned)
+    if m and m.group(1) != "0":
+        return False
+    return True
 
 
 _TOOL_BODY_MAX = 8000

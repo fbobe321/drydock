@@ -59,27 +59,6 @@ def load_project_instructions() -> str:
     return ""
 
 
-def ensure_agents_md() -> None:
-    """Auto-create AGENTS.md if no project instructions exist."""
-    for name in ("AGENTS.md", "DRYDOCK.md", ".drydock.md", "CLAUDE.md"):
-        if (Path.cwd() / name).exists():
-            return
-    (Path.cwd() / "AGENTS.md").write_text(
-        "# Project Instructions\n\n"
-        "DO NOT ask for confirmation. ACT IMMEDIATELY.\n"
-        "If there is a PRD.md, implement it. If there is code, work on it.\n\n"
-        "## Workflow\n"
-        "1. Read requirements or explore existing code\n"
-        "2. Create/edit files with Write or Edit\n"
-        "3. Test with Bash\n"
-        "4. Fix errors and verify\n\n"
-        "## Rules\n"
-        "- Use absolute imports for Python packages\n"
-        "- Always create __init__.py and __main__.py\n"
-        "- Test with python3 -m package_name\n"
-    )
-
-
 # ── REPL ──────────────────────────────────────────────────────────────────
 
 def print_colored(text: str, color: str = "") -> None:
@@ -245,10 +224,12 @@ def main():
         "onboarding": onboarding,
     }
 
-    ensure_agents_md()
-    # Loaded after ensure_agents_md so the auto-created AGENTS.md is included.
-    # The TUI reads this from config; CLI modes call load_project_instructions
-    # directly (see run_interactive/run_oneshot).
+    # Load a user's OWN AGENTS.md/DRYDOCK.md as background context if present.
+    # Drydock never CREATES one: auto-writing an AGENTS.md littered every
+    # directory the user ran drydock in, and its "ACT IMMEDIATELY, implement
+    # the PRD" content fought the system prompt and risked turning a plain
+    # greeting into a runaway build. The TUI reads this from config; CLI modes
+    # call load_project_instructions directly (see run_interactive/run_oneshot).
     config["project_instructions"] = load_project_instructions()
 
     if args.prompt:
