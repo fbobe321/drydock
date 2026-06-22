@@ -1,0 +1,43 @@
+"""Safety valve: a byte-identical tool call that keeps FAILING must end the
+turn after a small cap, not spin toward MAX_TOOL_TURNS (a real session failed
+the same Write 160×)."""
+from __future__ import annotations
+
+import drydock.agent as agent_mod
+from drydock.agent import AgentState, run
+from drydock.providers import AssistantTurn
+
+
+def test_identical_failure_streak_ends_turn(monkeypatch):
+    calls = {"n": 0}
+
+    def counting(**kw):
+        calls["n"] += 1
+        # Same failing Write every time (empty file_path → Error). id varies but
+        # the input (the signature) is identical.
+        return iter([AssistantTurn(
+            "", [{"id": str(calls["n"]), "name": "Write",
+                  "input": {"file_path": "", "content": "x"}}], 1, 1)])
+
+    monkeypatch.setattr(agent_mod, "stream", counting)
+    st = AgentState()
+    list(run("build it", st, {"model": "m"}, "sys"))
+    assert calls["n"] <= 12  # stopped near the cap (8), nowhere near 200
+
+
+def test_changing_args_do_not_trip_valve(monkeypatch):
+    # Legit iterative fixing (different args each time) must NOT trip the valve;
+    # here each call succeeds (writes a different file), then the model finishes.
+    seq = [
+        AssistantTurn("", [{"id": "1", "name": "Write",
+                            "input": {"file_path": "a.txt", "content": "1"}}], 1, 1),
+        AssistantTurn("", [{"id": "2", "name": "Write",
+                            "input": {"file_path": "b.txt", "content": "2"}}], 1, 1),
+        AssistantTurn("done", [], 1, 1),
+    ]
+    monkeypatch.setattr(agent_mod, "stream", lambda **kw: iter([seq.pop(0)]))
+    st = AgentState()
+    import tempfile
+    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
+    assert any(m.get("role") == "assistant" and m.get("content") == "done"
+               for m in st.messages)
