@@ -22,7 +22,7 @@ DEFAULTS: dict[str, object] = {
     "model": "gemma4",
     "provider": "vllm",
     "base_url": "",
-    "max_tokens": 4096,
+    "max_tokens": 8192,  # 4096 truncated large file writes mid-JSON (→ _raw fail)
     "temperature": 0.2,
     "theme": "harbor",
 }

@@ -326,7 +326,11 @@ class DrydockApp(App):
             return ""
         spin = _SPINNER[self._spinner_i % len(_SPINNER)]
         elapsed = _fmt_elapsed(time.monotonic() - self._work_start)
-        toks = _fmt_tokens(self._work_chars // 4)
+        # Session output tokens (updated each completed turn) + this turn's live
+        # streamed chars. Tool turns are non-streaming, so _work_chars stays 0 —
+        # showing the cumulative total keeps the counter meaningful instead of
+        # stuck at "0 tokens" through a long multi-step task.
+        toks = _fmt_tokens(self.state.total_output_tokens + self._work_chars // 4)
         effort = self.state.current_effort
         eff = f" · thinking with {effort} effort" if effort else ""
         queued = f" · {len(self._queue)} queued" if self._queue else ""

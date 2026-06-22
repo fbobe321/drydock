@@ -217,6 +217,16 @@ def undo_last(config: dict) -> str:
 
 
 def tool_write(params: dict, config: dict) -> str:
+    # Truncated/invalid tool-call JSON arrives as {"_raw": ...} with no
+    # file_path/content — usually a big file that overran the response. Say so
+    # (and how to recover) instead of the misleading "needs a real file_path".
+    if "_raw" in params and not params.get("file_path"):
+        return (
+            "Error: the Write arguments were cut off or not valid JSON, so "
+            "nothing was written. This usually means the file was too large for "
+            "one response — write it in smaller pieces (Write the first part, "
+            "then Edit to append the rest)."
+        )
     fp = params.get("file_path")
     # Empty/whitespace path is the canonical real-use loop bug — reject it
     # clearly (with the content length, so the model knows the write was seen)
