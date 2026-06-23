@@ -205,13 +205,61 @@ def _parse_tool_args(raw: str) -> dict:
 
 # ── Message format conversion ─────────────────────────────────────────────
 
+_IMAGE_MIME = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+}
+
+
+def _user_content_with_images(content):
+    """Vision support: if the user's text references image file paths that exist
+    on disk, attach them as OpenAI multimodal image_url blocks (works with any
+    --mmproj-enabled server). Text-only prompts pass through unchanged as a plain
+    string, so display / loop-detection / compaction / token-counting (which all
+    assume string content) are untouched — the multimodal list is built ONLY here,
+    at the API boundary."""
+    if not isinstance(content, str) or "." not in content:
+        return content
+    import base64
+    import os
+    import re
+
+    exts = "png|jpe?g|gif|webp|bmp"
+    cands = re.findall(
+        rf'"([^"]+?\.(?:{exts}))"|\'([^\']+?\.(?:{exts}))\'|(\S+\.(?:{exts}))',
+        content, re.IGNORECASE,
+    )
+    seen: list[str] = []
+    for tup in cands:
+        raw = next((x for x in tup if x), None)
+        if not raw:
+            continue
+        p = os.path.expanduser(raw)
+        if os.path.isfile(p) and p not in seen:
+            seen.append(p)
+    if not seen:
+        return content
+    blocks = [{"type": "text", "text": content}]
+    for p in seen:
+        mime = _IMAGE_MIME.get(os.path.splitext(p)[1].lower(), "image/png")
+        try:
+            with open(p, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+        except OSError:
+            continue
+        blocks.append({"type": "image_url",
+                       "image_url": {"url": f"data:{mime};base64,{b64}"}})
+    return blocks if len(blocks) > 1 else content
+
+
 def messages_to_openai(messages: list, system: str) -> list:
     """Convert neutral messages to OpenAI API format."""
     result = [{"role": "system", "content": system}]
     for m in messages:
         role = m["role"]
         if role == "user":
-            result.append({"role": "user", "content": m["content"]})
+            result.append({"role": "user",
+                           "content": _user_content_with_images(m["content"])})
         elif role == "assistant":
             msg = {"role": "assistant", "content": m.get("content") or None}
             tcs = m.get("tool_calls", [])
