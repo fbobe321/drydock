@@ -9,6 +9,7 @@ import os
 import re
 import difflib
 import glob as _glob
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -438,6 +439,23 @@ def tool_edit(params: dict, config: dict) -> str:
         return f"Error editing {fp}: {e}"
 
 
+def kill_process_group(proc) -> None:
+    """Kill a Popen launched with start_new_session AND all its descendants by
+    signalling the whole process group. proc.kill() alone only kills the direct
+    shell, orphaning children (which keep running and hold the stdout pipe open,
+    hanging communicate() and freezing the TUI on STOP). Falls back to proc.kill()
+    if the group can't be resolved (e.g. process already gone)."""
+    if proc is None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def tool_bash(params: dict, config: dict) -> str:
     cmd = params.get("command")
     if not cmd:
@@ -469,7 +487,12 @@ def tool_bash(params: dict, config: dict) -> str:
                     f"({approval_reason}).\nCommand: {cmd.strip()}"
                 )
     # Run via Popen (not subprocess.run) so STOP can kill it mid-execution:
-    # the handle is stashed in config["_abort"]["proc"] for action_stop to .kill().
+    # the handle is stashed in config["_abort"]["proc"] for action_stop to kill.
+    # start_new_session=True puts the shell in its OWN process group so we can
+    # kill the WHOLE tree (kill_process_group): a bare proc.kill() only kills the
+    # /bin/sh shell, orphaning its children (e.g. a brute-force script and its
+    # subprocesses) which keep running AND keep the stdout pipe open — so the
+    # follow-up communicate() blocks forever and the TUI is stuck "working".
     # We poll communicate() in short slices, checking the cancel Event and the
     # overall timeout between slices.
     cancel = config.get("_cancel")
@@ -477,7 +500,7 @@ def tool_bash(params: dict, config: dict) -> str:
     try:
         proc = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=config.get("cwd"),
+            text=True, cwd=config.get("cwd"), start_new_session=True,
         )
         config.setdefault("_abort", {})["proc"] = proc
         start = time.monotonic()
@@ -487,11 +510,11 @@ def tool_bash(params: dict, config: dict) -> str:
                 break
             except subprocess.TimeoutExpired:
                 if cancel is not None and cancel.is_set():
-                    proc.kill()
+                    kill_process_group(proc)
                     proc.communicate()
                     return "[stopped by user]"
                 if time.monotonic() - start > timeout:
-                    proc.kill()
+                    kill_process_group(proc)
                     proc.communicate()
                     bigger = min(timeout * 4, 600)
                     return (

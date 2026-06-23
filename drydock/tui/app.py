@@ -165,10 +165,11 @@ class DrydockApp(App):
                 pass
         proc = abort.get("proc")
         if proc is not None:
-            try:
-                proc.kill()
-            except Exception:  # noqa: BLE001
-                pass
+            # kill the whole process group, not just the shell — else a command's
+            # child processes survive STOP and keep the stdout pipe open, hanging
+            # the bash tool's communicate() and freezing the TUI on "working".
+            from drydock.tools import kill_process_group
+            kill_process_group(proc)
 
     def action_scroll_up(self) -> None:
         self._scroll.scroll_page_up()
