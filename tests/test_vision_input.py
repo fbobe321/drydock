@@ -7,7 +7,6 @@ from __future__ import annotations
 import struct
 import zlib
 
-import pytest
 
 from drydock.providers import _user_content_with_images, messages_to_openai
 
