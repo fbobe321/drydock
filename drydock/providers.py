@@ -244,7 +244,7 @@ def _user_content_with_images(content):
             seen.append(p)
     if not seen:
         return content
-    blocks = [{"type": "text", "text": content}]
+    blocks: list[dict] = [{"type": "text", "text": content}]
     for p in seen:
         mime = _IMAGE_MIME.get(os.path.splitext(p)[1].lower(), "image/png")
         try:
@@ -259,7 +259,8 @@ def _user_content_with_images(content):
 
 def messages_to_openai(messages: list, system: str) -> list:
     """Convert neutral messages to OpenAI API format."""
-    result = [{"role": "system", "content": system}]
+    # value type is mixed (str content, multimodal list content, tool_calls list)
+    result: list[dict] = [{"role": "system", "content": system}]
     for m in messages:
         role = m["role"]
         if role == "user":

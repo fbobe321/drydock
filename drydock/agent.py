@@ -323,7 +323,7 @@ def run(
         # Safety valve: the same call has run identically (same args AND result)
         # too many times in a row — repeating it changes nothing. End the turn
         # and hand control back rather than burning turns toward MAX_TOOL_TURNS.
-        if identical_repeat_streak >= IDENTICAL_REPEAT_CAP:
+        if identical_repeat_streak >= IDENTICAL_REPEAT_CAP and last_call_sig:
             yield TextChunk(
                 f"\n[Stopped: the same {last_call_sig[0]} call ran "
                 f"{identical_repeat_streak}× in a row with the same result — "
