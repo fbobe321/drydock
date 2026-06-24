@@ -15,16 +15,16 @@ def test_defaults_when_no_file_and_no_flags(tmp_path):
 
 def test_file_overrides_defaults(tmp_path):
     path = tmp_path / "config.toml"
-    path.write_text('model = "qwen"\ntemperature = 0.7\n')
+    path.write_text('model = "mistral"\ntemperature = 0.7\n')
     out = cfg.resolve({}, path)
-    assert out["model"] == "qwen"
+    assert out["model"] == "mistral"
     assert out["temperature"] == 0.7
     assert out["provider"] == "vllm"  # still default
 
 
 def test_cli_overrides_file(tmp_path):
     path = tmp_path / "config.toml"
-    path.write_text('model = "qwen"\n')
+    path.write_text('model = "mistral"\n')
     out = cfg.resolve({"model": "gemma4", "provider": None}, path)
     assert out["model"] == "gemma4"      # CLI wins
     assert out["provider"] == "vllm"     # None CLI flag ignored → default
@@ -42,11 +42,11 @@ def test_existing_file_is_never_modified(tmp_path):
     # keys are backfilled only in the returned config, not written back. This
     # is what stops v3 clobbering a config shared with another tool.
     path = tmp_path / "config.toml"
-    original = 'model = "qwen"\nunknown_key = 42\n'
+    original = 'model = "mistral"\nunknown_key = 42\n'
     path.write_text(original)
     out = cfg.resolve({}, path)
     assert path.read_text() == original          # file untouched
-    assert out["model"] == "qwen"
+    assert out["model"] == "mistral"
     assert out["provider"] == "vllm"             # backfilled in memory only
 
 

@@ -181,7 +181,7 @@ def test_tui_includes_project_instructions_in_system_prompt():
     app = DrydockApp(cfg)
     assert "Use tabs not spaces." in app.system
     # A model switch rebuilds via the same path, so instructions are kept.
-    assert "Use tabs not spaces." in app._build_system("qwen")
+    assert "Use tabs not spaces." in app._build_system("mistral")
 
 
 def test_transcript_renders_bracket_text_without_markup_error():
@@ -220,8 +220,8 @@ def test_slash_commands_model_cwd_status_undo(tmp_path):
 
             # /model with no arg shows current; with arg switches.
             await slash("/model")
-            await slash("/model qwen")
-            assert app.config["model"] == "qwen"
+            await slash("/model mistral")
+            assert app.config["model"] == "mistral"
 
             # /cwd to a real dir switches; bad dir is rejected.
             sub = tmp_path / "work"

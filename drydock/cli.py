@@ -116,17 +116,28 @@ def run_interactive(config: dict) -> None:
 
 def run_oneshot(prompt: str, config: dict) -> None:
     """One-shot mode: run a single prompt and exit."""
+    from drydock.providers import LLMUnreachable
+
     system = SYSTEM_PROMPT + load_project_instructions()
     state = AgentState()
 
-    for event in run(prompt, state, config, system):
-        if isinstance(event, TextChunk):
-            print(event.text, end="", flush=True)
-        elif isinstance(event, ToolStart):
-            print(f"  [{event.name}]", file=sys.stderr, flush=True)
-        elif isinstance(event, ToolEnd):
-            pass
-    print()
+    try:
+        for event in run(prompt, state, config, system):
+            if isinstance(event, TextChunk):
+                print(event.text, end="", flush=True)
+            elif isinstance(event, ToolStart):
+                print(f"  [{event.name}]", file=sys.stderr, flush=True)
+            elif isinstance(event, ToolEnd):
+                pass
+        print()
+    except LLMUnreachable as e:
+        # The model server is down, the URL is wrong, or a turn overran the read
+        # timeout. The TUI and --cli paths already surface this; one-shot mode
+        # (-p, used by automation/harnesses) had no handler, so it crashed with a
+        # raw traceback that buried the actionable message. Print the remediation
+        # cleanly to stderr and exit non-zero so callers can detect the failure.
+        print(f"\nError: {e}", file=sys.stderr, flush=True)
+        sys.exit(2)
 
 
 def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
@@ -213,6 +224,12 @@ def main():
     parser.add_argument("--max-tool-calls", type=int, default=0, help="Max tool calls (0=unlimited)")
     parser.add_argument("--force-first-tool", action="store_true", help="Force tool_choice=required on first turn")
     parser.add_argument("--cli", action="store_true", help="Plain readline mode instead of the TUI")
+    parser.add_argument(
+        "--dangerously-skip-permissions",
+        dest="dangerously_skip_permissions",
+        action="store_true",
+        help="Auto-approve all tool calls without prompting (for CI/cron use)",
+    )
     args = parser.parse_args()
 
     from drydock import config as cfgmod
@@ -251,6 +268,7 @@ def main():
         "context_limit": 65536,
         "max_tool_calls": args.max_tool_calls,
         "force_first_tool": args.force_first_tool,
+        "_approve_all": args.dangerously_skip_permissions,
         "cwd": os.getcwd(),
         "history_path": str(Path.home() / ".drydock" / "history"),
         "onboarding": onboarding,
