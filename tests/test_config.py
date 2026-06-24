@@ -60,7 +60,7 @@ def test_first_run_creates_file_with_defaults_only(tmp_path):
     assert out["base_url"] == "http://localhost:9/v1"  # used this run
     with path.open("rb") as f:
         written = tomllib.load(f)
-    assert written["base_url"] == ""             # but NOT persisted
+    assert written["base_url"] == "http://localhost:8000/v1"  # the DEFAULT, NOT the CLI override
 
 
 def test_unparseable_file_falls_back_to_defaults(tmp_path):

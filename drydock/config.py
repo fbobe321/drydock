@@ -21,7 +21,11 @@ from pathlib import Path
 DEFAULTS: dict[str, object] = {
     "model": "gemma4",
     "provider": "vllm",
-    "base_url": "",
+    # Concrete (not "") so a freshly-written config SHOWS the endpoint and the
+    # user can edit it / point at another box. Empty fell back to the provider
+    # default invisibly, which left base_url absent from the file. For a non-vllm
+    # provider, override base_url (or use --base-url / the first-run prompt).
+    "base_url": "http://localhost:8000/v1",
     "max_tokens": 8192,  # 4096 truncated large file writes mid-JSON (→ _raw fail)
     "temperature": 0.2,
     "theme": "harbor",
