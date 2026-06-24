@@ -85,3 +85,39 @@ def test_default_base_url_is_concrete_not_empty():
     # the fix: an empty default left configs with no visible endpoint
     assert cfg.DEFAULTS["base_url"], "base_url default must be a concrete URL"
     assert cfg.DEFAULTS["base_url"].startswith("http")
+
+
+def test_v2_file_is_migrated_and_backed_up(tmp_path):
+    """A real v2 file (no v3 keys) is backed up and replaced with a fresh,
+    editable v3 config — the upgrade path that was invisible before."""
+    p = tmp_path / "config.toml"
+    p.write_text(V2_CONFIG)
+    merged = cfg.resolve({}, path=p)
+    # original preserved as a sibling .bak
+    bak = p.with_name("config.toml.bak")
+    assert bak.exists()
+    assert "active_model" in bak.read_text()  # the v2 content is safe
+    # the live file is now a clean v3 config with a visible base_url
+    new_text = p.read_text()
+    assert "base_url" in new_text
+    assert "http" in new_text
+    assert merged["base_url"] == cfg.DEFAULTS["base_url"]
+    assert "active_model" not in new_text  # v2 junk gone from the live file
+
+
+def test_real_v3_file_is_left_untouched(tmp_path):
+    """A genuine v3 file (has a known key) must NOT be migrated/rewritten."""
+    p = tmp_path / "config.toml"
+    p.write_text('base_url = "http://192.0.2.20:8000/v1"\n# my hand edit\n')
+    cfg.resolve({}, path=p)
+    assert not p.with_name("config.toml.bak").exists()
+    assert "# my hand edit" in p.read_text()  # untouched
+
+
+def test_migration_does_not_clobber_existing_backup(tmp_path):
+    p = tmp_path / "config.toml"
+    p.write_text(V2_CONFIG)
+    bak = p.with_name("config.toml.bak")
+    bak.write_text("PRIOR BACKUP")
+    cfg.resolve({}, path=p)
+    assert bak.read_text() == "PRIOR BACKUP"  # not overwritten
