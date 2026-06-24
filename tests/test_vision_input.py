@@ -71,3 +71,14 @@ def test_messages_to_openai_wires_image(tmp_path):
 def test_messages_to_openai_text_only_stays_string():
     msgs = messages_to_openai([{"role": "user", "content": "hello"}], "sys")
     assert msgs[1]["content"] == "hello"
+
+
+def test_image_path_in_backticks_and_punctuation(tmp_path):
+    # the code-from-image regression: path in markdown backticks / parens /
+    # trailing punctuation must still be detected (greedy \S+ grabbed them,
+    # so os.path.isfile failed and vision silently never attached).
+    p = _write_png(tmp_path / "code.png")
+    for prompt in (f"image at `{p}`. go", f"see ({p}) here", f"the file {p}, then"):
+        out = _user_content_with_images(prompt)
+        assert isinstance(out, list), f"not attached: {prompt!r}"
+        assert any(b.get("type") == "image_url" for b in out), prompt

@@ -234,6 +234,11 @@ def _user_content_with_images(content):
         raw = next((x for x in tup if x), None)
         if not raw:
             continue
+        # the greedy \S+ branch grabs surrounding markdown/punctuation, e.g. a
+        # path in backticks `/app/code.png`, parens, or with trailing .,;: —
+        # strip it so os.path.isfile sees the real path (else vision silently
+        # never attaches).
+        raw = raw.strip("`'\"()[]{}<>").rstrip(".,;:!?")
         p = os.path.expanduser(raw)
         if os.path.isfile(p) and p not in seen:
             seen.append(p)
