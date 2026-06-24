@@ -43,9 +43,65 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
 
 - **Repo:** `https://github.com/fbobe321/drydock-v3` (PRIVATE), branch `master`.
 - **Checkout:** `/data3/drydock-v3` on the workstation.
-- **Primary model:** Gemma-4-26B-A4B served by llama.cpp at
-  `http://localhost:8000/v1` (model name `gemma4`). Uses harmony/gpt-oss
-  `<|channel>` tokens, so it accepts `reasoning_effort`.
+- **Primary model (UPDATED 2026-06-22):** **Gemma-4-31B dense** (QAT
+  `Q4_K_XL`, NOT the 26B-A4B MoE) served by llama.cpp at
+  `http://localhost:8000/v1` (model name `gemma4`). Swapped because the
+  26B-A4B's ~4B active params caused fatal agentic loops (180× identical
+  pytest). The dense 31B is loop-free; ~3–4× slower (15 tok/s tensor-split
+  vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
+
+---
+## ⭐ 2026-06-23/24 OVERNIGHT — LATEST STATE (read this first on resume)
+
+**Repo HEAD:** `5fe9b22` (v3.0.38), CI **green**, all pushed. Repo PRIVATE.
+
+**Fleet (all 4 boxes on dense 31B + vision, 64K ctx, persistent):**
+- remus/Dell `.22:8000` (docker `llamacpp-gemma4-31b`, this box), romulus
+  `.21:8000` (systemd, tensor-split, gpu1 service retired), 3090 `.129:8000`
+  (Windows `fbobe@`, watchdog scheduled-task **every 24h**, startup .bat +
+  llama-watchdog.ps1), Jetson `.19:8080` (systemd, `/opt/models` NVMe).
+- Rollback to 26B-A4B: `/data3/Models/gemma4_restore_config.txt`.
+
+**Drydock fixes shipped tonight (v3.0.33→v3.0.38, all committed+pushed):**
+- v3.0.33 timeout no longer mislabeled "Cannot reach the LLM" (600→1800s
+  configurable via `request_timeout`, accurate timeout msg).
+- v3.0.34 **vision input** — image path in a prompt → attached as multimodal
+  block (`_user_content_with_images` in providers.py).
+- v3.0.35 STOP kills the whole Bash **process tree** (start_new_session +
+  `kill_process_group`/os.killpg) — not just the shell.
+- v3.0.37 vision path-strip — strip backticks/parens/punct so a path in
+  markdown ``code.png`` actually attaches (was silently missing → code-from-image fail).
+- v3.0.38 pyright/CI green (mixed-value message dicts + None-guard).
+
+**tbench harness is NOW WORKING** (`/data3/harbor_fork`, adapter
+`.../agents/installed/drydock_agent.py`). It was blocked by broken container
+networking — fixed: **ufw `DEFAULT_FORWARD_POLICY=ACCEPT`** + `systemctl
+restart docker` + raw iptables `INPUT -s 172.16.0.0/12 -p tcp --dport 8899 -j
+ACCEPT` (so per-task bridges can fetch the wheel). Cleaned 7 dead orphan containers.
+- **Install spec (private repo → can't git-clone in container):** a **host
+  wheel server** `python -m http.server 8899` over `/data3/drydock-v3/dist/`,
+  set `DRYDOCK_INSTALL_SPEC=http://172.17.0.1:8899/drydock_cli-<ver>.whl`.
+  Rebuild after code change: `pip wheel . --no-deps -w dist/`.
+- **Backend pool env:** `DRYDOCK_BACKEND_POOL="http://192.0.2.10:8000/v1,
+  ...x3 3090, x2 romulus .21, x2 remus .22, x1 jetson .19:8080"`.
+- Launch: `harbor run --path tasks/terminal-bench-2 --agent drydock
+  --n-concurrent 5 --n-attempts N --agent-timeout-multiplier 4 -i <task>...`
+
+**Baselines / results:**
+- v2 (mistral fork)+26B leaderboard: **15/47 = 31.9%** passed (opencode target 51.7%).
+- EASY5 @1att (v3.0.36): 2/5 (headless-terminal ✓, multi-source ✓; db-wal,
+  sqlite-with-gcov, code-from-image ✗). code-from-image fail = the vision
+  path bug → fixed in v3.0.37.
+- IN PROGRESS: EASY5 @3att on v3.0.37 (vision fixed); then the OVERNIGHT PLAN
+  in `/tmp/overnight_tbench_plan.md`: v2-passed-10 @3att (does v3 hold v2's
+  wins?) → frontier/untested @1att → compile v3+31B overall vs 31.9%/51.7%.
+- Eval via `result.json` → `stats.evals[ev].reward_stats.reward` (1.0=pass);
+  the per-trial `is_resolved` field is unreliable. Tally: `/tmp/tbench_worklist.md`.
+
+**Open caveat:** 31B over-runs hard tasks (15–33min reasoning) → frontier
+tasks mostly timeout-fail even at 4×; lever = lower server `--reasoning-budget`
+(currently 20000), operator's call.
+---
 
 ## Current state (as of HEAD 956e017)
 

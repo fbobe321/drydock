@@ -1,7 +1,16 @@
 # Drydock v3 — Product Requirements
 
-Status: active rewrite (Phase 0 complete). Supersedes the v2 line.
+Status: SHIPPING (v3.0.38, CI green). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-06-24):** Model swapped 26B-A4B → **dense Gemma-4-31B**
+> (64K, fleet-wide) to kill the agentic looping. Shipped v3.0.33–38
+> (timeout msg, vision input, STOP process-tree kill, vision path-strip, CI).
+> The terminal-bench (`harbor`) eval harness now runs end-to-end on the 31B
+> (was blocked by ufw/docker container networking — fixed). Baseline to beat:
+> v2+26B = 15/47 (31.9%); opencode = 51.7%. **Full resume state, harness
+> setup, and the overnight eval plan are in `RESUME.md` (read first) and
+> `/tmp/overnight_tbench_plan.md`.**
 
 ## 1. Why v3 exists
 
