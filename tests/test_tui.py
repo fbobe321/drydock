@@ -247,15 +247,23 @@ def test_multiline_compose_with_ctrl_j_then_enter_submits_full_text():
             await pilot.pause()
             started: list[str] = []
             app._run_agent = lambda text: started.append(text)  # type: ignore[method-assign]
+            inp = app.query_one("#prompt")
             await pilot.press("l", "i", "n", "e", "1")
             await pilot.press("ctrl+j")            # newline, does NOT submit
             await pilot.press("l", "i", "n", "e", "2")
-            await pilot.pause()
-            inp = app.query_one("#prompt")
+            # A single pause can return before the cascading key->input-change
+            # messages drain (flaky under load); pump until the text settles.
+            for _ in range(20):
+                await pilot.pause()
+                if inp.text == "line1\nline2":
+                    break
             assert inp.text == "line1\nline2"       # composed two lines
             assert started == []                     # ctrl+j didn't submit
             await pilot.press("enter")               # now submit
-            await pilot.pause()
+            for _ in range(20):
+                await pilot.pause()
+                if started:
+                    break
             assert started == ["line1\nline2"]       # full multi-line text sent
             assert inp.text == ""                    # box cleared
 
