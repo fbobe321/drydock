@@ -4,7 +4,6 @@ should load to a USABLE config, falling back to defaults for anything it can't
 read. Regression guard for the v2->v3 upgrade path."""
 from __future__ import annotations
 
-from pathlib import Path
 
 from drydock import config as cfg
 
