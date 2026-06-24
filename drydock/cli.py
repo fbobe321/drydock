@@ -126,9 +126,16 @@ def run_oneshot(prompt: str, config: dict) -> None:
             if isinstance(event, TextChunk):
                 print(event.text, end="", flush=True)
             elif isinstance(event, ToolStart):
-                print(f"  [{event.name}]", file=sys.stderr, flush=True)
+                # Include an input summary so the trace (captured to drydock.log
+                # under -p) shows WHAT each tool did, not just its name. Without
+                # this, a timed-out run is an opaque wall of "[Bash]" with no way
+                # to tell a genuine 100-command exploration from a tight loop.
+                print(f"  [{event.name}] {_summarize(event.inputs)}",
+                      file=sys.stderr, flush=True)
             elif isinstance(event, ToolEnd):
-                pass
+                # One-line outcome so failures/repeats are visible in the trace.
+                preview = " ".join(str(event.result).split())[:100]
+                print(f"     -> {preview}", file=sys.stderr, flush=True)
         print()
     except LLMUnreachable as e:
         # The model server is down, the URL is wrong, or a turn overran the read
