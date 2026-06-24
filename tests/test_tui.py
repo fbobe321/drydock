@@ -322,3 +322,29 @@ def test_busy_input_is_queued_and_drained():
             assert app._queue == []
 
     asyncio.run(main())
+
+
+def test_new_user_turn_clears_stale_plan():
+    """A pinned plan from a prior task must not linger into an unrelated new
+    turn (it was only cleared on /clear). _begin() resets both the panel and
+    config['_todo'] so a completed/abandoned plan can't show stale or fire a
+    stale continue-nudge. Verified live in a real TUI session 2026-06-24."""
+    from textual.widgets import Static
+
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            # simulate a plan pinned from a previous task
+            app._render_todo("[x] step one\n[x] step two")
+            app.config["_todo"] = [("step one", "done"), ("step two", "done")]
+            panel = app.query_one("#todo", Static)
+            assert "Plan" in str(panel.render())        # plan is showing
+            # a new user turn (stub the agent so we don't hit the model)
+            app._run_agent = lambda text: None  # type: ignore[method-assign]
+            app._begin("an unrelated new request")
+            await pilot.pause()
+            assert "_todo" not in app.config              # nudge state reset
+            assert str(panel.render()) == ""            # panel cleared
+
+    asyncio.run(main())

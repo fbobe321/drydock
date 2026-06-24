@@ -397,6 +397,12 @@ class DrydockApp(App):
         """Start an agent turn for an already-displayed user prompt."""
         self._current_assistant = None
         self._cancel.clear()  # fresh turn — clear any prior STOP
+        # Reset the pinned plan so the previous task's checklist doesn't linger
+        # in the panel during an unrelated new request, and a prior *unfinished*
+        # plan can't fire a stale continue-nudge (_plan_has_unfinished) on this
+        # turn. If this turn emits its own todo, _render_todo repopulates it.
+        self.config.pop("_todo", None)
+        self.query_one("#todo", Static).update("")
         self._busy = True
         self._work_start = time.monotonic()
         self._work_word = random.choice(_WORKING_WORDS)
