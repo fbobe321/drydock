@@ -1,16 +1,57 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.38, CI green). Supersedes the v2 line.
+Status: SHIPPING (v3.0.44, CI green). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
-> **Progress (2026-06-24):** Model swapped 26B-A4B → **dense Gemma-4-31B**
-> (64K, fleet-wide) to kill the agentic looping. Shipped v3.0.33–38
-> (timeout msg, vision input, STOP process-tree kill, vision path-strip, CI).
-> The terminal-bench (`harbor`) eval harness now runs end-to-end on the 31B
-> (was blocked by ufw/docker container networking — fixed). Baseline to beat:
-> v2+26B = 15/47 (31.9%); opencode = 51.7%. **Full resume state, harness
-> setup, and the overnight eval plan are in `RESUME.md` (read first) and
-> `/tmp/overnight_tbench_plan.md`.**
+> **Progress (2026-06-24, late):** Model is the **dense Gemma-4-31B** (64K,
+> fleet-wide) — it killed the 26B-A4B agentic looping (confirmed with data,
+> see below). Shipped **v3.0.39–44** today, all CI-green:
+> - v3.0.39 concrete default `base_url` (config shows the endpoint);
+>   v3.0.40 Python floor 3.12→3.11 (v2-upgrade compat); **v3.0.41 active
+>   v2→v3 config migration** (back up legacy/foreign config, write a fresh
+>   editable one — verified on a real v2 config on the Windows 3090).
+> - **v3.0.42** `-p`/one-shot surfaces an unreachable LLM as the actionable
+>   message + exit 2 (was a raw traceback that buried it — exactly what harbor
+>   logged when a backend died); purged `qwen` sample strings per the
+>   no-Chinese-models rule.
+> - **v3.0.43** plan panel cleared at the start of each user turn (stale plan
+>   no longer lingers / can't fire a stale continue-nudge) — found by *using*
+>   the TUI, verified live.
+> - **v3.0.44** `-p` trace logs tool inputs + outcomes (so a timed-out run is
+>   diagnosable, not an opaque wall of `[Bash]`).
+> - Harness-side (in `harbor_fork`): adapter now **skips unreachable backends**
+>   in the rr pool (a frozen Jetson silently errored ~¼ of a run); a
+>   never-404 wheel launch helper at `/data3/tbench_local/tbench_launch_lib.sh`.
+>
+> **terminal-bench (harbor) results, dense 31B, full 89-task corpus:**
+> - **pass@1 = 21/89 ≈ 23.6%** (clean 3-box run, Jetson excluded for
+>   speed-fairness). On v2's own passing set (V2PASSED10) the 31B holds
+>   **8/10**.
+> - **pass@3 (in progress)** with extended agent-timeout (`--agent-timeout-
+>   multiplier 6`, up from 4) is climbing past **29%** with most trials still
+>   pending — job `drydock_PASS3_v3.0.44_mult6_3box`, monitor
+>   `/tmp/pass3_progress.log`.
+> - Baselines: v2+26B = 31.9% (easier 47-subset, pass@5-ish); opencode = 51.7%.
+>   The gap is concentrated in frontier tasks (compiler builds, ray tracers,
+>   ARC-AGI) that exceed the 31B's *speed* at these timeouts — **genuine slow
+>   work, not loops** (diagnosed).
+>
+> **Doom-loop status vs 26B-A4B (data, 219–239 trials + hands-on TUI):**
+> the dense 31B does **not** reproduce the 26B's hard tool-loop (e.g. pytest
+> 180×). The byte-identical tool guard (`IDENTICAL_REPEAT_CAP=8`) fired on
+> only **36/239 trials and caps at 8**; ~85% never trip it; 0 loops across
+> ~8 hands-on TUI tasks. One *different*, rare failure remains: **text-
+> repetition collapse** (1 task — make-mips-interpreter emitted `295:` ×1365),
+> which the tool guard doesn't see. Root cause: llama.cpp server runs with no
+> repetition control. **Queued fix (task #41):** add `--repeat-penalty 1.1`
+> (+ optional `--dry-multiplier 0.8`) server-side, and/or a drydock-side
+> text-loop guard. Deferred until no tbench run is mid-flight.
+>
+> **Direction next:** (1) land the pass@3 headline + the list of which tasks
+> the extended timeout rescued; (2) ship #41 (repetition control) once the
+> fleet is free; (3) keep improving by real hands-on TUI use (the rule that
+> found the stale-plan bug) — not score-chasing.
+> **Full resume state + harness setup in `RESUME.md` (read first).**
 
 ## 1. Why v3 exists
 
@@ -32,9 +73,10 @@ shape un-shippable.
 
 A local, provider-agnostic **terminal coding agent** that feels like a
 top-tier CLI agent and runs entirely against a **local LLM** — primary
-target **Gemma-4-26B-A4B** served by llama.cpp. No accounts, no telemetry,
-no cloud. It builds real projects from a prompt, reliably, on a single
-workstation (2× RTX 4060 Ti 16 GB).
+target the **dense Gemma-4-31B** (QAT, 64K) served by llama.cpp (swapped
+from 26B-A4B, which looped; see the progress note). No accounts, no
+telemetry, no cloud. It builds real projects from a prompt, reliably, on a
+single workstation (2× RTX 4060 Ti 16 GB).
 
 ## 3. Principles (non-negotiable)
 
