@@ -84,7 +84,7 @@ SCHEMAS = [
             "type": "object",
             "properties": {
                 "command": {"type": "string"},
-                "timeout": {"type": "integer", "description": "Seconds (default 30)"},
+                "timeout": {"type": "integer", "description": "Seconds (default 120; bump to 1800 for builds/training/cracking)"},
             },
             "required": ["command"],
         },
@@ -456,6 +456,40 @@ def kill_process_group(proc) -> None:
             pass
 
 
+_OFFLINE_HINT = (
+    "\n[Note: this looks like a network/download command and the environment "
+    "appears to be OFFLINE — downloads will keep failing no matter how many "
+    "times you retry. Do NOT repeat the fetch. Use only files/data already "
+    "present in the project; if the required data genuinely isn't here, say so "
+    "and stop rather than looping on the download.]"
+)
+# Commands that reach the network (so an offline failure is expected, not a bug).
+_NETWORK_CMD_RE = re.compile(
+    r"\b(pip3?\s+install|pip\s+download|uv\s+(pip\s+)?(install|add)|conda\s+install|"
+    r"npm\s+(install|i|ci)|yarn\s+add|wget|curl\s+[^|]*https?://|git\s+clone|"
+    r"apt(-get)?\s+(install|update)|hf\s+download|huggingface-cli\s+download|"
+    r"load_dataset|hf_hub_download|snapshot_download|from_pretrained)\b",
+    re.IGNORECASE,
+)
+# Output signatures of a name-resolution / connectivity failure.
+_NETWORK_FAIL_RE = re.compile(
+    r"(could not resolve|name or service not known|temporary failure in name "
+    r"resolution|network is unreachable|no route to host|connection (timed out|"
+    r"refused)|failed to establish a new connection|max retries exceeded|"
+    r"getaddrinfo|no address associated|could not find a version|offline mode "
+    r"is enabled|connectionerror|read timed out)",
+    re.IGNORECASE,
+)
+
+
+def _is_network_command(cmd: str) -> bool:
+    return bool(_NETWORK_CMD_RE.search(cmd or ""))
+
+
+def _looks_like_network_failure(output: str) -> bool:
+    return bool(_NETWORK_FAIL_RE.search(output or ""))
+
+
 def tool_bash(params: dict, config: dict) -> str:
     cmd = params.get("command")
     if not cmd:
@@ -467,7 +501,11 @@ def tool_bash(params: dict, config: dict) -> str:
                 "(escape any newline as \\n; avoid raw line breaks in the JSON)."
             )
         return "Error: Bash needs a non-empty 'command'."
-    timeout = params.get("timeout", 30)
+    # Default 120s (was 30s): real coding tasks compile, train, run test suites,
+    # and crack hashes — a 30s wall killed legitimate long work before it could
+    # finish (terminal-bench: 16 tasks died at 30s on builds/training). Bounded,
+    # and the model can pass a larger `timeout` for genuinely heavy commands.
+    timeout = params.get("timeout", 120)
     reason = bash_safety.dangerous_command(cmd)
     if reason is not None:
         return bash_safety.refusal_message(cmd, reason)
@@ -516,16 +554,23 @@ def tool_bash(params: dict, config: dict) -> str:
                 if time.monotonic() - start > timeout:
                     kill_process_group(proc)
                     proc.communicate()
-                    bigger = min(timeout * 4, 600)
-                    return (
+                    bigger = min(timeout * 4, 1800)
+                    msg = (
                         f"Error: command timed out after {timeout}s. If it is "
                         f"legitimately slow (a big query, build, download, or "
                         f"test run), retry with a larger timeout — pass "
                         f"timeout: {bigger}. Otherwise it may be hung."
                     )
+                    if _is_network_command(cmd):
+                        msg += _OFFLINE_HINT
+                    return msg
         output = out or ""
         if proc.returncode != 0:
             output += f"\n[exit code: {proc.returncode}]"
+            # Offline environments make downloads fail forever; the model tends
+            # to retry the same fetch in a loop. Tell it to stop and work local.
+            if _is_network_command(cmd) and _looks_like_network_failure(output):
+                output += _OFFLINE_HINT
         return output.strip() or "(no output)"
     except Exception as e:
         return f"Error: {e}"
