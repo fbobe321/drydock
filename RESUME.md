@@ -51,56 +51,67 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-06-23/24 OVERNIGHT — LATEST STATE (read this first on resume)
+## ⭐ 2026-06-24 OVERNIGHT — LATEST STATE (read this first on resume)
 
-**Repo HEAD:** `5fe9b22` (v3.0.38), CI **green**, all pushed. Repo PRIVATE.
+**Repo HEAD:** `93fbb46` (v3.0.44 + PRD update), CI **green**, all pushed. Repo PRIVATE.
 
 **Fleet (all 4 boxes on dense 31B + vision, 64K ctx, persistent):**
 - remus/Dell `.22:8000` (docker `llamacpp-gemma4-31b`, this box), romulus
-  `.21:8000` (systemd, tensor-split, gpu1 service retired), 3090 `.129:8000`
-  (Windows `fbobe@`, watchdog scheduled-task **every 24h**, startup .bat +
-  llama-watchdog.ps1), Jetson `.19:8080` (systemd, `/opt/models` NVMe).
+  `.21:8000` (systemd), 3090 `.129:8000` (Windows `fbobe@`, watchdog
+  scheduled-task **every 24h**), Jetson `.19:8080` (systemd, `/opt/models` NVMe).
+- **Jetson caution:** under the 31B it *thrashes* (5 tok/s) until SSH +
+  llama-server both time out, though the host stays up (17d uptime). It
+  recovers when idle. Excluded from scoring runs (it converts passable tasks
+  to false-timeouts). The harbor adapter now health-probes + skips dead boxes.
 - Rollback to 26B-A4B: `/data3/Models/gemma4_restore_config.txt`.
 
-**Drydock fixes shipped tonight (v3.0.33→v3.0.38, all committed+pushed):**
-- v3.0.33 timeout no longer mislabeled "Cannot reach the LLM" (600→1800s
-  configurable via `request_timeout`, accurate timeout msg).
-- v3.0.34 **vision input** — image path in a prompt → attached as multimodal
-  block (`_user_content_with_images` in providers.py).
-- v3.0.35 STOP kills the whole Bash **process tree** (start_new_session +
-  `kill_process_group`/os.killpg) — not just the shell.
-- v3.0.37 vision path-strip — strip backticks/parens/punct so a path in
-  markdown ``code.png`` actually attaches (was silently missing → code-from-image fail).
-- v3.0.38 pyright/CI green (mixed-value message dicts + None-guard).
+**Shipped 2026-06-24 (v3.0.39→44, all CI-green + pushed):**
+- v3.0.39 concrete default `base_url`; v3.0.40 Python floor 3.12→3.11
+  (v2-upgrade compat); **v3.0.41 active v2→v3 config migration** (back up
+  legacy/foreign config.toml, write fresh editable one — verified on the real
+  v2 config on the Windows 3090).
+- **v3.0.42** `-p`/one-shot surfaces unreachable LLM as the actionable message
+  + exit 2 (was a raw traceback); purged `qwen` from test fixtures.
+- **v3.0.43** plan panel cleared at each user-turn start (stale-plan bug, found
+  by hands-on TUI use, verified live).
+- **v3.0.44** `-p` trace logs tool inputs + outcomes (timeout diagnosability).
+- harbor_fork adapter: **skips unreachable backends** in the rr pool; wheel
+  launch helper `/data3/tbench_local/tbench_launch_lib.sh` (never-404).
+- Fixed the operator's live `~/.drydock/config.toml` (qwen→gemma4 + base_url);
+  de-flaked a CI-flaky TUI test; refreshed editable install → `--version` 3.0.44.
 
-**tbench harness is NOW WORKING** (`/data3/harbor_fork`, adapter
-`.../agents/installed/drydock_agent.py`). It was blocked by broken container
-networking — fixed: **ufw `DEFAULT_FORWARD_POLICY=ACCEPT`** + `systemctl
-restart docker` + raw iptables `INPUT -s 172.16.0.0/12 -p tcp --dport 8899 -j
-ACCEPT` (so per-task bridges can fetch the wheel). Cleaned 7 dead orphan containers.
-- **Install spec (private repo → can't git-clone in container):** a **host
-  wheel server** `python -m http.server 8899` over `/data3/drydock-v3/dist/`,
-  set `DRYDOCK_INSTALL_SPEC=http://172.17.0.1:8899/drydock_cli-<ver>.whl`.
-  Rebuild after code change: `pip wheel . --no-deps -w dist/`.
-- **Backend pool env:** `DRYDOCK_BACKEND_POOL="http://192.0.2.10:8000/v1,
-  ...x3 3090, x2 romulus .21, x2 remus .22, x1 jetson .19:8080"`.
-- Launch: `harbor run --path tasks/terminal-bench-2 --agent drydock
-  --n-concurrent 5 --n-attempts N --agent-timeout-multiplier 4 -i <task>...`
+**tbench harness** (`/data3/harbor_fork`, adapter `.../installed/drydock_agent.py`).
+Container networking was fixed earlier (ufw `DEFAULT_FORWARD_POLICY=ACCEPT` +
+docker restart + iptables `INPUT -s 172.16.0.0/12 --dport 8899 ACCEPT`). Wheel
+served by host `python -m http.server 8899` over `/data3/drydock-v3/dist/`.
+- **Use the launch helper:** `source /data3/tbench_local/tbench_launch_lib.sh;
+  tb_prepare_wheel 3.0.44` (builds-if-missing, verifies HTTP 200, sets
+  `DRYDOCK_INSTALL_SPEC`). Pool env `DRYDOCK_BACKEND_POOL=<comma list>`; rr
+  counter `/tmp/dd_backend_rr.ctr`. Eval: `result.json` →
+  `stats.evals[ev].reward_stats.reward` (1.0=pass); `is_resolved` is unreliable.
 
-**Baselines / results:**
-- v2 (mistral fork)+26B leaderboard: **15/47 = 31.9%** passed (opencode target 51.7%).
-- EASY5 @1att (v3.0.36): 2/5 (headless-terminal ✓, multi-source ✓; db-wal,
-  sqlite-with-gcov, code-from-image ✗). code-from-image fail = the vision
-  path bug → fixed in v3.0.37.
-- IN PROGRESS: EASY5 @3att on v3.0.37 (vision fixed); then the OVERNIGHT PLAN
-  in `/tmp/overnight_tbench_plan.md`: v2-passed-10 @3att (does v3 hold v2's
-  wins?) → frontier/untested @1att → compile v3+31B overall vs 31.9%/51.7%.
-- Eval via `result.json` → `stats.evals[ev].reward_stats.reward` (1.0=pass);
-  the per-trial `is_resolved` field is unreliable. Tally: `/tmp/tbench_worklist.md`.
+**Results (dense 31B, full 89-task terminal-bench-2 corpus):**
+- **pass@1 = 21/89 ≈ 23.6%** (clean 3-box, Jetson excluded). V2PASSED10 = 8/10.
+- **pass@3 IN PROGRESS** (extended `--agent-timeout-multiplier 6`): job
+  `drydock_PASS3_v3.0.44_mult6_3box`, 68 not-yet-passing tasks ×3 (21 pass@1
+  winners carried forward in `/tmp/pass3_winners.json`), 3-box pool. Monitor
+  `/tmp/pass3_progress.log`. Was ~29% climbing when the operator went to bed.
+  Merge = winners ∪ retry-rescued. Self-monitoring; report the headline + which
+  tasks the extended timeout rescued when it finishes (~20-40h run).
 
-**Open caveat:** 31B over-runs hard tasks (15–33min reasoning) → frontier
-tasks mostly timeout-fail even at 4×; lever = lower server `--reasoning-budget`
-(currently 20000), operator's call.
+**Doom-loop verdict vs 26B-A4B (data, 219-239 trials + hands-on TUI):** the
+dense 31B does NOT reproduce the 26B's hard tool-loops. Byte-identical guard
+(`agent.py IDENTICAL_REPEAT_CAP=8`) fired 36/239 trials, caps at 8; ~85% never
+trip it; 0 loops in ~8 hands-on TUI tasks. **One rare different failure:**
+text-repetition collapse (make-mips-interpreter emitted `295:` ×1365), 1 task /
+219, not seen by the tool guard. **Task #41 (queued, deferred until fleet is
+free):** server-side `--repeat-penalty 1.1` (+ optional `--dry-multiplier 0.8`)
+in `/data3/Models/start_gemma4_31b_llamacpp.sh`, and/or a drydock-side text-loop
+guard. Server currently runs with NO repetition control.
+
+**Open caveat:** 31B is slow on hard frontier tasks (compiler builds, ray
+tracers, ARC-AGI) → genuine timeouts even at mult 6 (NOT loops — diagnosed).
+Lever = lower server `--reasoning-budget` (currently 20000), operator's call.
 ---
 
 ## Current state (as of HEAD 956e017)
