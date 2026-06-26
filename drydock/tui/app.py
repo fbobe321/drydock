@@ -530,7 +530,7 @@ class DrydockApp(App):
         """Model + endpoint setup. Subcommands persist so they survive restart:
           /model                      show model, provider, endpoint
           /model <name>               set the model name
-          /model url <base_url>       set the server URL (e.g. http://host:8000/v1)
+          /model url <base_url>       set the server URL (e.g. http://localhost:8000/v1)
           /model provider <name>      vllm | ollama | lmstudio | openai
         """
         arg = (arg or "").strip()
@@ -541,7 +541,7 @@ class DrydockApp(App):
                 f"model:    {self.config.get('model')}\n"
                 f"provider: {prov}\n"
                 f"endpoint: {url}\n"
-                "Set up:  /model <name>  ·  /model url <http://host:port/v1>  ·  "
+                "Set up:  /model <name>  ·  /model url <http://localhost:8000/v1>  ·  "
                 "/model provider <vllm|ollama|lmstudio|openai>"
             )
             return
@@ -550,7 +550,7 @@ class DrydockApp(App):
         val = parts[1].strip() if len(parts) > 1 else ""
         if sub == "url":
             if not val:
-                self._info("usage: /model url <http://host:port/v1>")
+                self._info("usage: /model url <http://localhost:8000/v1>")
                 return
             self.config["base_url"] = val
             self._persist_config()

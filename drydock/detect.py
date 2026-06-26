@@ -63,7 +63,7 @@ def onboarding_message(found: list[dict]) -> str:
         return (
             "No local LLM detected (" + ports + "). Point Drydock at your model "
             "right here:\n"
-            "  /model url <http://host:port/v1>     then     /model <model-name>\n"
+            "  /model url <http://localhost:8000/v1>     then     /model <model-name>\n"
             "(saved to ~/.drydock/config.toml). Or start a local server "
             "(llama.cpp / vLLM / Ollama / LM Studio) and restart."
         )
