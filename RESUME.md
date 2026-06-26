@@ -57,10 +57,18 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
 - **`/compact` implemented FRESH** (TUI + CLI) — was advertised in `/help`, never
   wired. v3.0.46. Honesty fix: the ctx gauge only moves on a real shrink (found
   via hands-on tmux). Regression tests in `tests/test_compact_command.py`.
-- **PyPI publishing is LIVE again** — `drydock-cli` 3.0.32 → **3.0.46 published**.
+- **PyPI publishing is LIVE again** — `drydock-cli` 3.0.32 → **3.0.47 published**.
   NOT banned; active account token at `~/.config/drydock/pypi_token` (old
   quarantined account is the `.bak`). See Credentials section for the exact
   publish command. Earlier "blocked on reinstatement" notes were WRONG.
+- **v3.0.47 — runaway text-repetition guard** (RESUME Task #41, half of it):
+  `loop_detect.runaway_repetition_len()` + a throttled check in
+  `providers.stream()`. When the model collapses into repeating one short unit
+  (the `295:`×1365 failure), it trims the repeated tail, shows
+  "[stopped — output began repeating]", and stops reading. Advisory, never
+  raises. Conservative thresholds so legit repetition never trips it; 11 tests
+  + hands-on TUI verified normal streaming is unaffected. (The other half —
+  server-side `--repeat-penalty` — remains the operator's call.)
 - **GitHub re-synced + auto-auth.** Local was 26 commits ahead (no cached creds →
   silent push failures). Pushed all; added a git credential helper reading
   `~/.config/drydock/github_token`, so `git push` now just works.
