@@ -51,6 +51,49 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-06-26 (PM) — SHIPPED: PyPI live, TUI-driven tbench launcher, clean baseline
+
+**Done this session (all pushed; HEAD past b6cedd7):**
+- **`/compact` implemented FRESH** (TUI + CLI) — was advertised in `/help`, never
+  wired. v3.0.46. Honesty fix: the ctx gauge only moves on a real shrink (found
+  via hands-on tmux). Regression tests in `tests/test_compact_command.py`.
+- **PyPI publishing is LIVE again** — `drydock-cli` 3.0.32 → **3.0.46 published**.
+  NOT banned; active account token at `~/.config/drydock/pypi_token` (old
+  quarantined account is the `.bak`). See Credentials section for the exact
+  publish command. Earlier "blocked on reinstatement" notes were WRONG.
+- **GitHub re-synced + auto-auth.** Local was 26 commits ahead (no cached creds →
+  silent push failures). Pushed all; added a git credential helper reading
+  `~/.config/drydock/github_token`, so `git push` now just works.
+- **🎯 PRIMARY GOAL MET — TUI-driven tbench launcher.** `/data3/tbench_local/
+  tui_task_lib.sh`: `source` it, then `ddt_up <task>` (builds the task's docker
+  image, installs `drydock-cli` from PyPI inside, points it at gemma4 via
+  host.docker.internal) → `ddt_tui <task>` (launches the REAL TUI in a tmux
+  session `ddt_<task>` via `docker exec -it`) → drive by hand with
+  `tmux send-keys`/`capture-pane` → `ddt_verify <task>` (runs the task's OWN
+  `tests/test.sh`, prints reward 1/0) → `ddt_down <task>`. No `-p`, no judge
+  pipeline — env-setup + the real verifier, hand-driven. This is THE path.
+
+**Hands-on TUI baseline (3 tbench-2 tasks through the real TUI):**
+- `fix-git` → **reward 1** (found lost commit via reflog, merged, resolved
+  conflict). `nginx-request-logging` → **reward 1** (8/8 tests; the **sudo
+  approval modal fired and `a`=Always worked** — a TUI-only path `-p` never hits).
+  `sqlite-db-truncate` → not completed (model-slowness, see below), but used to
+  stress-probe the TUI.
+- **No drydock bugs found.** Validated: clean tool cards + Plan panel, no
+  tool-call-as-text leaks, **binary tool output (`print(open(...,'rb').read())`)
+  does NOT corrupt the transcript**, **Esc cleanly interrupts a long non-stream
+  turn** and the session stays responsive after, empty-response path nudges once
+  then breaks (no spin — code + observed), context gauge accurate, `/compact`
+  works. The from-scratch TUI is solid.
+- **Only real limiter = model speed**, exactly as the prior caveat said: dense
+  31B at ~15 tok/s with `--reasoning-budget 20000` ⇒ a single hard-task turn can
+  run 11+ min (sqlite recovery hit this). NOT a loop, NOT a drydock bug — the
+  server even cancels at its default 600s timeout. Operator lever unchanged:
+  lower `--reasoning-budget` in `/data3/Models/start_gemma4_31b_llamacpp.sh`.
+  Note: during non-streaming tool turns the working-line token count holds at the
+  session total by design (elapsed timer still advances to show liveness).
+
+---
 ## ⭐ 2026-06-26 — LATEST STATE (READ THIS FIRST)
 
 **Direction locked by the operator (2026-06-26):**
