@@ -242,12 +242,21 @@ DRYDOCK_PY=/home/bobef/miniconda3/bin/python3 ./scripts/release.sh   # build + s
 7. `scripts/security_scan.py` gates every release (exit 2 = HIGH = block).
 
 ## Credentials / env (workstation)
-- GitHub: token at `~/.config/drydock/github_token` (user `fbobe321`); `gh` at
-  `/home/bobef/miniconda3/bin/gh`. To push, set `GH_TOKEN` and use a one-shot
-  credential helper (the repo has no stored creds).
+- GitHub: token at `~/.config/drydock/github_token` (user `fbobe321`). A global
+  git credential helper now reads that file, so plain `git push` auto-auths and
+  picks up any token rotation — no inline `GH_TOKEN` dance needed. (Set up
+  2026-06-26.) `gh` at `/home/bobef/miniconda3/bin/gh`.
 - Dev/test Python: `/home/bobef/miniconda3/bin/python3` (3.12, has textual/openai).
 - tbench notifications paused via `/data3/drydock/.pause_tbench_*` flags.
-- PyPI reinstatement appeal draft: `/data3/drydock/docs/pypi_reinstatement_appeal.md`.
+- **PyPI: PUBLISHING IS LIVE (corrected 2026-06-26).** `drydock-cli` is on an
+  ACTIVE account — token at `~/.config/drydock/pypi_token` (the OLD quarantined
+  account's token is `~/.config/drydock/pypi_token.quarantined_account.bak`,
+  unused). v3.0.46 was published this way. The earlier "reinstatement pending /
+  publishing blocked" notes were WRONG. Publish: build, run the provenance scan,
+  then `SETUPTOOLS_USE_DISTUTILS=stdlib python -m twine upload -u __token__ -p
+  "$(cat ~/.config/drydock/pypi_token)" dist/*` (the env shim dodges a
+  jaraco.functools circular import in this box's conda twine). `scripts/release.sh`
+  documents the same.
 
 ## Suggested next steps (pick up here — 2026-06-26)
 1. **Hands-on v3 TUI shakedown** — drive v3's real TUI in tmux (per rule #1),
@@ -258,8 +267,9 @@ DRYDOCK_PY=/home/bobef/miniconda3/bin/python3 ./scripts/release.sh   # build + s
 3. **Build the TUI-driven test path** (PRIMARY GOAL above): run tbench tasks
    through v3's real TUI instead of `-p`, then use it to find + fix real bugs.
 4. Do NOT touch / read / port from the old `/data3/drydock` fork.
-5. (Operator action, unchanged) PyPI/Docker republish per the reinstatement
-   status; confirm the dead fork's `auto_release` cron can't republish it.
+5. PyPI publishing WORKS now (see Credentials) — `drydock-cli` was at 3.0.32,
+   v3.0.46 published 2026-06-26. Bump version → build → provenance scan → twine
+   upload with the active token. (Docker republish still per operator.)
 
 Earlier backlog (v3 hardening port, retrieval, etc.) is essentially done — see
 the "What's implemented" + history sections above.

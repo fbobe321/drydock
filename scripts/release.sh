@@ -36,6 +36,10 @@ echo
 echo "✅ Release artifacts built and scanned clean:"
 ls -1 dist/
 echo
-echo "PUBLISH IS NOT AUTOMATED — PyPI account reinstatement is pending."
-echo "Once restored, upload by hand with:"
-echo "    twine upload dist/*"
+echo "PUBLISH (drydock-cli is live on PyPI again — active account token at"
+echo "~/.config/drydock/pypi_token; the old quarantined account is the .bak):"
+echo "    TOK=\$(cat ~/.config/drydock/pypi_token)"
+echo "    SETUPTOOLS_USE_DISTUTILS=stdlib \\"
+echo "      \$PY -m twine upload -u __token__ -p \"\$TOK\" dist/*"
+echo "(the SETUPTOOLS_USE_DISTUTILS=stdlib shim works around a jaraco.functools"
+echo " circular-import in this box's conda twine; drop it in a clean env.)"
