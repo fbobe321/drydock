@@ -121,6 +121,33 @@ def is_gemma(model: str | None) -> bool:
     return bool(model) and "gemma" in model.lower()
 
 
+def extract_thinking(text: str) -> tuple[str, str]:
+    """Return (thinking_content, cleaned_text).
+
+    Extracts the content of Gemma's <|channel>…<channel|> blocks so callers
+    can surface it in the UI, then strips the markers from the returned text.
+    Returns ("", text) when no thinking block is present.
+    """
+    if not text or "<|channel>" not in text:
+        return "", text
+    spans = _THINKING_RE.findall(text)
+    # Each match includes the delimiters — strip them to get bare thought text.
+    thoughts = []
+    for span in spans:
+        inner = span
+        if inner.startswith("<|channel>"):
+            inner = inner[len("<|channel>"):]
+        for closer in ("<channel|>", "<tool_call|>"):
+            if inner.endswith(closer):
+                inner = inner[: -len(closer)]
+                break
+        if inner.strip():
+            thoughts.append(inner.strip())
+    thinking = "\n\n".join(thoughts)
+    cleaned = strip_thinking_tokens(text)
+    return thinking, cleaned
+
+
 def strip_thinking_tokens(text: str) -> str:
     """Remove Gemma's leaked channel/thinking markers and stray special tokens.
 
