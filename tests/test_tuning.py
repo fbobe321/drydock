@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from drydock.tuning import (
     GEMMA_DISABLED_TOOLS,
+    extract_thinking,
     filter_tool_schemas,
     is_gemma,
     strip_thinking_tokens,
@@ -96,3 +97,56 @@ def test_thinking_level_adaptive():
     assert thinking_level_for_turn(1, is_user_turn=False) == "high"
     assert thinking_level_for_turn(5, is_user_turn=False) == "off"
     assert thinking_level_for_turn(5, is_user_turn=True) == "high"
+
+
+# --- extract_thinking ---
+
+def test_extract_thinking_no_block():
+    thinking, text = extract_thinking("hello world")
+    assert thinking == ""
+    assert text == "hello world"
+
+
+def test_extract_thinking_empty_string():
+    thinking, text = extract_thinking("")
+    assert thinking == ""
+    assert text == ""
+
+
+def test_extract_thinking_extracts_and_strips():
+    raw = "<|channel>my thought<channel|>the answer"
+    thinking, text = extract_thinking(raw)
+    assert thinking == "my thought"
+    assert text == "the answer"
+
+
+def test_extract_thinking_multiline_block():
+    raw = "<|channel>line1\nline2<channel|>result"
+    thinking, text = extract_thinking(raw)
+    assert thinking == "line1\nline2"
+    assert text == "result"
+
+
+def test_extract_thinking_tool_call_closer():
+    # Thought running into a malformed tool call closes with <tool_call|>.
+    raw = "<|channel>secret thought<tool_call|>visible"
+    thinking, text = extract_thinking(raw)
+    assert thinking == "secret thought"
+    assert text == "visible"
+
+
+def test_extract_thinking_multiple_blocks():
+    raw = "<|channel>thought1<channel|>text1<|channel>thought2<channel|>text2"
+    thinking, text = extract_thinking(raw)
+    assert "thought1" in thinking
+    assert "thought2" in thinking
+    assert "text1" in text
+    assert "text2" in text
+    assert "<|channel>" not in text
+
+
+def test_extract_thinking_noop_when_no_marker():
+    raw = "no markers here <b>html</b>"
+    thinking, text = extract_thinking(raw)
+    assert thinking == ""
+    assert text == raw
