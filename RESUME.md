@@ -51,7 +51,58 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-06-24 OVERNIGHT — LATEST STATE (read this first on resume)
+## ⭐ 2026-06-26 — LATEST STATE (READ THIS FIRST)
+
+**Direction locked by the operator (2026-06-26):**
+- **v3 (`/data3/drydock-v3`) is THE codebase.** The old `/data3/drydock`
+  mistral-vibe fork is DEAD and RADIOACTIVE — do **NOT** read it, run it, or
+  copy/port anything out of it. It is the inherited lineage/phone-home code that
+  got the PyPI account banned. v3 stays **from-scratch / clean-room**. Missing
+  features get **built fresh in v3**, never ported.
+- **Improve drydock by USING its real TUI, hands-on (tmux).** `-p`,
+  programmatic, pexpect, and stress harnesses do **NOT** count (rules #1 & #4
+  below). Operator, verbatim: *"it has to go through the TUI. That is the whole
+  point."*
+
+**tbench was STOPPED (2026-06-26) — and why it matters:** the entire tbench
+setup drove drydock via `drydock -p '<task>'` (one-shot). That exercises the
+model + `agent.py` core but **bypasses the TUI entirely** — so the scores never
+reflected the product the operator actually uses. Accordingly:
+- Both harbor runs killed (`drydock_PASS3_v3.0.45_mult6_3box` + a
+  `RERUN_FAILS` run). Relaunch crons PAUSED:
+  `/data3/drydock/.pause_harbor_watchdog`, `.pause_tbench_chain`,
+  `.pause_tbench_watchdog`.
+- ~58 GB docker reclaimed (unused images + build cache); the `gemma4` server
+  container/image preserved. Job result dirs (~1.3 GB) left at
+  `/data3/tbench_local/jobs`.
+- Last `-p` numbers (informational only, NOT a TUI measurement): pass@1 = 21/89
+  (23.6%); the stopped pass@3 was ~25/89 (28.1%, partial).
+
+**🎯 PRIMARY GOAL — TUI-driven testing (open task):** build a way to run tbench
+TASKS through v3's **real TUI** (not `-p`): set up the task environment, launch
+v3's TUI in tmux, feed the task prompt, let drydock work through the genuine TUI
+code path, then run the task's existing verifier — verify by watching
+`capture-pane`. Honor "no custom eval harness": reuse the real task defs +
+verifiers and drive the genuine TUI; do not build a judge/batch-runner pipeline.
+
+**Open task — build `/compact` FRESH in v3:** `drydock/cli.py` advertises
+`/compact` in `/help` (line ~158) but `handle_command` never implements it.
+Wire it to the existing `compaction.py` (`maybe_compact`/`emergency_compact`) +
+the TUI, and verify hands-on in tmux. Pure from-scratch v3 work.
+
+**⚠️ Heads-up (do NOT act on without operator OK):** the dead fork still has an
+`auto_release` cron that could republish the banned-lineage package to PyPI.
+Worth confirming it's disarmed — but check only the cron/flag, never the old code.
+
+**Mistake not to repeat:** on 2026-06-25, before this decision, two fixes (a
+read-timeout fix + a thinking-visibility feature) were committed into the OLD
+fork `/data3/drydock` — the wrong tree. They are NOT in v3 and must NOT be
+ported as code. v3 already shipped its own bash/read-timeout handling (v3.0.45,
+`df51a06`). If those behaviors are wanted in v3's TUI, build them fresh.
+
+---
+
+## ⭐ 2026-06-24 OVERNIGHT — (history; superseded by the 2026-06-26 section above)
 
 **Repo HEAD:** `93fbb46` (v3.0.44 + PRD update), CI **green**, all pushed. Repo PRIVATE.
 
@@ -198,10 +249,17 @@ DRYDOCK_PY=/home/bobef/miniconda3/bin/python3 ./scripts/release.sh   # build + s
 - tbench notifications paused via `/data3/drydock/.pause_tbench_*` flags.
 - PyPI reinstatement appeal draft: `/data3/drydock/docs/pypi_reinstatement_appeal.md`.
 
-## Suggested next steps (pick up here)
-- Operator review of the v3 hardening port.
-- Phase-3 extras *only as real use justifies* (e.g. retrieval).
-- PyPI/Docker republish once the suspended account is reinstated (appeal draft
-  at `/data3/drydock/docs/pypi_reinstatement_appeal.md` — operator action).
-- Remaining v2 ports are niche/N-A (v3's Edit uses old_string/new_string, not
-  SEARCH/REPLACE markers, so the raw-marker fallbacks don't apply).
+## Suggested next steps (pick up here — 2026-06-26)
+1. **Hands-on v3 TUI shakedown** — drive v3's real TUI in tmux (per rule #1),
+   establish a clean baseline of what works / what's missing in the from-scratch
+   build, with `capture-pane` evidence. This is how we find what to build next.
+2. **Build `/compact` fresh in v3** (advertised in `/help`, not implemented —
+   wire to `compaction.py`). Verify in tmux.
+3. **Build the TUI-driven test path** (PRIMARY GOAL above): run tbench tasks
+   through v3's real TUI instead of `-p`, then use it to find + fix real bugs.
+4. Do NOT touch / read / port from the old `/data3/drydock` fork.
+5. (Operator action, unchanged) PyPI/Docker republish per the reinstatement
+   status; confirm the dead fork's `auto_release` cron can't republish it.
+
+Earlier backlog (v3 hardening port, retrieval, etc.) is essentially done — see
+the "What's implemented" + history sections above.

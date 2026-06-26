@@ -153,7 +153,7 @@ class PromptHistory:
 # completes the prefix.
 SLASH_COMMANDS = [
     "/help", "/model", "/cwd", "/undo", "/back", "/stop", "/status",
-    "/clear", "/quit",
+    "/compact", "/clear", "/quit",
 ]
 
 

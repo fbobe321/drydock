@@ -163,6 +163,25 @@ def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
         state.turn_count = 0
         print_colored("  Conversation cleared.", "green")
         return True
+    elif cmd == "/compact":
+        from drydock.compaction import compact, estimate_tokens
+
+        if not state.messages:
+            print_colored("  Nothing to compact.", "dim")
+            return True
+        before = estimate_tokens(state.messages)
+        limit = config.get("context_limit", 65536) or 65536
+        state.messages = compact(state.messages, limit)
+        after = estimate_tokens(state.messages)
+        saved = before - after
+        if saved > 0:
+            print_colored(
+                f"  Compacted: ~{before:,} → ~{after:,} tokens (freed ~{saved:,}).",
+                "green",
+            )
+        else:
+            print_colored(f"  Already compact (~{before:,} tokens).", "dim")
+        return True
     elif cmd == "/status":
         print_colored(f"  Turns: {state.turn_count}", "cyan")
         print_colored(f"  Messages: {len(state.messages)}", "cyan")

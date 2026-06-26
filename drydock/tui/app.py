@@ -453,6 +453,8 @@ class DrydockApp(App):
                 )
             else:
                 self._info("Nothing to go back to.")
+        elif cmd == "/compact":
+            self._cmd_compact()
         elif cmd == "/status":
             t = self.state
             self._info(
@@ -471,12 +473,49 @@ class DrydockApp(App):
                 "  /back            rewind the last turn from the model's context\n"
                 "  /stop            stop the running turn (or press Esc)\n"
                 "  /status          session model, cwd, turns, tokens\n"
+                "  /compact         shrink old context to free up the window\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
                 "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
             )
         else:
             self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))
+
+    def _cmd_compact(self) -> None:
+        """Manually compact the conversation to reclaim context NOW, without
+        waiting for the automatic 60%-of-window threshold (agent.maybe_compact).
+        Truncates/drops old tool results and oversized tool-call arguments while
+        keeping recent turns intact (see compaction.compact)."""
+        from drydock.compaction import compact, estimate_tokens
+
+        msgs = self.state.messages
+        if not msgs:
+            self._info("Nothing to compact — the conversation is empty.")
+            return
+        before = estimate_tokens(msgs)
+        limit = self.config.get("context_limit", 65536) or 65536
+        self.state.messages = compact(msgs, limit)
+        after = estimate_tokens(self.state.messages)
+        saved = before - after
+        if saved > 0:
+            # Only touch the gauge when we ACTUALLY shrank the history. The gauge
+            # normally shows the server's exact prompt-token count; our estimate
+            # (chars/3) runs lower, so overwriting it on a no-op compaction would
+            # fake a large drop. Scale the real count by the same ratio we shrank
+            # the estimate, so the gauge moves proportionally and stays honest;
+            # the next real turn replaces it with the server's exact count.
+            self._ctx_tokens = round(self._ctx_tokens * (after / before)) if before else after
+            self._refresh_status()
+            self._info(
+                f"Compacted context: ~{before:,} → ~{after:,} tokens "
+                f"(freed ~{saved:,}). Older tool output was truncated/dropped; "
+                "recent turns are kept intact."
+            )
+        else:
+            self._info(
+                f"Already compact — ~{before:,} tokens, nothing to free "
+                "(recent turns are always preserved)."
+            )
 
     def _persist_config(self) -> None:
         """Save the persistable settings (model/provider/base_url/… — save_file
