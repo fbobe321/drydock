@@ -23,7 +23,8 @@ _LLM_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_pre
 class _StopRequested(Exception):
     """Internal: STOP was pressed during a blocking LLM call."""
 
-from drydock.tuning import strip_leaked_tool_calls, strip_thinking_tokens, use_streaming
+from drydock.loop_detect import runaway_repetition_len
+from drydock.tuning import extract_thinking, strip_leaked_tool_calls, strip_thinking_tokens, use_streaming
 
 # ── Provider registry ─────────────────────────────────────────────────────
 
@@ -165,6 +166,14 @@ def _stream_chunks(response, cancel):
 
 @dataclass
 class TextChunk:
+    text: str
+
+@dataclass
+class ReasoningChunk:
+    """Thinking tokens emitted by the model before its answer (Gemma 4 only).
+    Yielded once per non-streaming turn, before any TextChunk, when the model
+    included a <|channel>…<channel|> block in its response.
+    """
     text: str
 
 @dataclass
@@ -405,6 +414,11 @@ def stream(
     text = ""
     tool_buf: dict = {}  # index → {id, name, args}
     in_tok = out_tok = 0
+    # Runaway-repetition guard: a weak model can collapse into streaming one
+    # short unit hundreds of times (gemma4: `295:` ×1365). Advisory, never
+    # raises — on detection we trim the repeated tail, emit a note, and stop
+    # reading (the orphaned producer drains in the background, like STOP).
+    _rep_checked_at = 0
 
     try:
         response = _create_abortable(client, kwargs, base_url, provider, cancel, read_timeout)
@@ -432,6 +446,20 @@ def stream(
             if chunk_text:
                 text += chunk_text
                 yield TextChunk(chunk_text)
+                # Throttled: only scan once text is long enough and every ~200
+                # new chars, so the common path pays almost nothing.
+                if len(text) - _rep_checked_at >= 200:
+                    _rep_checked_at = len(text)
+                    run = runaway_repetition_len(text)
+                    if run:
+                        text = (
+                            text[: len(text) - run]
+                            + "\n[… output began repeating — stopped by drydock]"
+                        )
+                        yield TextChunk(
+                            "\n[stopped — model output began repeating itself]"
+                        )
+                        break
 
         if delta.tool_calls:
             for tc in delta.tool_calls:
@@ -479,10 +507,12 @@ def _complete_nonstreaming(
     msg = choice.message
 
     # Order matters: remove <|tool_call> blobs FIRST (sets had_leak for the
-    # retry nudge), THEN strip channel/special-token markers — otherwise the
-    # generic special-token pass would eat the tool_call markers.
+    # retry nudge), THEN extract+strip channel/special-token markers — otherwise
+    # the generic special-token pass would eat the tool_call markers.
     text, had_leak = strip_leaked_tool_calls(msg.content or "")
-    text = strip_thinking_tokens(text)
+    thinking, text = extract_thinking(text)
+    if thinking:
+        yield ReasoningChunk(thinking)
     if text.strip():
         yield TextChunk(text)
 

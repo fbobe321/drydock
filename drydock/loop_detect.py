@@ -86,6 +86,49 @@ def path_thrash_note(path: str, count: int) -> str | None:
     )
 
 
+def runaway_repetition_len(
+    text: str,
+    *,
+    window: int = 2000,
+    min_run: int = 600,
+    max_unit: int = 80,
+    min_reps: int = 6,
+) -> int:
+    """Length (in chars) of a runaway repeated SUFFIX of *text*, else 0.
+
+    A weak local model sometimes collapses mid-generation into emitting the same
+    short unit hundreds of times (observed: gemma4 streamed ``295:`` ~1365× on
+    make-mips-interpreter). The tool-call loop guard never sees this — it's
+    streamed assistant TEXT, not a tool call — so the turn balloons unchecked.
+
+    This detects that one failure mode and nothing else. It is deliberately
+    CONSERVATIVE: it requires a long pure-repetition run (>= ``min_run`` chars
+    AND >= ``min_reps`` repeats of one <= ``max_unit``-char unit) so that
+    legitimate repetition — a ``---`` rule, a short bulleted list, an ASCII
+    table — never trips it. Pure-whitespace units (the blank line between
+    markdown blocks) are ignored. Returns the run length so the caller can trim
+    exactly the repeated tail; 0 means "looks fine, keep going".
+    """
+    if len(text) < min_run:
+        return 0
+    tail = text[-window:]
+    n = len(tail)
+    best = 0
+    for p in range(1, min(max_unit, n // min_reps) + 1):
+        unit = tail[-p:]
+        if not unit.strip():
+            continue  # ignore blank-line / whitespace units
+        reps = 0
+        i = n
+        while i - p >= 0 and tail[i - p:i] == unit:
+            reps += 1
+            i -= p
+        run = reps * p
+        if reps >= min_reps and run >= min_run:
+            best = max(best, run)
+    return best
+
+
 class LoopTracker:
     """Counts identical tool calls across a run and produces advisory notes."""
 
