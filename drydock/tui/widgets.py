@@ -266,6 +266,29 @@ class ErrorMessage(Static):
         super().__init__(f"⚠ {text}", classes="error-msg", markup=False)
 
 
+class ReasoningCard(Collapsible):
+    """The model's thinking for a turn — collapsed by default so a long reasoning
+    block (gemma runs a 20k-token budget) doesn't flood the transcript; expand
+    to read it. Distinct from the answer, which renders as an AssistantMessage."""
+
+    def __init__(self, text: str) -> None:
+        self._buf = text
+        self._body = Static(text, classes="reasoning-body", markup=False)
+        n = len(text)
+        super().__init__(
+            self._body,
+            title=f"💭 thinking  ·  {n:,} chars",
+            collapsed=True,
+        )
+        self.add_class("reasoning-card")
+
+    def append(self, text: str) -> None:
+        """Grow the block if a turn streams reasoning in multiple chunks."""
+        self._buf += text
+        self._body.update(self._buf)
+        self.title = f"💭 thinking  ·  {len(self._buf):,} chars"
+
+
 class ToolCard(Collapsible):
     """A tool call: compact header (name + summary), expandable full output."""
 

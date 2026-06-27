@@ -19,6 +19,7 @@ from textual.widgets import Static
 
 from drydock.agent import (
     AgentState,
+    ReasoningChunk,
     TextChunk,
     ToolEnd,
     ToolStart,
@@ -28,6 +29,7 @@ from drydock.agent import (
 from drydock.tui.messages import (
     AgentError,
     AgentFinished,
+    AgentReasoning,
     AgentText,
     AgentToolEnd,
     AgentToolStart,
@@ -38,6 +40,7 @@ from drydock.tui.widgets import (
     AssistantMessage,
     ErrorMessage,
     PromptArea,
+    ReasoningCard,
     ToolCard,
     UserMessage,
     result_is_ok,
@@ -92,6 +95,10 @@ class DrydockApp(App):
     .tool-card.ok { border-left: thick #2e8b6b; }
     .tool-card.fail { border-left: thick #b3503e; }
     .tool-body { color: #9bb4c0; padding: 0 1; }
+    .reasoning-card {
+        margin: 0 0 0 2; border-left: thick #6a5acd; background: #14132a;
+    }
+    .reasoning-body { color: #9a93c0; padding: 0 1; }
     /* Pinned task checklist in the footer (height auto → 0 lines when empty). */
     #todo {
         height: auto; margin: 0 2 1 2; padding: 0 1; color: #d7e6ee;
@@ -600,7 +607,9 @@ class DrydockApp(App):
     def _run_agent(self, text: str) -> None:
         try:
             for ev in run(text, self.state, self.config, self.system):
-                if isinstance(ev, TextChunk):
+                if isinstance(ev, ReasoningChunk):
+                    self.post_message(AgentReasoning(ev.text))
+                elif isinstance(ev, TextChunk):
                     self.post_message(AgentText(ev.text))
                 elif isinstance(ev, ToolStart):
                     self.post_message(AgentToolStart(ev.name, ev.inputs))
@@ -614,6 +623,14 @@ class DrydockApp(App):
             self.post_message(AgentFinished())
 
     # ── agent → UI handlers ───────────────────────────────────────────────
+
+    def on_agent_reasoning(self, m: AgentReasoning) -> None:
+        # The model's thinking for this turn, rendered as a collapsed card BEFORE
+        # the answer text (reasoning is yielded before TextChunk). End any current
+        # text block so the answer starts fresh below the card.
+        self._current_assistant = None
+        self._mount(ReasoningCard(m.text))
+        self._scroll.scroll_end(animate=False)
 
     def on_agent_text(self, m: AgentText) -> None:
         self._ensure_assistant().append(m.text)

@@ -19,7 +19,7 @@ def _plan_has_unfinished(config: dict) -> bool:
     todo = config.get("_todo")
     return bool(todo) and any(status != "done" for _, status in todo)
 
-from drydock.providers import stream, AssistantTurn, TextChunk
+from drydock.providers import stream, AssistantTurn, ReasoningChunk, TextChunk
 from drydock.tool_registry import schemas, execute
 from drydock.tools import register_all
 
@@ -168,7 +168,9 @@ def run(
                     tool_schemas=filter_tool_schemas(available, turn_config.get("model")),
                     config=turn_config,
                 ):
-                    if isinstance(event, TextChunk):
+                    if isinstance(event, ReasoningChunk):
+                        yield event
+                    elif isinstance(event, TextChunk):
                         yield event
                     elif isinstance(event, AssistantTurn):
                         assistant_turn = event

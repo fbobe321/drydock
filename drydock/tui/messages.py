@@ -9,6 +9,12 @@ from __future__ import annotations
 from textual.message import Message
 
 
+class AgentReasoning(Message):
+    def __init__(self, text: str) -> None:
+        self.text = text
+        super().__init__()
+
+
 class AgentText(Message):
     def __init__(self, text: str) -> None:
         self.text = text
