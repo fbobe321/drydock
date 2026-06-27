@@ -164,7 +164,7 @@ def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
         print_colored("  Conversation cleared.", "green")
         return True
     elif cmd == "/compact":
-        from drydock.compaction import compact, estimate_tokens
+        from drydock.compaction import compact, emergency_compact, estimate_tokens
 
         if not state.messages:
             print_colored("  Nothing to compact.", "dim")
@@ -172,6 +172,8 @@ def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
         before = estimate_tokens(state.messages)
         limit = config.get("context_limit", 65536) or 65536
         state.messages = compact(state.messages, limit)
+        if estimate_tokens(state.messages) > limit * 0.5:
+            state.messages = emergency_compact(state.messages, limit)
         after = estimate_tokens(state.messages)
         saved = before - after
         if saved > 0:
@@ -246,6 +248,11 @@ def main():
     parser.add_argument("--provider", help="Provider: vllm, ollama, lmstudio, openai")
     parser.add_argument("--base-url", dest="base_url", help="Override API base URL")
     parser.add_argument("--max-tokens", dest="max_tokens", type=int, help="Max response tokens")
+    parser.add_argument(
+        "--context-limit", dest="context_limit", type=int,
+        help="Model server context window (must match the server's -c / "
+             "--max-model-len; drives the ctx gauge + when compaction fires)",
+    )
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--max-tool-calls", type=int, default=0, help="Max tool calls (0=unlimited)")
     parser.add_argument("--force-first-tool", action="store_true", help="Force tool_choice=required on first turn")
@@ -268,6 +275,7 @@ def main():
         "base_url": args.base_url,
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
+        "context_limit": args.context_limit,
     }, cfg_path)
 
     # First launch: ask the user for their model server URL + model name and
@@ -288,10 +296,11 @@ def main():
                 cfgmod.save_file(cfg, cfg_path)
 
     config = {
+        # context_limit now comes from cfg (DEFAULTS < config.toml < --context-limit)
+        # — it drives the ctx gauge AND when compaction fires, so it must match the
+        # server's real -c. Previously hardcoded to 65536 here, which clobbered the
+        # config value and overflowed servers running a smaller window.
         **cfg,
-        # Match the llama.cpp server's -c (gemma4 runs at 64k). Drives both the
-        # status-bar context gauge and when compaction kicks in.
-        "context_limit": 65536,
         "max_tool_calls": args.max_tool_calls,
         "force_first_tool": args.force_first_tool,
         "_approve_all": args.dangerously_skip_permissions,

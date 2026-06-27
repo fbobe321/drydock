@@ -84,5 +84,8 @@ def test_save_drops_runtime_only_keys(tmp_path):
     cfg.save_file({"model": "g", "cwd": "/tmp", "context_limit": 999}, path)
     with path.open("rb") as f:
         written = tomllib.load(f)
-    assert "cwd" not in written and "context_limit" not in written
+    # cwd is runtime-only (dropped); context_limit is a real persistent setting
+    # (users must be able to match it to their server's window).
+    assert "cwd" not in written
+    assert written["context_limit"] == 999
     assert written["model"] == "g"

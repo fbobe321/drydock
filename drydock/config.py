@@ -28,6 +28,12 @@ DEFAULTS: dict[str, object] = {
     "base_url": "http://localhost:8000/v1",
     "max_tokens": 8192,  # 4096 truncated large file writes mid-JSON (→ _raw fail)
     "temperature": 0.2,
+    # The model server's context window (llama.cpp -c / vLLM --max-model-len).
+    # Drives the ctx gauge AND when compaction fires (it compacts at ~60% of
+    # this). It MUST match your server: if it's too high, drydock overflows the
+    # real window BEFORE compacting (the server 400s) — set this to your -c
+    # value. Default 65536 matches the bundled gemma4 server (-c 65536).
+    "context_limit": 65536,
     "theme": "harbor",
 }
 

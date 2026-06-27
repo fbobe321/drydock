@@ -492,8 +492,11 @@ class DrydockApp(App):
         """Manually compact the conversation to reclaim context NOW, without
         waiting for the automatic 60%-of-window threshold (agent.maybe_compact).
         Truncates/drops old tool results and oversized tool-call arguments while
-        keeping recent turns intact (see compaction.compact)."""
-        from drydock.compaction import compact, estimate_tokens
+        keeping recent turns intact (see compaction.compact). If a normal pass
+        can't free enough (history dominated by big messages, not tool output),
+        it ESCALATES to emergency_compact so an explicit /compact always helps —
+        the user asked to free space, so being aggressive is the right call."""
+        from drydock.compaction import compact, emergency_compact, estimate_tokens
 
         msgs = self.state.messages
         if not msgs:
@@ -502,6 +505,11 @@ class DrydockApp(App):
         before = estimate_tokens(msgs)
         limit = self.config.get("context_limit", 65536) or 65536
         self.state.messages = compact(msgs, limit)
+        # Escalate when the normal pass left us still heavy (>50% of the window):
+        # this is exactly the "tried /compact, it said nothing, then OOM again"
+        # case — the bloat isn't in droppable tool results, so go aggressive.
+        if estimate_tokens(self.state.messages) > limit * 0.5:
+            self.state.messages = emergency_compact(self.state.messages, limit)
         after = estimate_tokens(self.state.messages)
         saved = before - after
         if saved > 0:
