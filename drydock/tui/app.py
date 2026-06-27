@@ -462,6 +462,8 @@ class DrydockApp(App):
                 self._info("Nothing to go back to.")
         elif cmd == "/compact":
             self._cmd_compact()
+        elif cmd == "/graphrag":
+            self._cmd_graphrag(arg)
         elif cmd == "/status":
             t = self.state
             self._info(
@@ -481,6 +483,8 @@ class DrydockApp(App):
                 "  /stop            stop the running turn (or press Esc)\n"
                 "  /status          session model, cwd, turns, tokens\n"
                 "  /compact         shrink old context to free up the window\n"
+                "  /graphrag        build/query a knowledge base from your docs\n"
+                "                   /graphrag build <path> · /graphrag status · /graphrag clear\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
                 "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
@@ -531,6 +535,54 @@ class DrydockApp(App):
                 f"Already compact — ~{before:,} tokens, nothing to free "
                 "(recent turns are always preserved)."
             )
+
+    def _cmd_graphrag(self, arg: str) -> None:
+        """Build / inspect / clear the project's GraphRAG knowledge base. Once
+        built, the agent retrieves from it via the read-only Knowledge tool."""
+        from drydock import graphrag
+
+        cwd = self.config.get("cwd") or "."
+        store = graphrag.default_store_path(cwd)
+        parts = arg.split(maxsplit=1)
+        sub = parts[0].lower() if parts else ""
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "build":
+            if not rest:
+                self._info("usage: /graphrag build <path>   (a file or directory of docs/code)")
+                return
+            self._info(f"Building knowledge base from {rest} …")
+            try:
+                stats = graphrag.build_index([rest], store, cwd=cwd)
+            except Exception as e:  # noqa: BLE001 — surface, never crash the TUI
+                self._mount(ErrorMessage(f"graphrag build failed: {e}"))
+                return
+            if not stats["chunks"]:
+                self._info(f"No text found under {rest}. Nothing was indexed.")
+                return
+            self._info(
+                f"✓ Knowledge base built: {stats['files']} files · "
+                f"{stats['chunks']} chunks · {stats['entities']} entities · "
+                f"{stats['edges']} edges.\nStored at {store}. The agent will now "
+                "use the Knowledge tool to draw on it."
+            )
+        elif sub in ("", "status"):
+            index = graphrag.load_index(store)
+            if index is None:
+                self._info("No knowledge base yet. Build one:  /graphrag build <path>")
+            else:
+                self._info(
+                    f"Knowledge base: {len(index.get('chunks', []))} chunks · "
+                    f"{len(index.get('entities', {}))} entities  ({store})."
+                )
+        elif sub == "clear":
+            try:
+                store.unlink(missing_ok=True)
+                self._info("Knowledge base cleared.")
+            except OSError as e:
+                self._mount(ErrorMessage(f"could not clear: {e}"))
+        else:
+            self._info("usage:  /graphrag build <path>  ·  /graphrag status  ·  /graphrag clear")
 
     def _persist_config(self) -> None:
         """Save the persistable settings (model/provider/base_url/… — save_file

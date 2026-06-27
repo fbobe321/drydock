@@ -149,7 +149,8 @@ def run_oneshot(prompt: str, config: dict) -> None:
 
 def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
     """Handle slash commands. Returns True if handled."""
-    cmd = cmd.lower().strip()
+    raw = cmd.strip()  # case-preserved (paths/args must not be lowercased)
+    cmd = raw.lower()
     if cmd == "/help":
         print_colored("Commands:", "bold")
         print("  /help     — show this help")
@@ -188,6 +189,37 @@ def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
         print_colored(f"  Turns: {state.turn_count}", "cyan")
         print_colored(f"  Messages: {len(state.messages)}", "cyan")
         print_colored(f"  Tokens: {state.total_input_tokens}in / {state.total_output_tokens}out", "cyan")
+        return True
+    elif cmd.split()[0] == "/graphrag":
+        from drydock import graphrag
+
+        cwd = config.get("cwd") or os.getcwd()
+        store = graphrag.default_store_path(cwd)
+        parts = raw.split()  # raw = case-preserved, so paths survive
+        sub = parts[1].lower() if len(parts) > 1 else ""
+        rest = " ".join(parts[2:]).strip()
+        if sub == "build" and rest:
+            print_colored(f"  Building knowledge base from {rest} …", "dim")
+            try:
+                stats = graphrag.build_index([rest], store, cwd=cwd)
+                print_colored(
+                    f"  ✓ {stats['files']} files · {stats['chunks']} chunks · "
+                    f"{stats['entities']} entities · {stats['edges']} edges → {store}",
+                    "green",
+                )
+            except Exception as e:  # noqa: BLE001
+                print_colored(f"  graphrag build failed: {e}", "red")
+        elif sub == "clear":
+            store.unlink(missing_ok=True)
+            print_colored("  Knowledge base cleared.", "green")
+        else:
+            index = graphrag.load_index(store)
+            if index is None:
+                print_colored("  No knowledge base. Build: /graphrag build <path>", "dim")
+            else:
+                print_colored(
+                    f"  Knowledge base: {len(index.get('chunks', []))} chunks · "
+                    f"{len(index.get('entities', {}))} entities ({store})", "cyan")
         return True
     elif cmd in ("/quit", "/exit"):
         raise KeyboardInterrupt

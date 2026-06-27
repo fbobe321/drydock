@@ -161,6 +161,32 @@ SCHEMAS = [
             "required": ["prompt"],
         },
     },
+    {
+        "name": "Knowledge",
+        "description": (
+            "Search the user's KNOWLEDGE BASE (a GraphRAG index they built from "
+            "their own docs/code) for project-specific information you were not "
+            "trained on. Returns the most relevant passages plus related entities "
+            "from the graph. Use it BEFORE answering or coding when the task may "
+            "depend on the user's private/project knowledge (their APIs, specs, "
+            "data, conventions). If it returns no matches, the topic isn't in the "
+            "base — answer normally."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "What to look up, as a natural-language question or keywords.",
+                },
+                "k": {
+                    "type": "integer",
+                    "description": "Max passages to return (default 5).",
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 # ── Tool implementations ──────────────────────────────────────────────────
@@ -709,6 +735,32 @@ def tool_task(params: dict, config: dict) -> str:
     return f"[sub-agent finished {steps} step(s) with no summary]"
 
 
+def tool_knowledge(params: dict, config: dict) -> str:
+    """Query the project's GraphRAG knowledge base (built with /graphrag build).
+    Read-only; returns the most relevant passages plus related graph entities.
+    If no index exists, says so cleanly rather than erroring."""
+    from drydock import graphrag
+
+    query = (params.get("query") or "").strip()
+    if not query:
+        return "Error: `Knowledge` needs a `query` describing what to look up."
+    cwd = config.get("cwd") or os.getcwd()
+    store = config.get("graphrag_store") or graphrag.default_store_path(cwd)
+    index = graphrag.load_index(store)
+    if index is None:
+        return (
+            "No knowledge base has been built yet. The user can build one with "
+            "'/graphrag build <path>' (a file or directory of docs/code). Until "
+            "then, answer from your own knowledge."
+        )
+    try:
+        k = int(params.get("k") or 5)
+    except (TypeError, ValueError):
+        k = 5
+    result = graphrag.query_index(index, query, k=max(1, min(k, 15)))
+    return graphrag.format_results(result, query)
+
+
 # ── Register all tools ────────────────────────────────────────────────────
 
 _TOOLS = [
@@ -720,6 +772,7 @@ _TOOLS = [
     ("Grep", tool_grep, True),
     ("todo", tool_todo, False),
     ("task", tool_task, True),
+    ("Knowledge", tool_knowledge, True),
 ]
 
 def register_all():
@@ -728,10 +781,10 @@ def register_all():
         func = {
             "Read": tool_read, "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
-            "todo": tool_todo, "task": tool_task,
+            "todo": tool_todo, "task": tool_task, "Knowledge": tool_knowledge,
         }[name]
-        # `task` is read-only w.r.t. the parent's files (it can't Write/Edit).
-        read_only = name in ("Read", "Glob", "Grep", "task")
+        # task + Knowledge are read-only w.r.t. the parent's files.
+        read_only = name in ("Read", "Glob", "Grep", "task", "Knowledge")
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
 
 register_all()
