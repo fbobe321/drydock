@@ -51,7 +51,26 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-06-26 (PM) — SHIPPED: PyPI live, TUI-driven tbench launcher, clean baseline
+## ⭐ 2026-06-26 (PM) — SHIPPED: PyPI live, TUI-driven launcher, GraphRAG, context fix
+
+**Newest first (all pushed + on PyPI 3.0.49):**
+- **v3.0.49 GraphRAG knowledge base** — users build a local entity-graph index
+  from their docs/code; the agent retrieves from it via the read-only
+  `Knowledge` tool. `drydock/graphrag.py` (clean-room, stdlib only — no
+  embeddings/deps): chunk → entity extraction → co-occurrence graph → query with
+  1-hop expansion. `/graphrag build <path>|status|clear` (TUI + CLI). Verified
+  hands-on: model called Knowledge and answered KB-only facts. Tests:
+  tests/test_graphrag.py.
+- **v3.0.48 configurable `context_limit`** — was HARDCODED 65536 in cli.py (even
+  clobbered `**cfg`), so a 32k-server user OOM'd before compaction fired and
+  /compact found nothing. Now a config.toml setting (DEFAULTS < file <
+  `--context-limit`); set it to your server's -c. Manual /compact also escalates
+  to emergency_compact when a normal pass leaves history >50% full.
+- **v3.0.47 thinking-visibility** (operator's feature, finished + rendered):
+  `extract_thinking` + `ReasoningChunk` → collapsed `ReasoningCard` in the TUI.
+- **v3.0.47 runaway text-repetition guard** (see below).
+
+
 
 **Done this session (all pushed; HEAD past b6cedd7):**
 - **`/compact` implemented FRESH** (TUI + CLI) — was advertised in `/help`, never
