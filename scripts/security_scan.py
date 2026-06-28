@@ -44,6 +44,9 @@ ALLOWED_HOST_SUFFIXES = (
     "host.docker.internal",
     "api.openai.com",
     "api.anthropic.com",
+    # WebSearch backend (drydock/web.py). Carries only the user's search query —
+    # no credentials read, no auth header (verified: web.py touches no secrets).
+    "duckduckgo.com",
     "googleapis.com",
     "pypi.org",
     "github.com",
