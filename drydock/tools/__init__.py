@@ -162,6 +162,34 @@ SCHEMAS = [
         },
     },
     {
+        "name": "Dispatch",
+        "description": (
+            "Run SEVERAL read-only investigation sub-agents at once (in "
+            "parallel), each in its own fresh context with Read/Glob/Grep/Bash. "
+            "Use it to answer multiple INDEPENDENT questions concurrently, e.g. "
+            "'where is auth handled?', 'how does the DB layer work?', 'what tests "
+            "exist?'. Returns each agent's summary. They cannot write or recurse."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "description": "Up to 6 independent investigation tasks.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "prompt": {"type": "string", "description": "The self-contained task."},
+                            "label": {"type": "string", "description": "Optional short label."},
+                        },
+                        "required": ["prompt"],
+                    },
+                },
+            },
+            "required": ["tasks"],
+        },
+    },
+    {
         "name": "GitStatus",
         "description": (
             "Show the current branch and a concise list of changed/staged/"
@@ -787,15 +815,10 @@ _SUBAGENT_SYSTEM = (
 )
 
 
-def tool_task(params: dict, config: dict) -> str:
-    """Spawn a read-only sub-agent with a FRESH context for a focused
-    exploration task, returning only its final summary. Keeps big searches out
-    of the main agent's context. Cannot recurse (no `task` tool) and cannot
-    write (no Write/Edit), so it can never corrupt the parent's work."""
-    prompt = (params.get("prompt") or params.get("description") or "").strip()
-    if not prompt:
-        return "Error: `task` needs a `prompt` describing what to investigate."
-    # Lazy import to avoid a tools <-> agent import cycle.
+def _run_subagent(prompt: str, config: dict) -> str:
+    """Run one read-only sub-agent to completion and return its final summary.
+    Shared by `task` (one) and `Dispatch` (many in parallel). Hard-capped; never
+    raises (a sub-agent must not crash the parent turn)."""
     from drydock.agent import run as agent_run, AgentState, TurnDone
 
     sub_state = AgentState()
@@ -806,6 +829,9 @@ def tool_task(params: dict, config: dict) -> str:
     sub_config["max_tool_calls"] = 20
     sub_config.pop("_todo", None)      # the sub-agent keeps no checklist of its own
     sub_config.pop("_plan_autocontinue", None)
+    # Own abort holder so parallel sub-agents don't clobber each other's (or the
+    # parent's) in-flight client/proc handles in the shared dict.
+    sub_config["_abort"] = {}
     steps = 0
     try:
         for ev in agent_run(prompt, sub_state, sub_config, _SUBAGENT_SYSTEM):
@@ -817,6 +843,54 @@ def tool_task(params: dict, config: dict) -> str:
         if msg.get("role") == "assistant" and (msg.get("content") or "").strip():
             return msg["content"].strip()
     return f"[sub-agent finished {steps} step(s) with no summary]"
+
+
+def tool_task(params: dict, config: dict) -> str:
+    """Spawn a read-only sub-agent with a FRESH context for a focused
+    exploration task, returning only its final summary. Keeps big searches out
+    of the main agent's context. Cannot recurse (no `task` tool) and cannot
+    write (no Write/Edit), so it can never corrupt the parent's work."""
+    prompt = (params.get("prompt") or params.get("description") or "").strip()
+    if not prompt:
+        return "Error: `task` needs a `prompt` describing what to investigate."
+    return _run_subagent(prompt, config)
+
+
+def tool_dispatch(params: dict, config: dict) -> str:
+    """Run SEVERAL read-only sub-agents concurrently and return all summaries.
+    Each gets its own fresh context + Read/Glob/Grep/Bash (no recursion, no
+    writes). Use it to investigate independent questions at once."""
+    import concurrent.futures
+
+    raw = params.get("tasks") or params.get("agents") or []
+    if isinstance(raw, dict):
+        raw = [raw]
+    norm: list[dict] = []
+    for t in raw:
+        if isinstance(t, str) and t.strip():
+            norm.append({"prompt": t.strip(), "label": ""})
+        elif isinstance(t, dict):
+            p = (t.get("prompt") or t.get("description") or "").strip()
+            if p:
+                norm.append({"prompt": p, "label": (t.get("label") or t.get("description") or "").strip()})
+    if not norm:
+        return "Error: `Dispatch` needs a `tasks` list, each item a prompt (string) or {prompt, label}."
+    norm = norm[:6]  # cap fan-out
+
+    results: list[str] = [""] * len(norm)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(norm))) as ex:
+        futs = {ex.submit(_run_subagent, t["prompt"], config): i for i, t in enumerate(norm)}
+        for fut in concurrent.futures.as_completed(futs):
+            i = futs[fut]
+            try:
+                results[i] = fut.result()
+            except Exception as e:  # noqa: BLE001
+                results[i] = f"[agent error: {e}]"
+    parts = [f"Dispatched {len(norm)} sub-agent(s) in parallel:"]
+    for i, t in enumerate(norm):
+        label = t["label"] or f"agent {i + 1}"
+        parts.append(f"\n=== {label} ===\n{results[i]}")
+    return "\n".join(parts)
 
 
 def _git_cwd(config: dict) -> str:
@@ -940,6 +1014,7 @@ _TOOLS = [
     ("Grep", tool_grep, True),
     ("todo", tool_todo, False),
     ("task", tool_task, True),
+    ("Dispatch", tool_dispatch, True),
     ("Knowledge", tool_knowledge, True),
     ("WebSearch", tool_websearch, True),
     ("WebFetch", tool_webfetch, True),
@@ -955,7 +1030,8 @@ def register_all():
         func = {
             "Read": tool_read, "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
-            "todo": tool_todo, "task": tool_task, "Knowledge": tool_knowledge,
+            "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
+            "Knowledge": tool_knowledge,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
             "GitStatus": tool_gitstatus, "GitDiff": tool_gitdiff,
             "GitLog": tool_gitlog, "GitCommit": tool_gitcommit,
@@ -963,8 +1039,8 @@ def register_all():
         # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
         # GitCommit writes a local, reversible commit).
         read_only = name in (
-            "Read", "Glob", "Grep", "task", "Knowledge", "WebSearch", "WebFetch",
-            "GitStatus", "GitDiff", "GitLog",
+            "Read", "Glob", "Grep", "task", "Dispatch", "Knowledge",
+            "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
 
