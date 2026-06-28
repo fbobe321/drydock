@@ -1,7 +1,38 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.44, CI green). Supersedes the v2 line.
+Status: SHIPPING (v3.0.56, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-06-28) — agentic-harness feature push (v3.0.45–3.0.56):**
+> Drydock grew from a core file/bash agent into a full agentic CLI harness.
+> Every capability is clean-room / stdlib-only (no new runtime deps beyond
+> `openai` + `textual`), unit-tested, and **verified hands-on in the real TUI**.
+> - **Publishing is LIVE again.** `drydock-cli` is on an active PyPI account
+>   (the earlier "blocked on reinstatement" status is resolved); v3.0.45→3.0.56
+>   all published. GitHub auto-auths via a credential helper.
+> - **Internet search** — `WebSearch` / `WebFetch` tools (DuckDuckGo, stdlib,
+>   offline-safe).
+> - **GraphRAG knowledge base** — users build a local entity-graph index from
+>   their docs/code (`/graphrag build`); the agent retrieves via the read-only
+>   `Knowledge` tool.
+> - **Version-control tools** — `GitStatus` / `GitDiff` / `GitLog` / `GitCommit`
+>   (structured, truncated; commit is local + reversible, push stays gated).
+> - **Multi-agent** — `Dispatch` runs up to 6 read-only sub-agents in parallel.
+> - **Skills** — reusable `/<name>` commands from markdown (`~/.drydock/skills`).
+> - **Loops** — `/loop <count> <prompt>` for iterative runs (Esc stops).
+> - **MCP** — clean-room JSON-RPC stdio client; connects to configured MCP
+>   servers and exposes their tools as `mcp__<server>__<tool>`.
+> - **Semantic chunking** — `Read` on a >1500-line file returns a structure
+>   index (symbols + line numbers) instead of dumping it.
+> - Plus: `/compact`, configurable `context_limit` (config.toml), a runaway
+>   text-repetition guard, and collapsible reasoning ("thinking") cards.
+>
+> **Primary model is the dense Gemma-4-31B** (QAT, 64K) — it killed the
+> 26B-A4B agentic looping. Improvement is driven by **real hands-on TUI use**
+> against the live model, not score-chasing (no eval harnesses — still a
+> non-goal). A TUI-driven tbench launcher (`/data3/tbench_local/tui_task_lib.sh`)
+> drives real tasks through the genuine TUI for bug-hunting.
+> **Full resume state in `RESUME.md` (read first).**
 
 > **Progress (2026-06-24, late):** Model is the **dense Gemma-4-31B** (64K,
 > fleet-wide) — it killed the 26B-A4B agentic looping (confirmed with data,
@@ -113,8 +144,9 @@ Emulated from first principles, not copied:
   tool-call cards** (compact by default; expand for full args/output).
 - Inline, advisory **permission prompts** for risky tools, with a remembered
   allowlist.
-- **Slash commands** for control (`/help`, `/undo`, `/clear`, `/model`,
-  `/goal`, `/quit`).
+- **Slash commands** for control: `/help` `/model` `/cwd` `/undo` `/back`
+  `/stop` `/status` `/compact` `/graphrag` `/skills` `/loop` `/mcp` `/clear`
+  `/quit`, plus any user-defined `/<skill>`.
 - A prompt box with history, multiline (Ctrl+J), and "type while busy"
   injection into the running turn.
 
@@ -145,11 +177,19 @@ no copied ASCII or message strings.
 
 ## 7. Architecture
 
-Build on the existing clean v3 spine (~1k LOC): `agent.py` (loop + event
-stream), `providers.py` (OpenAI-compatible client for llama.cpp),
-`compaction.py`, `tool_registry.py`, `tools/` (read/write/edit/bash/glob/
-grep). Add: reliability core (§6), a Textual TUI (§5), config/onboarding,
-and the release pipeline.
+The clean v3 spine: `agent.py` (loop + event stream), `providers.py`
+(OpenAI-compatible client for llama.cpp), `compaction.py`, `tool_registry.py`,
+`tools/` (Read/Write/Edit/Bash/Glob/Grep + the agentic toolset below), the
+reliability core (§6), a Textual TUI (§5), config/onboarding, and the
+scanner-gated release pipeline.
+
+**Agentic toolset modules (all clean-room, stdlib-only):** `web.py`
+(WebSearch/WebFetch), `gittools.py` (Git status/diff/log/commit), `graphrag.py`
+(Knowledge KB), `skills.py` (`/<name>` commands), `mcp.py` (MCP stdio client),
+plus the in-`tools` `Dispatch` (parallel sub-agents) and `task` (single
+sub-agent). Tools registered: Read · Write · Edit · Bash · Glob · Grep · todo ·
+task · Dispatch · GitStatus · GitDiff · GitLog · GitCommit · WebSearch ·
+WebFetch · Knowledge · `mcp__<server>__<tool>` (dynamic).
 
 ## 8. Non-goals (for now)
 
@@ -166,14 +206,18 @@ batch runners. Multimodal/vision is optional and deferred.
 - **M2 — TUI:** §5 implemented; first real tmux shakedown against Gemma-26B.
 - **M3 — Config/onboarding/packaging:** local autodetect, llama.cpp defaults,
   scanner-gated release pipeline.
-- **M4 — Validation & launch:** PRD shakedown suite (401–405) passes; website
-  updated; publish to PyPI once the account is restored to good standing.
+- **M4 — Validation & launch (done):** PRD shakedown suite passes; published to
+  PyPI (`drydock-cli`, account in good standing); website updated.
+- **M5 — Agentic harness (done, v3.0.45–3.0.56):** internet search, GraphRAG,
+  version-control tools, multi-agent Dispatch, skills, loops, MCP, semantic
+  chunking — see the top progress note. All clean-room, TUI-verified.
 
 ## 10. Risks
 
-- **PyPI access.** Publishing depends on account reinstatement (incident in
-  progress). Mitigation: ship via GitHub/Docker meanwhile; keep one account,
-  full transparency.
+- **PyPI access (RESOLVED).** Publishing is live again — `drydock-cli` is on an
+  active account and v3.0.45→3.0.56 published cleanly. Every release is still
+  gated by the provenance scanner before upload. (History: the v2 lineage was
+  quarantined; v3's clean-room rebuild restored good standing.)
 - **TUI scope.** A good TUI is the largest chunk; risk of over-building.
   Mitigation: ship a minimal usable transcript+cards first, iterate from real
   use.

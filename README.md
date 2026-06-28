@@ -1,9 +1,10 @@
 # ⚓ Drydock
 
 A local-first, provider-agnostic **terminal coding agent** for your own LLM.
-No accounts, no telemetry, no cloud — the only network call it makes is to
-the model endpoint you configure. Primary target: **Gemma-4-26B-A4B** served
-by llama.cpp on a single workstation.
+No accounts, no telemetry, no cloud — the only outbound calls are to the model
+endpoint you configure and (optionally) the web-search tools you invoke.
+Primary target: **dense Gemma-4-31B** (QAT, 64K) served by llama.cpp on a
+single workstation.
 
 > **v3 — clean-room rebuild.** Drydock is being rebuilt as an original,
 > Apache-2.0 codebase owned end to end (no upstream fork). Every release is
@@ -22,9 +23,31 @@ your box.
 
 Shipping. Published on PyPI as **`drydock-cli`** (v3.x). The Textual TUI is the
 default surface: a scrolling transcript with streamed assistant text, collapsible
-tool cards, a live nautical activity line, and a multi-line prompt. The agent
-loop, OpenAI-compatible provider, two-tier compaction, and the core tools
-(Read/Write/Edit/Bash/Glob/Grep) are in, with Gemma reliability hardening verified.
+tool cards, collapsible reasoning ("thinking") cards, a live nautical activity
+line, and a multi-line prompt. The agent loop, OpenAI-compatible provider,
+two-tier compaction, and the full agentic toolset (below) are in, with Gemma
+reliability hardening verified hands-on.
+
+## Capabilities
+
+A full agentic CLI harness — every tool below is clean-room and dependency-free
+(nothing beyond `openai` + `textual`), and the model calls them autonomously:
+
+- **Files & shell** — `Read` (with a structure index for huge files), `Write`,
+  `Edit`, `Bash`, `Glob`, `Grep`.
+- **Version control** — `GitStatus`, `GitDiff`, `GitLog`, `GitCommit`
+  (structured + truncated; commit is local and reversible).
+- **Internet** — `WebSearch` + `WebFetch` (DuckDuckGo; offline-safe).
+- **Knowledge base (GraphRAG)** — build a local entity-graph index from your
+  docs/code with `/graphrag build <path>`; the agent retrieves from it via the
+  read-only `Knowledge` tool.
+- **Multi-agent** — `Dispatch` runs several read-only sub-agents in parallel;
+  `task` runs one — each in a fresh context, for focused investigation.
+- **MCP** — connect to Model Context Protocol servers (`~/.drydock/mcp.json`);
+  their tools appear as `mcp__<server>__<tool>`. List them with `/mcp`.
+- **Skills** — reusable `/<name>` commands authored as markdown in
+  `~/.drydock/skills/` (or `<project>/.drydock/skills/`); `$ARGS` substitution.
+- **Loops** — `/loop <count> <prompt>` runs a prompt iteratively (Esc stops).
 
 ## Install
 
@@ -33,7 +56,7 @@ pip install drydock-cli
 drydock
 ```
 
-Requires Python 3.12+. From source instead:
+Requires Python 3.11+. From source instead:
 `git clone https://github.com/fbobe321/drydock-v3.git && cd drydock-v3 && pip install -e .`
 
 On first launch with no config, Drydock probes localhost for a running local
@@ -54,8 +77,11 @@ commands to do the work, showing each as a collapsible tool card.
 - A live activity line shows progress while it works:
   `◡ Keelhauling…  (12s · ↓ 6.2k tokens · thinking with high effort)`
 - Submit while it's working and the prompt **queues** (drains in order)
-- Slash commands: `/model [name]` · `/cwd [path]` · `/undo` (revert last write)
-  · `/back` (rewind last turn) · `/status` · `/clear` · `/help` · `/quit`
+- Slash commands: `/model` · `/cwd` · `/undo` (revert last write) · `/back`
+  (rewind last turn) · `/status` · `/compact` (shrink context) · `/graphrag`
+  (build/query a knowledge base) · `/skills` (list your `/<name>` skills) ·
+  `/loop` (repeat a prompt) · `/mcp` (list MCP servers) · `/clear` · `/help` ·
+  `/quit`
 
 It honors `AGENTS.md` / `DRYDOCK.md` in the working directory for project
 conventions.
@@ -74,22 +100,26 @@ blocked:
   `raise` outside an except, and refuses to write git conflict-marker content.
 
 Point it at a local OpenAI-compatible endpoint (e.g. llama.cpp's `server-cuda`
-serving Gemma 4 26B).
+serving Gemma-4-31B). The web tools (`WebSearch`/`WebFetch`) are read-only and
+degrade cleanly offline; the release scanner allowlists only the search backend.
 
 ## Model server (reference setup)
 
 Drydock is provider-agnostic, but it's tuned and measured against this rig:
 
-- **Model:** Gemma-4-26B-A4B-it (26B MoE, ~4B active/token), Unsloth `Q3_K_M`
-  GGUF, served by `ghcr.io/ggml-org/llama.cpp:server-cuda` with `--jinja`.
-- **GPUs:** 2× NVIDIA RTX 4060 Ti 16GB. The Q3_K_M weights (~13 GB) fit on a
-  **single 16 GB card**, so each GPU runs a **full, independent instance** —
-  two cards give two parallel instances for throughput; the model is **not**
-  tensor-split or "pooled" across both.
+- **Model:** dense **Gemma-4-31B** (QAT `Q4_K_XL` GGUF), served by
+  `ghcr.io/ggml-org/llama.cpp:server-cuda` with `--jinja`. Swapped from the
+  26B-A4B MoE, whose ~4B active params caused fatal agentic tool-loops; the
+  dense 31B is loop-free (slower, but it finishes).
+- **GPUs:** 2× NVIDIA RTX 4060 Ti 16GB, **tensor-split** across both cards
+  (`--tensor-split 1,1`) so the 31B weights fit.
 - **Context:** 64k (`-c 65536`) with `q8_0` KV-cache quantization
-  (`-ctk q8_0 -ctv q8_0`) — 64k @ q8 fits roughly the same VRAM as 32k @ f16.
-- **Throughput:** ~**64 tok/s** decode, ~94 tok/s prompt (per instance, Q3_K_M).
-- **Minimum:** any single 16 GB+ CUDA card runs it.
+  (`-ctk q8_0 -ctv q8_0`); set `context_limit` in `~/.drydock/config.toml` to
+  match your server's `-c`.
+- **Throughput:** ~15 tok/s decode (tensor-split 31B). Faster single-GPU
+  options exist if you drop to a smaller model.
+- **Provider-agnostic:** any OpenAI-compatible endpoint (llama.cpp, vLLM,
+  Ollama, LM Studio) works — point `--base-url` at it.
 
 ## Principles
 
