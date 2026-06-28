@@ -52,8 +52,10 @@ def test_empty_body_skipped(tmp_path):
     assert "empty" not in skills.load_skills(str(tmp_path))
 
 
-def test_no_skills_dir_is_empty(tmp_path):
-    assert skills.load_skills(str(tmp_path)) == {}
+def test_no_user_or_project_skills_yields_only_builtins(tmp_path):
+    # With no user/project skills, only the bundled built-ins (RMF) are present.
+    loaded = skills.load_skills(str(tmp_path))
+    assert set(loaded) == {"rmf-control", "rmf-categorize", "rmf-review", "rmf-poam"}
 
 
 def test_create_skill_user_scope(tmp_path, monkeypatch):

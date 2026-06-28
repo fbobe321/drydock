@@ -74,7 +74,13 @@ def _parse(path: Path) -> Skill | None:
 
 
 def skills_dirs(cwd: str) -> list[Path]:
-    return [Path.home() / ".drydock" / "skills", Path(cwd) / ".drydock" / "skills"]
+    # Built-in skills ship with the package (e.g. the RMF skills); user + project
+    # dirs come AFTER so they override a built-in of the same name.
+    return [
+        Path(__file__).parent / "builtin_skills",
+        Path.home() / ".drydock" / "skills",
+        Path(cwd) / ".drydock" / "skills",
+    ]
 
 
 def create_skill(name: str, body: str, *, description: str = "", scope: str = "user",

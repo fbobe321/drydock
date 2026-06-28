@@ -65,6 +65,8 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/<name>` | Run a skill |
 | `/loop <count> <prompt>` | Repeat a prompt N times (Esc stops) |
 | `/mcp` | List connected MCP servers + their tools |
+| `/rmf bootstrap [families]` | Ingest the NIST SP 800-53 catalog (RMF automation) |
+| `/rmf-control` · `/rmf-categorize` · `/rmf-review` · `/rmf-poam` | Bundled RMF skills |
 | `/model` · `/cwd` | Show/set model & endpoint · working directory |
 | `/undo` · `/back` | Revert the last write · rewind the last turn |
 | `/compact` · `/status` · `/clear` | Shrink context · session stats · reset |
@@ -95,6 +97,21 @@ needs nothing extra; PDF uses the `pdftotext` binary (poppler) if present, else
 
 Skills are markdown files in `~/.drydock/skills/` (personal) or
 `<project>/.drydock/skills/` (project); `/skills new` writes one for you.
+
+### RMF automation (NIST SP 800-53)
+
+For Risk Management Framework work, Drydock can ingest the NIST SP 800-53 Rev 5
+control catalog into the knowledge base and ships four RMF skills — all
+**100% local** for CUI/sensitive systems.
+
+```
+/rmf bootstrap            # one-time: fetch + ingest the 800-53 catalog (offline after)
+/graphrag build ./ssp     # ingest your own SSP/POA&M (PDF/Word/text)
+/rmf-control AC-2         # look up a control
+/rmf-categorize ...       # FIPS 199 categorization + tailored baseline
+/rmf-review AC-2          # review an SSP implementation statement vs 800-53A
+/rmf-poam <finding>       # generate a POA&M entry from a scan/STIG finding
+```
 
 ## Install
 

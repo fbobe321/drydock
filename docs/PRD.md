@@ -1,7 +1,29 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.56, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.63, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-06-28, late) — knowledge ingestion + RMF automation
+> (v3.0.57–3.0.63):**
+> - **Self-documenting:** the system prompt now teaches the model Drydock's own
+>   slash commands, so a user can just ask "how do I add my docs / make a skill?"
+>   and the model answers. Commands documented on README + website + PyPI.
+> - **GraphRAG ingestion UX:** `/graphrag add <path>` (incremental),
+>   `/graphrag query <q>` (test retrieval), `status` lists sources.
+> - **PDF + Word ingestion (v3.0.62):** `drydock/extract.py` — `.docx` via stdlib
+>   (zip/XML), `.pdf` via `pdftotext` (poppler) or optional `pip install
+>   drydock-cli[pdf]` (pypdf). So SSPs/POA&Ms in PDF/Word ingest directly.
+> - **Author skills in-TUI (v3.0.61):** `/skills new <name> <prompt>`; built-in
+>   skills now ship in the wheel (`drydock/builtin_skills/`).
+> - **🎖️ RMF Automation (v3.0.63) — Operation RMF Automata, Phase 1:** ingest
+>   the NIST SP 800-53 Rev 5 OSCAL catalog into the GraphRAG KB (`/rmf bootstrap
+>   [families]`, `drydock/rmf.py`) so controls are queryable offline; plus four
+>   bundled RMF skills — `/rmf-control`, `/rmf-categorize`, `/rmf-review`,
+>   `/rmf-poam` — that drive the `Knowledge` tool over the catalog + the user's
+>   own ingested SSP/POA&M/scan artifacts. Control-ID lookup works (added a
+>   code-token entity pattern, `AC-2`/`SI-4`). 100% local-first for CUI. See §11.
+>   Phase 2/3 (typed Control→Component→Vulnerability ontology graph + graph
+>   queries + inheritance reasoning) is scoped but NOT yet built.
 
 > **Progress (2026-06-28) — agentic-harness feature push (v3.0.45–3.0.56):**
 > Drydock grew from a core file/bash agent into a full agentic CLI harness.
@@ -223,3 +245,40 @@ batch runners. Multimodal/vision is optional and deferred.
   use.
 - **Model variance.** Same prompt can pass/fail run-to-run. Mitigation:
   report both numbers; rely on advisory hardening, not brittle gates.
+
+## 11. RMF Automation — "Operation RMF Automata"
+
+Extends Drydock to automate Risk Management Framework (RMF) work — parsing,
+mapping, and reviewing System Security Plans (SSPs), POA&Ms, and NIST SP 800-53
+control baselines — while keeping CUI / sensitive architectures 100% local
+(no cloud). Built on Drydock's GraphRAG knowledge base + skills.
+
+**Phase 1 (shipped, v3.0.63):**
+
+- **NIST 800-53 catalog ingestion** (`drydock/rmf.py`, `/rmf bootstrap
+  [families]`): fetch the OSCAL Rev 5 catalog once (then offline), flatten each
+  control (id, family, statement, guidance, assessment objective; OSCAL params
+  resolved) into per-family docs, and ingest into the GraphRAG KB. Controls are
+  queryable via the read-only `Knowledge` tool. A code-token entity pattern makes
+  control-ID lookups (`AC-2`, `SI-4`, `AC-2.1`) resolve.
+- **Four bundled RMF skills** (`drydock/builtin_skills/`, ship in the wheel):
+  `/rmf-control <id>` (control lookup), `/rmf-categorize` (FIPS 199 + tailored
+  baseline, RMF Steps 1–3), `/rmf-review <control>` (SSP implementation-statement
+  reviewer vs 800-53A objectives, Steps 4–5), `/rmf-poam <finding>` (POA&M
+  generator from scan/STIG findings). Each is instructed to consult `Knowledge`
+  first. Users ingest their own SSPs/POA&Ms (PDF/Word/text) with `/graphrag
+  build` so the skills cross-reference them.
+
+**Phase 2/3 (scoped, NOT built):** a SCHEMA-TYPED ontology graph
+(Control / Component / Vulnerability / Test Case nodes; `IMPLEMENTS`, `RESIDES_ON`,
+`AFFECTS`, `ASSESSES`, `MITIGATES` edges) built via LLM relationship extraction,
+plus graph queries ("which servers inherit physical security controls?") and
+inheritance reasoning (a child system fails an inherited control its parent
+fails). To stay clean-room and local-first this would be a stdlib in-memory typed
+graph layered on GraphRAG — NOT an external Neo4j dependency. Bootstrapping the
+typed control nodes directly from the OSCAL catalog (already parsed in Phase 1)
+is the natural first step.
+
+**Constraints:** local-first inference for CUI; runs alongside the primary
+reasoning model on the reference multi-GPU rig; advisory-not-blocking; clean
+provenance (the OSCAL catalog is U.S. public domain).

@@ -52,6 +52,9 @@ _RE_IDENT = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*(?:[_./][a-zA-Z0-9_]+)+)\b")
 _RE_CAMEL = re.compile(r"\b([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+)\b")
 _RE_PROPER = re.compile(r"\b([A-Z][a-zA-Z0-9]+(?:[ \t]+[A-Z][a-zA-Z0-9]+){0,3})\b")
 _RE_ACRONYM = re.compile(r"\b([A-Z]{2,6})\b")
+# Dotted/hyphenated codes like control IDs (AC-2, AC-2.1, SI-4), CVEs, STIG IDs —
+# these tokenize into too-short pieces otherwise, so a lookup by the code misses.
+_RE_CODE = re.compile(r"\b([A-Za-z]{1,6}-\d+(?:\.\d+)*)\b")
 _RE_WORD = re.compile(r"[a-zA-Z0-9_]+")
 
 
@@ -63,7 +66,7 @@ def default_store_path(cwd: str) -> Path:
 def extract_entities(text: str) -> list[str]:
     """Heuristic entity extraction → normalized (lowercased) entity keys."""
     found: set[str] = set()
-    for rx in (_RE_BACKTICK, _RE_IDENT, _RE_CAMEL, _RE_PROPER, _RE_ACRONYM):
+    for rx in (_RE_BACKTICK, _RE_IDENT, _RE_CAMEL, _RE_PROPER, _RE_ACRONYM, _RE_CODE):
         for m in rx.findall(text):
             e = m.strip().lower()
             # Drop trivial / stopword-only entities and overlong noise.

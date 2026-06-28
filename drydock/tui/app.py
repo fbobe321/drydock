@@ -495,12 +495,15 @@ class DrydockApp(App):
                 "  /skills          list skills · /skills new <name> <prompt> to create one\n"
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
                 "  /mcp             list connected MCP servers and their tools\n"
+                "  /rmf             RMF automation — /rmf bootstrap, then /rmf-control etc.\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
                 "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
             )
         elif cmd == "/mcp":
             self._cmd_mcp()
+        elif cmd == "/rmf":
+            self._cmd_rmf(arg)
         elif cmd == "/loop":
             self._cmd_loop(arg)
         elif cmd == "/skills":
@@ -509,6 +512,57 @@ class DrydockApp(App):
             self._run_skill(self._skills[cmd[1:]], arg)
         else:
             self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))
+
+    def _cmd_rmf(self, arg: str) -> None:
+        """RMF automation: bootstrap the NIST 800-53 catalog into the knowledge
+        base and surface the bundled RMF skills."""
+        from drydock import rmf
+
+        parts = arg.split()
+        sub = parts[0].lower() if parts else ""
+        cwd = self.config.get("cwd") or "."
+        if sub == "bootstrap":
+            families = [f.lower() for f in parts[1:]] or None
+            scope = ("families " + ", ".join(families)) if families else "all 20 families"
+            self._info(
+                f"Ingesting the NIST SP 800-53 Rev 5 catalog ({scope}) into the "
+                "knowledge base — one-time download + index, this can take ~30s…"
+            )
+            self.run_worker(lambda: self._rmf_bootstrap(cwd, families), thread=True)
+        elif sub in ("", "help", "status"):
+            cat = rmf.rmf_dir(cwd) / "catalog.json"
+            have = "downloaded" if cat.exists() else "not downloaded yet"
+            self._info(
+                "RMF automation — automate Risk Management Framework work.\n"
+                f"  Catalog (NIST 800-53 Rev 5): {have} ({cat})\n"
+                "  /rmf bootstrap [families…]   ingest the control catalog (e.g. "
+                "/rmf bootstrap ac si, or no args for all)\n"
+                "Skills (run as /<name>):\n"
+                "  /rmf-control <id>      look up a control (e.g. /rmf-control AC-2)\n"
+                "  /rmf-categorize …      FIPS 199 categorization + tailored baseline\n"
+                "  /rmf-review <control>  review an SSP implementation statement\n"
+                "  /rmf-poam <finding>    generate a POA&M entry\n"
+                "Ingest your own SSPs/POA&Ms (PDF/Word/text) with /graphrag build "
+                "<path> so the skills can cross-reference them."
+            )
+        else:
+            self._info("usage:  /rmf bootstrap [families…]  ·  /rmf status")
+
+    def _rmf_bootstrap(self, cwd: str, families) -> None:
+        """Worker-thread body: fetch + ingest the catalog, report back on the UI."""
+        from drydock import rmf
+
+        try:
+            stats = rmf.bootstrap(cwd, families=families)
+            msg = (
+                f"✓ RMF catalog ingested: {stats['family_docs']} family doc(s), "
+                f"{stats['chunks']} chunks total in the knowledge base. Controls are "
+                "now queryable — try /rmf-control AC-2 or ask about a control."
+            )
+        except Exception as e:  # noqa: BLE001
+            msg = (f"RMF bootstrap failed: {e}. (Needs internet for the one-time "
+                   "catalog download; after that it works offline.)")
+        self.call_from_thread(self._info, msg)
 
     def _cmd_mcp(self) -> None:
         """List connected MCP servers and the tools they expose."""
