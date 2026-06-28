@@ -271,6 +271,58 @@ SCHEMAS = [
         },
     },
     {
+        "name": "StigRules",
+        "description": (
+            "List the rules in a DISA STIG checklist (.ckl / .cklb) with their "
+            "status, optionally filtered by status (e.g. not_reviewed). Use it to "
+            "see what needs assessing. Pair with StigRule to read one, StigSet to "
+            "record a result."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the .ckl/.cklb file."},
+                "status": {"type": "string", "description": "Optional filter: open|not_a_finding|not_applicable|not_reviewed"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "StigRule",
+        "description": (
+            "Read ONE STIG rule's full detail — Check Content + Fix Text — so you "
+            "can assess it against system evidence. Assess one rule at a time."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "rule_id": {"type": "string", "description": "Vuln_Num (V-…) or Rule_ID (SV-…)."},
+            },
+            "required": ["path", "rule_id"],
+        },
+    },
+    {
+        "name": "StigSet",
+        "description": (
+            "Record an assessment result for a STIG rule and save the checklist: "
+            "set status (open / not_a_finding / not_applicable / not_reviewed) and "
+            "the finding_details / comments narrative. Regenerates a valid "
+            ".ckl/.cklb that re-imports into STIG Viewer / eMASS."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "rule_id": {"type": "string"},
+                "status": {"type": "string", "description": "open | not_a_finding | not_applicable | not_reviewed"},
+                "finding_details": {"type": "string"},
+                "comments": {"type": "string"},
+            },
+            "required": ["path", "rule_id"],
+        },
+    },
+    {
         "name": "GraphQuery",
         "description": (
             "Query the RMF ontology GRAPH to TRACE relationships (typed: Control, "
@@ -1102,6 +1154,78 @@ def _rmf_graph(config):
     return rmf_graph, rmf_graph.RmfGraph.load(path), path
 
 
+def _gattrs(g, nid) -> dict:
+    n = g.get(nid)
+    return n["attrs"] if n else {}
+
+
+def _stig_path(params, config):
+    p = (params.get("path") or "").strip()
+    return _resolve_path(p, config) if p else None
+
+
+def tool_stigrules(params: dict, config: dict) -> str:
+    """List the rules in a STIG checklist (.ckl/.cklb), optionally by status."""
+    from drydock import stig
+    path = _stig_path(params, config)
+    if not path:
+        return "Error: StigRules needs a `path` to a .ckl/.cklb checklist."
+    try:
+        cl = stig.load(path)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not read checklist: {e}"
+    status = params.get("status")
+    sf = stig.canonical_status(status) if status else None
+    rules = [r for r in cl.rules if sf is None or r.status == sf]
+    head = (f"{path}: {len(cl.rules)} rules — " +
+            ", ".join(f"{k}={v}" for k, v in cl.counts().items()))
+    lines = [head] + [f"  {r.summary()}" for r in rules[:400]]
+    if len(rules) > 400:
+        lines.append(f"  … +{len(rules) - 400} more")
+    return "\n".join(lines)
+
+
+def tool_stigrule(params: dict, config: dict) -> str:
+    """Full detail of ONE STIG rule (check content + fix text) for assessment."""
+    from drydock import stig
+    path = _stig_path(params, config)
+    rid = (params.get("rule_id") or "").strip()
+    if not path or not rid:
+        return "Error: StigRule needs `path` and `rule_id`."
+    try:
+        cl = stig.load(path)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not read checklist: {e}"
+    r = cl.by_id(rid)
+    if r is None:
+        return f"No rule {rid} in {path}."
+    return (f"{r.group_id} ({r.rule_id}) — {r.title}\nSeverity: {r.severity}\n"
+            f"Status: {r.status}\nCheck Content:\n{r.check_content}\n\n"
+            f"Fix Text:\n{r.fix_text}")
+
+
+def tool_stigset(params: dict, config: dict) -> str:
+    """Set a STIG rule's status + finding details/comments and save the file."""
+    from drydock import stig
+    path = _stig_path(params, config)
+    rid = (params.get("rule_id") or "").strip()
+    if not path or not rid:
+        return "Error: StigSet needs `path` and `rule_id`."
+    status = params.get("status")
+    if status and stig.canonical_status(status) not in stig.STATUSES:
+        return f"status must be one of {stig.STATUSES}."
+    try:
+        cl = stig.load(path)
+        ok = cl.update(rid, status=status, finding_details=params.get("finding_details"),
+                       comments=params.get("comments"))
+        if not ok:
+            return f"No rule {rid} in {path}."
+        cl.save(path)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not update checklist: {e}"
+    return f"✓ {rid} set to {stig.canonical_status(status) if status else 'unchanged'} in {path}."
+
+
 def tool_graphquery(params: dict, config: dict) -> str:
     """Traverse the RMF typed ontology graph (read-only)."""
     rmf_graph, g, _ = _rmf_graph(config)
@@ -1115,8 +1239,8 @@ def tool_graphquery(params: dict, config: dict) -> str:
         n = g.get(node)
         if not n:
             return f"No control {ident} in the graph."
-        objs = [g.get(o)["attrs"].get("prose", "") for o in g.neighbors(node, "ASSESSES", direction="in")]
-        impl = [g.get(c)["attrs"].get("name", c) for c in g.neighbors(node, "IMPLEMENTS", direction="in")]
+        objs = [_gattrs(g, o).get("prose", "") for o in g.neighbors(node, "ASSESSES", direction="in")]
+        impl = [_gattrs(g, c).get("name", c) for c in g.neighbors(node, "IMPLEMENTS", direction="in")]
         out = [f"{n['attrs'].get('control_id', ident)} — {n['attrs'].get('title','')} "
                f"(Family: {n['attrs'].get('family','')})"]
         if objs:
@@ -1124,28 +1248,28 @@ def tool_graphquery(params: dict, config: dict) -> str:
         out.append("Implemented by: " + (", ".join(impl) if impl else "(no components recorded)"))
         return "\n".join(out)
     if op == "family":
-        ctrls = [g.get(c)["attrs"].get("control_id", c)
+        ctrls = [_gattrs(g, c).get("control_id", c)
                  for c in g.of_type("Control")
-                 if g.get(c)["attrs"].get("family", "").lower().startswith(ident.lower())
-                 or ident.lower() in g.get(c)["attrs"].get("family", "").lower()]
+                 if _gattrs(g, c).get("family", "").lower().startswith(ident.lower())
+                 or ident.lower() in _gattrs(g, c).get("family", "").lower()]
         return f"Controls in '{ident}': " + (", ".join(sorted(ctrls)) or "(none)")
     if op in ("component", "implementers", "inherited"):
         comp = rmf_graph.component_id(ident)
         if op == "implementers":
             node = rmf_graph.control_id(ident)
-            comps = [g.get(c)["attrs"].get("name", c) for c in g.neighbors(node, "IMPLEMENTS", direction="in")]
+            comps = [_gattrs(g, c).get("name", c) for c in g.neighbors(node, "IMPLEMENTS", direction="in")]
             return f"Components implementing {ident}: " + (", ".join(comps) or "(none)")
         if op == "inherited":
             inh = g.inherited_controls(comp)
-            names = [g.get(c)["attrs"].get("control_id", c) if g.get(c) else c for c in inh]
+            names = [_gattrs(g, c).get("control_id", c) if g.get(c) else c for c in inh]
             return (f"{ident} inherits {len(names)} control(s) from its parent system(s): "
                     + (", ".join(names) or "(none — no RESIDES_ON recorded)"))
         n = g.get(comp)
         if not n:
             return f"No component '{ident}' in the graph (add it with GraphAdd)."
-        impl = [g.get(c)["attrs"].get("control_id", c) for c in g.neighbors(comp, "IMPLEMENTS", direction="out")]
-        res = [g.get(p)["attrs"].get("name", p) for p in g.neighbors(comp, "RESIDES_ON", direction="out")]
-        vulns = [g.get(v)["attrs"].get("vuln_id", v) for v in g.neighbors(comp, "AFFECTS", direction="in")]
+        impl = [_gattrs(g, c).get("control_id", c) for c in g.neighbors(comp, "IMPLEMENTS", direction="out")]
+        res = [_gattrs(g, p).get("name", p) for p in g.neighbors(comp, "RESIDES_ON", direction="out")]
+        vulns = [_gattrs(g, v).get("vuln_id", v) for v in g.neighbors(comp, "AFFECTS", direction="in")]
         return (f"Component {ident} ({n['attrs'].get('os','')}): implements "
                 f"{', '.join(impl) or 'none'}; resides on {', '.join(res) or 'nothing'}; "
                 f"flaws {', '.join(vulns) or 'none'}.")
@@ -1258,6 +1382,9 @@ _TOOLS = [
     ("Knowledge", tool_knowledge, True),
     ("GraphQuery", tool_graphquery, True),
     ("GraphAdd", tool_graphadd, False),
+    ("StigRules", tool_stigrules, True),
+    ("StigRule", tool_stigrule, True),
+    ("StigSet", tool_stigset, False),
     ("WebSearch", tool_websearch, True),
     ("WebFetch", tool_webfetch, True),
     ("GitStatus", tool_gitstatus, True),
@@ -1275,6 +1402,7 @@ def register_all():
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
             "Knowledge": tool_knowledge,
             "GraphQuery": tool_graphquery, "GraphAdd": tool_graphadd,
+            "StigRules": tool_stigrules, "StigRule": tool_stigrule, "StigSet": tool_stigset,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
             "GitStatus": tool_gitstatus, "GitDiff": tool_gitdiff,
             "GitLog": tool_gitlog, "GitCommit": tool_gitcommit,
@@ -1283,6 +1411,7 @@ def register_all():
         # GitCommit + GraphAdd write).
         read_only = name in (
             "Read", "Glob", "Grep", "task", "Dispatch", "Knowledge", "GraphQuery",
+            "StigRules", "StigRule",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))

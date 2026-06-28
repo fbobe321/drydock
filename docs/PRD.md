@@ -302,7 +302,14 @@ Targets the most tedious part of Implement/Assess: DISA STIGs and the `.ckl`
 carry hostnames, IPs, and statuses that are almost always CUI — so parsing stays
 entirely local.
 
-- **§3.5 STIG Automated Assessor & `.ckl` generator (Phase 4–5, planned):** parse
+- **Engine SHIPPED (v3.0.65):** `drydock/stig.py` parses `.ckl` (XML) and `.cklb`
+  (JSON) into a compact per-rule model and regenerates them with **edit-in-place
+  fidelity** (only status/finding-details/comments change; all other STIG_DATA is
+  preserved, so STIG Viewer/eMASS re-import cleanly). Tools `StigRules` (list +
+  status counts), `StigRule` (one rule's check/fix text), `StigSet` (record
+  status + narrative, save). Verified live: the model read a rule, assessed it
+  against `sshd_config` evidence, and set it Open with a justification.
+- **§3.5 STIG Automated Assessor & `.ckl` generator (assessor skill + loop, planned):** parse
   `.ckl`/`.cklb` into a compact internal model (rule id, severity CAT I/II/III,
   check content, fix text, status, finding details); the LLM evaluates each
   check against supplied technical evidence (config files, command output) and
