@@ -217,7 +217,7 @@ _DRYDOCK_COMMANDS_HELP = (
     "folder), `/graphrag add <path>` to add more, `/graphrag query <q>` to test "
     "it, `/graphrag status`, `/graphrag clear`. Once built, you automatically use "
     "the `Knowledge` tool to draw on it. It ingests text formats (md/txt/code/"
-    "json/yaml/…); PDFs/Word must be converted to text first.\n"
+    "json/yaml/…) plus PDF and Word (.docx) directly.\n"
     "- Custom skills (reusable `/<name>` prompts): `/skills new <name> <prompt "
     "text>` creates one (use $ARGS in the prompt for trailing input); `/skills` "
     "lists them; then they run it as `/<name>`.\n"

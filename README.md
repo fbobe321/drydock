@@ -81,9 +81,10 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 
 Once built, the agent **automatically** retrieves from it (read-only `Knowledge`
 tool) when a question touches your material. Ingests text formats
-(`.md .txt .py .js .json .yaml .sql …`); convert PDFs/Word to text first
-(e.g. `pdftotext file.pdf file.txt`). The index is a single JSON at
-`<project>/.drydock/graphrag.json` — clean-room, stdlib-only, no embeddings.
+(`.md .txt .py .js .json .yaml .sql …`) **plus PDF and Word (`.docx`)**. `.docx`
+needs nothing extra; PDF uses the `pdftotext` binary (poppler) if present, else
+`pip install drydock-cli[pdf]` (pypdf). The index is a single JSON at
+`<project>/.drydock/graphrag.json` — clean-room, no embeddings.
 
 ### Custom skills
 

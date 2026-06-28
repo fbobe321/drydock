@@ -26,6 +26,8 @@ import json
 import os
 import re
 from collections import Counter, defaultdict
+
+from drydock import extract
 from pathlib import Path
 
 # Files we ingest as text. Everything else (binaries, images) is skipped.
@@ -106,7 +108,8 @@ def _iter_text_files(paths: list[str]):
                 dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
                 for f in files:
                     fp = Path(root) / f
-                    if fp.suffix.lower() in _TEXT_EXT or fp.suffix == "":
+                    ext = fp.suffix.lower()
+                    if ext in _TEXT_EXT or ext in extract.EXTRACTABLE_EXT or fp.suffix == "":
                         yield fp
 
 
@@ -119,10 +122,15 @@ def _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip_sources):
         rel = os.path.relpath(str(fp), cwd)
         if rel in skip_sources:
             continue
-        try:
-            text = fp.read_text("utf-8", "ignore")
-        except OSError:
-            continue
+        if fp.suffix.lower() in extract.EXTRACTABLE_EXT:
+            text = extract.extract_document(fp)  # PDF/Word → text (or None)
+            if not text:
+                continue  # unreadable / no PDF backend — skip cleanly
+        else:
+            try:
+                text = fp.read_text("utf-8", "ignore")
+            except OSError:
+                continue
         if not text.strip():
             continue
         added += 1
