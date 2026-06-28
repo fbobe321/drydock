@@ -123,4 +123,10 @@ def bootstrap(cwd: str, *, families: list[str] | None = None,
     store = graphrag.default_store_path(cwd)
     stats = graphrag.add_to_index([str(d) for d in docs], store, cwd=cwd)
     stats["family_docs"] = len(docs)
+    # Phase 2: also build the typed ontology graph (Control + Objective backbone)
+    # so the agent can TRACE relationships via GraphQuery, not just retrieve text.
+    from drydock import rmf_graph
+    g = rmf_graph.build_from_catalog(catalog, families=families)
+    g.save(rmf_graph.graph_path(cwd))
+    stats["graph"] = g.stats()
     return stats

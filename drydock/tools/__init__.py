@@ -271,6 +271,48 @@ SCHEMAS = [
         },
     },
     {
+        "name": "GraphQuery",
+        "description": (
+            "Query the RMF ontology GRAPH to TRACE relationships (typed: Control, "
+            "Component, Vulnerability, Objective). Use it for traceability the text "
+            "knowledge base can't give: a control's assessment objectives, which "
+            "components implement a control, or which controls a component INHERITS "
+            "from its parent system. ops: control <id>, family <id>, component "
+            "<name>, implementers <control>, inherited <component>."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "op": {"type": "string", "description": "control | family | component | implementers | inherited"},
+                "id": {"type": "string", "description": "control id, family id, or component name"},
+            },
+            "required": ["op", "id"],
+        },
+    },
+    {
+        "name": "GraphAdd",
+        "description": (
+            "Record a typed fact in the RMF ontology graph as you read an SSP / "
+            "scan / checklist, so relationships can be traced later. ops: component "
+            "(a system component), implements (component implements a control), "
+            "resides_on (component resides on a parent/boundary — enables control "
+            "inheritance), vulnerability (a finding affecting a component)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "op": {"type": "string", "description": "component | implements | resides_on | vulnerability"},
+                "component": {"type": "string"},
+                "control": {"type": "string", "description": "control id, for op=implements"},
+                "parent": {"type": "string", "description": "parent component/boundary, for op=resides_on"},
+                "id": {"type": "string", "description": "vulnerability/STIG/CVE id, for op=vulnerability"},
+                "severity": {"type": "string"},
+                "os": {"type": "string"}, "ip": {"type": "string"}, "data_type": {"type": "string"},
+            },
+            "required": ["op"],
+        },
+    },
+    {
         "name": "WebSearch",
         "description": (
             "Search the internet and get back the top results (title, URL, "
@@ -1053,6 +1095,92 @@ def tool_gitcommit(params: dict, config: dict) -> str:
         return f"git commit failed: {e}"
 
 
+def _rmf_graph(config):
+    from drydock import rmf_graph
+    cwd = config.get("cwd") or os.getcwd()
+    path = rmf_graph.graph_path(cwd)
+    return rmf_graph, rmf_graph.RmfGraph.load(path), path
+
+
+def tool_graphquery(params: dict, config: dict) -> str:
+    """Traverse the RMF typed ontology graph (read-only)."""
+    rmf_graph, g, _ = _rmf_graph(config)
+    if not g.nodes:
+        return ("The RMF graph is empty. Run /rmf bootstrap to build the control "
+                "backbone, and use GraphAdd to record components/relationships.")
+    op = (params.get("op") or "").strip().lower()
+    ident = (params.get("id") or "").strip()
+    if op == "control":
+        node = rmf_graph.control_id(ident)
+        n = g.get(node)
+        if not n:
+            return f"No control {ident} in the graph."
+        objs = [g.get(o)["attrs"].get("prose", "") for o in g.neighbors(node, "ASSESSES", direction="in")]
+        impl = [g.get(c)["attrs"].get("name", c) for c in g.neighbors(node, "IMPLEMENTS", direction="in")]
+        out = [f"{n['attrs'].get('control_id', ident)} — {n['attrs'].get('title','')} "
+               f"(Family: {n['attrs'].get('family','')})"]
+        if objs:
+            out.append("Assessment objectives:\n" + "\n".join(f"  - {o}" for o in objs))
+        out.append("Implemented by: " + (", ".join(impl) if impl else "(no components recorded)"))
+        return "\n".join(out)
+    if op == "family":
+        ctrls = [g.get(c)["attrs"].get("control_id", c)
+                 for c in g.of_type("Control")
+                 if g.get(c)["attrs"].get("family", "").lower().startswith(ident.lower())
+                 or ident.lower() in g.get(c)["attrs"].get("family", "").lower()]
+        return f"Controls in '{ident}': " + (", ".join(sorted(ctrls)) or "(none)")
+    if op in ("component", "implementers", "inherited"):
+        comp = rmf_graph.component_id(ident)
+        if op == "implementers":
+            node = rmf_graph.control_id(ident)
+            comps = [g.get(c)["attrs"].get("name", c) for c in g.neighbors(node, "IMPLEMENTS", direction="in")]
+            return f"Components implementing {ident}: " + (", ".join(comps) or "(none)")
+        if op == "inherited":
+            inh = g.inherited_controls(comp)
+            names = [g.get(c)["attrs"].get("control_id", c) if g.get(c) else c for c in inh]
+            return (f"{ident} inherits {len(names)} control(s) from its parent system(s): "
+                    + (", ".join(names) or "(none — no RESIDES_ON recorded)"))
+        n = g.get(comp)
+        if not n:
+            return f"No component '{ident}' in the graph (add it with GraphAdd)."
+        impl = [g.get(c)["attrs"].get("control_id", c) for c in g.neighbors(comp, "IMPLEMENTS", direction="out")]
+        res = [g.get(p)["attrs"].get("name", p) for p in g.neighbors(comp, "RESIDES_ON", direction="out")]
+        vulns = [g.get(v)["attrs"].get("vuln_id", v) for v in g.neighbors(comp, "AFFECTS", direction="in")]
+        return (f"Component {ident} ({n['attrs'].get('os','')}): implements "
+                f"{', '.join(impl) or 'none'}; resides on {', '.join(res) or 'nothing'}; "
+                f"flaws {', '.join(vulns) or 'none'}.")
+    return "GraphQuery ops: control <id> | family <id> | component <name> | implementers <control> | inherited <component>"
+
+
+def tool_graphadd(params: dict, config: dict) -> str:
+    """Record a typed fact in the RMF ontology graph (write)."""
+    rmf_graph, g, path = _rmf_graph(config)
+    op = (params.get("op") or "").strip().lower()
+    comp = (params.get("component") or "").strip()
+    if op == "component" and comp:
+        g.add_node(rmf_graph.component_id(comp), "Component", name=comp,
+                   os=params.get("os"), ip=params.get("ip"), data_type=params.get("data_type"))
+        g.save(path); return f"Recorded component {comp}."
+    if op == "implements" and comp and params.get("control"):
+        g.add_node(rmf_graph.component_id(comp), "Component", name=comp)
+        g.add_edge(rmf_graph.component_id(comp), "IMPLEMENTS", rmf_graph.control_id(params["control"]))
+        g.save(path); return f"Recorded: {comp} IMPLEMENTS {params['control'].upper()}."
+    if op == "resides_on" and comp and params.get("parent"):
+        g.add_node(rmf_graph.component_id(comp), "Component", name=comp)
+        g.add_node(rmf_graph.component_id(params["parent"]), "Component", name=params["parent"])
+        g.add_edge(rmf_graph.component_id(comp), "RESIDES_ON", rmf_graph.component_id(params["parent"]))
+        g.save(path); return f"Recorded: {comp} RESIDES_ON {params['parent']}."
+    if op == "vulnerability" and params.get("id"):
+        vid = f"vuln:{params['id'].lower()}"
+        g.add_node(vid, "Vulnerability", vuln_id=params["id"], severity=params.get("severity"))
+        if comp:
+            g.add_node(rmf_graph.component_id(comp), "Component", name=comp)
+            g.add_edge(vid, "AFFECTS", rmf_graph.component_id(comp))
+        g.save(path); return f"Recorded vulnerability {params['id']}" + (f" affecting {comp}." if comp else ".")
+    return ("GraphAdd ops: component (name in `component`) | implements (`component`,`control`) "
+            "| resides_on (`component`,`parent`) | vulnerability (`id`, optional `component`,`severity`).")
+
+
 def tool_websearch(params: dict, config: dict) -> str:
     """Search the internet (DuckDuckGo). Read-only; clean message when offline."""
     from drydock import web
@@ -1128,6 +1256,8 @@ _TOOLS = [
     ("task", tool_task, True),
     ("Dispatch", tool_dispatch, True),
     ("Knowledge", tool_knowledge, True),
+    ("GraphQuery", tool_graphquery, True),
+    ("GraphAdd", tool_graphadd, False),
     ("WebSearch", tool_websearch, True),
     ("WebFetch", tool_webfetch, True),
     ("GitStatus", tool_gitstatus, True),
@@ -1144,14 +1274,15 @@ def register_all():
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
             "Knowledge": tool_knowledge,
+            "GraphQuery": tool_graphquery, "GraphAdd": tool_graphadd,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
             "GitStatus": tool_gitstatus, "GitDiff": tool_gitdiff,
             "GitLog": tool_gitlog, "GitCommit": tool_gitcommit,
         }[name]
         # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
-        # GitCommit writes a local, reversible commit).
+        # GitCommit + GraphAdd write).
         read_only = name in (
-            "Read", "Glob", "Grep", "task", "Dispatch", "Knowledge",
+            "Read", "Glob", "Grep", "task", "Dispatch", "Knowledge", "GraphQuery",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))

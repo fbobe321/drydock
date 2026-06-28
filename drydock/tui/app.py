@@ -554,10 +554,12 @@ class DrydockApp(App):
 
         try:
             stats = rmf.bootstrap(cwd, families=families)
+            gstats = stats.get("graph", {})
             msg = (
                 f"✓ RMF catalog ingested: {stats['family_docs']} family doc(s), "
-                f"{stats['chunks']} chunks total in the knowledge base. Controls are "
-                "now queryable — try /rmf-control AC-2 or ask about a control."
+                f"{stats['chunks']} KB chunks + a typed graph ({gstats.get('nodes', 0)} "
+                f"nodes, {gstats.get('edges', 0)} edges). Try /rmf-control AC-2 (text) "
+                "or ask the agent to trace relationships (GraphQuery / GraphAdd)."
             )
         except Exception as e:  # noqa: BLE001
             msg = (f"RMF bootstrap failed: {e}. (Needs internet for the one-time "

@@ -113,6 +113,13 @@ control catalog into the knowledge base and ships four RMF skills — all
 /rmf-poam <finding>       # generate a POA&M entry from a scan/STIG finding
 ```
 
+Beyond text retrieval, `/rmf bootstrap` also builds a **typed ontology graph**
+(Control / Component / Vulnerability nodes; IMPLEMENTS / RESIDES_ON / ASSESSES
+edges). The agent records your system topology with `GraphAdd` and traces
+relationships with `GraphQuery` — including **control inheritance** ("which
+servers inherit physical controls from their enclave?"). Stdlib in-memory graph,
+no Neo4j.
+
 ## Install
 
 ```bash

@@ -22,8 +22,14 @@ Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 >   `/rmf-poam` — that drive the `Knowledge` tool over the catalog + the user's
 >   own ingested SSP/POA&M/scan artifacts. Control-ID lookup works (added a
 >   code-token entity pattern, `AC-2`/`SI-4`). 100% local-first for CUI. See §11.
->   Phase 2/3 (typed Control→Component→Vulnerability ontology graph + graph
->   queries + inheritance reasoning) is scoped but NOT yet built.
+> - **🎖️ RMF Phase 2 (v3.0.64) — typed ontology graph SHIPPED:** a stdlib
+>   in-memory typed graph (`drydock/rmf_graph.py`, NOT Neo4j) — Control /
+>   Objective / Component / Vulnerability / Boundary nodes; ASSESSES / IMPLEMENTS
+>   / RESIDES_ON / AFFECTS edges. `/rmf bootstrap` builds the Control+Objective
+>   backbone from OSCAL; the agent records topology with the `GraphAdd` tool and
+>   traces relationships with `GraphQuery` — including **control inheritance**
+>   ("which servers inherit physical controls"), verified live in the TUI.
+>   Phase 3 (LLM relationship extraction at scale) + STIG automation (§11.1) remain.
 
 > **Progress (2026-06-28) — agentic-harness feature push (v3.0.45–3.0.56):**
 > Drydock grew from a core file/bash agent into a full agentic CLI harness.
@@ -269,16 +275,52 @@ control baselines — while keeping CUI / sensitive architectures 100% local
   first. Users ingest their own SSPs/POA&Ms (PDF/Word/text) with `/graphrag
   build` so the skills cross-reference them.
 
-**Phase 2/3 (scoped, NOT built):** a SCHEMA-TYPED ontology graph
-(Control / Component / Vulnerability / Test Case nodes; `IMPLEMENTS`, `RESIDES_ON`,
-`AFFECTS`, `ASSESSES`, `MITIGATES` edges) built via LLM relationship extraction,
-plus graph queries ("which servers inherit physical security controls?") and
-inheritance reasoning (a child system fails an inherited control its parent
-fails). To stay clean-room and local-first this would be a stdlib in-memory typed
-graph layered on GraphRAG — NOT an external Neo4j dependency. Bootstrapping the
-typed control nodes directly from the OSCAL catalog (already parsed in Phase 1)
-is the natural first step.
+**Phase 2 (shipped, v3.0.64):** a SCHEMA-TYPED ontology graph
+(`drydock/rmf_graph.py`) — Control / Objective / Component / Vulnerability /
+Boundary nodes; `ASSESSES`, `IMPLEMENTS`, `RESIDES_ON`, `AFFECTS`, `ENHANCES`
+edges. A stdlib in-memory graph persisted as JSON (`<cwd>/.drydock/rmf/graph.json`)
+— NOT Neo4j, to stay clean-room and local-first. `/rmf bootstrap` builds the
+Control + Objective backbone from the OSCAL catalog. Two tools: **`GraphAdd`**
+(the agent records components / implements / resides_on / vulnerabilities as it
+reads SSPs & scans) and **`GraphQuery`** (control + its objectives + implementers;
+family; component; implementers; **inherited** — controls a component inherits
+from its parent system via `RESIDES_ON`→`IMPLEMENTS`). Inheritance reasoning
+("which servers inherit physical security controls") verified live in the TUI.
+
+**Phase 3 (planned):** automatic LLM relationship extraction at scale (populate
+Component/Vulnerability nodes + edges by reading SSPs/scans without hand-asserted
+GraphAdd calls), failed-inherited-control propagation, and richer graph paths.
 
 **Constraints:** local-first inference for CUI; runs alongside the primary
 reasoning model on the reference multi-GPU rig; advisory-not-blocking; clean
 provenance (the OSCAL catalog is U.S. public domain).
+
+### 11.1 STIG automation & checklist files (`.ckl` / `.cklb`)
+
+Targets the most tedious part of Implement/Assess: DISA STIGs and the `.ckl`
+(XML) / `.cklb` (JSON) checklist files used by STIG Viewer and eMASS. These files
+carry hostnames, IPs, and statuses that are almost always CUI — so parsing stays
+entirely local.
+
+- **§3.5 STIG Automated Assessor & `.ckl` generator (Phase 4–5, planned):** parse
+  `.ckl`/`.cklb` into a compact internal model (rule id, severity CAT I/II/III,
+  check content, fix text, status, finding details); the LLM evaluates each
+  check against supplied technical evidence (config files, command output) and
+  sets **Not a Finding / Open / Not Applicable** with a narrative justification;
+  rebuild a well-formed `.ckl`/`.cklb` that re-imports cleanly.
+- **§3.6 Automated Remediation Scripter (planned, optional):** translate an Open
+  finding's "Fix Text" into an executable Ansible playbook / PowerShell / Bash
+  script for the target OS, using Drydock's coding tools.
+- **Ontology additions:** `STIG` (name/version/release, `APPLIES_TO` Component),
+  `STIG-Rule`/Vuln (Rule ID e.g. SV-230232r, severity; `PART_OF` STIG,
+  `EVALUATES` Component), and `Control —SATISFIED_BY→ STIG-Rule` so granular STIG
+  checks map up to NIST controls.
+
+**Design decision (context efficiency):** the harness does NOT feed raw checklist
+XML to the model. It parses the checklist **once** into a lightweight JSON model,
+evaluates **one check at a time** (composes with `/loop`) so each turn sees only
+that rule's check-content + the relevant evidence (forcing step-by-step reasoning
+before a status), writes the result back into the model, and **rebuilds** the
+`.ckl`/`.cklb` from the model at the end. Parse→per-check→rebuild keeps context
+tiny (vital on a 64K local model) and keeps XML generation schema-correct and
+decoupled from evaluation.
