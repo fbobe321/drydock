@@ -51,6 +51,39 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-06-27 — SHIPPED: agentic-harness feature push (3.0.50–3.0.56)
+
+Built out the PRD "Drydock Agentic CLI Orchestration" capabilities. All on
+GitHub + PyPI, each verified hands-on in the real TUI. **Tool registry now:**
+Read · Write · Edit · Bash · Glob · Grep · todo · task · **Dispatch** ·
+**GitStatus/GitDiff/GitLog/GitCommit** · **WebSearch/WebFetch** · **Knowledge** ·
+**mcp__\<server\>__\<tool\>** (dynamic).
+
+- **3.0.50 internet search** — `WebSearch`/`WebFetch` (`drydock/web.py`, stdlib
+  DuckDuckGo POST + page-to-text; offline-safe). Model chained search→fetch live.
+- **3.0.51 Version Control tools** — `GitStatus/GitDiff/GitLog/GitCommit`
+  (`drydock/gittools.py`); structured + truncated; commit is local/reversible,
+  push stays gated. Model chained status→diff→commit.
+- **3.0.52 Skills** — `drydock/skills.py`; markdown skills in
+  ~/.drydock/skills + <proj>/.drydock/skills, invoked `/<name>` ($ARGS subst);
+  `/skills` lists them.
+- **3.0.53 /loop** — `/loop <count> <prompt>` repeats a prompt (Esc stops).
+  NOTE: loop state is `self._repeat` (NOT `self._loop` — collides with Textual
+  App._loop).
+- **3.0.54 multi-agent `Dispatch`** — runs up to 6 read-only sub-agents in
+  parallel (shared `_run_subagent`; isolated _abort each). Serializes on the
+  single-slot local server; parallel on multi-slot/backends.
+- **3.0.55 MCP** — `drydock/mcp.py` clean-room JSON-RPC stdio client; config
+  ~/.drydock/mcp.json ("mcpServers"); tools registered as mcp__server__tool at
+  startup (crash-proof); `/mcp` lists them. Mock server in tests/fixtures.
+- **3.0.56 semantic chunking** — `Read` on a >1500-line file with no window
+  returns a STRUCTURE INDEX (def/class/header anchors) instead of dumping it.
+
+PRD gap-analysis verdict: File System / Execution / Agent State were already
+complete; the from-scratch items were **Version Control tools** + **semantic
+chunking** — both now done.
+
+---
 ## ⭐ 2026-06-26 (PM) — SHIPPED: PyPI live, TUI-driven launcher, GraphRAG, context fix
 
 **Newest first (all pushed + on PyPI 3.0.49):**
