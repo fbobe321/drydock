@@ -162,6 +162,40 @@ SCHEMAS = [
         },
     },
     {
+        "name": "WebSearch",
+        "description": (
+            "Search the internet and get back the top results (title, URL, "
+            "snippet). Use it for current events, docs, library/API details, "
+            "error messages, or anything you're unsure about or that may have "
+            "changed since training. Follow up with WebFetch to read a result in "
+            "full. Returns a clean message if the machine is offline."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query."},
+                "k": {"type": "integer", "description": "Max results (default 5)."},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "WebFetch",
+        "description": (
+            "Fetch a web page (or any URL) and return its readable text content, "
+            "HTML stripped. Use it to read a page found via WebSearch or a URL the "
+            "user gave you. Returns a clean message if the machine is offline."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The URL to fetch."},
+                "max_chars": {"type": "integer", "description": "Max chars to return (default 6000)."},
+            },
+            "required": ["url"],
+        },
+    },
+    {
         "name": "Knowledge",
         "description": (
             "Search the user's KNOWLEDGE BASE (a GraphRAG index they built from "
@@ -735,6 +769,42 @@ def tool_task(params: dict, config: dict) -> str:
     return f"[sub-agent finished {steps} step(s) with no summary]"
 
 
+def tool_websearch(params: dict, config: dict) -> str:
+    """Search the internet (DuckDuckGo). Read-only; clean message when offline."""
+    from drydock import web
+
+    query = (params.get("query") or "").strip()
+    if not query:
+        return "Error: `WebSearch` needs a `query`."
+    try:
+        k = int(params.get("k") or 5)
+    except (TypeError, ValueError):
+        k = 5
+    try:
+        results = web.search(query, k=max(1, min(k, 10)))
+    except web.WebError as e:
+        return f"Web search unavailable: {e}. You appear to be offline — answer from your own knowledge."
+    return web.format_search(query, results)
+
+
+def tool_webfetch(params: dict, config: dict) -> str:
+    """Fetch a URL and return readable text. Read-only; clean message offline."""
+    from drydock import web
+
+    url = (params.get("url") or "").strip()
+    if not url:
+        return "Error: `WebFetch` needs a `url`."
+    try:
+        mc = int(params.get("max_chars") or 6000)
+    except (TypeError, ValueError):
+        mc = 6000
+    try:
+        text = web.fetch(url, max_chars=max(500, min(mc, 30000)))
+    except web.WebError as e:
+        return f"Could not fetch the page: {e}."
+    return text or f"(no readable text extracted from {url})"
+
+
 def tool_knowledge(params: dict, config: dict) -> str:
     """Query the project's GraphRAG knowledge base (built with /graphrag build).
     Read-only; returns the most relevant passages plus related graph entities.
@@ -773,6 +843,8 @@ _TOOLS = [
     ("todo", tool_todo, False),
     ("task", tool_task, True),
     ("Knowledge", tool_knowledge, True),
+    ("WebSearch", tool_websearch, True),
+    ("WebFetch", tool_webfetch, True),
 ]
 
 def register_all():
@@ -782,9 +854,12 @@ def register_all():
             "Read": tool_read, "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Knowledge": tool_knowledge,
+            "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
         }[name]
-        # task + Knowledge are read-only w.r.t. the parent's files.
-        read_only = name in ("Read", "Glob", "Grep", "task", "Knowledge")
+        # These are read-only w.r.t. the parent's files.
+        read_only = name in (
+            "Read", "Glob", "Grep", "task", "Knowledge", "WebSearch", "WebFetch",
+        )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
 
 register_all()
