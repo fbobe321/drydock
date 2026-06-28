@@ -162,6 +162,56 @@ SCHEMAS = [
         },
     },
     {
+        "name": "GitStatus",
+        "description": (
+            "Show the current branch and a concise list of changed/staged/"
+            "untracked files (git status). Use it to understand the working tree "
+            "before editing or committing."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "GitDiff",
+        "description": (
+            "Show the diff of changes (git diff), with a --stat summary first and "
+            "the body truncated to fit context. Set staged=true for staged "
+            "changes; pass a path to scope it to one file/dir."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Optional file/dir to scope the diff."},
+                "staged": {"type": "boolean", "description": "Diff staged changes instead of the working tree."},
+            },
+        },
+    },
+    {
+        "name": "GitLog",
+        "description": "Show the last n commits, one line each (git log --oneline).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer", "description": "How many commits (default 10)."},
+            },
+        },
+    },
+    {
+        "name": "GitCommit",
+        "description": (
+            "Stage all changes and commit with a message (git add -A && git "
+            "commit). Local and reversible; does NOT push. Use it to package a "
+            "completed, verified change. Write a clear, specific message."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "The commit message."},
+                "add_all": {"type": "boolean", "description": "Stage all changes first (default true)."},
+            },
+            "required": ["message"],
+        },
+    },
+    {
         "name": "WebSearch",
         "description": (
             "Search the internet and get back the top results (title, URL, "
@@ -769,6 +819,54 @@ def tool_task(params: dict, config: dict) -> str:
     return f"[sub-agent finished {steps} step(s) with no summary]"
 
 
+def _git_cwd(config: dict) -> str:
+    return config.get("cwd") or os.getcwd()
+
+
+def tool_gitstatus(params: dict, config: dict) -> str:
+    from drydock import gittools
+    try:
+        return gittools.status(_git_cwd(config))
+    except gittools.GitError as e:
+        return f"git status failed: {e}"
+
+
+def tool_gitdiff(params: dict, config: dict) -> str:
+    from drydock import gittools
+    try:
+        return gittools.diff(
+            _git_cwd(config),
+            path=(params.get("path") or None),
+            staged=bool(params.get("staged")),
+        )
+    except gittools.GitError as e:
+        return f"git diff failed: {e}"
+
+
+def tool_gitlog(params: dict, config: dict) -> str:
+    from drydock import gittools
+    try:
+        n = int(params.get("n") or 10)
+    except (TypeError, ValueError):
+        n = 10
+    try:
+        return gittools.log(_git_cwd(config), n=n)
+    except gittools.GitError as e:
+        return f"git log failed: {e}"
+
+
+def tool_gitcommit(params: dict, config: dict) -> str:
+    from drydock import gittools
+    try:
+        return gittools.commit(
+            _git_cwd(config),
+            params.get("message") or "",
+            add_all=params.get("add_all", True) is not False,
+        )
+    except gittools.GitError as e:
+        return f"git commit failed: {e}"
+
+
 def tool_websearch(params: dict, config: dict) -> str:
     """Search the internet (DuckDuckGo). Read-only; clean message when offline."""
     from drydock import web
@@ -845,6 +943,10 @@ _TOOLS = [
     ("Knowledge", tool_knowledge, True),
     ("WebSearch", tool_websearch, True),
     ("WebFetch", tool_webfetch, True),
+    ("GitStatus", tool_gitstatus, True),
+    ("GitDiff", tool_gitdiff, True),
+    ("GitLog", tool_gitlog, True),
+    ("GitCommit", tool_gitcommit, False),
 ]
 
 def register_all():
@@ -855,10 +957,14 @@ def register_all():
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Knowledge": tool_knowledge,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
+            "GitStatus": tool_gitstatus, "GitDiff": tool_gitdiff,
+            "GitLog": tool_gitlog, "GitCommit": tool_gitcommit,
         }[name]
-        # These are read-only w.r.t. the parent's files.
+        # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
+        # GitCommit writes a local, reversible commit).
         read_only = name in (
             "Read", "Glob", "Grep", "task", "Knowledge", "WebSearch", "WebFetch",
+            "GitStatus", "GitDiff", "GitLog",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
 
