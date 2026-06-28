@@ -47,6 +47,12 @@ ALLOWED_HOST_SUFFIXES = (
     # WebSearch backend (drydock/web.py). Carries only the user's search query —
     # no credentials read, no auth header (verified: web.py touches no secrets).
     "duckduckgo.com",
+    # NIST 800-53 OSCAL catalog (drydock/rmf.py) — public-domain catalog fetch,
+    # no credentials. Hosted on GitHub raw.
+    "githubusercontent.com",
+    # OOXML XML namespace URI in drydock/extract.py — a string literal in .docx
+    # parsing, NOT a network call.
+    "schemas.openxmlformats.org",
     "googleapis.com",
     "pypi.org",
     "github.com",
