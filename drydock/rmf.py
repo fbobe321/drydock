@@ -108,16 +108,23 @@ def rmf_dir(cwd: str) -> Path:
 
 
 def bootstrap(cwd: str, *, families: list[str] | None = None,
-              source: str | Path | None = None) -> dict:
+              source: str | Path | None = None, refresh: bool = False) -> dict:
     """Fetch (if needed) + flatten the 800-53 catalog into <cwd>/.drydock/rmf and
     ingest it into the GraphRAG KB. Returns {families, controls_docs, **kb_stats}.
-    `source` reuses an already-downloaded catalog JSON (offline)."""
+    `source` reuses an already-downloaded catalog JSON (offline). `refresh` pulls
+    the latest from upstream, but falls back to the cached catalog if upstream is
+    unreachable — so a network blip never stalls an assessment (PRD §4)."""
     from drydock import graphrag
 
     base = rmf_dir(cwd)
     cat_path = Path(source) if source else base / "catalog.json"
-    if not cat_path.exists():
-        fetch_catalog(cat_path)
+    if source is None and (refresh or not cat_path.exists()):
+        try:
+            fetch_catalog(cat_path)
+        except Exception:  # noqa: BLE001 — any network/HTTP failure
+            if not cat_path.exists():
+                raise  # nothing cached to fall back to
+            # else: keep using the cached catalog
     catalog = json.loads(Path(cat_path).read_text("utf-8"))
     docs = catalog_to_family_docs(catalog, base / "800-53", families)
     store = graphrag.default_store_path(cwd)
