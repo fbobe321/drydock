@@ -77,6 +77,25 @@ def skills_dirs(cwd: str) -> list[Path]:
     return [Path.home() / ".drydock" / "skills", Path(cwd) / ".drydock" / "skills"]
 
 
+def create_skill(name: str, body: str, *, description: str = "", scope: str = "user",
+                 cwd: str = ".") -> Path:
+    """Author a new skill markdown file and return its path. scope='user' writes
+    to ~/.drydock/skills (available everywhere); scope='project' writes to
+    <cwd>/.drydock/skills. Raises ValueError on a bad name / empty body."""
+    name = (name or "").strip().lower()
+    body = (body or "").strip()
+    if not _NAME_RE.match(name):
+        raise ValueError("skill name must be letters/digits/-/_ (e.g. 'review')")
+    if not body:
+        raise ValueError("a skill needs a prompt body")
+    d = (Path(cwd) if scope == "project" else Path.home()) / ".drydock" / "skills"
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{name}.md"
+    front = f"---\nname: {name}\ndescription: {description or 'user skill'}\n---\n"
+    path.write_text(front + body + "\n", encoding="utf-8")
+    return path
+
+
 def load_skills(cwd: str) -> dict[str, Skill]:
     """Load all skills; later dirs (project) override earlier (user) by name."""
     skills: dict[str, Skill] = {}

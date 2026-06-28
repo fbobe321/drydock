@@ -49,6 +49,52 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
   `~/.drydock/skills/` (or `<project>/.drydock/skills/`); `$ARGS` substitution.
 - **Loops** — `/loop <count> <prompt>` runs a prompt iteratively (Esc stops).
 
+## Slash commands
+
+Typed into the prompt. The agent also knows these, so you can just **ask it**
+("how do I add my own docs?") and it'll point you to the right one.
+
+| Command | What it does |
+| --- | --- |
+| `/graphrag build <path>` | Build a knowledge base from a file or folder of docs/code |
+| `/graphrag add <path>` | Incrementally add more documents to the base |
+| `/graphrag query <q>` | Test what the base returns (no model) |
+| `/graphrag status` · `clear` | List indexed sources · wipe the base |
+| `/skills` | List your skills |
+| `/skills new <name> <prompt>` | Create a reusable `/<name>` skill (use `$ARGS` for input) |
+| `/<name>` | Run a skill |
+| `/loop <count> <prompt>` | Repeat a prompt N times (Esc stops) |
+| `/mcp` | List connected MCP servers + their tools |
+| `/model` · `/cwd` | Show/set model & endpoint · working directory |
+| `/undo` · `/back` | Revert the last write · rewind the last turn |
+| `/compact` · `/status` · `/clear` | Shrink context · session stats · reset |
+| `/help` · `/quit` | Help · exit |
+
+### Knowledge base (GraphRAG) — ingesting your documents
+
+```
+/graphrag build ./docs        # index a file or a whole folder
+/graphrag add ./more_docs     # add more later, incrementally
+/graphrag query "how are refunds handled?"   # check retrieval
+/graphrag status              # what's indexed
+```
+
+Once built, the agent **automatically** retrieves from it (read-only `Knowledge`
+tool) when a question touches your material. Ingests text formats
+(`.md .txt .py .js .json .yaml .sql …`); convert PDFs/Word to text first
+(e.g. `pdftotext file.pdf file.txt`). The index is a single JSON at
+`<project>/.drydock/graphrag.json` — clean-room, stdlib-only, no embeddings.
+
+### Custom skills
+
+```
+/skills new commitmsg  Write a concise conventional-commit message for: $ARGS
+/commitmsg the staged auth changes      # runs the skill with $ARGS substituted
+```
+
+Skills are markdown files in `~/.drydock/skills/` (personal) or
+`<project>/.drydock/skills/` (project); `/skills new` writes one for you.
+
 ## Install
 
 ```bash

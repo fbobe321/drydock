@@ -492,7 +492,7 @@ class DrydockApp(App):
                 "  /compact         shrink old context to free up the window\n"
                 "  /graphrag        ingest docs into a knowledge base the agent can use\n"
                 "                   build <path> · add <path> · query <q> · status · clear\n"
-                "  /skills          list your reusable /<name> skills\n"
+                "  /skills          list skills · /skills new <name> <prompt> to create one\n"
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
                 "  /mcp             list connected MCP servers and their tools\n"
                 "  /clear           reset the conversation\n"
@@ -504,7 +504,7 @@ class DrydockApp(App):
         elif cmd == "/loop":
             self._cmd_loop(arg)
         elif cmd == "/skills":
-            self._cmd_skills()
+            self._cmd_skills(arg)
         elif cmd[1:] in self._skills:
             self._run_skill(self._skills[cmd[1:]], arg)
         else:
@@ -554,19 +554,42 @@ class DrydockApp(App):
         self._mount(UserMessage(prompt))
         self._begin(prompt)
 
-    def _cmd_skills(self) -> None:
+    def _cmd_skills(self, arg: str = "") -> None:
+        """List skills, or create one: /skills new <name> <prompt…> (use $ARGS in
+        the prompt for trailing input). Created skills are usable as /<name>
+        immediately."""
+        from drydock import skills as skillsmod
+
+        parts = arg.split(maxsplit=2)
+        if parts and parts[0].lower() == "new":
+            if len(parts) < 3:
+                self._info(
+                    "usage: /skills new <name> <prompt text>\n"
+                    "  e.g.  /skills new review  Run GitDiff, then review the changes "
+                    "for bugs.\n  (use $ARGS in the prompt for trailing input)"
+                )
+                return
+            name, body = parts[1], parts[2]
+            try:
+                path = skillsmod.create_skill(name, body, cwd=self.config.get("cwd") or ".")
+            except ValueError as e:
+                self._info(f"Couldn't create skill: {e}")
+                return
+            self._skills = skillsmod.load_skills(self.config.get("cwd") or ".")  # reload
+            self._info(f"✓ Created skill /{name.lower()} ({path}). Invoke it as /{name.lower()}.")
+            return
         if not self._skills:
             self._info(
-                "No skills yet. Create one as a markdown file in "
-                "~/.drydock/skills/<name>.md (or <project>/.drydock/skills/), "
-                "then invoke it as /<name>. The body is the prompt; use $ARGS for "
-                "trailing input."
+                "No skills yet. Create one with:  /skills new <name> <prompt text>\n"
+                "(or drop a markdown file in ~/.drydock/skills/<name>.md). Invoke as "
+                "/<name>; use $ARGS for trailing input."
             )
             return
         lines = ["Skills (invoke as /<name>):"]
         for name in sorted(self._skills):
             sk = self._skills[name]
             lines.append(f"  /{name}" + (f"  — {sk.description}" if sk.description else ""))
+        lines.append("Create one:  /skills new <name> <prompt text>")
         self._info("\n".join(lines))
 
     def _run_skill(self, skill, arg: str) -> None:

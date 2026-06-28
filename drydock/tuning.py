@@ -206,9 +206,33 @@ def filter_tool_schemas(tool_schemas: list, model: str | None) -> list:
     return [t for t in tool_schemas if t.get("name") not in GEMMA_DISABLED_TOOLS]
 
 
+# Reference for the model so it can answer "how do I …" questions about Drydock
+# itself. The user TYPES these slash commands; you (the model) do NOT run them —
+# you just explain the right one when asked. Appended to every system prompt.
+_DRYDOCK_COMMANDS_HELP = (
+    "\n\nAbout Drydock (the tool you run inside). If the user asks how to do "
+    "something with Drydock, tell them the slash command — they type it, you do "
+    "NOT run it:\n"
+    "- Knowledge base from their docs: `/graphrag build <path>` (a file or "
+    "folder), `/graphrag add <path>` to add more, `/graphrag query <q>` to test "
+    "it, `/graphrag status`, `/graphrag clear`. Once built, you automatically use "
+    "the `Knowledge` tool to draw on it. It ingests text formats (md/txt/code/"
+    "json/yaml/…); PDFs/Word must be converted to text first.\n"
+    "- Custom skills (reusable `/<name>` prompts): `/skills new <name> <prompt "
+    "text>` creates one (use $ARGS in the prompt for trailing input); `/skills` "
+    "lists them; then they run it as `/<name>`.\n"
+    "- Other: `/model` (model/endpoint), `/cwd`, `/undo` (revert last write), "
+    "`/back` (rewind a turn), `/compact` (shrink context), `/loop <n> <prompt>` "
+    "(repeat a prompt), `/mcp` (connected MCP servers), `/status`, `/clear`, "
+    "`/help`, `/quit`. Internet + git are tools you call yourself "
+    "(WebSearch/WebFetch, GitStatus/GitDiff/GitLog/GitCommit)."
+)
+
+
 def system_prompt_for_model(model: str | None) -> str:
     """Return the system prompt best suited to the model."""
-    return _GEMMA_SYSTEM_PROMPT if is_gemma(model) else _DEFAULT_SYSTEM_PROMPT
+    base = _GEMMA_SYSTEM_PROMPT if is_gemma(model) else _DEFAULT_SYSTEM_PROMPT
+    return base + _DRYDOCK_COMMANDS_HELP
 
 
 def thinking_level_for_turn(turn_count: int, is_user_turn: bool) -> str:
