@@ -11,8 +11,16 @@ import difflib
 import glob as _glob
 import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
+
+# Hard ceiling on bytes read from a command's output. communicate() buffers ALL
+# stdout in RAM before we ever truncate for context, so a runaway/infinite-output
+# command (`yes`, `cat /dev/urandom`, a massive build log) could balloon memory
+# to gigabytes within the timeout. We stream with a byte cap and kill the command
+# once it's hit — bounding RAM regardless of how much it tries to produce.
+_MAX_BASH_OUTPUT_BYTES = 256 * 1024  # 256 KB — plenty of context, safe for RAM
 
 from drydock.tool_registry import ToolDef, register
 from drydock.guards import (
@@ -728,30 +736,59 @@ def tool_bash(params: dict, config: dict) -> str:
             text=True, cwd=config.get("cwd"), start_new_session=True,
         )
         config.setdefault("_abort", {})["proc"] = proc
+        # Read output in a daemon thread with a HARD byte cap, so memory can't
+        # balloon on a runaway-output command. The thread stops (and we kill the
+        # process) once the cap is hit; the main loop polls cancel + timeout.
+        chunks: list[str] = []
+        total = [0]
+        capped = threading.Event()
+
+        def _drain():
+            assert proc.stdout is not None
+            while True:
+                block = proc.stdout.read(8192)
+                if not block:
+                    break
+                chunks.append(block)
+                total[0] += len(block)
+                if total[0] >= _MAX_BASH_OUTPUT_BYTES:
+                    capped.set()
+                    break
+
+        reader = threading.Thread(target=_drain, daemon=True)
+        reader.start()
         start = time.monotonic()
-        while True:
-            try:
-                out, _ = proc.communicate(timeout=0.5)
+        while reader.is_alive():
+            reader.join(0.3)
+            if capped.is_set():
+                kill_process_group(proc)  # stop it producing more
                 break
-            except subprocess.TimeoutExpired:
-                if cancel is not None and cancel.is_set():
-                    kill_process_group(proc)
-                    proc.communicate()
-                    return "[stopped by user]"
-                if time.monotonic() - start > timeout:
-                    kill_process_group(proc)
-                    proc.communicate()
-                    bigger = min(timeout * 4, 1800)
-                    msg = (
-                        f"Error: command timed out after {timeout}s. If it is "
-                        f"legitimately slow (a big query, build, download, or "
-                        f"test run), retry with a larger timeout — pass "
-                        f"timeout: {bigger}. Otherwise it may be hung."
-                    )
-                    if _is_network_command(cmd):
-                        msg += _OFFLINE_HINT
-                    return msg
-        output = out or ""
+            if cancel is not None and cancel.is_set():
+                kill_process_group(proc)
+                proc.wait()
+                return "[stopped by user]"
+            if time.monotonic() - start > timeout:
+                kill_process_group(proc)
+                proc.wait()
+                bigger = min(timeout * 4, 1800)
+                msg = (
+                    f"Error: command timed out after {timeout}s. If it is "
+                    f"legitimately slow (a big query, build, download, or "
+                    f"test run), retry with a larger timeout — pass "
+                    f"timeout: {bigger}. Otherwise it may be hung."
+                )
+                if _is_network_command(cmd):
+                    msg += _OFFLINE_HINT
+                return msg
+        proc.wait()
+        output = "".join(chunks)
+        if capped.is_set():
+            return (
+                output[:_MAX_BASH_OUTPUT_BYTES]
+                + f"\n[output truncated at {_MAX_BASH_OUTPUT_BYTES // 1024} KB — "
+                "the command produced more; redirect to a file and inspect it in "
+                "pieces (head/tail/grep) instead of dumping it all]"
+            )
         if proc.returncode != 0:
             output += f"\n[exit code: {proc.returncode}]"
             # Offline environments make downloads fail forever; the model tends

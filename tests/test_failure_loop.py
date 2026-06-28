@@ -75,3 +75,26 @@ def test_polling_with_changing_result_not_tripped(monkeypatch):
     st = AgentState()
     list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
     assert any(m.get("content") == "done" for m in st.messages)
+
+
+def test_infinite_distinct_tool_calls_terminate_at_max_turns(monkeypatch):
+    """PRD §3.D: a model that keeps calling tools (DIFFERENT, succeeding calls)
+    and never yields 'Task Complete' must be forcibly stopped at the hard
+    max-iteration ceiling — protecting VRAM/context from an unbounded loop."""
+    calls = {"n": 0}
+
+    def never_done(**kw):
+        calls["n"] += 1
+        # A unique, succeeding command each turn → the identical-repeat valve
+        # never trips, so only the hard max_turns cap can end it.
+        return iter([AssistantTurn(
+            "", [{"id": str(calls["n"]), "name": "Bash",
+                  "input": {"command": f"echo step {calls['n']}"}}], 1, 1)])
+
+    monkeypatch.setattr(agent_mod, "stream", never_done)
+    st = AgentState()
+    import tempfile
+    # Low cap so the test is fast; the real default is 200.
+    list(run("loop forever", st, {"model": "m", "max_turns": 12,
+                                  "cwd": tempfile.mkdtemp()}, "sys"))
+    assert calls["n"] == 12  # ran exactly to the ceiling, then terminated
