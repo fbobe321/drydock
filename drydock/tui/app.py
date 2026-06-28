@@ -236,6 +236,8 @@ class DrydockApp(App):
         self.config = config
         self.state = AgentState()
         self.system = self._build_system(config.get("model"))
+        from drydock.skills import load_skills
+        self._skills = load_skills(config.get("cwd") or ".")
         self._current_assistant: AssistantMessage | None = None
         self._last_card: ToolCard | None = None
         self._busy = False
@@ -375,7 +377,8 @@ class DrydockApp(App):
             return
         hint = ""
         if text.startswith("/") and " " not in text and "\n" not in text:
-            matches = [c for c in SLASH_COMMANDS if c.startswith(text.lower())]
+            commands = SLASH_COMMANDS + ["/skills"] + [f"/{n}" for n in sorted(self._skills)]
+            matches = [c for c in commands if c.startswith(text.lower())]
             if matches:
                 hint = "  " + "   ".join(matches) + "   ·  Tab to complete"
         self.query_one("#working", Static).update(hint)
@@ -485,12 +488,42 @@ class DrydockApp(App):
                 "  /compact         shrink old context to free up the window\n"
                 "  /graphrag        build/query a knowledge base from your docs\n"
                 "                   /graphrag build <path> · /graphrag status · /graphrag clear\n"
+                "  /skills          list your reusable /<name> skills\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
                 "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
             )
+        elif cmd == "/skills":
+            self._cmd_skills()
+        elif cmd[1:] in self._skills:
+            self._run_skill(self._skills[cmd[1:]], arg)
         else:
             self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))
+
+    def _cmd_skills(self) -> None:
+        if not self._skills:
+            self._info(
+                "No skills yet. Create one as a markdown file in "
+                "~/.drydock/skills/<name>.md (or <project>/.drydock/skills/), "
+                "then invoke it as /<name>. The body is the prompt; use $ARGS for "
+                "trailing input."
+            )
+            return
+        lines = ["Skills (invoke as /<name>):"]
+        for name in sorted(self._skills):
+            sk = self._skills[name]
+            lines.append(f"  /{name}" + (f"  — {sk.description}" if sk.description else ""))
+        self._info("\n".join(lines))
+
+    def _run_skill(self, skill, arg: str) -> None:
+        """Expand a skill into a prompt and run it as a normal user turn."""
+        prompt = skill.render(arg)
+        self._mount(UserMessage(f"/{skill.name}" + (f" {arg}" if arg else "")))
+        if self._busy:
+            self._queue.append(prompt)
+            self._refresh_status()
+        else:
+            self._begin(prompt)
 
     def _cmd_compact(self) -> None:
         """Manually compact the conversation to reclaim context NOW, without
