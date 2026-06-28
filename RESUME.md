@@ -51,6 +51,17 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-06-28 (cont.) — doc ingestion UX + skill authoring + self-documenting prompt
+
+- **v3.0.60** — GraphRAG doc ingestion UX: `/graphrag add <path>` (incremental),
+  `/graphrag query <q>` (test retrieval), `/graphrag status` lists sources.
+  `graphrag.add_to_index()`/`sources()`.
+- **v3.0.61** — `/skills new <name> <prompt>` authors a skill from the TUI
+  (`skills.create_skill`, $ARGS supported); the **system prompt now documents
+  Drydock's own slash commands** (`tuning._DRYDOCK_COMMANDS_HELP`) so the MODEL
+  answers "how do I add docs / make a skill?" itself. Slash commands documented
+  on README (table + sections), website, PyPI. All verified hands-on in the TUI.
+
 ## ⭐ 2026-06-28 — Docs + website updated for the new capabilities
 
 - **v3.0.57** — README + `docs/PRD.md` rewritten for the agentic harness
