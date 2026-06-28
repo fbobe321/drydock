@@ -22,6 +22,29 @@ from pathlib import Path
 # once it's hit — bounding RAM regardless of how much it tries to produce.
 _MAX_BASH_OUTPUT_BYTES = 256 * 1024  # 256 KB — plenty of context, safe for RAM
 
+
+def _collapse_repeated_lines(text: str, run: int = 20) -> str:
+    """Collapse a run of >= `run` IDENTICAL consecutive lines into one line + a
+    count. Repetitive output (`yes`, a spinning progress log) tokenizes densely —
+    32 KB of "y\\n" is ~24k tokens — so even after byte-capping it can eat a big
+    slice of the context window. Collapsing makes it cheap without losing the
+    signal. Non-repetitive output (a normal build log) is left untouched."""
+    lines = text.split("\n")
+    out: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        j = i
+        while j < n and lines[j] == lines[i]:
+            j += 1
+        count = j - i
+        if count >= run:
+            out.append(lines[i])
+            out.append(f"[... {count - 1} more identical lines collapsed ...]")
+        else:
+            out.extend(lines[i:j])
+        i = j
+    return "\n".join(out)
+
 from drydock.tool_registry import ToolDef, register
 from drydock.guards import (
     conflict_marker_refusal,
@@ -781,10 +804,13 @@ def tool_bash(params: dict, config: dict) -> str:
                     msg += _OFFLINE_HINT
                 return msg
         proc.wait()
-        output = "".join(chunks)
+        # Collapse repetitive runs FIRST (turns 256 KB of "y\n" into ~2 lines),
+        # then note if we hit the byte cap. Bounds both RAM (the cap) and context
+        # tokens (the collapse).
+        output = _collapse_repeated_lines("".join(chunks))
         if capped.is_set():
             return (
-                output[:_MAX_BASH_OUTPUT_BYTES]
+                output.rstrip()
                 + f"\n[output truncated at {_MAX_BASH_OUTPUT_BYTES // 1024} KB — "
                 "the command produced more; redirect to a file and inspect it in "
                 "pieces (head/tail/grep) instead of dumping it all]"

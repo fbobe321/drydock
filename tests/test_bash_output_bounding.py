@@ -35,3 +35,15 @@ def test_exit_code_still_reported(tmp_path):
     cfg = {"cwd": str(tmp_path)}
     out = tool_bash({"command": "echo oops; exit 3"}, cfg)
     assert "oops" in out and "exit code: 3" in out
+
+
+def test_repetitive_output_is_collapsed(tmp_path):
+    # PRD "protect context size": a repetitive dump must not eat the window.
+    out = tool_bash({"command": "yes | head -c 2000000"}, {"cwd": str(tmp_path)})
+    assert len(out) < 500                       # ~24k chars before the collapse
+    assert "identical lines collapsed" in out
+
+
+def test_collapse_preserves_distinct_lines(tmp_path):
+    out = tool_bash({"command": "printf 'a\\nb\\nc\\n'"}, {"cwd": str(tmp_path)})
+    assert out == "a\nb\nc"                      # nothing collapsed
