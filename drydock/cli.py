@@ -268,6 +268,33 @@ def _first_run_setup(cfg: dict, cfg_path, cfgmod) -> tuple[dict, str]:
     return cfg, f"⚓ Using {model} at {url}"
 
 
+def _connect_mcp(config: dict) -> None:
+    """Start configured MCP servers and register their tools into the registry.
+    Quiet + crash-proof: any failure is logged to config['mcp_log'], never
+    raised. No-op when no mcp.json exists."""
+    import atexit
+
+    from drydock import mcp
+    from drydock.tool_registry import ToolDef, register
+
+    log: list[str] = []
+    try:
+        schemas = mcp.connect_all(config.get("cwd") or os.getcwd(), log=log.append)
+    except Exception as e:  # noqa: BLE001 — never block startup on MCP
+        config["mcp_log"] = [f"MCP init error: {e}"]
+        return
+    for sch in schemas:
+        _, server, tool = sch["name"].split("__", 2)
+        register(ToolDef(
+            name=sch["name"], schema=sch,
+            func=(lambda params, cfg, s=server, t=tool: mcp.call(s, t, params)),
+            read_only=False,
+        ))
+    config["mcp_log"] = log
+    if mcp.connected():
+        atexit.register(mcp.shutdown)
+
+
 def main():
     parser = argparse.ArgumentParser(description="DryDock — local coding agent")
     parser.add_argument(
@@ -348,6 +375,11 @@ def main():
     # greeting into a runaway build. The TUI reads this from config; CLI modes
     # call load_project_instructions directly (see run_interactive/run_oneshot).
     config["project_instructions"] = load_project_instructions()
+
+    # Connect any configured MCP servers and register their tools so the model
+    # can call them like native tools. Failures are skipped (never block start);
+    # status is stashed for /mcp. Servers are torn down at exit.
+    _connect_mcp(config)
 
     if args.prompt:
         run_oneshot(args.prompt, config)

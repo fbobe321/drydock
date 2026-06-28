@@ -494,10 +494,13 @@ class DrydockApp(App):
                 "                   /graphrag build <path> · /graphrag status · /graphrag clear\n"
                 "  /skills          list your reusable /<name> skills\n"
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
+                "  /mcp             list connected MCP servers and their tools\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
                 "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
             )
+        elif cmd == "/mcp":
+            self._cmd_mcp()
         elif cmd == "/loop":
             self._cmd_loop(arg)
         elif cmd == "/skills":
@@ -506,6 +509,27 @@ class DrydockApp(App):
             self._run_skill(self._skills[cmd[1:]], arg)
         else:
             self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))
+
+    def _cmd_mcp(self) -> None:
+        """List connected MCP servers and the tools they expose."""
+        from drydock import mcp
+
+        servers = mcp.connected()
+        lines: list[str] = []
+        if not servers:
+            lines.append(
+                "No MCP servers connected. Configure them in ~/.drydock/mcp.json "
+                "(or <project>/.drydock/mcp.json) under \"mcpServers\", then restart."
+            )
+        else:
+            lines.append(f"MCP servers ({len(servers)} connected):")
+            for name, srv in servers.items():
+                tools = ", ".join(t["name"] for t in srv.tools) or "(no tools)"
+                lines.append(f"  • {name}: {tools}")
+            lines.append("Call them as mcp__<server>__<tool> (the model does this automatically).")
+        for msg in self.config.get("mcp_log") or []:
+            lines.append(f"  · {msg}")
+        self._info("\n".join(lines))
 
     def _cmd_loop(self, arg: str) -> None:
         """/loop <count> <prompt> — run <prompt> up to <count> times (1–50),
