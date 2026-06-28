@@ -51,6 +51,24 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-06-28 — Docs + website updated for the new capabilities
+
+- **v3.0.57** — README + `docs/PRD.md` rewritten for the agentic harness
+  (Capabilities section, full tool/slash-command lists, dense-31B model, Python
+  3.11+, corrected the stale "PyPI blocked" language). Published so the PyPI
+  long-description updates too.
+- **Website is now in the CLEAN repo** at `web/index.html` (fresh, clean-room —
+  NOT from the radioactive old fork's `web/`). Live at **drydock.pages.dev** +
+  **www.drydock-cli.com** (Cloudflare Pages project `drydock`, direct-upload).
+  **Redeploy:** `web/` is the source; the box's `/usr/bin/node` is v22 (nvm's is
+  v18, too old for wrangler), so:
+  ```
+  export CLOUDFLARE_API_TOKEN=$(cat ~/.config/drydock/cloudflare_token)
+  export CLOUDFLARE_ACCOUNT_ID=$(cat ~/.config/drydock/cloudflare_account_id)
+  PATH=/usr/bin:$PATH /usr/bin/npx --yes wrangler@latest pages deploy web \
+    --project-name drydock --branch main --commit-dirty=true
+  ```
+
 ## ⭐ 2026-06-27 — SHIPPED: agentic-harness feature push (3.0.50–3.0.56)
 
 Built out the PRD "Drydock Agentic CLI Orchestration" capabilities. All on
