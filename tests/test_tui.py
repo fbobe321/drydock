@@ -348,3 +348,40 @@ def test_new_user_turn_clears_stale_plan():
             assert str(panel.render()) == ""            # panel cleared
 
     asyncio.run(main())
+
+
+def test_loop_command_iterates_and_stops():
+    """/loop <n> <prompt> re-runs the prompt n times, then clears; Esc ends it."""
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            begins = []
+            app._begin = lambda text: begins.append(text)  # stub out the real agent
+
+            # bad usage → no loop
+            app._handle_slash("/loop notanumber")
+            assert app._repeat is None and not begins
+
+            # /loop 3 <prompt> → starts, first iteration begun
+            app._handle_slash("/loop 3 do the thing")
+            assert app._repeat and app._repeat["total"] == 3
+            assert begins == ["do the thing"]
+
+            # each finished turn re-begins until the count is exhausted
+            from drydock.tui.messages import AgentFinished
+            app.on_agent_finished(AgentFinished())  # iter 2
+            app.on_agent_finished(AgentFinished())  # iter 3
+            assert len(begins) == 3
+            app.on_agent_finished(AgentFinished())  # done → loop cleared
+            assert app._repeat is None
+            assert len(begins) == 3  # no 4th run
+
+            # Esc/stop ends an active loop
+            app._begin = lambda text: begins.append(text)
+            app._handle_slash("/loop 5 again")
+            app._busy = True
+            app.action_stop()
+            assert app._repeat is None
+
+    asyncio.run(main())
