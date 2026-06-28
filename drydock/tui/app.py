@@ -496,6 +496,7 @@ class DrydockApp(App):
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
                 "  /mcp             list connected MCP servers and their tools\n"
                 "  /rmf             RMF automation — /rmf bootstrap, then /rmf-control etc.\n"
+                "  /stig            summarize a .ckl/.cklb; assess via /stig-assess\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
                 "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
@@ -504,6 +505,8 @@ class DrydockApp(App):
             self._cmd_mcp()
         elif cmd == "/rmf":
             self._cmd_rmf(arg)
+        elif cmd == "/stig":
+            self._cmd_stig(arg)
         elif cmd == "/loop":
             self._cmd_loop(arg)
         elif cmd == "/skills":
@@ -512,6 +515,41 @@ class DrydockApp(App):
             self._run_skill(self._skills[cmd[1:]], arg)
         else:
             self._mount(ErrorMessage(f"unknown command: {cmd} (try /help)"))
+
+    def _cmd_stig(self, arg: str) -> None:
+        """Summarize a STIG checklist (.ckl/.cklb): asset + status counts, or list
+        rules of a given status. Assess it with /stig-assess (loop for the whole
+        checklist)."""
+        from drydock import stig
+
+        parts = arg.split()
+        if not parts:
+            self._info("usage: /stig <path-to.ckl|.cklb> [status]   "
+                       "(status: open|not_a_finding|not_applicable|not_reviewed)\n"
+                       "Assess it: /loop <n> /stig-assess <path>")
+            return
+        import os as _os
+        path = parts[0]
+        if not _os.path.isabs(path):
+            path = _os.path.join(self.config.get("cwd") or ".", path)
+        try:
+            cl = stig.load(path)
+        except Exception as e:  # noqa: BLE001
+            self._mount(ErrorMessage(f"could not read checklist: {e}"))
+            return
+        host = cl.asset.get("HOST_NAME") or cl.asset.get("host_name") or "?"
+        c = cl.counts()
+        lines = [f"STIG checklist {path}  (host: {host}, format: {cl.fmt})",
+                 f"  {len(cl.rules)} rules — " + " · ".join(f"{k}={v}" for k, v in c.items())]
+        if len(parts) > 1:
+            sf = stig.canonical_status(parts[1])
+            hits = [r for r in cl.rules if r.status == sf]
+            lines.append(f"\n{sf} ({len(hits)}):")
+            lines += [f"  {r.group_id} ({r.severity}) — {r.title}" for r in hits[:50]]
+        else:
+            lines.append("Assess un-reviewed rules:  /loop "
+                         f"{c.get('not_reviewed', 0) or 1} /stig-assess {parts[0]}")
+        self._info("\n".join(lines))
 
     def _cmd_rmf(self, arg: str) -> None:
         """RMF automation: bootstrap the NIST 800-53 catalog into the knowledge
