@@ -41,7 +41,7 @@ def _resolve_path(path: str, config: dict) -> str:
 SCHEMAS = [
     {
         "name": "Read",
-        "description": "Read a file. Returns content with line numbers. Use limit/offset for large files.",
+        "description": "Read a file. Returns content with line numbers. Use limit/offset for large files. A very large file with no limit returns a STRUCTURE INDEX (key symbols + line numbers) instead of the whole file — then Read the ranges you need with offset/limit.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -303,18 +303,67 @@ SCHEMAS = [
 
 # ── Tool implementations ──────────────────────────────────────────────────
 
+# Above this many lines, a Read with no explicit window returns a structural
+# INDEX (key symbols + line numbers) instead of dumping the file — semantic
+# chunking so a huge file can't blow the context window. The model then Reads
+# the ranges it needs with offset/limit.
+_BIG_FILE_LINES = 1500
+
+# Structural anchors: a definition → a node the model can jump to. Code anchors
+# apply to every file; markdown headers (anchored at column 0 so indented code
+# COMMENTS aren't mistaken for headings) apply only to doc files.
+_CODE_RE = re.compile(
+    r"^\s*("
+    r"(?:async\s+)?def\s+\w+"            # python functions
+    r"|class\s+\w+"                       # python/js/etc classes
+    r"|(?:export\s+)?(?:async\s+)?function\s+\w+"  # js/ts functions
+    r"|(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?\("  # js arrow fns
+    r"|func\s+\w+"                        # go
+    r"|fn\s+\w+"                          # rust
+    r")"
+)
+_MD_RE = re.compile(r"^#{1,6}\s+\S")  # markdown headers, column 0 only
+_DOC_EXT = {".md", ".markdown", ".rst", ".txt", ".org"}
+
+
+def _file_index(lines: list[str], fp: str) -> str:
+    """A compact, line-numbered index of a large file's structure."""
+    is_doc = Path(fp).suffix.lower() in _DOC_EXT
+    anchors = [
+        f"  L{i + 1}: {ln.rstrip()[:100]}"
+        for i, ln in enumerate(lines)
+        if _CODE_RE.match(ln) or (is_doc and _MD_RE.match(ln))
+    ]
+    head = (
+        f"{fp} is large ({len(lines)} lines) — showing a STRUCTURE INDEX instead "
+        f"of the whole file (to save context). Read a specific section with "
+        f"offset/limit (e.g. {{\"file_path\": ..., \"offset\": <line-1>, "
+        f"\"limit\": 120}}).\n"
+    )
+    if not anchors:
+        return head + "(no def/class/header anchors found — read ranges with offset/limit.)"
+    body = "\n".join(anchors[:400])
+    if len(anchors) > 400:
+        body += f"\n  [... {len(anchors) - 400} more anchors ...]"
+    return f"{head}\nKey locations ({len(anchors)}):\n{body}"
+
+
 def tool_read(params: dict, config: dict) -> str:
     fp = _resolve_path(params["file_path"], config)
-    limit = params.get("limit", 2000)
+    limit = params.get("limit")  # None = caller didn't specify a window
     offset = params.get("offset", 0)
     try:
         with open(fp, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
-        selected = lines[offset:offset + limit]
+        # Huge file, no explicit window → index it instead of dumping it.
+        if limit is None and offset == 0 and len(lines) > _BIG_FILE_LINES:
+            return _file_index(lines, fp)
+        eff_limit = 2000 if limit is None else limit
+        selected = lines[offset:offset + eff_limit]
         numbered = [f"{i + offset + 1}\t{line.rstrip()}" for i, line in enumerate(selected)]
         result = "\n".join(numbered)
-        if len(lines) > offset + limit:
-            result += f"\n[... {len(lines) - offset - limit} more lines]"
+        if len(lines) > offset + eff_limit:
+            result += f"\n[... {len(lines) - offset - eff_limit} more lines]"
         return result or "(empty file)"
     except FileNotFoundError:
         return f"Error: file not found: {fp}"
