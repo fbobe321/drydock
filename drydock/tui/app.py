@@ -490,8 +490,8 @@ class DrydockApp(App):
                 "  /stop            stop the running turn (or press Esc)\n"
                 "  /status          session model, cwd, turns, tokens\n"
                 "  /compact         shrink old context to free up the window\n"
-                "  /graphrag        build/query a knowledge base from your docs\n"
-                "                   /graphrag build <path> · /graphrag status · /graphrag clear\n"
+                "  /graphrag        ingest docs into a knowledge base the agent can use\n"
+                "                   build <path> · add <path> · query <q> · status · clear\n"
                 "  /skills          list your reusable /<name> skills\n"
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
                 "  /mcp             list connected MCP servers and their tools\n"
@@ -634,33 +634,52 @@ class DrydockApp(App):
         sub = parts[0].lower() if parts else ""
         rest = parts[1].strip() if len(parts) > 1 else ""
 
-        if sub == "build":
+        if sub in ("build", "add"):
             if not rest:
-                self._info("usage: /graphrag build <path>   (a file or directory of docs/code)")
+                self._info(f"usage: /graphrag {sub} <path>   (a file or directory of docs/code)")
                 return
-            self._info(f"Building knowledge base from {rest} …")
+            verb = "Rebuilding" if sub == "build" else "Ingesting into"
+            self._info(f"{verb} knowledge base from {rest} …")
             try:
-                stats = graphrag.build_index([rest], store, cwd=cwd)
+                fn = graphrag.build_index if sub == "build" else graphrag.add_to_index
+                stats = fn([rest], store, cwd=cwd)
             except Exception as e:  # noqa: BLE001 — surface, never crash the TUI
-                self._mount(ErrorMessage(f"graphrag build failed: {e}"))
+                self._mount(ErrorMessage(f"graphrag {sub} failed: {e}"))
+                return
+            if sub == "add" and stats["files"] == 0:
+                self._info(f"No new documents under {rest} (already indexed, or no text found).")
                 return
             if not stats["chunks"]:
                 self._info(f"No text found under {rest}. Nothing was indexed.")
                 return
+            verb2 = "built" if sub == "build" else f"updated (+{stats['files']} new files)"
             self._info(
-                f"✓ Knowledge base built: {stats['files']} files · "
-                f"{stats['chunks']} chunks · {stats['entities']} entities · "
-                f"{stats['edges']} edges.\nStored at {store}. The agent will now "
-                "use the Knowledge tool to draw on it."
+                f"✓ Knowledge base {verb2}: {stats['chunks']} chunks · "
+                f"{stats['entities']} entities · {stats['edges']} edges.\n"
+                f"Stored at {store}. The agent draws on it via the Knowledge tool."
             )
+        elif sub == "query":
+            if not rest:
+                self._info("usage: /graphrag query <question>   (test what the KB returns)")
+                return
+            index = graphrag.load_index(store)
+            if index is None:
+                self._info("No knowledge base yet. Build one:  /graphrag build <path>")
+                return
+            res = graphrag.query_index(index, rest, k=3)
+            self._info(graphrag.format_results(res, rest))
         elif sub in ("", "status"):
             index = graphrag.load_index(store)
             if index is None:
                 self._info("No knowledge base yet. Build one:  /graphrag build <path>")
             else:
+                srcs = graphrag.sources(index)
+                shown = "\n".join(f"    · {s}" for s in srcs[:20])
+                more = f"\n    … +{len(srcs) - 20} more" if len(srcs) > 20 else ""
                 self._info(
                     f"Knowledge base: {len(index.get('chunks', []))} chunks · "
-                    f"{len(index.get('entities', {}))} entities  ({store})."
+                    f"{len(index.get('entities', {}))} entities · {len(srcs)} sources "
+                    f"({store}).\n{shown}{more}"
                 )
         elif sub == "clear":
             try:
@@ -669,7 +688,10 @@ class DrydockApp(App):
             except OSError as e:
                 self._mount(ErrorMessage(f"could not clear: {e}"))
         else:
-            self._info("usage:  /graphrag build <path>  ·  /graphrag status  ·  /graphrag clear")
+            self._info(
+                "usage:  /graphrag build <path>  ·  add <path>  ·  query <question>  "
+                "·  status  ·  clear"
+            )
 
     def _persist_config(self) -> None:
         """Save the persistable settings (model/provider/base_url/… — save_file

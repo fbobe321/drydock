@@ -198,17 +198,23 @@ def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
         parts = raw.split()  # raw = case-preserved, so paths survive
         sub = parts[1].lower() if len(parts) > 1 else ""
         rest = " ".join(parts[2:]).strip()
-        if sub == "build" and rest:
-            print_colored(f"  Building knowledge base from {rest} …", "dim")
+        if sub in ("build", "add") and rest:
             try:
-                stats = graphrag.build_index([rest], store, cwd=cwd)
+                fn = graphrag.build_index if sub == "build" else graphrag.add_to_index
+                stats = fn([rest], store, cwd=cwd)
                 print_colored(
-                    f"  ✓ {stats['files']} files · {stats['chunks']} chunks · "
+                    f"  ✓ {sub}: +{stats['files']} files · {stats['chunks']} chunks · "
                     f"{stats['entities']} entities · {stats['edges']} edges → {store}",
                     "green",
                 )
             except Exception as e:  # noqa: BLE001
-                print_colored(f"  graphrag build failed: {e}", "red")
+                print_colored(f"  graphrag {sub} failed: {e}", "red")
+        elif sub == "query" and rest:
+            index = graphrag.load_index(store)
+            if index is None:
+                print_colored("  No knowledge base. Build: /graphrag build <path>", "dim")
+            else:
+                print(graphrag.format_results(graphrag.query_index(index, rest, k=3), rest))
         elif sub == "clear":
             store.unlink(missing_ok=True)
             print_colored("  Knowledge base cleared.", "green")
@@ -217,9 +223,11 @@ def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
             if index is None:
                 print_colored("  No knowledge base. Build: /graphrag build <path>", "dim")
             else:
+                srcs = graphrag.sources(index)
                 print_colored(
                     f"  Knowledge base: {len(index.get('chunks', []))} chunks · "
-                    f"{len(index.get('entities', {}))} entities ({store})", "cyan")
+                    f"{len(index.get('entities', {}))} entities · {len(srcs)} sources "
+                    f"({store})", "cyan")
         return True
     elif cmd in ("/quit", "/exit"):
         raise KeyboardInterrupt

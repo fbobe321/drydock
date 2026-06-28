@@ -73,3 +73,35 @@ import pytest  # noqa: E402
 def _make_corpus(tmp_path):
     _corpus(tmp_path)
     yield
+
+
+def test_add_to_index_is_incremental(tmp_path):
+    store = tmp_path / ".drydock" / "graphrag.json"
+    (tmp_path / "one.md").write_text("The Alpha service uses the Beacon token.")
+    s1 = graphrag.build_index(["one.md"], store, cwd=str(tmp_path))
+    assert s1["files"] == 1
+    # add a second doc — existing chunks preserved, new ones appended
+    (tmp_path / "two.md").write_text("The Gamma module writes to the Delta table.")
+    s2 = graphrag.add_to_index(["two.md"], store, cwd=str(tmp_path))
+    assert s2["files"] == 1                      # only the NEW file counted
+    assert s2["chunks"] > s1["chunks"]           # grew
+    idx = graphrag.load_index(store)
+    assert set(graphrag.sources(idx)) == {"one.md", "two.md"}
+    # both docs are queryable
+    assert graphrag.query_index(idx, "Beacon token")["chunks"][0]["source"] == "one.md"
+    assert graphrag.query_index(idx, "Delta table")["chunks"][0]["source"] == "two.md"
+
+
+def test_add_skips_already_indexed(tmp_path):
+    store = tmp_path / ".drydock" / "graphrag.json"
+    (tmp_path / "one.md").write_text("Alpha Beacon content here.")
+    graphrag.build_index(["one.md"], store, cwd=str(tmp_path))
+    s = graphrag.add_to_index(["one.md"], store, cwd=str(tmp_path))  # same file again
+    assert s["files"] == 0                        # nothing re-ingested
+
+
+def test_add_builds_when_no_index_yet(tmp_path):
+    store = tmp_path / ".drydock" / "graphrag.json"
+    (tmp_path / "x.md").write_text("Some Echo content.")
+    s = graphrag.add_to_index(["x.md"], store, cwd=str(tmp_path))
+    assert s["files"] == 1 and graphrag.load_index(store) is not None

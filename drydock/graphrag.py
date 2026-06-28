@@ -110,26 +110,23 @@ def _iter_text_files(paths: list[str]):
                         yield fp
 
 
-def build_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") -> dict:
-    """Build (or rebuild) the knowledge graph from paths; persist to store_path.
-
-    Returns a stats dict: {files, chunks, entities, edges}.
-    """
-    chunks: list[dict] = []
-    entity_chunks: dict[str, set[int]] = defaultdict(set)
-    edges: dict[str, Counter] = defaultdict(Counter)
-    files = 0
-
+def _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip_sources):
+    """Chunk + extract + graph every text file under paths into the (mutable)
+    accumulators, skipping any source already present. Returns files added."""
+    added = 0
     for fp in _iter_text_files([str(Path(cwd) / p) if not os.path.isabs(p) else p
                                 for p in paths]):
+        rel = os.path.relpath(str(fp), cwd)
+        if rel in skip_sources:
+            continue
         try:
             text = fp.read_text("utf-8", "ignore")
         except OSError:
             continue
         if not text.strip():
             continue
-        files += 1
-        rel = os.path.relpath(str(fp), cwd)
+        added += 1
+        skip_sources.add(rel)  # don't double-ingest the same file in one call
         for body in _chunk_text(text):
             cid = len(chunks)
             ents = extract_entities(body)
@@ -140,7 +137,10 @@ def build_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") -> 
                 for b in ents[i + 1:]:
                     edges[a][b] += 1
                     edges[b][a] += 1
+    return added
 
+
+def _save(store_path, chunks, entity_chunks, edges, files_added):
     index = {
         "version": 1,
         "chunks": chunks,
@@ -151,11 +151,45 @@ def build_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") -> 
     sp.parent.mkdir(parents=True, exist_ok=True)
     sp.write_text(json.dumps(index), encoding="utf-8")
     return {
-        "files": files,
+        "files": files_added,
         "chunks": len(chunks),
         "entities": len(entity_chunks),
         "edges": sum(len(v) for v in edges.values()) // 2,
     }
+
+
+def build_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") -> dict:
+    """Build (or REBUILD from scratch) the knowledge graph from paths; persist to
+    store_path. Returns {files, chunks, entities, edges}."""
+    chunks: list[dict] = []
+    entity_chunks: dict[str, set[int]] = defaultdict(set)
+    edges: dict[str, Counter] = defaultdict(Counter)
+    added = _ingest_files(paths, cwd, chunks, entity_chunks, edges, set())
+    return _save(store_path, chunks, entity_chunks, edges, added)
+
+
+def add_to_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") -> dict:
+    """Incrementally ADD documents to an existing index (build it if none yet).
+    Files already indexed (by relative path) are skipped — clear+build to refresh
+    changed files. Returns {files (added), chunks, entities, edges} totals."""
+    existing = load_index(store_path)
+    if existing is None:
+        return build_index(paths, store_path, cwd=cwd)
+    chunks: list[dict] = list(existing.get("chunks", []))
+    entity_chunks: dict[str, set[int]] = defaultdict(set)
+    for e, cids in existing.get("entities", {}).items():
+        entity_chunks[e] = set(cids)
+    edges: dict[str, Counter] = defaultdict(Counter)
+    for a, nbrs in existing.get("edges", {}).items():
+        edges[a] = Counter(nbrs)
+    skip = {c["source"] for c in chunks}
+    added = _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip)
+    return _save(store_path, chunks, entity_chunks, edges, added)
+
+
+def sources(index: dict) -> list[str]:
+    """The distinct source files in an index, sorted."""
+    return sorted({c["source"] for c in index.get("chunks", [])})
 
 
 def load_index(store_path: str | Path) -> dict | None:
