@@ -353,10 +353,11 @@ SCHEMAS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "op": {"type": "string", "description": "component | implements | resides_on | vulnerability"},
+                "op": {"type": "string", "description": "component | implements | resides_on | vulnerability | satisfies"},
                 "component": {"type": "string"},
-                "control": {"type": "string", "description": "control id, for op=implements"},
+                "control": {"type": "string", "description": "control id, for op=implements/satisfies"},
                 "parent": {"type": "string", "description": "parent component/boundary, for op=resides_on"},
+                "rule": {"type": "string", "description": "STIG rule id, for op=satisfies"},
                 "id": {"type": "string", "description": "vulnerability/STIG/CVE id, for op=vulnerability"},
                 "severity": {"type": "string"},
                 "os": {"type": "string"}, "ip": {"type": "string"}, "data_type": {"type": "string"},
@@ -1246,6 +1247,9 @@ def tool_graphquery(params: dict, config: dict) -> str:
         if objs:
             out.append("Assessment objectives:\n" + "\n".join(f"  - {o}" for o in objs))
         out.append("Implemented by: " + (", ".join(impl) if impl else "(no components recorded)"))
+        rules = [_gattrs(g, rn).get("rule_id", rn) for rn in g.neighbors(node, "SATISFIED_BY", direction="out")]
+        if rules:
+            out.append("Satisfied by STIG rules: " + ", ".join(rules))
         return "\n".join(out)
     if op == "family":
         ctrls = [_gattrs(g, c).get("control_id", c)
@@ -1301,8 +1305,16 @@ def tool_graphadd(params: dict, config: dict) -> str:
             g.add_node(rmf_graph.component_id(comp), "Component", name=comp)
             g.add_edge(vid, "AFFECTS", rmf_graph.component_id(comp))
         g.save(path); return f"Recorded vulnerability {params['id']}" + (f" affecting {comp}." if comp else ".")
-    return ("GraphAdd ops: component (name in `component`) | implements (`component`,`control`) "
-            "| resides_on (`component`,`parent`) | vulnerability (`id`, optional `component`,`severity`).")
+    if op == "satisfies" and params.get("control") and params.get("rule"):
+        cn, rn = rmf_graph.control_id(params["control"]), rmf_graph.rule_node(params["rule"])
+        if not g.get(cn):  # ref node if the catalog isn't bootstrapped
+            g.add_node(cn, "Control", control_id=params["control"].upper())
+        g.add_node(rn, "STIGRule", rule_id=params["rule"])
+        g.add_edge(cn, "SATISFIED_BY", rn)
+        g.save(path); return f"Recorded: {params['control'].upper()} SATISFIED_BY {params['rule']}."
+    return ("GraphAdd ops: component (`component`) | implements (`component`,`control`) | "
+            "resides_on (`component`,`parent`) | vulnerability (`id`, optional `component`) | "
+            "satisfies (`control`,`rule` — a STIG rule satisfies a NIST control).")
 
 
 def tool_websearch(params: dict, config: dict) -> str:

@@ -315,13 +315,17 @@ entirely local.
   check against supplied technical evidence (config files, command output) and
   sets **Not a Finding / Open / Not Applicable** with a narrative justification;
   rebuild a well-formed `.ckl`/`.cklb` that re-imports cleanly.
-- **§3.6 Automated Remediation Scripter (planned, optional):** translate an Open
-  finding's "Fix Text" into an executable Ansible playbook / PowerShell / Bash
-  script for the target OS, using Drydock's coding tools.
-- **Ontology additions:** `STIG` (name/version/release, `APPLIES_TO` Component),
-  `STIG-Rule`/Vuln (Rule ID e.g. SV-230232r, severity; `PART_OF` STIG,
-  `EVALUATES` Component), and `Control —SATISFIED_BY→ STIG-Rule` so granular STIG
-  checks map up to NIST controls.
+- **§3.6 Automated Remediation Scripter SHIPPED (v3.0.69):** bundled
+  `/stig-remediate <ckl> <rule>` skill — reads the rule's Fix Text (StigRule),
+  infers the OS, and writes an idempotent Bash/PowerShell/Ansible remediation
+  script (it never runs it — the operator reviews). Verified live: produced a
+  set-`PermitRootLogin no` Bash script for an Open SSH finding.
+- **Ontology additions SHIPPED (v3.0.69):** `STIG` (name/version, `APPLIES_TO`
+  Component), `STIG-Rule` (rule_id, severity, status, CCI; `PART_OF` STIG,
+  `EVALUATES` Component), and `Control —SATISFIED_BY→ STIG-Rule`. `/stig graph
+  <ckl>` ingests a checklist into the typed graph; `GraphAdd satisfies` links a
+  rule to a NIST control (the CCI→control auto-map is a follow-on — DISA's CCI
+  list isn't on a clean public mirror, so the CCI is captured on each rule node).
 
 **Design decision (context efficiency):** the harness does NOT feed raw checklist
 XML to the model. It parses the checklist **once** into a lightweight JSON model,

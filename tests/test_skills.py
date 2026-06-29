@@ -55,7 +55,7 @@ def test_empty_body_skipped(tmp_path):
 def test_no_user_or_project_skills_yields_only_builtins(tmp_path):
     # With no user/project skills, only the bundled built-ins (RMF) are present.
     loaded = skills.load_skills(str(tmp_path))
-    assert set(loaded) == {"rmf-control", "rmf-categorize", "rmf-review", "rmf-poam", "stig-assess"}
+    assert set(loaded) == {"rmf-control", "rmf-categorize", "rmf-review", "rmf-poam", "stig-assess", "stig-remediate"}
 
 
 def test_create_skill_user_scope(tmp_path, monkeypatch):

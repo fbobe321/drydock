@@ -529,9 +529,28 @@ class DrydockApp(App):
                        "Assess it: /loop <n> /stig-assess <path>")
             return
         import os as _os
+        cwd = self.config.get("cwd") or "."
+        # /stig graph <path> — ingest the checklist into the RMF typed graph
+        if parts[0].lower() == "graph" and len(parts) > 1:
+            from drydock import rmf_graph
+            gp = parts[1] if _os.path.isabs(parts[1]) else _os.path.join(cwd, parts[1])
+            try:
+                cl = stig.load(gp)
+                g = rmf_graph.RmfGraph.load(rmf_graph.graph_path(cwd))
+                r = rmf_graph.ingest_checklist(g, cl)
+                g.save(rmf_graph.graph_path(cwd))
+            except Exception as e:  # noqa: BLE001
+                self._mount(ErrorMessage(f"could not graph checklist: {e}"))
+                return
+            self._info(
+                f"✓ Ingested {r['rules']} STIG rules for host '{r['host']}' into the "
+                f"RMF graph (STIG/STIG-Rule nodes, PART_OF/APPLIES_TO/EVALUATES). "
+                "Link rules to controls with GraphAdd satisfies; trace via GraphQuery."
+            )
+            return
         path = parts[0]
         if not _os.path.isabs(path):
-            path = _os.path.join(self.config.get("cwd") or ".", path)
+            path = _os.path.join(cwd, path)
         try:
             cl = stig.load(path)
         except Exception as e:  # noqa: BLE001

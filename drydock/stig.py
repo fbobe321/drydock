@@ -43,6 +43,7 @@ class Rule:
     status: str              # canonical
     finding_details: str = ""
     comments: str = ""
+    cci: str = ""            # Control Correlation Identifier (maps up to a NIST control)
     _raw: Any = field(default=None, repr=False)  # ET element or dict, for edit-in-place
 
     def summary(self) -> str:
@@ -55,6 +56,8 @@ class Checklist:
     def __init__(self, fmt: str) -> None:
         self.fmt = fmt
         self.asset: dict = {}
+        self.stig_name: str = ""
+        self.stig_version: str = ""
         self.rules: list[Rule] = []
         self._tree: Any = None   # ckl: ElementTree
         self._data: Any = None   # cklb: dict
@@ -128,6 +131,9 @@ def parse_ckl(path: str | Path) -> Checklist:
     asset = root.find("ASSET")
     if asset is not None:
         cl.asset = {c.tag: (c.text or "") for c in asset}
+    info = {si.findtext("SID_NAME"): si.findtext("SID_DATA") for si in root.iter("SI_DATA")}
+    cl.stig_name = info.get("title") or info.get("stigid") or ""
+    cl.stig_version = info.get("version") or ""
     for vuln in root.iter("VULN"):
         data: dict[str, str] = {}
         for sd in vuln.findall("STIG_DATA"):
@@ -138,7 +144,7 @@ def parse_ckl(path: str | Path) -> Checklist:
             check_content=data.get("Check_Content", ""), fix_text=data.get("Fix_Text", ""),
             status=canonical_status(vuln.findtext("STATUS")),
             finding_details=vuln.findtext("FINDING_DETAILS") or "",
-            comments=vuln.findtext("COMMENTS") or "", _raw=vuln,
+            comments=vuln.findtext("COMMENTS") or "", cci=data.get("CCI_REF", ""), _raw=vuln,
         ))
     return cl
 
@@ -148,7 +154,10 @@ def parse_cklb(path: str | Path) -> Checklist:
     cl._data = json.loads(Path(path).read_text("utf-8"))
     cl.asset = cl._data.get("target_data", {}) or {}
     for stig in cl._data.get("stigs", []) or []:
+        cl.stig_name = cl.stig_name or stig.get("stig_name", stig.get("display_name", ""))
+        cl.stig_version = cl.stig_version or str(stig.get("version", ""))
         for rule in stig.get("rules", []) or []:
+            ccis = rule.get("ccis") or ([rule["cci"]] if rule.get("cci") else [])
             cl.rules.append(Rule(
                 group_id=rule.get("group_id", ""), rule_id=rule.get("rule_id", ""),
                 title=rule.get("rule_title", rule.get("group_title", "")),
@@ -156,7 +165,7 @@ def parse_cklb(path: str | Path) -> Checklist:
                 check_content=rule.get("check_content", ""), fix_text=rule.get("fix_text", ""),
                 status=canonical_status(rule.get("status")),
                 finding_details=rule.get("finding_details", ""),
-                comments=rule.get("comments", ""), _raw=rule,
+                comments=rule.get("comments", ""), cci=(ccis[0] if ccis else ""), _raw=rule,
             ))
     return cl
 

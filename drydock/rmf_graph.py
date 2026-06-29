@@ -118,6 +118,38 @@ def component_id(name: str) -> str:
     return f"component:{name.strip().lower()}"
 
 
+def stig_id(name: str) -> str:
+    return f"stig:{name.strip().lower()}"
+
+
+def rule_node(rid: str) -> str:
+    return f"stigrule:{rid.strip().lower()}"
+
+
+def ingest_checklist(g: "RmfGraph", checklist) -> dict:
+    """Add a parsed STIG Checklist to the typed graph: STIG + STIG-Rule nodes,
+    PART_OF (rule→stig), APPLIES_TO (stig→host), EVALUATES (rule→host). Returns
+    {rules, host}. The Control —SATISFIED_BY→ STIG-Rule link is asserted
+    separately (via GraphAdd 'satisfies') since it needs the CCI→control map."""
+    host = (checklist.asset.get("HOST_NAME") or checklist.asset.get("host_name") or "target")
+    hnode = component_id(host)
+    g.add_node(hnode, "Component", name=host, ip=checklist.asset.get("HOST_IP"))
+    sname = checklist.stig_name or "STIG"
+    snode = stig_id(sname)
+    g.add_node(snode, "STIG", name=sname, version=checklist.stig_version)
+    g.add_edge(snode, "APPLIES_TO", hnode)
+    for r in checklist.rules:
+        rid = r.rule_id or r.group_id
+        if not rid:
+            continue
+        rn = rule_node(rid)
+        g.add_node(rn, "STIGRule", rule_id=r.rule_id, group_id=r.group_id,
+                   severity=r.severity, status=r.status, cci=r.cci, title=r.title)
+        g.add_edge(rn, "PART_OF", snode)
+        g.add_edge(rn, "EVALUATES", hnode)
+    return {"rules": len(checklist.rules), "host": host}
+
+
 def build_from_catalog(catalog: dict, *, families: list[str] | None = None) -> RmfGraph:
     """Deterministically build Control + Objective nodes (and ASSESSES edges) from
     an OSCAL 800-53 catalog. The typed backbone the user's components/vulns attach to."""
