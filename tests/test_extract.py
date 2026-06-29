@@ -69,3 +69,27 @@ def test_graphrag_ingests_docx_and_pdf(tmp_path):
     if extract.pdf_backend_available():
         assert "manual.pdf" in srcs
         assert graphrag.query_index(idx, "refunds Zephyr gateway")["chunks"][0]["source"] == "manual.pdf"
+
+
+def test_extract_ckl_checklist(tmp_path):
+    p = tmp_path / "sys.ckl"
+    p.write_text('<?xml version="1.0"?><CHECKLIST><ASSET><HOST_NAME>web01</HOST_NAME></ASSET>'
+                 '<STIGS><iSTIG><STIG_INFO></STIG_INFO><VULN>'
+                 '<STIG_DATA><VULN_ATTRIBUTE>Vuln_Num</VULN_ATTRIBUTE><ATTRIBUTE_DATA>V-1</ATTRIBUTE_DATA></STIG_DATA>'
+                 '<STIG_DATA><VULN_ATTRIBUTE>Rule_Title</VULN_ATTRIBUTE><ATTRIBUTE_DATA>disable debug</ATTRIBUTE_DATA></STIG_DATA>'
+                 '<STATUS>Open</STATUS><FINDING_DETAILS>debug=true found</FINDING_DETAILS></VULN></iSTIG></STIGS></CHECKLIST>')
+    out = extract.extract_document(p)
+    assert out and "V-1" in out and "STATUS=open" in out and "debug=true found" in out
+
+
+def test_graphrag_ingests_ckl(tmp_path):
+    (tmp_path / "sys.ckl").write_text('<?xml version="1.0"?><CHECKLIST><STIGS><iSTIG><STIG_INFO></STIG_INFO>'
+        '<VULN><STIG_DATA><VULN_ATTRIBUTE>Vuln_Num</VULN_ATTRIBUTE><ATTRIBUTE_DATA>V-42</ATTRIBUTE_DATA></STIG_DATA>'
+        '<STIG_DATA><VULN_ATTRIBUTE>Rule_Title</VULN_ATTRIBUTE><ATTRIBUTE_DATA>SSH root login disabled</ATTRIBUTE_DATA></STIG_DATA>'
+        '<STATUS>NotAFinding</STATUS></VULN></iSTIG></STIGS></CHECKLIST>')
+    store = graphrag.default_store_path(str(tmp_path))
+    stats = graphrag.build_index(["."], store, cwd=str(tmp_path))
+    assert stats["files"] == 1
+    idx = graphrag.load_index(store)
+    assert "sys.ckl" in graphrag.sources(idx)
+    assert graphrag.query_index(idx, "SSH root login")["chunks"]

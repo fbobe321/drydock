@@ -19,8 +19,9 @@ import zipfile
 from pathlib import Path
 
 # Extensions we can pull text out of (beyond the plain-text formats GraphRAG
-# already reads directly).
-EXTRACTABLE_EXT = {".pdf", ".docx"}
+# already reads directly). .ckl/.cklb are STIG checklists — we extract the
+# meaningful per-rule text (id/severity/status/finding), not the raw XML/JSON.
+EXTRACTABLE_EXT = {".pdf", ".docx", ".ckl", ".cklb"}
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -70,13 +71,38 @@ def _extract_pdf(path: str | Path) -> str | None:
         return None
 
 
+def _extract_checklist(path: str | Path) -> str | None:
+    """Flatten a STIG .ckl/.cklb to readable, queryable text (per-rule id,
+    severity, status, title, finding details) — so the agent can answer 'which
+    findings are open?' over an ingested checklist."""
+    try:
+        from drydock import stig
+
+        cl = stig.load(path)
+    except Exception:  # noqa: BLE001 — unreadable/unsupported → skip cleanly
+        return None
+    host = cl.asset.get("HOST_NAME") or cl.asset.get("host_name") or "?"
+    lines = [f"STIG Checklist: {cl.stig_name or 'STIG'} (host: {host})",
+             "Counts: " + ", ".join(f"{k}={v}" for k, v in cl.counts().items())]
+    for r in cl.rules:
+        lines.append(f"\n{r.group_id} ({r.rule_id}) severity={r.severity} "
+                     f"STATUS={r.status} — {r.title}")
+        if r.finding_details:
+            lines.append(f"  Finding: {r.finding_details}")
+        if r.check_content:
+            lines.append(f"  Check: {r.check_content[:300]}")
+    return "\n".join(lines) or None
+
+
 def extract_document(path: str | Path) -> str | None:
-    """Extract text from a supported document (.pdf/.docx), or None."""
+    """Extract text from a supported document (.pdf/.docx/.ckl/.cklb), or None."""
     ext = Path(path).suffix.lower()
     if ext == ".docx":
         return _extract_docx(path)
     if ext == ".pdf":
         return _extract_pdf(path)
+    if ext in (".ckl", ".cklb"):
+        return _extract_checklist(path)
     return None
 
 
