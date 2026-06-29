@@ -328,9 +328,9 @@ entirely local.
 - **Ontology additions SHIPPED (v3.0.69):** `STIG` (name/version, `APPLIES_TO`
   Component), `STIG-Rule` (rule_id, severity, status, CCI; `PART_OF` STIG,
   `EVALUATES` Component), and `Control —SATISFIED_BY→ STIG-Rule`. `/stig graph
-  <ckl>` ingests a checklist into the typed graph; `GraphAdd satisfies` links a
-  rule to a NIST control (the CCI→control auto-map is a follow-on — DISA's CCI
-  list isn't on a clean public mirror, so the CCI is captured on each rule node).
+  <ckl>` ingests a checklist into the typed graph; `/stig graph` now AUTO-links each rule to its NIST control via the DISA CCI
+  map (CCI→800-53, built from U_CCI_List.xml = 3551 CCIs, fetched once + cached,
+  offline-safe); `GraphAdd satisfies` remains for manual links. (v3.0.74)
 
 **Design decision (context efficiency):** the harness does NOT feed raw checklist
 XML to the model. It parses the checklist **once** into a lightweight JSON model,

@@ -126,11 +126,11 @@ def rule_node(rid: str) -> str:
     return f"stigrule:{rid.strip().lower()}"
 
 
-def ingest_checklist(g: "RmfGraph", checklist) -> dict:
+def ingest_checklist(g: "RmfGraph", checklist, cci_map: dict | None = None) -> dict:
     """Add a parsed STIG Checklist to the typed graph: STIG + STIG-Rule nodes,
-    PART_OF (rule→stig), APPLIES_TO (stig→host), EVALUATES (rule→host). Returns
-    {rules, host}. The Control —SATISFIED_BY→ STIG-Rule link is asserted
-    separately (via GraphAdd 'satisfies') since it needs the CCI→control map."""
+    PART_OF (rule→stig), APPLIES_TO (stig→host), EVALUATES (rule→host). When a
+    CCI→control map is supplied, also auto-creates Control —SATISFIED_BY→ STIG-Rule
+    edges via each rule's CCI. Returns {rules, host, linked}."""
     host = (checklist.asset.get("HOST_NAME") or checklist.asset.get("host_name") or "target")
     hnode = component_id(host)
     g.add_node(hnode, "Component", name=host, ip=checklist.asset.get("HOST_IP"))
@@ -138,6 +138,7 @@ def ingest_checklist(g: "RmfGraph", checklist) -> dict:
     snode = stig_id(sname)
     g.add_node(snode, "STIG", name=sname, version=checklist.stig_version)
     g.add_edge(snode, "APPLIES_TO", hnode)
+    linked = 0
     for r in checklist.rules:
         rid = r.rule_id or r.group_id
         if not rid:
@@ -147,7 +148,14 @@ def ingest_checklist(g: "RmfGraph", checklist) -> dict:
                    severity=r.severity, status=r.status, cci=r.cci, title=r.title)
         g.add_edge(rn, "PART_OF", snode)
         g.add_edge(rn, "EVALUATES", hnode)
-    return {"rules": len(checklist.rules), "host": host}
+        ctl = (cci_map or {}).get(r.cci)
+        if ctl:
+            cn = control_id(ctl)
+            if not g.get(cn):
+                g.add_node(cn, "Control", control_id=ctl.upper())
+            g.add_edge(cn, "SATISFIED_BY", rn)
+            linked += 1
+    return {"rules": len(checklist.rules), "host": host, "linked": linked}
 
 
 def build_from_catalog(catalog: dict, *, families: list[str] | None = None) -> RmfGraph:

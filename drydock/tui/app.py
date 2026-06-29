@@ -563,21 +563,10 @@ class DrydockApp(App):
             return
         # /stig graph <path> — ingest the checklist into the RMF typed graph
         if parts[0].lower() == "graph" and len(parts) > 1:
-            from drydock import rmf_graph
             gp = parts[1] if _os.path.isabs(parts[1]) else _os.path.join(cwd, parts[1])
-            try:
-                cl = stig.load(gp)
-                g = rmf_graph.RmfGraph.load(rmf_graph.graph_path(cwd))
-                r = rmf_graph.ingest_checklist(g, cl)
-                g.save(rmf_graph.graph_path(cwd))
-            except Exception as e:  # noqa: BLE001
-                self._mount(ErrorMessage(f"could not graph checklist: {e}"))
-                return
-            self._info(
-                f"✓ Ingested {r['rules']} STIG rules for host '{r['host']}' into the "
-                f"RMF graph (STIG/STIG-Rule nodes, PART_OF/APPLIES_TO/EVALUATES). "
-                "Link rules to controls with GraphAdd satisfies; trace via GraphQuery."
-            )
+            self._info("Ingesting the checklist into the RMF graph "
+                       "(fetching the DISA CCI→800-53 map on first use)…")
+            self.run_worker(lambda: self._stig_graph(cwd, gp), thread=True)
             return
         path = parts[0]
         if not _os.path.isabs(path):
@@ -641,6 +630,30 @@ class DrydockApp(App):
         except Exception as e:  # noqa: BLE001
             msg = (f"RMF bootstrap failed: {e}. (Needs internet for the one-time "
                    "catalog download; after that it works offline.)")
+        self.call_from_thread(self._info, msg)
+
+    def _stig_graph(self, cwd: str, path: str) -> None:
+        """Worker-thread body: ingest a checklist into the RMF graph, auto-linking
+        rules to NIST controls via the DISA CCI map. Reports back on the UI."""
+        from drydock import cci, rmf_graph, stig
+
+        try:
+            cl = stig.load(path)
+            cci_map = cci.load_map(cwd)        # fetch+cache once; offline-safe ({} on failure)
+            g = rmf_graph.RmfGraph.load(rmf_graph.graph_path(cwd))
+            r = rmf_graph.ingest_checklist(g, cl, cci_map)
+            g.save(rmf_graph.graph_path(cwd))
+            link_note = (
+                f"auto-linked {r['linked']}/{r['rules']} rules to NIST controls via CCI "
+                "(Control —SATISFIED_BY→ rule). Trace with GraphQuery control <id>."
+                if r["linked"] else
+                "(no CCI→control links — the CCI map was unavailable offline; rules are "
+                "still in the graph. Re-run online, or use GraphAdd satisfies.)"
+            )
+            msg = (f"✓ Ingested {r['rules']} STIG rules for host '{r['host']}' into the "
+                   f"RMF graph (STIG/STIG-Rule + PART_OF/APPLIES_TO/EVALUATES); {link_note}")
+        except Exception as e:  # noqa: BLE001
+            msg = f"could not graph checklist: {e}"
         self.call_from_thread(self._info, msg)
 
     def _cmd_mcp(self) -> None:
