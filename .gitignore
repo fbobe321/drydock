@@ -6,3 +6,7 @@ build/
 .venv/
 logs/
 .pytest_cache/
+.wrangler/
+.drydock/
+*.ckl
+*.cklb
