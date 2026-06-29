@@ -302,6 +302,11 @@ Targets the most tedious part of Implement/Assess: DISA STIGs and the `.ckl`
 carry hostnames, IPs, and statuses that are almost always CUI — so parsing stays
 entirely local.
 
+- **XCCDF→.ckl generator SHIPPED (v3.0.70):** `/stig new <benchmark-xccdf.xml>`
+  parses a raw DISA STIG XCCDF benchmark (e.g. the Application STIG) and generates
+  a blank `.ckl` (all rules Not_Reviewed) — the inverse of STIG Viewer. Closes the
+  loop: STIG benchmark → blank .ckl → assess (pull in app evidence) → completed .ckl.
+  Verified against a real DISA vSphere STIG XCCDF.
 - **Engine SHIPPED (v3.0.65):** `drydock/stig.py` parses `.ckl` (XML) and `.cklb`
   (JSON) into a compact per-rule model and regenerates them with **edit-in-place
   fidelity** (only status/finding-details/comments change; all other STIG_DATA is

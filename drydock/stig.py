@@ -12,6 +12,7 @@ Stdlib only (xml.etree + json). All logic original to Drydock.
 from __future__ import annotations
 
 import json
+import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -124,10 +125,10 @@ def _set_child_text(el: ET.Element, tag: str, text: str) -> None:
 
 
 # ── parsing ─────────────────────────────────────────────────────────────────
-def parse_ckl(path: str | Path) -> Checklist:
+def _checklist_from_tree(tree: Any) -> Checklist:
     cl = Checklist("ckl")
-    cl._tree = ET.parse(path)
-    root = cl._tree.getroot()
+    cl._tree = tree
+    root = tree.getroot()
     asset = root.find("ASSET")
     if asset is not None:
         cl.asset = {c.tag: (c.text or "") for c in asset}
@@ -147,6 +148,106 @@ def parse_ckl(path: str | Path) -> Checklist:
             comments=vuln.findtext("COMMENTS") or "", cci=data.get("CCI_REF", ""), _raw=vuln,
         ))
     return cl
+
+
+def parse_ckl(path: str | Path) -> Checklist:
+    return _checklist_from_tree(ET.parse(path))
+
+
+# ── XCCDF benchmark (the raw STIG) → a blank .ckl ───────────────────────────
+_VULN_DISCUSS = re.compile(r"<VulnDiscussion>(.*?)</VulnDiscussion>", re.S | re.I)
+
+
+def _lname(el) -> str:
+    return el.tag.split("}")[-1]
+
+
+def _kids(parent, name):
+    return [c for c in parent if _lname(c) == name]
+
+
+def _ktext(parent, name) -> str:
+    for c in parent:
+        if _lname(c) == name:
+            return (c.text or "").strip()
+    return ""
+
+
+def parse_xccdf(path: str | Path) -> dict:
+    """Parse a DISA STIG XCCDF benchmark (namespace-agnostic) into
+    {title, version, release, stigid, rules:[...]}."""
+    root = ET.parse(path).getroot()
+    title = _ktext(root, "title")
+    version = _ktext(root, "version")
+    stigid = root.get("id", "")
+    release = ""
+    for pt in _kids(root, "plain-text"):
+        if pt.get("id") == "release-info":
+            release = (pt.text or "").strip()
+    rules = []
+    for group in _kids(root, "Group"):
+        gid = group.get("id", "")
+        gtitle = _ktext(group, "title")
+        for rule in _kids(group, "Rule"):
+            desc = _ktext(rule, "description")
+            m = _VULN_DISCUSS.search(desc)
+            check = ""
+            for ch in _kids(rule, "check"):
+                check = _ktext(ch, "check-content") or check
+            rules.append({
+                "group_id": gid, "group_title": gtitle,
+                "rule_id": rule.get("id", ""), "rule_ver": _ktext(rule, "version"),
+                "severity": rule.get("severity", ""), "weight": rule.get("weight", ""),
+                "title": _ktext(rule, "title"),
+                "discussion": (m.group(1).strip() if m else desc),
+                "check": check, "fix": _ktext(rule, "fixtext"),
+                "ccis": [(c.text or "").strip() for c in _kids(rule, "ident")
+                         if "cci" in (c.get("system", "") + (c.text or "")).lower()],
+            })
+    return {"title": title, "version": version, "release": release,
+            "stigid": stigid, "rules": rules}
+
+
+def xccdf_to_checklist(path: str | Path, *, host: str = "") -> Checklist:
+    """Build a blank .ckl (all rules Not_Reviewed) from a STIG XCCDF benchmark —
+    the inverse of what STIG Viewer does, so the catalog can be assessed directly."""
+    bench = parse_xccdf(path)
+    stigref = f"{bench['title']} :: Version {bench['version']}, {bench['release']}".strip(" :,")
+    root = ET.Element("CHECKLIST")
+    asset = ET.SubElement(root, "ASSET")
+    for tag, val in [("ROLE", "None"), ("ASSET_TYPE", "Computing"), ("HOST_NAME", host),
+                     ("HOST_IP", ""), ("HOST_MAC", ""), ("HOST_FQDN", ""),
+                     ("TARGET_COMMENT", ""), ("TECH_AREA", ""), ("TARGET_KEY", ""),
+                     ("WEB_OR_DATABASE", "false"), ("WEB_DB_SITE", ""), ("WEB_DB_INSTANCE", "")]:
+        ET.SubElement(asset, tag).text = val
+    istig = ET.SubElement(ET.SubElement(root, "STIGS"), "iSTIG")
+    info = ET.SubElement(istig, "STIG_INFO")
+    for name, data in [("version", bench["version"]), ("classification", "UNCLASSIFIED"),
+                       ("stigid", bench["stigid"]), ("description", ""),
+                       ("releaseinfo", bench["release"]), ("title", bench["title"])]:
+        sid = ET.SubElement(info, "SI_DATA")
+        ET.SubElement(sid, "SID_NAME").text = name
+        ET.SubElement(sid, "SID_DATA").text = data
+    for rd in bench["rules"]:
+        vuln = ET.SubElement(istig, "VULN")
+        for attr, val in [("Vuln_Num", rd["group_id"]), ("Severity", rd["severity"]),
+                          ("Group_Title", rd["group_title"]), ("Rule_ID", rd["rule_id"]),
+                          ("Rule_Ver", rd["rule_ver"]), ("Rule_Title", rd["title"]),
+                          ("Vuln_Discuss", rd["discussion"]), ("Check_Content", rd["check"]),
+                          ("Fix_Text", rd["fix"]), ("Weight", rd["weight"]), ("STIGRef", stigref)]:
+            sd = ET.SubElement(vuln, "STIG_DATA")
+            ET.SubElement(sd, "VULN_ATTRIBUTE").text = attr
+            ET.SubElement(sd, "ATTRIBUTE_DATA").text = val or ""
+        for cci in rd["ccis"]:
+            sd = ET.SubElement(vuln, "STIG_DATA")
+            ET.SubElement(sd, "VULN_ATTRIBUTE").text = "CCI_REF"
+            ET.SubElement(sd, "ATTRIBUTE_DATA").text = cci
+        ET.SubElement(vuln, "STATUS").text = "Not_Reviewed"
+        ET.SubElement(vuln, "FINDING_DETAILS").text = ""
+        ET.SubElement(vuln, "COMMENTS").text = ""
+        ET.SubElement(vuln, "SEVERITY_OVERRIDE").text = ""
+        ET.SubElement(vuln, "SEVERITY_JUSTIFICATION").text = ""
+    return _checklist_from_tree(ET.ElementTree(root))
 
 
 def parse_cklb(path: str | Path) -> Checklist:

@@ -496,7 +496,7 @@ class DrydockApp(App):
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
                 "  /mcp             list connected MCP servers and their tools\n"
                 "  /rmf             RMF automation — /rmf bootstrap, then /rmf-control etc.\n"
-                "  /stig            summarize a .ckl/.cklb; assess via /stig-assess\n"
+                "  /stig            /stig new <xccdf> → blank .ckl; summarize; /stig-assess\n"
                 "  /clear           reset the conversation\n"
                 "  /quit            exit\n"
                 "Type a task and press Enter. ↑/↓ recall history · Esc stops · Ctrl+O expands tools."
@@ -524,12 +524,32 @@ class DrydockApp(App):
 
         parts = arg.split()
         if not parts:
-            self._info("usage: /stig <path-to.ckl|.cklb> [status]   "
-                       "(status: open|not_a_finding|not_applicable|not_reviewed)\n"
-                       "Assess it: /loop <n> /stig-assess <path>")
+            self._info("usage:\n"
+                       "  /stig new <benchmark-xccdf.xml> [out.ckl]  — blank .ckl from a STIG\n"
+                       "  /stig <path.ckl|.cklb> [status]            — summary / list by status\n"
+                       "  /stig graph <path.ckl>                     — ingest into the RMF graph\n"
+                       "Assess:  /loop <n> /stig-assess <path>")
             return
         import os as _os
         cwd = self.config.get("cwd") or "."
+        _abs = lambda p: p if _os.path.isabs(p) else _os.path.join(cwd, p)  # noqa: E731
+        # /stig new <xccdf> [out.ckl] — generate a BLANK .ckl from a STIG XCCDF benchmark
+        if parts[0].lower() == "new" and len(parts) > 1:
+            xp = _abs(parts[1])
+            out = _abs(parts[2]) if len(parts) > 2 else \
+                _os.path.splitext(_abs(parts[1]))[0].replace("-xccdf", "") + ".ckl"
+            try:
+                cl = stig.xccdf_to_checklist(xp)
+                cl.save(out)
+            except Exception as e:  # noqa: BLE001
+                self._mount(ErrorMessage(f"could not parse the STIG XCCDF: {e}"))
+                return
+            self._info(
+                f"✓ Generated {out} from the STIG benchmark — {len(cl.rules)} rules, "
+                "all Not_Reviewed. Now pull in the app's evidence and assess:\n"
+                f"  /graphrag build <app-docs>   ·   /loop {len(cl.rules)} /stig-assess {out}"
+            )
+            return
         # /stig graph <path> — ingest the checklist into the RMF typed graph
         if parts[0].lower() == "graph" and len(parts) > 1:
             from drydock import rmf_graph
