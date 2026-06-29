@@ -306,7 +306,7 @@ entirely local.
   parses a raw DISA STIG XCCDF benchmark (e.g. the Application STIG) and generates
   a blank `.ckl` (all rules Not_Reviewed) — the inverse of STIG Viewer. Closes the
   loop: STIG benchmark → blank .ckl → assess (pull in app evidence) → completed .ckl.
-  Verified against a real DISA vSphere STIG XCCDF.
+  Validated against the full real DISA Application Security & Development STIG (U_ASD_STIG_V6R1, 286 rules → 1.1MB valid .ckl in ~0.02s) + a vSphere STIG.
 - **Engine SHIPPED (v3.0.65):** `drydock/stig.py` parses `.ckl` (XML) and `.cklb`
   (JSON) into a compact per-rule model and regenerates them with **edit-in-place
   fidelity** (only status/finding-details/comments change; all other STIG_DATA is

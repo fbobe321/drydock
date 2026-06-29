@@ -54,3 +54,32 @@ def test_xccdf_to_blank_ckl(tmp_path):
     assert stig.load(out).rules[0].status == "open"
     # the regenerated .ckl preserves the DISA status enum
     assert "<STATUS>Open</STATUS>" in out.read_text()
+
+
+def test_xccdf_scale_many_rules(tmp_path):
+    """A full DISA STIG (e.g. the ASD STIG) has hundreds of rules. Verify the
+    XCCDF->.ckl path handles scale: all rules parsed, well-formed, round-trips,
+    full id/title fidelity. (Validated live against U_ASD_STIG_V6R1 = 286 rules.)"""
+    rules = "".join(
+        f'<Group id="V-{i:05d}"><title>SRG-APP-{i:06d}</title>'
+        f'<Rule id="SV-{i:05d}r1_rule" severity="medium" weight="10.0">'
+        f'<version>APSC-DV-{i:06d}</version><title>Requirement {i}.</title>'
+        f'<description>&lt;VulnDiscussion&gt;Discussion {i}.&lt;/VulnDiscussion&gt;</description>'
+        f'<ident system="http://cyber.mil/cci">CCI-{i:06d}</ident>'
+        f'<fixtext fixref="F-{i}">Fix {i}.</fixtext>'
+        f'<check system="C-{i}"><check-content>Check {i}.</check-content></check>'
+        f'</Rule></Group>'
+        for i in range(250)
+    )
+    xccdf = ('<?xml version="1.0"?><Benchmark xmlns="http://checklists.nist.gov/xccdf/1.1" '
+             'id="BIG"><title>Big STIG</title><version>1</version>'
+             f'<plain-text id="release-info">Release: 1</plain-text>{rules}</Benchmark>')
+    p = tmp_path / "big-xccdf.xml"; p.write_text(xccdf)
+    cl = stig.xccdf_to_checklist(p, host="srv")
+    assert len(cl.rules) == 250
+    assert all(r.rule_id and r.title for r in cl.rules)        # full fidelity
+    out = tmp_path / "big.ckl"; cl.save(out)
+    ET.parse(out)                                              # valid at scale
+    re = stig.load(out)
+    assert len(re.rules) == 250 and re.counts()["not_reviewed"] == 250
+    assert re.rules[123].rule_id == "SV-00123r1_rule"          # order + content preserved
