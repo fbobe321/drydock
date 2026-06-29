@@ -12,7 +12,7 @@ import threading
 import time
 
 from textual import work
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.css.query import NoMatches
@@ -359,7 +359,7 @@ class DrydockApp(App):
         try:
             self.query_one("#status", Static).update(self._status_text())
             self.query_one("#working", Static).update(self._working_text())
-        except NoMatches:
+        except (NoMatches, ScreenStackError):
             pass
 
     @property
@@ -477,6 +477,8 @@ class DrydockApp(App):
                 self._info("Nothing to go back to.")
         elif cmd == "/compact":
             self._cmd_compact()
+        elif cmd == "/context":
+            self._cmd_context(arg)
         elif cmd == "/graphrag":
             self._cmd_graphrag(arg)
         elif cmd == "/status":
@@ -498,6 +500,7 @@ class DrydockApp(App):
                 "  /stop            stop the running turn (or press Esc)\n"
                 "  /status          session model, cwd, turns, tokens\n"
                 "  /compact         shrink old context to free up the window\n"
+                "  /context         view/set the context-window budget (e.g. /context 65536)\n"
                 "  /graphrag        ingest docs into a knowledge base the agent can use\n"
                 "                   build <path> · add <path> · query <q> · status · clear\n"
                 "  /skills          list skills · /skills new <name> <prompt> to create one\n"
@@ -742,6 +745,39 @@ class DrydockApp(App):
             self._refresh_status()
         else:
             self._begin(prompt)
+
+    def _cmd_context(self, arg: str) -> None:
+        """View or change the context-window budget (tokens) — the cap that drives
+        the ctx gauge + auto-compaction. `/context` shows it + its source; `/context
+        <n>` sets and PERSISTS it to ~/.drydock/config.toml. This is the lever for
+        'stuck at 32k': an old config.toml value (drydock never rewrites an existing
+        one) or a smaller model-server -c silently caps you."""
+        limit = self.config.get("context_limit", 65536) or 65536
+        arg = (arg or "").strip()
+        if not arg:
+            self._info(
+                f"context_limit: {limit:,} tokens (the '/{limit // 1024}k' in the ctx gauge).\n"
+                "Source order: built-in default 65536 < ~/.drydock/config.toml < --context-limit.\n"
+                "If you're stuck below this, your MODEL SERVER's context is smaller — raise its\n"
+                "`-c`/`--ctx-size`/`max_model_len` to match. To change drydock's budget:\n"
+                "  /context <tokens>      e.g. /context 65536   (saved to config.toml)"
+            )
+            return
+        try:
+            n = int(arg.replace(",", "").replace("k", "000").replace("K", "000"))
+            if n < 4096 or n > 2_000_000:
+                raise ValueError
+        except ValueError:
+            self._mount(ErrorMessage("usage: /context <tokens>  (4096–2000000, e.g. /context 65536)"))
+            return
+        self.config["context_limit"] = n
+        self._persist_config()
+        self._refresh_status()  # repaint the gauge against the new budget
+        self._info(
+            f"✓ context_limit set to {n:,} tokens and saved to ~/.drydock/config.toml.\n"
+            "Make sure your model server's context (-c / --ctx-size / max_model_len) is at\n"
+            "least this, or the server will still cap you below it."
+        )
 
     def _cmd_compact(self) -> None:
         """Manually compact the conversation to reclaim context NOW, without
