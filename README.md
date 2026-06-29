@@ -67,10 +67,14 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/mcp` | List connected MCP servers + their tools |
 | `/rmf bootstrap [families]` | Ingest the NIST SP 800-53 catalog (RMF automation) |
 | `/rmf-control` · `/rmf-categorize` · `/rmf-review` · `/rmf-poam` | Bundled RMF skills |
+| `/stig new <xccdf>` | Generate a blank `.ckl` from a DISA STIG benchmark |
+| `/stig <ckl>` · `/stig <ckl> open` | Summarize a checklist · list findings by status |
+| `/stig graph <ckl>` | Ingest a checklist into the RMF graph (auto-links rules→controls via CCI) |
+| `/stig-assess <ckl>` · `/stig-remediate <ckl> <rule>` | Assess a rule vs evidence · write a fix script |
 | `/model` · `/cwd` | Show/set model & endpoint · working directory |
 | `/undo` · `/back` | Revert the last write · rewind the last turn |
-| `/compact` · `/status` · `/clear` | Shrink context · session stats · reset |
-| `/help` · `/quit` | Help · exit |
+| `/compact` · `/context [n]` | Shrink context now · view/set the context-window budget |
+| `/status` · `/clear` · `/help` · `/quit` | Session stats · reset · help · exit |
 
 ### Knowledge base (GraphRAG) — ingesting your documents
 
@@ -83,9 +87,11 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 
 Once built, the agent **automatically** retrieves from it (read-only `Knowledge`
 tool) when a question touches your material. Ingests text formats
-(`.md .txt .py .js .json .yaml .sql …`) **plus PDF and Word (`.docx`)**. `.docx`
-needs nothing extra; PDF uses the `pdftotext` binary (poppler) if present, else
-`pip install drydock-cli[pdf]` (pypdf). The index is a single JSON at
+(`.md .txt .py .js .json .yaml .sql …`), **PDF and Word (`.docx`)**, and **STIG
+checklists (`.ckl`/`.cklb`)** — checklists are flattened to per-rule findings so
+you can ask "which findings are open?". `.docx`/`.ckl` need nothing extra; PDF
+uses the `pdftotext` binary (poppler) if present, else `pip install
+drydock-cli[pdf]` (pypdf). The index is a single JSON at
 `<project>/.drydock/graphrag.json` — clean-room, no embeddings.
 
 ### Custom skills
@@ -120,6 +126,26 @@ relationships with `GraphQuery` — including **control inheritance** ("which
 servers inherit physical controls from their enclave?"). Stdlib in-memory graph,
 no Neo4j.
 
+### STIG checklists (DISA `.ckl`/`.cklb`)
+
+Take a raw DISA STIG benchmark all the way to a completed, eMASS/STIG-Viewer-
+compatible checklist — entirely local (hostnames, IPs, and findings are CUI):
+
+```
+/stig new U_ASD_STIG_V6R1_Manual-xccdf.xml app.ckl   # benchmark → blank .ckl
+/graphrag build ./app                                 # pull in the app's evidence
+/loop 286 /stig-assess app.ckl                        # assess each rule vs evidence
+/stig app.ckl open                                    # list the open findings
+/stig-remediate app.ckl SV-900010r1_rule              # write an idempotent fix script
+/stig graph app.ckl                                   # ingest + auto-link rules → NIST controls
+```
+
+`/stig new` parses the XCCDF benchmark (validated against the full 286-rule
+Application STIG); `/stig-assess` reads your evidence and writes status +
+finding-details back in place; `/stig graph` builds `STIG`/`STIG-Rule` nodes and
+**auto-links each rule to its NIST 800-53 control** through DISA's CCI map
+(`Control —SATISFIED_BY→ rule`), fetched once and cached offline.
+
 ## Install
 
 ```bash
@@ -149,10 +175,11 @@ commands to do the work, showing each as a collapsible tool card.
   `◡ Keelhauling…  (12s · ↓ 6.2k tokens · thinking with high effort)`
 - Submit while it's working and the prompt **queues** (drains in order)
 - Slash commands: `/model` · `/cwd` · `/undo` (revert last write) · `/back`
-  (rewind last turn) · `/status` · `/compact` (shrink context) · `/graphrag`
-  (build/query a knowledge base) · `/skills` (list your `/<name>` skills) ·
-  `/loop` (repeat a prompt) · `/mcp` (list MCP servers) · `/clear` · `/help` ·
-  `/quit`
+  (rewind last turn) · `/status` · `/compact` (shrink context) · `/context`
+  (view/set the context-window budget) · `/graphrag` (build/query a knowledge
+  base) · `/skills` (list your `/<name>` skills) · `/loop` (repeat a prompt) ·
+  `/mcp` (list MCP servers) · `/rmf` & `/stig` (NIST 800-53 / DISA STIG
+  automation) · `/clear` · `/help` · `/quit`
 
 It honors `AGENTS.md` / `DRYDOCK.md` in the working directory for project
 conventions.
