@@ -385,3 +385,16 @@ def test_loop_command_iterates_and_stops():
             assert app._repeat is None
 
     asyncio.run(main())
+
+
+def test_refresh_status_survives_missing_widgets():
+    """The 0.18s _tick_work timer can fire one last time during app teardown,
+    after the footer widgets (#status/#working) are gone. _refresh_status must
+    swallow the resulting NoMatches, not crash the app. Regression for a flaky
+    NoMatches('#status') that surfaced under full-suite load."""
+    app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+    app._busy = True
+    # No widgets are mounted (no run_test), so query_one('#status') would raise
+    # NoMatches — the guard must make this a safe no-op.
+    app._refresh_status()   # must not raise
+    app._tick_work()        # the timer path that triggered the crash; must not raise

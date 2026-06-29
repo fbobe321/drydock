@@ -15,6 +15,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.widgets import Static
 
 from drydock.agent import (
@@ -351,8 +352,15 @@ class DrydockApp(App):
         return f"{spin} {self._work_word}…  ({elapsed} · ↓ {toks} tokens{eff}{queued})"
 
     def _refresh_status(self) -> None:
-        self.query_one("#status", Static).update(self._status_text())
-        self.query_one("#working", Static).update(self._working_text())
+        # The 0.18s _tick_work timer can fire one last time DURING app teardown,
+        # after the footer widgets have been removed — query_one would then raise
+        # NoMatches and crash the app (or fail a test). Be defensive: if the
+        # widgets aren't there (shutting down), there's nothing to refresh.
+        try:
+            self.query_one("#status", Static).update(self._status_text())
+            self.query_one("#working", Static).update(self._working_text())
+        except NoMatches:
+            pass
 
     @property
     def _scroll(self) -> VerticalScroll:

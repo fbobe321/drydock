@@ -1,6 +1,6 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.63, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.71, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
 > **Progress (2026-06-28, late) — knowledge ingestion + RMF automation
