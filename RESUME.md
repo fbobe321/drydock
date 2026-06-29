@@ -51,6 +51,47 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-06-29 — STIG pipeline completion + user-reported fixes (v3.0.62 → 3.0.74)
+
+Repo HEAD pushed + green; **PyPI 3.0.74**; website **deployed** to production
+(drydock.pages.dev + www.drydock-cli.com). Test suite **389 passing**.
+
+**RMF/STIG program — COMPLETE end to end (raw benchmark → completed checklist):**
+- **`/stig new <xccdf>`** (v3.0.70) — parses a raw DISA STIG **XCCDF benchmark**
+  into a blank `.ckl` (the missing first arrow). Validated against the full
+  **286-rule Application STIG** (U_ASD_STIG_V6R1) — 1.1MB valid `.ckl` in ~0.02s.
+- **`/stig graph` CCI auto-mapping** (v3.0.74) — `drydock/cci.py` builds a
+  CCI→800-53 map from DISA's `U_CCI_List.xml` (3551 CCIs, cached, offline-safe);
+  `ingest_checklist` auto-creates `Control —SATISFIED_BY→ STIG-Rule` edges. Was a
+  documented follow-on; now shipped. Closes RMF/STIG task #21's last gap.
+- STIG ontology nodes + `/stig-remediate` (v3.0.69), assessor + engine (3.0.65-66).
+- **`/stig` summary** (v3.0.73) — exact `/loop N` suggestion, scale hint for big
+  checklists, no silent 50-cap truncation. Logic in `stig.summary_lines()` (tested).
+
+**User-reported fixes (operator was at work):**
+- **`/context [n]`** (v3.0.72) — view/set + PERSIST the context-window budget.
+  Fixes the "stuck at 32768" trap: a stale `context_limit` in config.toml (drydock
+  never rewrites an existing config) or a smaller server `-c`. NO 32k hardcode —
+  default is 65536. See [[feedback_context_limit_32k_trap]].
+- **GraphRAG ingests `.ckl`/`.cklb`** (v3.0.72) — checklists were silently
+  skipped; now flattened to per-rule findings (extract.py). Verified end-to-end:
+  the agent calls `Knowledge` and answers "which findings are open" from a `.ckl`.
+
+**Real bugs found via hands-on TUI testing (the discipline pays off):**
+- **Teardown crash** (v3.0.72) — the 0.18s `_tick_work` timer could fire during
+  shutdown and `query_one("#status")` after widgets were gone → NoMatches/
+  ScreenStackError crashed the app. `_refresh_status` now guards both. This was
+  the root of the long-standing flaky TUI test (0/20 flake runs after the fix).
+- **CCI fetch mkdir bug** — `cci.load_map` wrote to `.drydock/rmf/` before the dir
+  existed → silent offline fallback. Mocked unit tests missed it; the live TUI run
+  caught it. Fixed + regression test.
+
+**Also:** broadened deterministic test coverage (web/mcp/rmf_graph/stig/cci edge
+cases); repo hygiene (`.gitignore` .wrangler/.drydock/checklists); README +
+website fully updated for the STIG suite + `/context`. Website deploy how-to:
+[[reference_website_deploy]].
+
+---
 ## ⭐ 2026-06-28 (cont.) — doc ingestion UX + skill authoring + self-documenting prompt
 
 - **v3.0.60** — GraphRAG doc ingestion UX: `/graphrag add <path>` (incremental),
