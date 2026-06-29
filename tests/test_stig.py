@@ -68,3 +68,28 @@ def test_stig_tools(tmp_path):
     assert stig.load(p).rules[0].status == "open"
     # filter by status
     assert "not_reviewed=0" in tool_stigrules({"path": "r.ckl"}, cfg)
+
+
+# ── edge cases (E2E PRD: malformed / incomplete checklist stubs) ────────────
+
+def test_malformed_ckl_is_graceful(tmp_path):
+    from drydock.tools import tool_stigrules
+    (tmp_path / "bad.ckl").write_text('<?xml version="1.0"?><CHECKLIST><VULN><STATUS>Open')
+    out = tool_stigrules({"path": "bad.ckl"}, {"cwd": str(tmp_path)})
+    assert "Could not read" in out  # clean error to the model, not a crash
+
+
+def test_incomplete_vuln_parses_with_defaults(tmp_path):
+    (tmp_path / "inc.ckl").write_text(
+        '<?xml version="1.0"?><CHECKLIST><STIGS><iSTIG>'
+        '<VULN><STIG_DATA><VULN_ATTRIBUTE>Rule_ID</VULN_ATTRIBUTE>'
+        '<ATTRIBUTE_DATA>SV-9</ATTRIBUTE_DATA></STIG_DATA></VULN></iSTIG></STIGS></CHECKLIST>')
+    cl = stig.load(tmp_path / "inc.ckl")
+    assert cl.rules[0].rule_id == "SV-9" and cl.rules[0].status == "not_reviewed"
+
+
+def test_empty_and_minimal_checklists(tmp_path):
+    (tmp_path / "e.ckl").write_text('<?xml version="1.0"?><CHECKLIST><STIGS></STIGS></CHECKLIST>')
+    assert stig.load(tmp_path / "e.ckl").rules == []
+    (tmp_path / "m.cklb").write_text('{"stigs":[{"rules":[{"group_id":"V-5"}]}]}')
+    assert stig.load(tmp_path / "m.cklb").rules[0].group_id == "V-5"

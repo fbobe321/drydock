@@ -331,3 +331,27 @@ before a status), writes the result back into the model, and **rebuilds** the
 `.ckl`/`.cklb` from the model at the end. Parse→per-check→rebuild keeps context
 tiny (vital on a 64K local model) and keeps XML generation schema-correct and
 decoupled from evaluation.
+
+## 12. E2E testing (connected configuration)
+
+The connected E2E test framework validates the RMF/STIG pipelines with network
+access for live regulatory feeds — but **scoped to DETERMINISTIC + integration
+testing only**. Operator decision (2026-06-28): model assessment & remediation
+ACCURACY stays verified **hands-on in the real TUI**, one case at a time — NOT an
+automated model-eval harness (the no-eval-harness / TUI-only rules stand).
+
+**Built (deterministic, `tests/test_e2e_connected.py` + `test_stig.py`):**
+- Network-resilience fallback: `rmf.bootstrap(refresh=True)` pulls upstream but
+  falls back to the cached catalog on any failure; offline-no-cache raises.
+- Live NIST OSCAL fetch + parse — opt-in (`DRYDOCK_E2E_NETWORK=1`), kept out of
+  the fast suite.
+- `.ckl` regenerates well-formed with the DISA status enum + `STIG_DATA` fidelity
+  preserved; malformed / incomplete / empty checklist stubs degrade gracefully.
+- Graph relationship semantics (`COMPONENT —IMPLEMENTS→ CONTROL`).
+
+**Out of scope here (TUI-driven instead):** STIG assessment correctness, the
+remediation→Docker→re-assess accuracy loop, and reasoning-trace grounding —
+because on the local model these measure model judgment, which is verified by
+driving the real TUI (e.g. `/loop N /stig-assess <ckl>` and inspecting results).
+Docker remediation *scaffolding* with a DETERMINISTIC end-state assertion (did
+the config actually change / does the `.ckl` validate) is admissible if built.
