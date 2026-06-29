@@ -823,7 +823,12 @@ class DrydockApp(App):
                 self._info("No knowledge base yet. Build one:  /graphrag build <path>")
                 return
             res = graphrag.query_index(index, rest, k=3)
-            self._info(graphrag.format_results(res, rest))
+            self._info(
+                graphrag.format_results(res, rest)
+                + "\n\n— This is a PREVIEW for you; it does not go to the model. "
+                "The agent retrieves from this knowledge base automatically (via "
+                "its Knowledge tool) when you just ASK a question — no slash command."
+            )
         elif sub in ("", "status"):
             index = graphrag.load_index(store)
             if index is None:
