@@ -113,3 +113,31 @@ def test_cklb_writeback_only_changes_status_fields(tmp_path):
     # untouched fields preserved exactly
     assert rule["severity"] == "high" and rule["check_content"] == "do x"
     assert rule["weight"] == "10.0" and rule["rule_title"] == "Rule one"
+
+
+def test_summary_lines_scale_and_no_silent_truncation(tmp_path):
+    import json
+    # 60 rules: 55 open, 5 not_reviewed → exercises >40 hint, open hint, >50 cap note
+    rules = [{"group_id": f"V-{i}", "rule_id": f"SV-{i}", "rule_title": f"r{i}",
+              "severity": "medium", "status": "open" if i < 55 else "not_reviewed"}
+             for i in range(60)]
+    (tmp_path / "b.cklb").write_text(json.dumps(
+        {"stigs": [{"stig_name": "S", "version": "1", "rules": rules}]}))
+    cl = stig.load(tmp_path / "b.cklb")
+    summ = "\n".join(stig.summary_lines(cl, "b.cklb"))
+    assert "/loop 5 /stig-assess b.cklb" in summ          # exact not_reviewed count
+    assert "List open findings" in summ                    # open hint shown
+    open_view = "\n".join(stig.summary_lines(cl, "b.cklb", "open"))
+    assert "showing first 50 of 55" in open_view           # no silent truncation
+    assert open_view.count("V-") <= 51                     # capped list + the note
+
+
+def test_summary_lines_large_checklist_hint(tmp_path):
+    import json
+    rules = [{"group_id": f"V-{i}", "rule_id": f"SV-{i}", "rule_title": "x",
+              "severity": "low", "status": "not_reviewed"} for i in range(286)]
+    (tmp_path / "big.cklb").write_text(json.dumps(
+        {"stigs": [{"stig_name": "ASD", "version": "6", "rules": rules}]}))
+    cl = stig.load(tmp_path / "big.cklb")
+    summ = "\n".join(stig.summary_lines(cl, "big.cklb"))
+    assert "/loop 286" in summ and "286 model turns" in summ

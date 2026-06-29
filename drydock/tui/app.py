@@ -587,19 +587,8 @@ class DrydockApp(App):
         except Exception as e:  # noqa: BLE001
             self._mount(ErrorMessage(f"could not read checklist: {e}"))
             return
-        host = cl.asset.get("HOST_NAME") or cl.asset.get("host_name") or "?"
-        c = cl.counts()
-        lines = [f"STIG checklist {path}  (host: {host}, format: {cl.fmt})",
-                 f"  {len(cl.rules)} rules — " + " · ".join(f"{k}={v}" for k, v in c.items())]
-        if len(parts) > 1:
-            sf = stig.canonical_status(parts[1])
-            hits = [r for r in cl.rules if r.status == sf]
-            lines.append(f"\n{sf} ({len(hits)}):")
-            lines += [f"  {r.group_id} ({r.severity}) — {r.title}" for r in hits[:50]]
-        else:
-            lines.append("Assess un-reviewed rules:  /loop "
-                         f"{c.get('not_reviewed', 0) or 1} /stig-assess {parts[0]}")
-        self._info("\n".join(lines))
+        status = parts[1] if len(parts) > 1 else None
+        self._info("\n".join(stig.summary_lines(cl, parts[0], status)))
 
     def _cmd_rmf(self, arg: str) -> None:
         """RMF automation: bootstrap the NIST 800-53 catalog into the knowledge

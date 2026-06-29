@@ -281,3 +281,32 @@ def load(path: str | Path) -> Checklist:
     # sniff: JSON → cklb, else ckl
     head = Path(path).read_text("utf-8", "ignore").lstrip()[:1]
     return parse_cklb(path) if head == "{" else parse_ckl(path)
+
+
+def summary_lines(cl: "Checklist", label: str, status: str | None = None) -> list[str]:
+    """Build the `/stig` summary view: counts, an optional status listing (never
+    silently truncated), and scale-aware next-step hints. Pure/presentation so it
+    can be unit-tested without the TUI."""
+    host = cl.asset.get("HOST_NAME") or cl.asset.get("host_name") or "?"
+    c = cl.counts()
+    lines = [f"STIG checklist {label}  (host: {host}, format: {cl.fmt})",
+             f"  {len(cl.rules)} rules — " + " · ".join(f"{k}={v}" for k, v in c.items())]
+    if status:
+        sf = canonical_status(status)
+        hits = [r for r in cl.rules if r.status == sf]
+        lines.append(f"\n{sf} ({len(hits)}):")
+        lines += [f"  {r.group_id} ({r.severity}) — {r.title}" for r in hits[:50]]
+        if len(hits) > 50:  # never silently truncate
+            lines.append(f"  … showing first 50 of {len(hits)}; "
+                         "open the .ckl in STIG Viewer for the full list.")
+        return lines
+    nr = c.get("not_reviewed", 0)
+    if nr:
+        lines.append(f"\nAssess the {nr} un-reviewed rule(s) — one focused turn each:"
+                     f"\n  /loop {nr} /stig-assess {label}")
+        if nr > 40:
+            lines.append(f"  (large checklist — that's {nr} model turns; you can run it in "
+                         "batches and re-run /stig to see remaining counts.)")
+    if c.get("open"):
+        lines.append(f"List open findings to remediate:  /stig {label} open")
+    return lines
