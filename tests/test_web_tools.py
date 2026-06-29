@@ -70,3 +70,36 @@ def test_search_parses_ddg_html(monkeypatch):
     assert res and res[0]["title"] == "Example A"
     assert res[0]["url"] == "https://example.com/a"   # uddg redirect unwrapped
     assert res[0]["snippet"] == "snippet A text"
+
+
+class _FakeResp:
+    def __init__(self, body: bytes, ctype: str):
+        self._body = body
+        self.headers = {"Content-Type": ctype}
+    def read(self, *a): return self._body
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+
+
+def test_fetch_strips_html_script_and_tags(monkeypatch):
+    import urllib.request
+    html_doc = (b"<html><head><script>var x=1; evil()</script><style>a{}</style></head>"
+                b"<body><h1>Title</h1><p>Hello &amp; welcome</p></body></html>")
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        lambda *a, **k: _FakeResp(html_doc, "text/html"))
+    out = web.fetch("example.com")
+    assert "Title" in out and "Hello & welcome" in out
+    assert "evil()" not in out and "<p>" not in out   # script + tags gone
+
+
+def test_fetch_truncates_long_text(monkeypatch):
+    import urllib.request
+    big = b"<html><body>" + b"x " * 5000 + b"</body></html>"
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        lambda *a, **k: _FakeResp(big, "text/html"))
+    out = web.fetch("example.com", max_chars=500)
+    assert "truncated" in out and len(out) < 700
+
+
+def test_format_search_empty():
+    assert "No web results" in web.format_search("rare query", [])

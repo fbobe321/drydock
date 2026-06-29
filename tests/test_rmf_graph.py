@@ -60,3 +60,29 @@ def test_graphadd_and_graphquery_tools(tmp_path):
 
 def test_graphquery_empty_graph_is_graceful(tmp_path):
     assert "empty" in tool_graphquery({"op": "control", "id": "AC-2"}, {"cwd": str(tmp_path)}).lower()
+
+
+def test_inherited_controls_handles_cycle():
+    """A RESIDES_ON cycle (misconfigured topology) must not infinite-loop."""
+    g = G.RmfGraph()
+    a, b = G.component_id("a"), G.component_id("b")
+    g.add_node(a, "Component"); g.add_node(b, "Component")
+    g.add_edge(a, "RESIDES_ON", b)
+    g.add_edge(b, "RESIDES_ON", a)            # cycle
+    g.add_edge(b, "IMPLEMENTS", G.control_id("pe-3"))
+    got = g.inherited_controls(a)             # must terminate
+    assert G.control_id("pe-3") in got
+
+
+def test_inherited_controls_missing_node_is_empty():
+    g = G.RmfGraph()
+    assert g.inherited_controls(G.component_id("ghost")) == []
+
+
+def test_neighbors_direction_and_missing():
+    g = G.RmfGraph()
+    g.add_edge("x", "REL", "y")
+    assert g.neighbors("x", "REL") == ["y"]
+    assert g.neighbors("y", "REL", direction="in") == ["x"]
+    assert g.neighbors("y", "REL", direction="out") == []
+    assert g.neighbors("nope") == []

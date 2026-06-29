@@ -93,3 +93,23 @@ def test_empty_and_minimal_checklists(tmp_path):
     assert stig.load(tmp_path / "e.ckl").rules == []
     (tmp_path / "m.cklb").write_text('{"stigs":[{"rules":[{"group_id":"V-5"}]}]}')
     assert stig.load(tmp_path / "m.cklb").rules[0].group_id == "V-5"
+
+
+def test_cklb_writeback_only_changes_status_fields(tmp_path):
+    """Editing a .cklb must change ONLY status/finding_details/comments and keep
+    everything else byte-stable (eMASS round-trip fidelity)."""
+    import json
+    data = {"title": "t", "stigs": [{"stig_name": "Demo", "version": "1", "rules": [
+        {"group_id": "V-1", "rule_id": "SV-1", "rule_title": "Rule one",
+         "severity": "high", "status": "not_reviewed", "check_content": "do x",
+         "fix_text": "fix x", "finding_details": "", "comments": "", "weight": "10.0"}]}]}
+    p = tmp_path / "a.cklb"; p.write_text(json.dumps(data))
+    cl = stig.load(p)
+    cl.update("V-1", status="open", finding_details="found it")
+    cl.save(p)
+    re = json.loads(p.read_text())
+    rule = re["stigs"][0]["rules"][0]
+    assert rule["status"] == "open" and rule["finding_details"] == "found it"
+    # untouched fields preserved exactly
+    assert rule["severity"] == "high" and rule["check_content"] == "do x"
+    assert rule["weight"] == "10.0" and rule["rule_title"] == "Rule one"
