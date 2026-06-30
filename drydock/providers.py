@@ -56,6 +56,36 @@ PROVIDERS: dict[str, dict] = {
 }
 
 
+def probe_server_context(base_url: str, *, timeout: float = 4.0) -> int | None:
+    """Best-effort: ask the model server its REAL context window (tokens).
+    llama.cpp exposes it on `/props` (n_ctx); vLLM puts `max_model_len` on
+    `/v1/models`. Returns None if unknown/unreachable — never raises. This is the
+    definitive diagnostic for a "stuck at N tokens" cap that isn't drydock's
+    config (it's the server's own `-c` / `--ctx-size` / `max_model_len`)."""
+    import json
+    import urllib.request
+
+    root = base_url.rstrip("/")
+    base_no_v1 = root[:-3].rstrip("/") if root.endswith("/v1") else root
+
+    def _n_ctx(d):
+        return (d.get("default_generation_settings") or {}).get("n_ctx") or d.get("n_ctx")
+
+    def _max_model_len(d):
+        return next((m.get("max_model_len") for m in d.get("data", []) if m.get("max_model_len")), None)
+
+    for url, pick in ((base_no_v1 + "/props", _n_ctx), (root + "/models", _max_model_len)):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r:  # noqa: S310 (user's own server)
+                data = json.loads(r.read().decode("utf-8", "ignore"))
+            val = pick(data)
+            if isinstance(val, int) and val > 0:
+                return val
+        except Exception:  # noqa: BLE001 — best-effort probe
+            continue
+    return None
+
+
 class LLMUnreachable(RuntimeError):
     """The configured LLM endpoint could not be reached. Carries a
     user-facing message with remediation steps (shown verbatim in the TUI)."""

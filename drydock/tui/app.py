@@ -758,12 +758,12 @@ class DrydockApp(App):
         arg = (arg or "").strip()
         if not arg:
             self._info(
-                f"context_limit: {limit:,} tokens (the '/{limit // 1024}k' in the ctx gauge).\n"
+                f"context_limit (drydock): {limit:,} tokens (the '/{limit // 1024}k' in the ctx gauge).\n"
                 "Source order: built-in default 65536 < ~/.drydock/config.toml < --context-limit.\n"
-                "If you're stuck below this, your MODEL SERVER's context is smaller — raise its\n"
-                "`-c`/`--ctx-size`/`max_model_len` to match. To change drydock's budget:\n"
-                "  /context <tokens>      e.g. /context 65536   (saved to config.toml)"
+                "Probing your model server for its REAL context window…\n"
+                "  To change drydock's budget:  /context <tokens>   (saved to config.toml)"
             )
+            self.run_worker(lambda: self._probe_server_context(limit), thread=True)
             return
         try:
             n = int(arg.replace(",", "").replace("k", "000").replace("K", "000"))
@@ -780,6 +780,30 @@ class DrydockApp(App):
             "Make sure your model server's context (-c / --ctx-size / max_model_len) is at\n"
             "least this, or the server will still cap you below it."
         )
+
+    def _probe_server_context(self, limit: int) -> None:
+        """Worker: ask the model server its real context window and report whether
+        IT (not drydock's config) is the thing capping you — the definitive answer
+        to 'stuck at N tokens'."""
+        from drydock import providers
+
+        base_url = self.config.get("base_url") or providers.PROVIDERS.get(
+            self.config.get("provider") or "vllm", {}).get("base_url", "http://localhost:8000/v1")
+        n_ctx = providers.probe_server_context(base_url)
+        if n_ctx is None:
+            msg = (f"Model server ({base_url}) didn't report its context size "
+                   "(not llama.cpp /props or vLLM max_model_len, or unreachable). "
+                   f"Your effective cap is the smaller of drydock's {limit:,} and the "
+                   "server's own -c/--ctx-size.")
+        elif n_ctx < limit:
+            msg = (f"⚠ Model server reports n_ctx = {n_ctx:,} tokens — SMALLER than "
+                   f"drydock's {limit:,}. The SERVER is your real cap (you'll stick near "
+                   f"{n_ctx // 1024}k). Restart it with a larger -c/--ctx-size/max_model_len, "
+                   "or lower /context to match.")
+        else:
+            msg = (f"✓ Model server reports n_ctx = {n_ctx:,} tokens (≥ drydock's {limit:,}), "
+                   "so drydock's budget is the effective limit — no server-side cap.")
+        self.call_from_thread(self._info, msg)
 
     def _cmd_compact(self) -> None:
         """Manually compact the conversation to reclaim context NOW, without
