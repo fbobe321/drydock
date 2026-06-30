@@ -514,6 +514,10 @@ def tool_viewimage(params: dict, config: dict) -> str:
 
 def tool_read(params: dict, config: dict) -> str:
     fp = _resolve_path(params["file_path"], config)
+    # Reading an image as text yields binary garbage — point at the vision tool.
+    if os.path.splitext(fp)[1].lower() in _IMAGE_EXTS and os.path.isfile(fp):
+        return (f"{params['file_path']} is an image — Read would return binary "
+                "garbage. Use the ViewImage tool to actually SEE it.")
     limit = params.get("limit")  # None = caller didn't specify a window
     offset = params.get("offset", 0)
     try:

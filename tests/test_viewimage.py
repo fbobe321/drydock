@@ -56,3 +56,13 @@ def test_non_viewimage_tool_with_png_path_stays_text(tmp_path):
     out = messages_to_openai([{"role": "tool", "tool_call_id": "c2",
                                "name": "Grep", "content": f"found {img} in code"}], "sys")
     assert isinstance(out[-1]["content"], str)   # no accidental image ballooning
+
+
+def test_read_on_image_points_to_viewimage(tmp_path):
+    img = _png(tmp_path / "pic.png")
+    out = reg.execute("Read", {"file_path": img}, {"cwd": str(tmp_path)})
+    assert "ViewImage" in out and "image" in out.lower()
+    # a normal text file still reads normally
+    (tmp_path / "f.txt").write_text("hello\nworld\n")
+    txt = reg.execute("Read", {"file_path": str(tmp_path / "f.txt")}, {"cwd": str(tmp_path)})
+    assert "hello" in txt and "ViewImage" not in txt
