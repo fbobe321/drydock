@@ -51,6 +51,35 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-06-29 (overnight) — multimodal + context diagnostics + hardening (v3.0.75 → 3.0.81)
+
+PyPI **3.0.81**; HEAD pushed/green; website redeployed. **409 tests.**
+
+- **Multimodal is first-class.** v3.0.77 user-attached vision (📎 confirmation +
+  the model is told it has vision); v3.0.78 **agent-side `ViewImage` tool** — the
+  agent can look at images it discovers (image rides back on the tool result;
+  the llama.cpp server reads images from tool-role messages, verified); v3.0.80
+  `Read` on an image points to `ViewImage`; v3.0.81 a server image-decode 400
+  degrades to a clean message (found via TUI edge-case hunt). All TUI-verified on
+  the mmproj gemma server (read "DRYDOCK 42" / "42" off PNGs).
+- **`/context` server probe (v3.0.76).** Probes the model server's real `n_ctx`
+  (llama.cpp `/props`, vLLM `max_model_len`) and warns if the SERVER is smaller
+  than drydock's budget — the definitive "stuck at 32k" diagnostic. Verified
+  against a fake 32k server: it warns correctly. (See [[feedback_context_limit_32k_trap]].)
+- **eMASS POA&M CSV (v3.0.79).** `/stig poam <ckl>` → deterministic CSV of open
+  findings (Control via CCI map, CAT→High/Moderate/Low, Status=Ongoing,
+  Milestone=Fix Text). `drydock/poam.py`, stdlib-only.
+- **Sub-agent summary cap (v3.0.75).** Dispatch/task returns are capped (~4000
+  chars) so a sub-agent's work can't bloat the main context.
+- **Overnight TUI bug-hunt (all clean except the corrupt-image fix above):** huge
+  bash output stays ~5% ctx; git tools, Dispatch fan-out (bounded summaries),
+  full 286-rule STIG chain (new→summary→graph, 265/286 CCI-linked), and a
+  multi-turn build (wrote + self-verified a Stack module) all held up.
+- 🚨 **Eval-harness ban REAFFIRMED 2026-06-29.** The `EVAL_HARNESS_DESIGN.md` +
+  `_anthropic/INTERP_AGENT_EVAL_INTEGRATION.md` specs exist but the operator said
+  **keep the ban** — do NOT build `drydock/eval/`. See [[feedback_no_custom_eval_harness]].
+
+---
 ## ⭐ 2026-06-29 — STIG pipeline completion + user-reported fixes (v3.0.62 → 3.0.74)
 
 Repo HEAD pushed + green; **PyPI 3.0.74**; website **deployed** to production
