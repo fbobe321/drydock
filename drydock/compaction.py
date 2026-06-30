@@ -34,6 +34,16 @@ def is_context_length_error(err: str) -> bool:
     return "context" in e and ("exceed" in e or "too long" in e or "too large" in e)
 
 
+def is_image_load_error(err: str) -> bool:
+    """Whether a provider 400 is the server failing to decode an attached image
+    (corrupt / truncated / unsupported), so the agent ends the turn with a clean
+    message instead of dumping the raw API error."""
+    e = (err or "").lower()
+    return "failed to load image" in e or (
+        "image" in e and ("invalid_request" in e or "could not" in e or "decode" in e)
+    )
+
+
 def estimate_tokens(messages: list) -> int:
     """Rough token estimate: chars / 3.5.
 

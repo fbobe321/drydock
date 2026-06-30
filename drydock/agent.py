@@ -29,7 +29,9 @@ from drydock.tools import register_all
 # emits tool calls as TEXT — which is exactly how the empty-registry regression
 # manifested. register_all() is idempotent.
 register_all()
-from drydock.compaction import maybe_compact, emergency_compact, is_context_length_error
+from drydock.compaction import (
+    maybe_compact, emergency_compact, is_context_length_error, is_image_load_error,
+)
 from drydock.loop_detect import LoopTracker
 from drydock.tuning import (
     filter_tool_schemas,
@@ -184,6 +186,15 @@ def run(
                     if retries >= 2:
                         raise
                     yield TextChunk("\n[context limit hit — compacting and retrying...]\n")
+                elif is_image_load_error(err):
+                    # Corrupt/truncated/unsupported image the server couldn't decode —
+                    # end the turn cleanly rather than dumping the raw 400.
+                    yield TextChunk(
+                        "\n[The model server couldn't load an attached image — it may be "
+                        "corrupt, truncated, or an unsupported format. Try a different image.]\n"
+                    )
+                    assistant_turn = None
+                    break
                 else:
                     raise
 

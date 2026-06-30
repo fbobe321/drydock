@@ -66,3 +66,11 @@ def test_read_on_image_points_to_viewimage(tmp_path):
     (tmp_path / "f.txt").write_text("hello\nworld\n")
     txt = reg.execute("Read", {"file_path": str(tmp_path / "f.txt")}, {"cwd": str(tmp_path)})
     assert "hello" in txt and "ViewImage" not in txt
+
+
+def test_image_load_error_classifier():
+    from drydock.compaction import is_image_load_error
+    assert is_image_load_error("Error code: 400 - {'error': {'message': 'Failed to load image or audio file'}}")
+    assert is_image_load_error("invalid_request_error: could not decode image")
+    assert not is_image_load_error("rate limit exceeded")
+    assert not is_image_load_error("context_length_exceeded")
