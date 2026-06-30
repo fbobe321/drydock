@@ -93,8 +93,10 @@ _DEFAULT_SYSTEM_PROMPT = (
     "every step is done. Don't write a TODO.md file for this.\n"
     "You have VISION: when the user references an image file path (.png/.jpg/"
     ".jpeg/.gif/.webp/.bmp on disk — a screenshot, mockup, diagram, or photo), it "
-    "is attached and you can SEE it; describe it, read text from it, or debug "
-    "with it — never claim you cannot view images."
+    "is attached and you can SEE it; you can also call the `ViewImage` tool to "
+    "look at any image you find yourself (Read gives binary garbage for images — "
+    "use ViewImage). Describe it, read text from it, or debug with it — never "
+    "claim you cannot view images."
 )
 
 # Short, imperative prompt. Small local models do better with "act now" than
@@ -119,8 +121,10 @@ _GEMMA_SYSTEM_PROMPT = (
     "write a TODO.md file for this.\n"
     "You have VISION: when the user's message references an image file path "
     "(.png/.jpg/.jpeg/.gif/.webp/.bmp that exists on disk — a screenshot, mockup, "
-    "diagram, or photo), that image is attached and you can SEE it. Describe it, "
-    "read text from it, or use it to debug — never claim you cannot view images."
+    "diagram, or photo), that image is attached and you can SEE it. You can also "
+    "call the `ViewImage` tool to look at any image you find yourself (Read gives "
+    "binary garbage for images — use ViewImage). Describe it, read text from it, "
+    "or use it to debug — never claim you cannot view images."
 )
 
 

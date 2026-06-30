@@ -84,6 +84,17 @@ SCHEMAS = [
         },
     },
     {
+        "name": "ViewImage",
+        "description": "Look at an image file with your vision — use this when you need to SEE a screenshot, mockup, diagram, photo, or rendered output (.png/.jpg/.jpeg/.gif/.webp/.bmp). The image is shown to you so you can describe it, read text from it, or debug it. (Reading an image with the Read tool gives binary garbage; use ViewImage instead.)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the image file"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "Write",
         "description": "Write content to a file, creating parent directories as needed.",
         "input_schema": {
@@ -472,6 +483,33 @@ def _file_index(lines: list[str], fp: str) -> str:
     if len(anchors) > 400:
         body += f"\n  [... {len(anchors) - 400} more anchors ...]"
     return f"{head}\nKey locations ({len(anchors)}):\n{body}"
+
+
+_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
+_MAX_VIEW_IMAGE_BYTES = 20_000_000
+
+
+def tool_viewimage(params: dict, config: dict) -> str:
+    """Validate an image path and return a result that names it; the API boundary
+    (providers.messages_to_openai) attaches the actual image to THIS tool result
+    so the vision model sees it. Returns a plain error string on any problem
+    (never an attachable path) so a bad call can't try to attach nothing."""
+    raw = (params.get("path") or params.get("file_path") or "").strip()
+    if not raw:
+        return "Error: ViewImage needs a `path` to an image file."
+    fp = _resolve_path(raw, config)
+    if os.path.splitext(fp)[1].lower() not in _IMAGE_EXTS:
+        return (f"Error: {raw} is not a supported image. ViewImage handles "
+                f"{', '.join(_IMAGE_EXTS)}.")
+    if not os.path.isfile(fp):
+        return f"Error: no image file at {raw} (resolved to {fp})."
+    size = os.path.getsize(fp)
+    if size > _MAX_VIEW_IMAGE_BYTES:
+        return f"Error: {raw} is {size // 1_000_000}MB — too large to view (limit 20MB)."
+    kind = os.path.splitext(fp)[1].lstrip(".").upper()
+    # The absolute path in this text is what the API boundary attaches.
+    return (f"Loaded image {fp} ({kind}, {size // 1024 or 1}KB) — it is now visible "
+            "to you. Describe it, read any text in it, or use it to answer the task.")
 
 
 def tool_read(params: dict, config: dict) -> str:
@@ -1010,7 +1048,7 @@ def tool_todo(params: dict, config: dict) -> str:
 # Tools a sub-agent may use. Excludes Write/Edit/todo (no silent mutations the
 # parent can't see) and `task` itself (no recursion). Bash is included for real
 # exploration (ls/cat/grep/find/git log) and is bounded by the same bash_safety.
-SUBAGENT_TOOLS = ("Read", "Glob", "Grep", "Bash")
+SUBAGENT_TOOLS = ("Read", "ViewImage", "Glob", "Grep", "Bash")
 
 _SUBAGENT_SYSTEM = (
     "You are a focused exploration sub-agent inside Drydock. You have read-only "
@@ -1428,7 +1466,8 @@ def register_all():
     for schema in SCHEMAS:
         name = schema["name"]
         func = {
-            "Read": tool_read, "Write": tool_write, "Edit": tool_edit,
+            "Read": tool_read, "ViewImage": tool_viewimage,
+            "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
             "Knowledge": tool_knowledge,
@@ -1441,8 +1480,8 @@ def register_all():
         # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
         # GitCommit + GraphAdd write).
         read_only = name in (
-            "Read", "Glob", "Grep", "task", "Dispatch", "Knowledge", "GraphQuery",
-            "StigRules", "StigRule",
+            "Read", "ViewImage", "Glob", "Grep", "task", "Dispatch", "Knowledge",
+            "GraphQuery", "StigRules", "StigRule",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))

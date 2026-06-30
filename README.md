@@ -37,8 +37,9 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
   `Edit`, `Bash`, `Glob`, `Grep`.
 - **Vision (multimodal)** — reference an image path in your message (a `.png`/
   `.jpg` screenshot, mockup, or diagram) and it's attached for a vision-capable
-  model to *see* — describe a UI, read text off a screenshot, debug a diagram.
-  Works with any `--mmproj`-enabled server (e.g. llama.cpp with a vision model).
+  model to *see*; the agent can also call the `ViewImage` tool to look at an
+  image it discovers on its own — describe a UI, read text off a screenshot,
+  debug a diagram. Works with any `--mmproj` server (e.g. llama.cpp + a vision model).
 - **Version control** — `GitStatus`, `GitDiff`, `GitLog`, `GitCommit`
   (structured + truncated; commit is local and reversible).
 - **Internet** — `WebSearch` + `WebFetch` (DuckDuckGo; offline-safe).

@@ -279,30 +279,45 @@ def detect_image_paths(content) -> list[str]:
     return seen
 
 
-def _user_content_with_images(content):
-    """Vision support: if the user's text references image file paths that exist
-    on disk, attach them as OpenAI multimodal image_url blocks (works with any
-    --mmproj-enabled server). Text-only prompts pass through unchanged as a plain
-    string, so display / loop-detection / compaction / token-counting (which all
-    assume string content) are untouched — the multimodal list is built ONLY here,
-    at the API boundary."""
-    seen = detect_image_paths(content)
-    if not seen:
-        return content
+_MAX_IMAGE_BYTES = 20_000_000  # don't base64 a >20MB file into a request
+
+
+def _image_url_block(path: str) -> dict | None:
+    """A base64 data-URL image_url block for an on-disk image, or None if it
+    can't be read / is too large."""
     import base64
     import os
 
+    try:
+        if os.path.getsize(path) > _MAX_IMAGE_BYTES:
+            return None
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+    except OSError:
+        return None
+    mime = _IMAGE_MIME.get(os.path.splitext(path)[1].lower(), "image/png")
+    return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+
+
+def _content_with_images(content):
+    """Turn text that references on-disk image paths into a multimodal content
+    list ([text, image_url…]); text without resolvable images passes through
+    unchanged. Used for BOTH user messages (the user names an image) and
+    ViewImage tool results (the AGENT chose to view one) — built ONLY here at the
+    API boundary so display/compaction/token-counting still see plain strings."""
+    seen = detect_image_paths(content)
+    if not seen:
+        return content
     blocks: list[dict] = [{"type": "text", "text": content}]
     for p in seen:
-        mime = _IMAGE_MIME.get(os.path.splitext(p)[1].lower(), "image/png")
-        try:
-            with open(p, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode()
-        except OSError:
-            continue
-        blocks.append({"type": "image_url",
-                       "image_url": {"url": f"data:{mime};base64,{b64}"}})
+        block = _image_url_block(p)
+        if block:
+            blocks.append(block)
     return blocks if len(blocks) > 1 else content
+
+
+# Back-compat alias (user-message vision).
+_user_content_with_images = _content_with_images
 
 
 def messages_to_openai(messages: list, system: str) -> list:
@@ -331,10 +346,17 @@ def messages_to_openai(messages: list, system: str) -> list:
                 ]
             result.append(msg)
         elif role == "tool":
+            content = m["content"]
+            # Agent-side vision: a ViewImage result names an image the agent chose
+            # to look at — attach it so the model SEES it (servers read images
+            # from tool messages too, verified). Only ViewImage, so an unrelated
+            # tool mentioning a .png path never balloons the request.
+            if m.get("name") == "ViewImage" and isinstance(content, str):
+                content = _content_with_images(content)
             result.append({
                 "role": "tool",
                 "tool_call_id": m["tool_call_id"],
-                "content": m["content"],
+                "content": content,
             })
     return result
 
