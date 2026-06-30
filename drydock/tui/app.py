@@ -547,6 +547,7 @@ class DrydockApp(App):
                        "  /stig new <benchmark-xccdf.xml> [out.ckl]  — blank .ckl from a STIG\n"
                        "  /stig <path.ckl|.cklb> [status]            — summary / list by status\n"
                        "  /stig graph <path.ckl>                     — ingest into the RMF graph\n"
+                       "  /stig poam <path.ckl> [out.csv]            — eMASS POA&M CSV (open findings)\n"
                        "Assess:  /loop <n> /stig-assess <path>")
             return
         import os as _os
@@ -568,6 +569,15 @@ class DrydockApp(App):
                 "all Not_Reviewed. Now pull in the app's evidence and assess:\n"
                 f"  /graphrag build <app-docs>   ·   /loop {len(cl.rules)} /stig-assess {out}"
             )
+            return
+        # /stig poam <path> [out.csv] — export open findings to an eMASS POA&M CSV
+        if parts[0].lower() == "poam" and len(parts) > 1:
+            cp = _abs(parts[1])
+            out = _abs(parts[2]) if len(parts) > 2 else \
+                _os.path.splitext(cp)[0] + "_poam.csv"
+            self._info("Building the eMASS POA&M CSV (mapping open findings to NIST "
+                       "controls via the CCI map)…")
+            self.run_worker(lambda: self._stig_poam(cwd, cp, out), thread=True)
             return
         # /stig graph <path> — ingest the checklist into the RMF typed graph
         if parts[0].lower() == "graph" and len(parts) > 1:
@@ -639,6 +649,26 @@ class DrydockApp(App):
             msg = (f"RMF bootstrap failed: {e}. (Needs internet for the one-time "
                    "catalog download; after that it works offline.)")
         self.call_from_thread(self._info, msg)
+
+    def _stig_poam(self, cwd: str, path: str, out: str) -> None:
+        """Worker: export a checklist's open findings to an eMASS POA&M CSV,
+        pulling each finding's NIST control from the CCI map. Deterministic."""
+        from drydock import cci, poam, stig
+
+        try:
+            cl = stig.load(path)
+            cci_map = cci.load_map(cwd)   # offline-safe ({} → Controls show '(unmapped)')
+            r = poam.export(cl, cci_map, out)
+        except Exception as e:  # noqa: BLE001
+            self.call_from_thread(self._mount, ErrorMessage(f"could not build POA&M: {e}"))
+            return
+        note = "" if cci_map else " (CCI map unavailable offline — Control column shows '(unmapped)'; re-run online to populate it)"
+        self.call_from_thread(
+            self._info,
+            f"✓ Wrote {r['rows']} POA&M row(s) for the open findings to {r['path']} "
+            f"(eMASS headers: Control · Vulnerability Description · POA&M Status=Ongoing · "
+            f"Milestone · Severity).{note}"
+        )
 
     def _stig_graph(self, cwd: str, path: str) -> None:
         """Worker-thread body: ingest a checklist into the RMF graph, auto-linking

@@ -143,13 +143,17 @@ compatible checklist — entirely local (hostnames, IPs, and findings are CUI):
 /stig app.ckl open                                    # list the open findings
 /stig-remediate app.ckl SV-900010r1_rule              # write an idempotent fix script
 /stig graph app.ckl                                   # ingest + auto-link rules → NIST controls
+/stig poam app.ckl                                    # eMASS POA&M CSV of the open findings
 ```
 
 `/stig new` parses the XCCDF benchmark (validated against the full 286-rule
 Application STIG); `/stig-assess` reads your evidence and writes status +
 finding-details back in place; `/stig graph` builds `STIG`/`STIG-Rule` nodes and
 **auto-links each rule to its NIST 800-53 control** through DISA's CCI map
-(`Control —SATISFIED_BY→ rule`), fetched once and cached offline.
+(`Control —SATISFIED_BY→ rule`), fetched once and cached offline. `/stig poam`
+exports the open findings to a deterministic **eMASS POA&M CSV** — Control (from
+the CCI map), Vulnerability Description, `POA&M Status=Ongoing`, Milestone (the
+Fix Text), and Severity (CAT I/II/III → High/Moderate/Low) — no LLM, stdlib only.
 
 ## Install
 
