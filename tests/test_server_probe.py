@@ -37,3 +37,21 @@ def test_probe_unreachable_is_none(monkeypatch):
     def boom(url, timeout=0): raise OSError("offline")
     monkeypatch.setattr(urllib.request, "urlopen", boom)
     assert providers.probe_server_context("http://localhost:9999/v1") is None
+
+
+def test_probe_garbage_and_missing_fields(monkeypatch):
+    import urllib.request
+    def fake(url, timeout=0):
+        return _Resp({"unexpected": "shape"})              # no n_ctx / max_model_len
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    assert providers.probe_server_context("http://localhost:8000/v1") is None
+
+
+def test_probe_zero_or_negative_ignored(monkeypatch):
+    import urllib.request
+    def fake(url, timeout=0):
+        if url.endswith("/props"):
+            return _Resp({"default_generation_settings": {"n_ctx": 0}})
+        return _Resp({"data": [{"max_model_len": -1}]})
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    assert providers.probe_server_context("http://localhost:8000/v1") is None

@@ -80,3 +80,19 @@ def test_load_map_creates_dir_and_caches(tmp_path, monkeypatch):
     m = cci.load_map(str(tmp_path))
     assert m["CCI-000366"] == "cm-6"                 # parsed from the "fetched" list
     assert cci.cache_path(str(tmp_path)).exists()    # cached as json
+
+
+def test_parse_cci_tolerates_malformed_items(tmp_path):
+    # items with no references, empty references, and non-NIST refs are skipped,
+    # not crashed on
+    xml = ('<?xml version="1.0"?><cci_list><cci_items>'
+           '<cci_item id="CCI-A"></cci_item>'                       # no references
+           '<cci_item id="CCI-B"><references></references></cci_item>'
+           '<cci_item id="CCI-C"><references>'
+           '<reference title="Some Other Doc" version="1" index="X-9"/></references></cci_item>'
+           '<cci_item id="CCI-D"><references>'
+           '<reference title="NIST SP 800-53 Revision 5" version="5" index="SI-4"/></references></cci_item>'
+           '</cci_items></cci_list>')
+    p = tmp_path / "c.xml"; p.write_text(xml)
+    m = cci.parse_cci_list(p)
+    assert m == {"CCI-D": "si-4"}                            # only the valid mapping
