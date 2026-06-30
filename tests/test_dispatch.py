@@ -60,3 +60,14 @@ def test_task_still_works_via_shared_runner(monkeypatch):
     monkeypatch.setattr(T, "_run_subagent", lambda p, c: f"summary:{p}")
     assert T.tool_task({"prompt": "explore X"}, {}) == "summary:explore X"
     assert "needs a `prompt`" in T.tool_task({}, {})
+
+
+def test_subagent_summary_is_capped():
+    """A sub-agent's return is size-capped so its investigation can never bloat
+    the main agent's context — only a bounded partition crosses back."""
+    from drydock.tools import _cap_summary, _SUBAGENT_SUMMARY_CAP
+    assert _cap_summary("brief finding") == "brief finding"        # short passes through
+    big = "\n".join(f"line {i} with some detail" for i in range(2000))
+    out = _cap_summary(big)
+    assert len(out) < _SUBAGENT_SUMMARY_CAP + 200                  # bounded
+    assert "truncated" in out and "main context" in out           # explains the cut

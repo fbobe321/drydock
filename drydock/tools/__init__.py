@@ -1017,15 +1017,34 @@ _SUBAGENT_SYSTEM = (
     "tools: Read, Glob, Grep, and Bash (use Bash only to INSPECT — ls, cat, "
     "grep, find, git log — never to modify files). Investigate the task you are "
     "given, then STOP and reply with a concise, factual summary of what you "
-    "found: concrete file:line references and the key code, not narration. Do "
-    "NOT try to edit or create files — the main agent acts on your findings."
+    "found: concrete file:line references and only the few key code snippets that "
+    "matter, not narration and not whole files. Aim for under ~250 words — the "
+    "main agent only gets this summary (not your tool output), so distill, don't "
+    "dump. Do NOT try to edit or create files — the main agent acts on your findings."
 )
+
+
+# A sub-agent's whole job is to keep its investigation OUT of the main agent's
+# context and hand back only a partition. The system prompt asks for a concise
+# summary, but a runaway model could still return a wall of text — so cap what
+# crosses back into the parent's window. ~4000 chars ≈ ~1000 tokens.
+_SUBAGENT_SUMMARY_CAP = 4000
+
+
+def _cap_summary(text: str) -> str:
+    if len(text) <= _SUBAGENT_SUMMARY_CAP:
+        return text
+    head = text[:_SUBAGENT_SUMMARY_CAP].rsplit("\n", 1)[0] or text[:_SUBAGENT_SUMMARY_CAP]
+    dropped = len(text) - len(head)
+    return (head + f"\n[… sub-agent summary truncated, {dropped} chars dropped to keep it out "
+            "of the main context. Ask a narrower follow-up sub-agent task if you need more.]")
 
 
 def _run_subagent(prompt: str, config: dict) -> str:
     """Run one read-only sub-agent to completion and return its final summary.
     Shared by `task` (one) and `Dispatch` (many in parallel). Hard-capped; never
-    raises (a sub-agent must not crash the parent turn)."""
+    raises (a sub-agent must not crash the parent turn). The returned summary is
+    size-capped (_cap_summary) so a sub-agent can never bloat the main context."""
     from drydock.agent import run as agent_run, AgentState, TurnDone
 
     sub_state = AgentState()
@@ -1048,7 +1067,7 @@ def _run_subagent(prompt: str, config: dict) -> str:
         return f"[sub-agent error: {e}]"
     for msg in reversed(sub_state.messages):
         if msg.get("role") == "assistant" and (msg.get("content") or "").strip():
-            return msg["content"].strip()
+            return _cap_summary(msg["content"].strip())
     return f"[sub-agent finished {steps} step(s) with no summary]"
 
 
