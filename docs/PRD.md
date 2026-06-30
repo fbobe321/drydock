@@ -1,7 +1,29 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.71, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.81, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-06-29) — multimodal, context diagnostics, POA&M, hardening
+> (v3.0.72–3.0.81):**
+> - **Multimodal/vision, first-class.** Reference an image path → it's attached
+>   for a vision model (📎 confirmation); the agent can also call **`ViewImage`**
+>   to look at images it finds itself (v3.0.77–78). `Read` on an image points to
+>   `ViewImage` (v3.0.80); a server image-decode 400 degrades to a clean message
+>   (v3.0.81). Verified live on the mmproj gemma server.
+> - **`/context` + server probe (v3.0.72/76).** View/set & persist the context
+>   budget, and probe the model server's real `n_ctx` (llama.cpp `/props`, vLLM
+>   `max_model_len`) — tells you whether a "stuck at 32k" cap is your config or a
+>   smaller-context server. (No 32k is hardcoded; default is 65536.)
+> - **GraphRAG ingests `.ckl`/`.cklb`** (v3.0.72) — checklists become queryable.
+> - **CCI→NIST control auto-map (v3.0.74)** — `/stig graph` links each STIG rule
+>   to its 800-53 control via DISA's CCI list (3551 CCIs, cached, offline-safe).
+> - **eMASS POA&M CSV (v3.0.79)** — `/stig poam` exports open findings to a
+>   deterministic eMASS-headered CSV (Control via CCI, CAT→High/Moderate/Low,
+>   Status=Ongoing, Milestone=Fix Text). Stdlib-only.
+> - **Sub-agent summary cap (v3.0.75)** — Dispatch/task return a bounded partition
+>   so a sub-agent's work can't bloat the main context.
+> - **Teardown de-flake (v3.0.72)** — fixed a real `_refresh_status` shutdown race
+>   (the long-standing flaky test; 0/20 after the fix).
 
 > **Progress (2026-06-28, late) — knowledge ingestion + RMF automation
 > (v3.0.57–3.0.63):**
