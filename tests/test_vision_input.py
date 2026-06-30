@@ -82,3 +82,23 @@ def test_image_path_in_backticks_and_punctuation(tmp_path):
         out = _user_content_with_images(prompt)
         assert isinstance(out, list), f"not attached: {prompt!r}"
         assert any(b.get("type") == "image_url" for b in out), prompt
+
+
+def test_detect_image_paths_shared_helper(tmp_path):
+    from drydock.providers import detect_image_paths
+    img = _write_png(tmp_path / "shot.png")
+    # plain, quoted, backticked, and trailing-punctuation forms all resolve
+    assert detect_image_paths(f"look at {img}") == [img]
+    assert detect_image_paths(f'see "{img}".') == [img]
+    assert detect_image_paths(f"debug `{img}`,") == [img]
+    # nonexistent path or text-only → nothing attached
+    assert detect_image_paths(f"{tmp_path}/nope.png") == []
+    assert detect_image_paths("no images here, just prose") == []
+    # de-dupes repeats
+    assert detect_image_paths(f"{img} and again {img}") == [img]
+
+
+def test_vision_in_system_prompt():
+    from drydock.tuning import system_prompt_for_model
+    assert "VISION" in system_prompt_for_model("gemma4")
+    assert "VISION" in system_prompt_for_model("some-other-model")

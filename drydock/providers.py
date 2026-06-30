@@ -250,16 +250,11 @@ _IMAGE_MIME = {
 }
 
 
-def _user_content_with_images(content):
-    """Vision support: if the user's text references image file paths that exist
-    on disk, attach them as OpenAI multimodal image_url blocks (works with any
-    --mmproj-enabled server). Text-only prompts pass through unchanged as a plain
-    string, so display / loop-detection / compaction / token-counting (which all
-    assume string content) are untouched — the multimodal list is built ONLY here,
-    at the API boundary."""
+def detect_image_paths(content) -> list[str]:
+    """Image file paths referenced in a user message that exist on disk. Shared
+    by the multimodal attach (below) and the TUI (to confirm '📎 attached')."""
     if not isinstance(content, str) or "." not in content:
-        return content
-    import base64
+        return []
     import os
     import re
 
@@ -281,8 +276,22 @@ def _user_content_with_images(content):
         p = os.path.expanduser(raw)
         if os.path.isfile(p) and p not in seen:
             seen.append(p)
+    return seen
+
+
+def _user_content_with_images(content):
+    """Vision support: if the user's text references image file paths that exist
+    on disk, attach them as OpenAI multimodal image_url blocks (works with any
+    --mmproj-enabled server). Text-only prompts pass through unchanged as a plain
+    string, so display / loop-detection / compaction / token-counting (which all
+    assume string content) are untouched — the multimodal list is built ONLY here,
+    at the API boundary."""
+    seen = detect_image_paths(content)
     if not seen:
         return content
+    import base64
+    import os
+
     blocks: list[dict] = [{"type": "text", "text": content}]
     for p in seen:
         mime = _IMAGE_MIME.get(os.path.splitext(p)[1].lower(), "image/png")

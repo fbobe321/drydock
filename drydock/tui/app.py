@@ -409,6 +409,14 @@ class DrydockApp(App):
         # running, queue this one and drain it when the current turn finishes
         # instead of dropping it on the floor.
         self._mount(UserMessage(text))
+        # Confirm any image attachments so the user SEES vision is active (the
+        # actual attach happens at the API boundary in providers).
+        from drydock import providers
+        imgs = providers.detect_image_paths(text)
+        if imgs:
+            import os as _os
+            names = ", ".join(_os.path.basename(p) for p in imgs)
+            self._info(f"📎 attached {len(imgs)} image(s) for the model to see: {names}")
         if self._busy:
             self._queue.append(text)
             self._refresh_status()

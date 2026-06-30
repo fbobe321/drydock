@@ -90,7 +90,11 @@ _DEFAULT_SYSTEM_PROMPT = (
     "start to lay out the plan, then START WORKING THROUGH IT IMMEDIATELY — do "
     "NOT stop to ask whether to proceed. Call `todo` again to flip a step to "
     "done and the next to in-progress as you finish each, and only stop when "
-    "every step is done. Don't write a TODO.md file for this."
+    "every step is done. Don't write a TODO.md file for this.\n"
+    "You have VISION: when the user references an image file path (.png/.jpg/"
+    ".jpeg/.gif/.webp/.bmp on disk — a screenshot, mockup, diagram, or photo), it "
+    "is attached and you can SEE it; describe it, read text from it, or debug "
+    "with it — never claim you cannot view images."
 )
 
 # Short, imperative prompt. Small local models do better with "act now" than
@@ -112,7 +116,11 @@ _GEMMA_SYSTEM_PROMPT = (
     "(one task per line, '[ ]'/'[~]'/'[x]'), then IMMEDIATELY start doing the "
     "steps — do NOT stop to ask whether to proceed. Call `todo` again to update "
     "it as you finish each step, and only stop when every step is done. Do not "
-    "write a TODO.md file for this."
+    "write a TODO.md file for this.\n"
+    "You have VISION: when the user's message references an image file path "
+    "(.png/.jpg/.jpeg/.gif/.webp/.bmp that exists on disk — a screenshot, mockup, "
+    "diagram, or photo), that image is attached and you can SEE it. Describe it, "
+    "read text from it, or use it to debug — never claim you cannot view images."
 )
 
 
@@ -221,11 +229,15 @@ _DRYDOCK_COMMANDS_HELP = (
     "- Custom skills (reusable `/<name>` prompts): `/skills new <name> <prompt "
     "text>` creates one (use $ARGS in the prompt for trailing input); `/skills` "
     "lists them; then they run it as `/<name>`.\n"
+    "- Images / vision: the user just references an image file path in their "
+    "message (a .png/.jpg screenshot, mockup, or diagram on disk) and it is "
+    "attached for you to SEE — no command needed.\n"
     "- Other: `/model` (model/endpoint), `/cwd`, `/undo` (revert last write), "
-    "`/back` (rewind a turn), `/compact` (shrink context), `/loop <n> <prompt>` "
-    "(repeat a prompt), `/mcp` (connected MCP servers), `/status`, `/clear`, "
-    "`/help`, `/quit`. Internet + git are tools you call yourself "
-    "(WebSearch/WebFetch, GitStatus/GitDiff/GitLog/GitCommit)."
+    "`/back` (rewind a turn), `/compact` (shrink context), `/context` (view/set "
+    "the context-window budget), `/loop <n> <prompt>` (repeat a prompt), `/mcp` "
+    "(connected MCP servers), `/rmf` & `/stig` (NIST 800-53 / DISA STIG), "
+    "`/status`, `/clear`, `/help`, `/quit`. Internet + git are tools you call "
+    "yourself (WebSearch/WebFetch, GitStatus/GitDiff/GitLog/GitCommit)."
 )
 
 
