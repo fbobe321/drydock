@@ -41,15 +41,10 @@ def not_configured_message() -> str:
     )
 
 
-def consult(question: str, config: dict, *, context: str = "", timeout: float = 120.0) -> str:
-    """Ask the configured advisor model and return its answer (or a clean error).
-    Never raises — a failed consult must not crash the turn."""
-    question = (question or "").strip()
-    if not question:
-        return "Error: nothing to ask the advisor."
-    if not is_configured(config):
-        return not_configured_message()
-
+def _call(question: str, config: dict, *, context: str = "",
+          timeout: float = 120.0, max_tokens: int = 2048) -> str:
+    """Make one advisor call. RAISES on transport/model error (callers decide how
+    to surface it)."""
     import httpx
     from openai import OpenAI
 
@@ -61,13 +56,45 @@ def consult(question: str, config: dict, *, context: str = "", timeout: float = 
         messages.append({"role": "user",
                          "content": f"Context from the current task:\n{context.strip()}"})
     messages.append({"role": "user", "content": question})
-    kwargs = {"model": model, "messages": messages, "temperature": 0.3, "max_tokens": 2048}
+    kwargs = {"model": model, "messages": messages, "temperature": 0.3, "max_tokens": max_tokens}
+    client = OpenAI(api_key=key, base_url=base, max_retries=1,
+                    timeout=httpx.Timeout(timeout, connect=10.0))
+    resp = client.chat.completions.create(**kwargs)
+    return (resp.choices[0].message.content or "").strip()
+
+
+def consult(question: str, config: dict, *, context: str = "", timeout: float = 120.0) -> str:
+    """Ask the configured advisor model and return its answer (or a clean error).
+    Never raises — a failed consult must not crash the turn."""
+    question = (question or "").strip()
+    if not question:
+        return "Error: nothing to ask the advisor."
+    if not is_configured(config):
+        return not_configured_message()
     try:
-        client = OpenAI(api_key=key, base_url=base, max_retries=1,
-                        timeout=httpx.Timeout(timeout, connect=10.0))
-        resp = client.chat.completions.create(**kwargs)
-        answer = (resp.choices[0].message.content or "").strip()
-        return answer or "(the advisor model returned an empty response)"
+        return _call(question, config, context=context, timeout=timeout) \
+            or "(the advisor model returned an empty response)"
     except Exception as e:  # noqa: BLE001 — never crash the caller
-        return (f"Could not reach the advisor model ({model}) at {base}: {e}\n"
+        return (f"Could not reach the advisor model ({config.get('advisor_model')}) at "
+                f"{config.get('advisor_base_url')}: {e}\n"
                 "Check /advisor settings and that the endpoint is up.")
+
+
+def test_connection(config: dict) -> str:
+    """Ping the advisor endpoint with a trivial prompt and report reachability +
+    latency — one-shot setup confirmation for `/advisor test`."""
+    import time
+
+    if not is_configured(config):
+        return not_configured_message()
+    model = config.get("advisor_model")
+    base = config.get("advisor_base_url")
+    t0 = time.monotonic()
+    try:
+        reply = _call("Reply with exactly: OK", config, timeout=30.0, max_tokens=8)
+    except Exception as e:  # noqa: BLE001
+        return (f"✗ advisor unreachable — {model} at {base}\n   {e}\n"
+                "   Check the endpoint is up, the URL ends in /v1, and the key/model are right.")
+    dt = time.monotonic() - t0
+    return (f"✓ advisor reachable — {model} at {base} responded in {dt:.1f}s"
+            + (f' (said: "{reply[:40]}").' if reply else "."))

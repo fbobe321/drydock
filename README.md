@@ -114,6 +114,46 @@ drydock-cli[pdf]` (pypdf). The index is a single JSON at
 Skills are markdown files in `~/.drydock/skills/` (personal) or
 `<project>/.drydock/skills/` (project); `/skills new` writes one for you.
 
+### Second-model advisor (a stronger model for a second opinion)
+
+Drydock's primary model is a small local one. You can wire in a **second,
+stronger model** — e.g. **Gemini** — to consult when the local model is stuck or
+you want to sanity-check a design. It's just another OpenAI-compatible endpoint,
+so there's **no extra dependency**; it's **opt-in** and off until you configure
+it (the only call is the one you point it at — consistent with the no-phone-home
+stance).
+
+**Configure it** (persists to `~/.drydock/config.toml`):
+```
+/advisor url    http://<other-box>:4000/v1     # any OpenAI-compatible endpoint
+/advisor model  gemini-2.5-pro
+/advisor key    <api-key>                       # if the endpoint needs one
+/advisor test                                   # ping it: reachable? which model? latency?
+/advisor                                         # show current config (key masked)
+```
+
+**Use it** two ways:
+- **You:** `/ask <question>` — consults the advisor and shows its answer.
+- **The agent:** it can call the read-only `Consult` tool on its own when it hits
+  something hard, passing the relevant code/error as context. You act on the advice.
+
+**Pointing it at Gemini** — two options:
+1. **Gemini's official OpenAI-compatible endpoint** (if this box has internet):
+   ```
+   /advisor url   https://generativelanguage.googleapis.com/v1beta/openai
+   /advisor model gemini-2.5-pro
+   /advisor key   <your-gemini-api-key>
+   ```
+2. **A proxy on another box** (e.g. where your key lives). LiteLLM is one line:
+   ```bash
+   pip install 'litellm[proxy]'; export GEMINI_API_KEY=...
+   litellm --model gemini/gemini-2.5-pro --host 0.0.0.0 --port 4000
+   ```
+   then `/advisor url http://<that-box-ip>:4000/v1`.
+
+Any OpenAI-compatible model works here (another local server, a hosted model,
+etc.) — Gemini is just the common case.
+
 ### RMF automation (NIST SP 800-53)
 
 For Risk Management Framework work, Drydock can ingest the NIST SP 800-53 Rev 5

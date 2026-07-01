@@ -864,17 +864,27 @@ class DrydockApp(App):
                 f"  endpoint: {u}\n"
                 f"  api key:  {has_key}\n"
                 "Set up:  /advisor url <base_url/v1>  ·  /advisor model <name>  ·  "
-                "/advisor key <api_key>\n"
+                "/advisor key <api_key>  ·  /advisor test\n"
                 "Then:  /ask <question>  (you)  or the agent calls the Consult tool."
             )
             return
         parts = arg.split(maxsplit=1)
         sub = parts[0].lower()
         val = parts[1].strip() if len(parts) > 1 else ""
+        if sub == "test":
+            from drydock import advisor
+            if not advisor.is_configured(self.config):
+                self._info(advisor.not_configured_message())
+                return
+            self._info(f"Testing the advisor endpoint ({self.config.get('advisor_base_url')})…")
+            self.run_worker(lambda: self.call_from_thread(
+                self._info, advisor.test_connection(self.config)), thread=True)
+            return
         keymap = {"url": "advisor_base_url", "endpoint": "advisor_base_url",
                   "model": "advisor_model", "key": "advisor_api_key", "api_key": "advisor_api_key"}
         if sub not in keymap or not val:
-            self._mount(ErrorMessage("usage: /advisor [url <base_url> | model <name> | key <api_key>]"))
+            self._mount(ErrorMessage(
+                "usage: /advisor [url <base_url> | model <name> | key <api_key> | test]"))
             return
         self.config[keymap[sub]] = val
         self._persist_config()

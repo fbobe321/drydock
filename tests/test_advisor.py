@@ -64,3 +64,20 @@ def test_consult_tool_unconfigured():
 
 def test_consult_tool_is_read_only():
     assert reg.get("Consult").read_only is True
+
+
+def test_test_connection_success(monkeypatch):
+    monkeypatch.setattr(advisor, "_call", lambda *a, **k: "OK")
+    out = advisor.test_connection({"advisor_base_url": "http://b/v1", "advisor_model": "m"})
+    assert out.startswith("✓") and "m" in out and "responded" in out
+
+
+def test_test_connection_failure(monkeypatch):
+    def boom(*a, **k): raise OSError("connection refused")
+    monkeypatch.setattr(advisor, "_call", boom)
+    out = advisor.test_connection({"advisor_base_url": "http://b/v1", "advisor_model": "m"})
+    assert out.startswith("✗") and "unreachable" in out and "connection refused" in out
+
+
+def test_test_connection_unconfigured():
+    assert "No advisor" in advisor.test_connection({})
