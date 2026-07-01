@@ -91,8 +91,16 @@ def test_connection(config: dict) -> str:
     base = config.get("advisor_base_url")
     t0 = time.monotonic()
     try:
-        reply = _call("Reply with exactly: OK", config, timeout=30.0, max_tokens=8)
+        # Generous read timeout: a slow/cold LOCAL model can take a while to
+        # return even a few tokens. A truly-down endpoint fails fast on the 10s
+        # connect timeout, so this only waits on a reachable-but-slow server.
+        reply = _call("Reply with exactly: OK", config, timeout=90.0, max_tokens=8)
     except Exception as e:  # noqa: BLE001
+        emsg = str(e).lower()
+        if "timeout" in emsg or "timed out" in emsg:
+            return (f"✗ advisor timed out (>90s) — {model} at {base} is REACHABLE but slow "
+                    "to respond (a cold or loaded local model?). `/ask` allows much longer, "
+                    "so it may still work; or give the server a moment and retry.")
         return (f"✗ advisor unreachable — {model} at {base}\n   {e}\n"
                 "   Check the endpoint is up, the URL ends in /v1, and the key/model are right.")
     dt = time.monotonic() - t0

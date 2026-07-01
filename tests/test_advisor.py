@@ -81,3 +81,10 @@ def test_test_connection_failure(monkeypatch):
 
 def test_test_connection_unconfigured():
     assert "No advisor" in advisor.test_connection({})
+
+
+def test_test_connection_timeout_says_reachable_but_slow(monkeypatch):
+    def slow(*a, **k): raise TimeoutError("Request timed out.")
+    monkeypatch.setattr(advisor, "_call", slow)
+    out = advisor.test_connection({"advisor_base_url": "http://b/v1", "advisor_model": "m"})
+    assert out.startswith("✗") and "REACHABLE but slow" in out and "/ask" in out
