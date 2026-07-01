@@ -132,10 +132,14 @@ stance).
 /advisor                                         # show current config (key masked)
 ```
 
-**Use it** two ways:
-- **You:** `/ask <question>` — consults the advisor and shows its answer.
+**Use it** three ways:
+- **You (private):** `/ask <question>` — consults the advisor and shows its
+  answer to *you only* (not added to the agent's context).
+- **You (feed the agent):** `/ask! <question>` — same, but also **injects** the
+  answer into the agent's context and has the primary model process it, so a
+  second opinion can steer the current task.
 - **The agent:** it can call the read-only `Consult` tool on its own when it hits
-  something hard, passing the relevant code/error as context. You act on the advice.
+  something hard (the answer comes back as a tool result, so it's in context).
 
 **Pointing it at Gemini** — two options:
 1. **Gemini's official OpenAI-compatible endpoint** (if this box has internet):

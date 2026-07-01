@@ -422,3 +422,38 @@ def test_context_command_sets_and_persists(tmp_path, monkeypatch):
     import tomllib
     saved = tomllib.loads((tmp_path / ".drydock" / "config.toml").read_text())
     assert saved["context_limit"] == 65536   # survived to disk
+
+
+def test_ask_bang_injects_advice_but_plain_ask_does_not():
+    """/ask! feeds the advisor's answer into the agent's context (starts a turn
+    with it); plain /ask (inject=False) only displays it."""
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            started: list[str] = []
+            app._run_agent = lambda text: started.append(text)  # type: ignore[method-assign]
+
+            # inject=True → a turn begins carrying the advice
+            app._deliver_advice("what DS for an LRU cache?",
+                                "Use a hash map + a doubly linked list.", True)
+            for _ in range(40):
+                await pilot.pause()
+                if started:
+                    break
+            assert started, "/ask! should start a turn"
+            assert "hash map + a doubly linked list" in started[0]
+            assert "advisor model" in started[0]     # framed as a second opinion
+
+            # inject=False → display only, no new turn
+            started.clear()
+            app._deliver_advice("q", "some answer", False)
+            await pilot.pause()
+            assert started == []
+
+            # a FAILED consult must not inject even with inject=True
+            app._deliver_advice("q", "Could not reach the advisor model at http://x: boom", True)
+            await pilot.pause()
+            assert started == []
+
+    asyncio.run(main())
