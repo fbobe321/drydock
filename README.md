@@ -48,6 +48,10 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
   read-only `Knowledge` tool.
 - **Multi-agent** — `Dispatch` runs several read-only sub-agents in parallel;
   `task` runs one — each in a fresh context, for focused investigation.
+- **Second-model advisor** — point `/advisor` at a stronger model on any
+  OpenAI-compatible endpoint (e.g. Gemini, or a proxy on another box); the agent
+  calls the `Consult` tool for a second opinion when stuck, and you can `/ask
+  <question>` directly. Opt-in, user-configured — no extra dependency.
 - **MCP** — connect to Model Context Protocol servers (`~/.drydock/mcp.json`);
   their tools appear as `mcp__<server>__<tool>`. List them with `/mcp`.
 - **Skills** — reusable `/<name>` commands authored as markdown in
@@ -79,6 +83,7 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/model` · `/cwd` | Show/set model & endpoint · working directory |
 | `/undo` · `/back` | Revert the last write · rewind the last turn |
 | `/compact` · `/context [n]` | Shrink context now · view/set the context-window budget |
+| `/advisor` · `/ask <q>` | Set up a 2nd 'advisor' model (Gemini etc.) · consult it |
 | `/status` · `/clear` · `/help` · `/quit` | Session stats · reset · help · exit |
 
 ### Knowledge base (GraphRAG) — ingesting your documents

@@ -35,6 +35,13 @@ DEFAULTS: dict[str, object] = {
     # value. Default 65536 matches the bundled gemma4 server (-c 65536).
     "context_limit": 65536,
     "theme": "harbor",
+    # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
+    # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The
+    # agent can call the `Consult` tool and you can use `/ask`; configure with
+    # `/advisor`. It's just another OpenAI-compatible endpoint (no extra deps).
+    "advisor_model": "",
+    "advisor_base_url": "",
+    "advisor_api_key": "",
 }
 
 

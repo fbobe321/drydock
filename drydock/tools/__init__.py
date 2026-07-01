@@ -179,6 +179,24 @@ SCHEMAS = [
         },
     },
     {
+        "name": "Consult",
+        "description": (
+            "Ask a SECOND, more powerful advisor model (if the user configured "
+            "one, e.g. Gemini) for a second opinion — use when you're stuck, want "
+            "to sanity-check a design/approach, or need an expert take on a tricky "
+            "bug. It only advises (no tools); YOU act on the answer. Pass the "
+            "relevant code/error in `context` so the advisor has what it needs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The specific question to ask the advisor."},
+                "context": {"type": "string", "description": "Relevant code, error output, or background the advisor needs."},
+            },
+            "required": ["question"],
+        },
+    },
+    {
         "name": "task",
         "description": (
             "Delegate a focused, READ-ONLY investigation to a sub-agent that "
@@ -1066,6 +1084,16 @@ _SUBAGENT_SYSTEM = (
 )
 
 
+def tool_consult(params: dict, config: dict) -> str:
+    """Ask the configured second/advisor model (e.g. Gemini) for a second opinion."""
+    from drydock import advisor
+
+    question = (params.get("question") or params.get("prompt") or "").strip()
+    if not question:
+        return "Error: Consult needs a `question`."
+    return advisor.consult(question, config, context=params.get("context", "") or "")
+
+
 # A sub-agent's whole job is to keep its investigation OUT of the main agent's
 # context and hand back only a partition. The system prompt asks for a concise
 # summary, but a runaway model could still return a wall of text — so cap what
@@ -1474,7 +1502,7 @@ def register_all():
             "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
-            "Knowledge": tool_knowledge,
+            "Consult": tool_consult, "Knowledge": tool_knowledge,
             "GraphQuery": tool_graphquery, "GraphAdd": tool_graphadd,
             "StigRules": tool_stigrules, "StigRule": tool_stigrule, "StigSet": tool_stigset,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
@@ -1484,8 +1512,8 @@ def register_all():
         # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
         # GitCommit + GraphAdd write).
         read_only = name in (
-            "Read", "ViewImage", "Glob", "Grep", "task", "Dispatch", "Knowledge",
-            "GraphQuery", "StigRules", "StigRule",
+            "Read", "ViewImage", "Glob", "Grep", "task", "Dispatch", "Consult",
+            "Knowledge", "GraphQuery", "StigRules", "StigRule",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
