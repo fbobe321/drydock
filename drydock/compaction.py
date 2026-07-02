@@ -192,9 +192,16 @@ def emergency_compact(messages: list, context_limit: int = 131072) -> list:
 
 
 def maybe_compact(state, config: dict) -> None:
-    """Compact state.messages if approaching context limit."""
+    """Compact state.messages if approaching context limit.
+
+    Uses the MAX of the char-based estimate and the SERVER's real prompt-token
+    count from the last call. estimate_tokens (chars/3.5) undercounts token-dense
+    content — code, compiler/build output, tracebacks tokenize to ~3 chars/token
+    — so on such tasks the real context (what the gauge shows) can pass 60% while
+    the estimate is still under it, and compaction fires late. The real count
+    catches that."""
     limit = config.get("context_limit", 131072)
-    current = estimate_tokens(state.messages)
+    current = max(estimate_tokens(state.messages), getattr(state, "last_input_tokens", 0))
 
     if current > limit * 0.60:
         state.messages = compact(state.messages, limit)

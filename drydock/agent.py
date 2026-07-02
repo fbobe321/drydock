@@ -63,6 +63,7 @@ class AgentState:
     messages: list = field(default_factory=list)
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    last_input_tokens: int = 0  # prompt tokens the SERVER counted on the last call
     turn_count: int = 0
     current_effort: str = ""  # "high"/"low" of the in-flight LLM call (for the UI)
 
@@ -210,6 +211,7 @@ def run(
 
         state.total_input_tokens += assistant_turn.input_tokens
         state.total_output_tokens += assistant_turn.output_tokens
+        state.last_input_tokens = assistant_turn.input_tokens
         yield TurnDone(assistant_turn.input_tokens, assistant_turn.output_tokens)
 
         # No tool calls = conversation complete — UNLESS the model emitted a
