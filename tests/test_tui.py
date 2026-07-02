@@ -457,3 +457,29 @@ def test_ask_bang_injects_advice_but_plain_ask_does_not():
             assert started == []
 
     asyncio.run(main())
+
+
+def test_stall_watchdog_hint_appears_after_silence():
+    """The activity line warns when no agent event has arrived for a while
+    (a hung model server) — advisory, and it clears once progress resumes."""
+    import time as _time
+    from drydock.tui.app import _STALL_HINT_SECS
+
+    async def main():
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._busy = True
+            app._work_start = _time.monotonic()
+            app._work_word = "Working"
+            # fresh progress → no hint
+            app._last_progress = _time.monotonic()
+            assert "stalled" not in app._working_text()
+            # simulate silence beyond the threshold → hint appears
+            app._last_progress = _time.monotonic() - (_STALL_HINT_SECS + 5)
+            assert "stalled" in app._working_text() and "Esc to stop" in app._working_text()
+            # progress resumes → hint clears
+            app._last_progress = _time.monotonic()
+            assert "stalled" not in app._working_text()
+
+    asyncio.run(main())

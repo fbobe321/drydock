@@ -59,6 +59,12 @@ BANNER = (
 # Animated "working" line: a turning-helm arc spinner + a nautical gerund +
 # elapsed time + streamed-token count. Rendered in-line above the status bar.
 _SPINNER = "◜◠◝◞◡◟"
+# No agent event for this long → the activity line warns the model may be stalled
+# (the gemma llama.cpp server can hang mid-generation on hard prompts). Advisory
+# only. Set above the longest LEGIT silent stretch seen (a ~135s high-effort
+# think before the first tool call) so normal slow turns don't nag; observed
+# stalls ran 3–5 min+, so 180s still flags them well before the 30-min timeout.
+_STALL_HINT_SECS = 180
 _WORKING_WORDS = [
     "Battening", "Splicing", "Hoisting", "Heaving", "Trimming", "Tacking",
     "Mooring", "Charting", "Navigating", "Sounding", "Caulking", "Rigging",
@@ -262,6 +268,7 @@ class DrydockApp(App):
         self._work_start = 0.0
         self._work_word = ""
         self._work_chars = 0   # streamed output chars this turn (→ ~tokens)
+        self._last_progress = 0.0  # monotonic time of the last agent event (stall watchdog)
         self._spinner_i = 0
 
         # The agent (worker thread) calls this to gate a sensitive command on
@@ -349,7 +356,13 @@ class DrydockApp(App):
         effort = self.state.current_effort
         eff = f" · thinking with {effort} effort" if effort else ""
         queued = f" · {len(self._queue)} queued" if self._queue else ""
-        return f"{spin} {self._work_word}…  ({elapsed} · ↓ {toks} tokens{eff}{queued})"
+        # Stall watchdog (advisory): if no agent event has arrived for a while,
+        # the model server may be hung. Flag it so the user isn't left guessing
+        # whether it's thinking or stalled — but never act (Esc is theirs).
+        silent = time.monotonic() - self._last_progress if self._last_progress else 0.0
+        stall = (f"  ⚠ no output for {int(silent)}s — the model may be slow or stalled; "
+                 "Esc to stop") if silent > _STALL_HINT_SECS else ""
+        return f"{spin} {self._work_word}…  ({elapsed} · ↓ {toks} tokens{eff}{queued}){stall}"
 
     def _refresh_status(self) -> None:
         # The 0.18s _tick_work timer can fire one last time DURING app teardown,
@@ -435,6 +448,7 @@ class DrydockApp(App):
         self.query_one("#todo", Static).update("")
         self._busy = True
         self._work_start = time.monotonic()
+        self._last_progress = self._work_start
         self._work_word = random.choice(_WORKING_WORDS)
         self._work_chars = 0
         self._spinner_i = 0
@@ -1133,6 +1147,11 @@ class DrydockApp(App):
     def _run_agent(self, text: str) -> None:
         try:
             for ev in run(text, self.state, self.config, self.system):
+                # Any event = the model/server is making progress → reset the
+                # stall watchdog. During a real stall the provider stream blocks
+                # and NO event arrives, so this timestamp freezes and
+                # _working_text surfaces a hint.
+                self._last_progress = time.monotonic()
                 if isinstance(ev, ReasoningChunk):
                     self.post_message(AgentReasoning(ev.text))
                 elif isinstance(ev, TextChunk):
