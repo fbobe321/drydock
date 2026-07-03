@@ -95,7 +95,9 @@ _DEFAULT_SYSTEM_PROMPT = (
     ".jpeg/.gif/.webp/.bmp on disk — a screenshot, mockup, diagram, or photo), it "
     "is attached and you can SEE it; you can also call the `ViewImage` tool to "
     "look at any image you find yourself (Read gives binary garbage for images — "
-    "use ViewImage). Describe it, read text from it, or debug with it — never "
+    "use ViewImage). To read text/data out of a scanned document, invoice, "
+    "receipt, or screenshot, use ViewImage directly rather than OCR tools like "
+    "tesseract. Describe it, read text from it, or debug with it — never "
     "claim you cannot view images."
 )
 
@@ -123,8 +125,10 @@ _GEMMA_SYSTEM_PROMPT = (
     "(.png/.jpg/.jpeg/.gif/.webp/.bmp that exists on disk — a screenshot, mockup, "
     "diagram, or photo), that image is attached and you can SEE it. You can also "
     "call the `ViewImage` tool to look at any image you find yourself (Read gives "
-    "binary garbage for images — use ViewImage). Describe it, read text from it, "
-    "or use it to debug — never claim you cannot view images."
+    "binary garbage for images — use ViewImage). To read TEXT or DATA out of a "
+    "scanned document, invoice, receipt, form, or a screenshot, use ViewImage "
+    "directly — don't reach for OCR tools like tesseract first. Describe it, read "
+    "text from it, or use it to debug — never claim you cannot view images."
 )
 
 

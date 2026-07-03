@@ -74,3 +74,15 @@ def test_image_load_error_classifier():
     assert is_image_load_error("invalid_request_error: could not decode image")
     assert not is_image_load_error("rate limit exceeded")
     assert not is_image_load_error("context_length_exceeded")
+
+
+def test_viewimage_nudges_over_ocr_for_documents():
+    """The tool description + both system prompts steer the model to ViewImage
+    (its own vision) for reading text off invoices/receipts/scans, instead of
+    reaching for OCR tools first (observed on the financial-doc tbench task)."""
+    from drydock.tuning import system_prompt_for_model
+    desc = reg.get("ViewImage").schema["description"]
+    assert "OCR" in desc and ("invoice" in desc or "receipt" in desc)
+    for model in ("gemma4", "some-other-model"):
+        p = system_prompt_for_model(model)
+        assert "OCR" in p and "ViewImage" in p

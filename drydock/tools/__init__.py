@@ -85,7 +85,7 @@ SCHEMAS = [
     },
     {
         "name": "ViewImage",
-        "description": "Look at an image file with your vision — use this when you need to SEE a screenshot, mockup, diagram, photo, or rendered output (.png/.jpg/.jpeg/.gif/.webp/.bmp). The image is shown to you so you can describe it, read text from it, or debug it. (Reading an image with the Read tool gives binary garbage; use ViewImage instead.)",
+        "description": "Look at an image file with your vision — use this when you need to SEE a screenshot, mockup, diagram, photo, or rendered output (.png/.jpg/.jpeg/.gif/.webp/.bmp). The image is shown to you so you can describe it, read text from it, or debug it. To READ TEXT OR DATA out of an image — a scanned document, invoice, receipt, form, or a screenshot with text — use ViewImage FIRST (you can read it directly); prefer it over OCR tools like tesseract/pdftotext, which are often unreliable or not installed. (Reading an image with the Read tool gives binary garbage; use ViewImage instead.)",
         "input_schema": {
             "type": "object",
             "properties": {
