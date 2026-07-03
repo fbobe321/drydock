@@ -23,6 +23,29 @@ from pathlib import Path
 _MAX_BASH_OUTPUT_BYTES = 256 * 1024  # 256 KB — plenty of context, safe for RAM
 
 
+def _detect_bash() -> str | None:
+    """Absolute path to bash, or None to fall back to Popen's default /bin/sh.
+
+    tool_bash runs commands under bash so the bash syntax the model naturally
+    writes — [[ ]], <<< herestrings, arrays, {1..n} brace expansion, process
+    substitution <(...), $'...' — actually works. On Debian/Ubuntu /bin/sh is
+    dash, which silently rejects all of those ("Syntax error: ... unexpected"),
+    a confusing failure the model then loops on."""
+    import shutil
+    found = shutil.which("bash")
+    if found:
+        return found
+    for p in ("/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash"):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+# Resolved once at import (in whatever environment drydock runs — host or the
+# task container). None → bash unavailable, fall back to the default shell.
+_BASH_SHELL = _detect_bash()
+
+
 def _collapse_repeated_lines(text: str, run: int = 20) -> str:
     """Collapse a run of >= `run` IDENTICAL consecutive lines into one line + a
     count. Repetitive output (`yes`, a spinning progress log) tokenizes densely —
@@ -910,7 +933,8 @@ def tool_bash(params: dict, config: dict) -> str:
     proc = None
     try:
         proc = subprocess.Popen(
-            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            cmd, shell=True, executable=_BASH_SHELL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             # stdin=DEVNULL so a command that reads stdin gets immediate EOF
             # (correct for a non-interactive tool) instead of inheriting the
             # TUI's terminal — where it would steal the user's keystrokes or hang
