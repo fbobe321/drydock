@@ -936,6 +936,7 @@ def tool_bash(params: dict, config: dict) -> str:
         reader = threading.Thread(target=_drain, daemon=True)
         reader.start()
         start = time.monotonic()
+        backgrounded = False
         while reader.is_alive():
             reader.join(0.3)
             if capped.is_set():
@@ -945,6 +946,17 @@ def tool_bash(params: dict, config: dict) -> str:
                 kill_process_group(proc)
                 proc.wait()
                 return "[stopped by user]"
+            # The SHELL has exited but the pipe is still open → the command
+            # backgrounded a child (`cmd &`, a server the task wants to keep
+            # running) that inherited stdout. Don't wait for it (that would hang
+            # until the timeout) and DON'T kill it — return what we have so the
+            # background process survives. (Redirecting its output, `cmd >log &`,
+            # closes the pipe and never reaches here.)
+            if proc.poll() is not None:
+                reader.join(0.5)  # brief grace for any final buffered output
+                if reader.is_alive():
+                    backgrounded = True
+                    break
             if time.monotonic() - start > timeout:
                 kill_process_group(proc)
                 proc.wait()
@@ -958,11 +970,16 @@ def tool_bash(params: dict, config: dict) -> str:
                 if _is_network_command(cmd):
                     msg += _OFFLINE_HINT
                 return msg
-        proc.wait()
+        if not backgrounded:
+            proc.wait()
         # Collapse repetitive runs FIRST (turns 256 KB of "y\n" into ~2 lines),
         # then note if we hit the byte cap. Bounds both RAM (the cap) and context
-        # tokens (the collapse).
-        output = _collapse_repeated_lines("".join(chunks))
+        # tokens (the collapse). Snapshot chunks (list()) in case the reader
+        # daemon is still appending for a backgrounded child.
+        output = _collapse_repeated_lines("".join(list(chunks)))
+        if backgrounded:
+            return (output.rstrip() + "\n[a process was left running in the background; "
+                    "the command returned. Check it with a follow-up command.]").lstrip("\n")
         if capped.is_set():
             return (
                 output.rstrip()
