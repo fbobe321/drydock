@@ -911,6 +911,13 @@ def tool_bash(params: dict, config: dict) -> str:
     try:
         proc = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            # stdin=DEVNULL so a command that reads stdin gets immediate EOF
+            # (correct for a non-interactive tool) instead of inheriting the
+            # TUI's terminal — where it would steal the user's keystrokes or hang
+            # waiting for input Textual has captured. The agent still feeds input
+            # explicitly via a pipe/redirect (echo x | cmd, cmd < file), which
+            # overrides this.
+            stdin=subprocess.DEVNULL,
             text=True, cwd=config.get("cwd"), start_new_session=True,
         )
         config.setdefault("_abort", {})["proc"] = proc
