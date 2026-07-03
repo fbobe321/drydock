@@ -51,6 +51,60 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-07-03 — second-model advisor + 7 tbench-through-TUI fixes (v3.0.82 → 3.0.91)
+
+PyPI **3.0.91**; HEAD pushed/green; **441 tests**. Everything below was found by
+driving **real terminal-bench-2 tasks through the actual TUI** (the
+`/data3/tbench_local/tui_task_lib.sh` harness: `ddt_up`/`ddt_tui`/`ddt_verify`/
+`ddt_down`, gemma at `host.docker.internal:8000`) and fixing what broke — never
+`-p`, never a batch judge. ~35 tasks across every category; harness had **zero
+crashes**, ~40% pass (failures are the local model's capability, not drydock).
+
+**Second-model advisor (v3.0.82–85).** Ask a stronger model (e.g. Gemini via its
+OpenAI-compatible endpoint) for help without leaving the TUI. `Consult` tool +
+`/advisor` (url/model/key/**test**) + `/ask <q>` (advice to screen) + **`/ask! <q>`**
+(inject the advice straight into the agent's context). Config keys
+`advisor_base_url`/`advisor_model`/`advisor_api_key`. No new dep (reuses `openai`).
+
+**The 7 fixes (each a real drydock bug hands-on use surfaced, unit tests missed):**
+1. **v3.0.84 `/advisor test` timeout** — 30s false-negative on a cold/slow model;
+   now 90s + "REACHABLE but slow". (Found testing two live LLMs on .21/.22.)
+2. **v3.0.86 stall watchdog** — the model server (llama.cpp) hangs mid-generation
+   on hard prompts (token count freezes, elapsed climbs); the activity line now
+   warns "no output for Ns" after 180s. Advisory only (never kills). Fired
+   correctly ~8× live; silent on legit slow steps.
+3. **v3.0.87 compaction on the REAL token count** — `maybe_compact` keyed on the
+   chars/3.0 estimate, which undercounts token-dense build/code output, so
+   compaction fired late (gauge showed 64% while estimate read ~55%). Now uses
+   `max(estimate, state.last_input_tokens)` — the server's real prompt-token
+   count. (Surfaced by build-cython-ext.)
+4. **v3.0.88 ViewImage-over-OCR** — the model reached for tesseract/pdftotext on
+   invoice/scanned images instead of its own vision; tool desc + both system
+   prompts now say use ViewImage first. (Surfaced by financial-document-processor.)
+5. **v3.0.89 background processes** — a naive `python server.py &` (no redirect)
+   HUNG `tool_bash` to the timeout then killed the server (the backgrounded child
+   inherits the stdout pipe → drain thread never sees EOF). Now: shell exited but
+   pipe still held → return promptly WITHOUT killing, so the bg server survives.
+   Validated live on pypi-server (`pypiserver … & sleep`) + qemu-startup (bg VM).
+   (Surfaced by kv-store-grpc.)
+6. **v3.0.90 stdin=DEVNULL** — `tool_bash` never set stdin, so a subprocess
+   inherited the TUI's terminal; a stdin-reading command would steal keystrokes or
+   hang. Now DEVNULL → instant EOF, isolated from the TUI; piped/redirect input
+   still overrides it. (Found investigating interactive-stdin tasks.)
+7. **v3.0.91 bash-not-dash** — `shell=True` used `/bin/sh` = dash on Debian, so
+   `[[ ]]`, `<<<`, arrays, `{1..n}`, `<(…)` failed with confusing syntax errors
+   the model looped on. Now resolves bash once (`_detect_bash`) and passes
+   `executable=_BASH_SHELL`; falls back to /bin/sh if bash is absent.
+
+**tbench passes worth noting:** build-pmars, build-pov-ray (render matches ref),
+modernize-scientific-stack, hf-model-inference (bg Flask+HF model),
+pypi-server (bg pypiserver), qemu-startup (bg Alpine VM on telnet:6665),
+constraints-scheduling. Fixes 89–91 all harden `tool_bash` (server/daemon +
+interactive-stdin + shell categories). Launcher gained `uv --refresh` (publish→run
+PyPI propagation lag). `_BASH_SHELL`/`_detect_bash`, stall watchdog, and the bg/stdin
+logic all live in `drydock/tools/__init__.py`; compaction in `drydock/compaction.py`.
+
+---
 ## ⭐ 2026-06-29 (overnight) — multimodal + context diagnostics + hardening (v3.0.75 → 3.0.81)
 
 PyPI **3.0.81**; HEAD pushed/green; website redeployed. **409 tests.**
