@@ -51,7 +51,17 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-07-03 — second-model advisor + 7 tbench-through-TUI fixes (v3.0.82 → 3.0.91)
+## ⭐ 2026-07-03 — second-model advisor + 7 tbench-through-TUI fixes + Graphify (v3.0.82 → 3.0.92)
+
+**Graphify MCP integration (v3.0.92).** [Graphify](https://github.com/safishamsi/graphify)
+(external, MIT) serves a codebase **knowledge graph** over an MCP stdio server;
+drydock's existing MCP client connects with **no code changes** — validated
+end-to-end through the TUI (agent autonomously called `mcp__graphify__god_nodes`).
+Made permanent as docs+example, NOT code coupling: `docs/graphify.md`,
+`examples/mcp/graphify.json`, README + website notes, `tests/test_graphify_example.py`.
+Fully local: structural build needs no LLM; semantic build points `OPENAI_BASE_URL`
+at the local gemma server. Complements drydock's own `/graphrag` ([[project_graphrag_feature]]).
+
 
 PyPI **3.0.91**; HEAD pushed/green; **441 tests**. Everything below was found by
 driving **real terminal-bench-2 tasks through the actual TUI** (the
