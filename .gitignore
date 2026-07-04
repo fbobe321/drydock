@@ -10,3 +10,6 @@ logs/
 .drydock/
 *.ckl
 *.cklb
+
+# Private integration/positioning docs (never publish)
+_anthropic/
