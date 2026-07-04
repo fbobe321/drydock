@@ -1,0 +1,12 @@
+{
+  "_comment": "Drydock MCP config for Graphify (https://github.com/safishamsi/graphify). Copy the mcpServers block into ~/.drydock/mcp.json or <project>/.drydock/mcp.json, replace the absolute --graph path with your own graphify-out/graph.json, and restart Drydock. Build the graph first: `pip install \"graphify[mcp]\"` then `graphify . --no-cluster --no-label`. Full how-to: docs/graphify.md.",
+  "mcpServers": {
+    "graphify": {
+      "command": "graphify-mcp",
+      "args": [
+        "--transport", "stdio",
+        "--graph", "/abs/path/to/your/project/graphify-out/graph.json"
+      ]
+    }
+  }
+}

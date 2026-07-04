@@ -53,7 +53,10 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
   calls the `Consult` tool for a second opinion when stuck, and you can `/ask
   <question>` directly. Opt-in, user-configured — no extra dependency.
 - **MCP** — connect to Model Context Protocol servers (`~/.drydock/mcp.json`);
-  their tools appear as `mcp__<server>__<tool>`. List them with `/mcp`.
+  their tools appear as `mcp__<server>__<tool>`. List them with `/mcp`. Works with
+  third-party servers out of the box — e.g. [Graphify](https://github.com/safishamsi/graphify)
+  for a queryable code knowledge graph: see [docs/graphify.md](docs/graphify.md)
+  and the copy-paste [example config](examples/mcp/graphify.json).
 - **Skills** — reusable `/<name>` commands authored as markdown in
   `~/.drydock/skills/` (or `<project>/.drydock/skills/`); `$ARGS` substitution.
 - **Loops** — `/loop <count> <prompt>` runs a prompt iteratively (Esc stops).
