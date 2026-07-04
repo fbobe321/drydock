@@ -1,7 +1,37 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.81, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.92, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-07-03/04) — second-model advisor, tbench-through-TUI hardening,
+> Graphify (v3.0.82–3.0.92):** All bug fixes below were found by driving real
+> terminal-bench-2 tasks through the actual TUI (never `-p`, never a batch judge);
+> ~35 tasks, zero harness crashes, ~40% pass (failures are the local model's
+> capability, not drydock). 444 tests.
+> - **Second-model advisor (v3.0.82–85).** `/advisor` (url/model/key/**test**),
+>   `/ask <q>` (advice to screen), **`/ask! <q>`** (inject advice into the agent's
+>   context), and the `Consult` tool. Any OpenAI-compatible endpoint (e.g. Gemini);
+>   no new dependency.
+> - **Stall watchdog (v3.0.86).** The activity line warns "no output for Ns" (180s)
+>   when the model server hangs mid-generation. Advisory only. Validated live in
+>   BOTH directions — quiet on a legit 12-min/3.9k-token generation, fired on a
+>   1.0k-token frozen stall.
+> - **Compaction on the REAL token count (v3.0.87).** `maybe_compact` uses
+>   `max(char-estimate, server's last prompt tokens)` — the chars/3 estimate
+>   undercounts token-dense build/code output, so compaction had fired late.
+> - **ViewImage-over-OCR (v3.0.88).** Tool desc + system prompts steer the model to
+>   its own vision (not tesseract) for reading invoices/scans/screenshots.
+> - **`tool_bash` hardened (v3.0.89–91), 3 fixes:** background processes (`cmd &`
+>   no longer hangs to timeout + kills the server; shell-exited-but-pipe-held →
+>   return without killing — validated on pypi-server + a bg QEMU VM);
+>   `stdin=DEVNULL` (no TUI-terminal inheritance / stdin hangs); run under **bash
+>   not dash** (`[[ ]]`, `<<<`, arrays, `{1..n}`, `<(…)` now work). Confirmed nested
+>   PTYs (pexpect) still work under all three (interactive-TTY tasks unaffected).
+> - **Graphify MCP integration (v3.0.92).** drydock's existing MCP client connects
+>   to [Graphify](https://github.com/safishamsi/graphify)'s knowledge-graph stdio
+>   server with NO code change (agent called `mcp__graphify__god_nodes` live).
+>   Documented as `docs/graphify.md` + `examples/mcp/graphify.json`; fully-local
+>   build path. Complements the built-in `/graphrag`.
 
 > **Progress (2026-06-29) — multimodal, context diagnostics, POA&M, hardening
 > (v3.0.72–3.0.81):**
