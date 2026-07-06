@@ -3,7 +3,6 @@ string ("10"); a 0/negative value made EVERY command time out instantly; an
 absurd value could hang for hours. _coerce_timeout normalizes all of these."""
 from __future__ import annotations
 
-import time
 
 import pytest
 
