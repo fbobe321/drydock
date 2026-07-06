@@ -1051,6 +1051,14 @@ def tool_bash(params: dict, config: dict) -> str:
             if cancel is not None and cancel.is_set():
                 kill_process_group(proc)
                 proc.wait()
+                partial = _sanitize_bash_output(
+                    _collapse_repeated_lines("".join(list(chunks)))
+                ).rstrip()
+                if partial:
+                    tail = partial[-_PARTIAL_TAIL:]
+                    if len(partial) > _PARTIAL_TAIL:
+                        tail = "[... earlier output truncated ...]\n" + tail
+                    return f"[stopped by user]\n\n--- output before stop ---\n{tail}"
                 return "[stopped by user]"
             # The SHELL has exited but the pipe is still open → the command
             # backgrounded a child (`cmd &`, a server the task wants to keep
