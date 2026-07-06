@@ -601,7 +601,10 @@ def tool_read(params: dict, config: dict) -> str:
         eff_limit = 2000 if limit is None else limit
         selected = lines[offset:offset + eff_limit]
         numbered = [f"{i + offset + 1}\t{line.rstrip()}" for i, line in enumerate(selected)]
-        result = "\n".join(numbered)
+        # Drop NUL bytes (valid UTF-8, so errors='replace' keeps them) — raw NUL in
+        # a JSON tool result trips some LLM servers. ANSI is left as-is: unlike
+        # command output, a file's bytes are content the model may need verbatim.
+        result = "\n".join(numbered).replace("\x00", "")
         if len(lines) > offset + eff_limit:
             result += f"\n[... {len(lines) - offset - eff_limit} more lines]"
         return result or "(empty file)"
@@ -1104,9 +1107,16 @@ def tool_grep(params: dict, config: dict) -> str:
             cmd.extend(["--include", include])
         cmd.extend([pattern, path])
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=30,
+            cmd, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=30,
         )
-        output = result.stdout.strip()
+        # grep exit codes: 0 = matched, 1 = no match, >=2 = ERROR (invalid regex,
+        # unreadable path). Don't report an error as "(no matches)" — the model
+        # would wrongly conclude the pattern is absent instead of fixing it.
+        if result.returncode >= 2:
+            err = (result.stderr or "").strip() or "grep failed"
+            return f"Error: {err.splitlines()[0]}"
+        output = _sanitize_bash_output(result.stdout).strip()
         if not output:
             return "(no matches)"
         lines = output.split("\n")
