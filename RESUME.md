@@ -51,15 +51,26 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-07-06 — tool I/O-path hardening via direct probing (v3.0.93 → 3.0.97)
+## ⭐ 2026-07-06 — tool I/O-path + arg hardening via direct probing (v3.0.93 → 3.0.99)
 
-**Key insight this session:** *directly probing drydock's own I/O paths* found 5
-real bugs that grinding hard tbench tasks did NOT — the hard tasks (cobol, db-wal,
-etc.) run the toolchain cleanly and are model-limited, so they don't surface
-harness bugs; the leverage is in probing edge cases of `tool_bash`, grep, Read.
-Fixes:
-- **v3.0.97** Grep reports grep errors (invalid regex / bad path, exit≥2) instead
-  of a false "(no matches)"; grep/Read made binary-safe (errors=replace, drop NUL).
+**Key insight this session:** *directly probing drydock's own tool I/O paths* found
+**7 real bugs** that grinding hard tbench tasks did NOT — the hard tasks (cobol,
+db-wal) run the toolchain cleanly and are model-limited, so they don't surface
+harness bugs; the leverage is in probing edge cases of `tool_bash`, grep, Read,
+Write, Edit. Fixes v3.0.93–99:
+- **93** binary/non-UTF8 bash output → errors="replace" (was "(no output)" crash).
+- **94** `_sanitize_bash_output()` strips ANSI + drops NUL.
+- **95** partial bash output preserved on timeout (tail-bounded).
+- **96** `_coerce_timeout()` — string/0/negative/absurd timeout params.
+- **97** Grep surfaces grep errors (invalid regex/bad path) instead of a false
+  "(no matches)"; grep/Read binary-safe.
+- **98–99** wrong-type tool args coerced across write/edit/read/grep (list/int/None
+  content, list new_string/file_path, string offset/limit) — were uncaught
+  TypeErrors. Helpers: `_as_text`, `_as_str_arg`, `_coerce_int`.
+
+Next probes if continuing: STOP (Esc) still discards partial bash output;
+`cd` doesn't persist across bash calls (by design). Probing tools > grinding
+hard-reasoning tbench tasks for harness bugs.
 - **v3.0.93** binary/non-UTF8 output no longer crashes the reader thread →
   "(no output)"; now `errors="replace"` (text survives).
 - **v3.0.94** `_sanitize_bash_output()` strips ANSI escapes + drops NUL bytes.

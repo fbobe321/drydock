@@ -3,10 +3,16 @@
 Status: SHIPPING (v3.0.96, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
-> **Progress (2026-07-06) — tool I/O-path hardening (v3.0.93–3.0.97):** Found by
-> directly PROBING drydock's own I/O paths (a higher-yield approach than grinding
-> hard tbench tasks, which stress the model, not drydock — cobol/db-wal/etc. all
-> ran the toolchain cleanly, model-limited, no harness bug). Five tool fixes:
+> **Progress (2026-07-06) — tool I/O-path + arg hardening (v3.0.93–3.0.99):** Found
+> by directly PROBING drydock's own tool I/O paths (higher-yield than grinding hard
+> tbench tasks, which stress the model, not drydock — cobol/db-wal ran the toolchain
+> cleanly, model-limited, no harness bug). Seven fixes — `tool_bash`/grep/read/write
+> are now the most-hardened surface:
+> - **v3.0.98–99 wrong-type tool args** — local models send args as the wrong type;
+>   Write content / Edit new_string as a list/int and Read file_path as a list raised
+>   uncaught TypeErrors (tools must never raise). Shared coercers `_as_text`
+>   (list→newline-join), `_as_str_arg` (unwrap single-elem list), `_coerce_int`
+>   applied across write/edit/read/grep.
 > - **v3.0.97 Grep errors + grep/Read binary-safety** — an invalid regex (grep
 >   exit ≥2, error on stderr) was reported as "(no matches)", a wrong negative the
 >   model trusts; now returns the error. grep decodes errors="replace"; Read drops NUL.
