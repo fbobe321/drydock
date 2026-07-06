@@ -942,7 +942,13 @@ def tool_bash(params: dict, config: dict) -> str:
             # explicitly via a pipe/redirect (echo x | cmd, cmd < file), which
             # overrides this.
             stdin=subprocess.DEVNULL,
-            text=True, cwd=config.get("cwd"), start_new_session=True,
+            # errors="replace" so BINARY / non-UTF8 output (cat a binary, a tool
+            # emitting raw bytes, gzip to stdout) decodes to replacement chars
+            # instead of raising UnicodeDecodeError inside the reader thread —
+            # which killed the thread and handed the agent "(no output)", losing
+            # even the text parts of mixed output.
+            text=True, encoding="utf-8", errors="replace",
+            cwd=config.get("cwd"), start_new_session=True,
         )
         config.setdefault("_abort", {})["proc"] = proc
         # Read output in a daemon thread with a HARD byte cap, so memory can't
