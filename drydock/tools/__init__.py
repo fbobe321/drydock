@@ -46,6 +46,20 @@ def _detect_bash() -> str | None:
 _BASH_SHELL = _detect_bash()
 
 
+# ANSI escape sequences (CSI colour/cursor, OSC title, and lone two-char escapes).
+# Some tools emit these even to a pipe (--color=always, forced-colour test runners),
+# and they're pure display control — noise that wastes the model's tokens.
+_ANSI_RE = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])")
+
+
+def _sanitize_bash_output(text: str) -> str:
+    """Strip ANSI escape sequences and drop NUL bytes from command output. NUL is
+    valid UTF-8 (so the errors='replace' decode keeps it) but raw NUL in a JSON
+    tool-result trips some LLM servers' tokenizers; ANSI codes are display noise.
+    Neither carries information the model needs. Newlines/tabs/Unicode are kept."""
+    return _ANSI_RE.sub("", text).replace("\x00", "")
+
+
 def _collapse_repeated_lines(text: str, run: int = 20) -> str:
     """Collapse a run of >= `run` IDENTICAL consecutive lines into one line + a
     count. Repetitive output (`yes`, a spinning progress log) tokenizes densely —
@@ -1013,7 +1027,7 @@ def tool_bash(params: dict, config: dict) -> str:
         # then note if we hit the byte cap. Bounds both RAM (the cap) and context
         # tokens (the collapse). Snapshot chunks (list()) in case the reader
         # daemon is still appending for a backgrounded child.
-        output = _collapse_repeated_lines("".join(list(chunks)))
+        output = _sanitize_bash_output(_collapse_repeated_lines("".join(list(chunks))))
         if backgrounded:
             return (output.rstrip() + "\n[a process was left running in the background; "
                     "the command returned. Check it with a follow-up command.]").lstrip("\n")
