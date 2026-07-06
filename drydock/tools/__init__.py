@@ -671,6 +671,13 @@ def tool_write(params: dict, config: dict) -> str:
     if Path(fp).is_dir():
         return f"Error: {fp} is a directory, not a file. Pass a file path."
     content = params.get("content", "")
+    # Local models sometimes send content as a JSON array of lines (or a number),
+    # which f.write() can't take — coerce instead of crashing with a TypeError
+    # (tools must return errors, never raise). A list → newline-joined lines.
+    if isinstance(content, (list, tuple)):
+        content = "\n".join(str(x) for x in content)
+    elif not isinstance(content, str):
+        content = "" if content is None else str(content)
     if has_conflict_markers(content):
         return conflict_marker_refusal(fp)
     prev = _snapshot(fp)
