@@ -68,17 +68,17 @@ Write, Edit. Fixes v3.0.93–99:
   content, list new_string/file_path, string offset/limit) — were uncaught
   TypeErrors. Helpers: `_as_text`, `_as_str_arg`, `_coerce_int`.
 
-Next probes if continuing: STOP (Esc) still discards partial bash output;
-`cd` doesn't persist across bash calls (by design). Probing tools > grinding
-hard-reasoning tbench tasks for harness bugs.
 - **v3.0.93** binary/non-UTF8 output no longer crashes the reader thread →
   "(no output)"; now `errors="replace"` (text survives).
 - **v3.0.94** `_sanitize_bash_output()` strips ANSI escapes + drops NUL bytes.
 - **v3.0.95** partial output preserved when a command times out (tail-bounded).
 - **v3.0.96** `_coerce_timeout()` — string/0/negative/absurd timeout params fixed.
-`tool_bash` is now the most-hardened surface (fixes 89–96). To keep hunting: keep
-probing I/O edges (Read on binary keeps NUL; cwd/`cd` persistence; STOP discards
-partial output — all candidates), not more hard-reasoning tbench tasks.
+- **v3.0.100** STOP (Esc) now preserves partial bash output matching timeout
+  behaviour (5bad1b1 + version bump); Read strips NUL (fixed in 97, confirmed).
+`tool_bash`/Read/Grep/Write are now the most-hardened surfaces. `cd` not
+persisting across bash calls is by design. Next: probe Edit tool edge cases
+(old_string not found, empty string, replace_all=True on no matches); probe
+multi-tool-turn flows (long bash → Edit → bash chain under real LLM traffic).
 
 ## ⭐ 2026-07-03 — second-model advisor + 7 tbench-through-TUI fixes + Graphify (v3.0.82 → 3.0.92)
 
