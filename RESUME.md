@@ -51,6 +51,22 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-07-06 — Bash I/O-path hardening via direct probing (v3.0.93 → 3.0.96)
+
+**Key insight this session:** *directly probing drydock's own I/O paths* found 4
+real bugs that grinding hard tbench tasks did NOT — the hard tasks (cobol, db-wal,
+etc.) run the toolchain cleanly and are model-limited, so they don't surface
+harness bugs; the leverage is in probing edge cases of `tool_bash`, Read, etc.
+All 4 fixes are in `tool_bash` output/param handling:
+- **v3.0.93** binary/non-UTF8 output no longer crashes the reader thread →
+  "(no output)"; now `errors="replace"` (text survives).
+- **v3.0.94** `_sanitize_bash_output()` strips ANSI escapes + drops NUL bytes.
+- **v3.0.95** partial output preserved when a command times out (tail-bounded).
+- **v3.0.96** `_coerce_timeout()` — string/0/negative/absurd timeout params fixed.
+`tool_bash` is now the most-hardened surface (fixes 89–96). To keep hunting: keep
+probing I/O edges (Read on binary keeps NUL; cwd/`cd` persistence; STOP discards
+partial output — all candidates), not more hard-reasoning tbench tasks.
+
 ## ⭐ 2026-07-03 — second-model advisor + 7 tbench-through-TUI fixes + Graphify (v3.0.82 → 3.0.92)
 
 **Graphify MCP integration (v3.0.92).** [Graphify](https://github.com/safishamsi/graphify)

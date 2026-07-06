@@ -1,7 +1,22 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.92, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.96, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-07-06) — Bash I/O-path hardening (v3.0.93–3.0.96):** Found by
+> directly PROBING drydock's own I/O paths (a higher-yield approach than grinding
+> hard tbench tasks, which stress the model, not drydock — cobol/db-wal/etc. all
+> ran the toolchain cleanly, model-limited, no harness bug). Four `tool_bash` fixes:
+> - **v3.0.93 binary/non-UTF8 output** — `text=True` strict decode raised
+>   UnicodeDecodeError inside the reader thread; the thread died and the agent got
+>   "(no output)", losing even the text parts of mixed output. Now `errors="replace"`.
+> - **v3.0.94 output sanitization** — strip ANSI escape sequences (forced-colour
+>   noise) and drop NUL bytes (trip some LLM servers' JSON) before the model sees it.
+> - **v3.0.95 partial output on timeout** — a command that printed results then hung
+>   lost them; now the pre-timeout output (tail-bounded) rides along with the message.
+> - **v3.0.96 robust timeout param** — coerce+clamp: string "10" (crashed),
+>   0/negative (instant-timeout every command), 99999 (multi-hour hang) all handled.
+> 461 tests. tool_bash is now the most-hardened surface (9 fixes across 89–96).
 
 > **Progress (2026-07-03/04) — second-model advisor, tbench-through-TUI hardening,
 > Graphify (v3.0.82–3.0.92):** All bug fixes below were found by driving real
