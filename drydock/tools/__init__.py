@@ -21,6 +21,7 @@ from pathlib import Path
 # to gigabytes within the timeout. We stream with a byte cap and kill the command
 # once it's hit — bounding RAM regardless of how much it tries to produce.
 _MAX_BASH_OUTPUT_BYTES = 256 * 1024  # 256 KB — plenty of context, safe for RAM
+_PARTIAL_TAIL = 4000  # chars of pre-timeout output to keep (tail) in the timeout msg
 
 
 def _detect_bash() -> str | None:
@@ -1020,6 +1021,18 @@ def tool_bash(params: dict, config: dict) -> str:
                 )
                 if _is_network_command(cmd):
                     msg += _OFFLINE_HINT
+                # Preserve any output produced BEFORE the hang — a test run or
+                # build that prints results/diagnostics then stalls would
+                # otherwise lose exactly what the agent needs. Tail-bounded so a
+                # big partial can't bloat context.
+                partial = _sanitize_bash_output(
+                    _collapse_repeated_lines("".join(list(chunks)))
+                ).rstrip()
+                if partial:
+                    tail = partial[-_PARTIAL_TAIL:]
+                    if len(partial) > _PARTIAL_TAIL:
+                        tail = "[... earlier output truncated ...]\n" + tail
+                    msg += f"\n\n--- output before timeout ---\n{tail}"
                 return msg
         if not backgrounded:
             proc.wait()

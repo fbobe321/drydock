@@ -42,3 +42,23 @@ def test_foreground_hang_still_times_out():
 def test_failing_command_still_reports_exit_code():
     _, out = _timed("false")
     assert "[exit code: 1]" in out
+
+
+def test_timeout_preserves_partial_output():
+    """A command that prints useful output then hangs must return that output
+    alongside the timeout message — not discard it (test runs/builds that stall
+    after printing results/diagnostics)."""
+    from drydock.tools import tool_bash
+    out = tool_bash(
+        {"command": "echo IMPORTANT_RESULT; echo line2; sleep 30", "timeout": 3},
+        {"cwd": "/tmp"},
+    )
+    assert "timed out" in out
+    assert "IMPORTANT_RESULT" in out and "line2" in out
+    assert "output before timeout" in out
+
+
+def test_timeout_no_output_stays_clean():
+    from drydock.tools import tool_bash
+    out = tool_bash({"command": "sleep 30", "timeout": 2}, {"cwd": "/tmp"})
+    assert "timed out" in out and "output before timeout" not in out
