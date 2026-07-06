@@ -22,6 +22,22 @@ from pathlib import Path
 # once it's hit — bounding RAM regardless of how much it tries to produce.
 _MAX_BASH_OUTPUT_BYTES = 256 * 1024  # 256 KB — plenty of context, safe for RAM
 _PARTIAL_TAIL = 4000  # chars of pre-timeout output to keep (tail) in the timeout msg
+_DEFAULT_TIMEOUT = 120
+_MAX_TIMEOUT = 1800  # 30 min hard ceiling — a single command shouldn't hang longer
+
+
+def _coerce_timeout(value) -> int:
+    """Make the model-supplied timeout robust: local models often send it as a
+    string ("10"), and a 0/negative/absurd value would make EVERY command time
+    out instantly (or hang for hours). Coerce to int, fall back to the default on
+    junk, and clamp to (0, _MAX_TIMEOUT]."""
+    try:
+        t = int(float(value))
+    except (TypeError, ValueError):
+        return _DEFAULT_TIMEOUT
+    if t <= 0:
+        return _DEFAULT_TIMEOUT
+    return min(t, _MAX_TIMEOUT)
 
 
 def _detect_bash() -> str | None:
@@ -916,7 +932,7 @@ def tool_bash(params: dict, config: dict) -> str:
     # and crack hashes — a 30s wall killed legitimate long work before it could
     # finish (terminal-bench: 16 tasks died at 30s on builds/training). Bounded,
     # and the model can pass a larger `timeout` for genuinely heavy commands.
-    timeout = params.get("timeout", 120)
+    timeout = _coerce_timeout(params.get("timeout", 120))
     reason = bash_safety.dangerous_command(cmd)
     if reason is not None:
         return bash_safety.refusal_message(cmd, reason)
