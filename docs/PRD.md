@@ -3,10 +3,13 @@
 Status: SHIPPING (v3.0.96, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
-> **Progress (2026-07-06) — Bash I/O-path hardening (v3.0.93–3.0.96):** Found by
+> **Progress (2026-07-06) — tool I/O-path hardening (v3.0.93–3.0.97):** Found by
 > directly PROBING drydock's own I/O paths (a higher-yield approach than grinding
 > hard tbench tasks, which stress the model, not drydock — cobol/db-wal/etc. all
-> ran the toolchain cleanly, model-limited, no harness bug). Four `tool_bash` fixes:
+> ran the toolchain cleanly, model-limited, no harness bug). Five tool fixes:
+> - **v3.0.97 Grep errors + grep/Read binary-safety** — an invalid regex (grep
+>   exit ≥2, error on stderr) was reported as "(no matches)", a wrong negative the
+>   model trusts; now returns the error. grep decodes errors="replace"; Read drops NUL.
 > - **v3.0.93 binary/non-UTF8 output** — `text=True` strict decode raised
 >   UnicodeDecodeError inside the reader thread; the thread died and the agent got
 >   "(no output)", losing even the text parts of mixed output. Now `errors="replace"`.

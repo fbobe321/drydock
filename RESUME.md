@@ -51,13 +51,15 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-07-06 — Bash I/O-path hardening via direct probing (v3.0.93 → 3.0.96)
+## ⭐ 2026-07-06 — tool I/O-path hardening via direct probing (v3.0.93 → 3.0.97)
 
-**Key insight this session:** *directly probing drydock's own I/O paths* found 4
+**Key insight this session:** *directly probing drydock's own I/O paths* found 5
 real bugs that grinding hard tbench tasks did NOT — the hard tasks (cobol, db-wal,
 etc.) run the toolchain cleanly and are model-limited, so they don't surface
-harness bugs; the leverage is in probing edge cases of `tool_bash`, Read, etc.
-All 4 fixes are in `tool_bash` output/param handling:
+harness bugs; the leverage is in probing edge cases of `tool_bash`, grep, Read.
+Fixes:
+- **v3.0.97** Grep reports grep errors (invalid regex / bad path, exit≥2) instead
+  of a false "(no matches)"; grep/Read made binary-safe (errors=replace, drop NUL).
 - **v3.0.93** binary/non-UTF8 output no longer crashes the reader thread →
   "(no output)"; now `errors="replace"` (text survives).
 - **v3.0.94** `_sanitize_bash_output()` strips ANSI escapes + drops NUL bytes.
