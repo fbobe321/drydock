@@ -26,6 +26,36 @@ _DEFAULT_TIMEOUT = 120
 _MAX_TIMEOUT = 1800  # 30 min hard ceiling — a single command shouldn't hang longer
 
 
+def _as_text(v, default: str = "") -> str:
+    """Coerce a text-body arg (file content, replacement text) to a string. Local
+    models sometimes send it as a JSON array of lines → newline-join; None →
+    default; other scalars → str()."""
+    if isinstance(v, (list, tuple)):
+        return "\n".join(str(x) for x in v)
+    if v is None:
+        return default
+    return v if isinstance(v, str) else str(v)
+
+
+def _as_str_arg(v, default: str = "") -> str:
+    """Coerce a scalar string arg (a path, a pattern) to a string. A single-value
+    list is unwrapped (models sometimes wrap a lone path/pattern in an array)."""
+    if isinstance(v, (list, tuple)):
+        return str(v[0]) if v else default
+    if v is None:
+        return default
+    return v if isinstance(v, str) else str(v)
+
+
+def _coerce_int(value, default: int):
+    """Coerce a model-supplied int arg (offset/limit) that may arrive as a string
+    ("5") or junk. Falls back to default on anything non-numeric."""
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
 def _coerce_timeout(value) -> int:
     """Make the model-supplied timeout robust: local models often send it as a
     string ("10"), and a 0/negative/absurd value would make EVERY command time
@@ -585,13 +615,13 @@ def tool_viewimage(params: dict, config: dict) -> str:
 
 
 def tool_read(params: dict, config: dict) -> str:
-    fp = _resolve_path(params["file_path"], config)
+    fp = _resolve_path(_as_str_arg(params.get("file_path")), config)
     # Reading an image as text yields binary garbage — point at the vision tool.
     if os.path.splitext(fp)[1].lower() in _IMAGE_EXTS and os.path.isfile(fp):
         return (f"{params['file_path']} is an image — Read would return binary "
                 "garbage. Use the ViewImage tool to actually SEE it.")
-    limit = params.get("limit")  # None = caller didn't specify a window
-    offset = params.get("offset", 0)
+    limit = None if params.get("limit") is None else _coerce_int(params.get("limit"), 2000)
+    offset = _coerce_int(params.get("offset", 0), 0)
     try:
         with open(fp, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
@@ -670,14 +700,10 @@ def tool_write(params: dict, config: dict) -> str:
     fp = _resolve_path(str(fp).strip(), config)
     if Path(fp).is_dir():
         return f"Error: {fp} is a directory, not a file. Pass a file path."
-    content = params.get("content", "")
     # Local models sometimes send content as a JSON array of lines (or a number),
-    # which f.write() can't take — coerce instead of crashing with a TypeError
-    # (tools must return errors, never raise). A list → newline-joined lines.
-    if isinstance(content, (list, tuple)):
-        content = "\n".join(str(x) for x in content)
-    elif not isinstance(content, str):
-        content = "" if content is None else str(content)
+    # which f.write() can't take — coerce instead of crashing (tools must return
+    # errors, never raise). A list → newline-joined lines.
+    content = _as_text(params.get("content", ""))
     if has_conflict_markers(content):
         return conflict_marker_refusal(fp)
     prev = _snapshot(fp)
@@ -800,8 +826,10 @@ def tool_edit(params: dict, config: dict) -> str:
     if not fp or not str(fp).strip():
         return "Error: Edit needs a real file_path (the path was empty or blank)."
     fp = _resolve_path(str(fp).strip(), config)
-    old = params.get("old_string", "")
-    new = params.get("new_string", "")
+    # Coerce non-string old/new (a JSON array of lines, a number) instead of
+    # crashing with a TypeError in the substring search / replace.
+    old = _as_text(params.get("old_string", ""))
+    new = _as_text(params.get("new_string", ""))
     if has_conflict_markers(new):
         return conflict_marker_refusal(fp)
     # If a directory was passed, try to infer the intended file (avoids a
@@ -1105,8 +1133,8 @@ def tool_glob(params: dict, config: dict) -> str:
 
 
 def tool_grep(params: dict, config: dict) -> str:
-    pattern = params["pattern"]
-    path = params.get("path") or config.get("cwd") or "."
+    pattern = _as_str_arg(params.get("pattern"))
+    path = _as_str_arg(params.get("path")) or config.get("cwd") or "."
     include = params.get("include", "")
     try:
         cmd = ["grep", "-rn", "--color=never"]
