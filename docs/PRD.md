@@ -1,9 +1,9 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.96, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.103, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
-> **Progress (2026-07-06) — tool I/O-path + arg hardening (v3.0.93–3.0.99):** Found
+> **Progress (2026-07-06) — full tool I/O-path + arg hardening (v3.0.93–3.0.103):** Found
 > by directly PROBING drydock's own tool I/O paths (higher-yield than grinding hard
 > tbench tasks, which stress the model, not drydock — cobol/db-wal ran the toolchain
 > cleanly, model-limited, no harness bug). Seven fixes — `tool_bash`/grep/read/write
@@ -13,6 +13,10 @@ Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 >   uncaught TypeErrors (tools must never raise). Shared coercers `_as_text`
 >   (list→newline-join), `_as_str_arg` (unwrap single-elem list), `_coerce_int`
 >   applied across write/edit/read/grep.
+> - **v3.0.100–103** STOP preserves partial output (operator); Edit honors
+>   **replace_all** (was ignored → multi-match loop); Glob no-crash on missing
+>   pattern; wrong-type args coerced in GitCommit/Knowledge/Consult/Web*. All 23
+>   tools audited for missing + wrong-type args.
 > - **v3.0.97 Grep errors + grep/Read binary-safety** — an invalid regex (grep
 >   exit ≥2, error on stderr) was reported as "(no matches)", a wrong negative the
 >   model trusts; now returns the error. grep decodes errors="replace"; Read drops NUL.

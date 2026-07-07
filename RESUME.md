@@ -51,34 +51,34 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-07-06 — tool I/O-path + arg hardening via direct probing (v3.0.93 → 3.0.99)
+## ⭐ 2026-07-06 — full tool I/O-path + arg hardening via direct probing (v3.0.93 → 3.0.103)
 
-**Key insight this session:** *directly probing drydock's own tool I/O paths* found
-**7 real bugs** that grinding hard tbench tasks did NOT — the hard tasks (cobol,
+**Key insight this session:** *directly probing drydock's own tool paths* found
+**~11 real bugs** that grinding hard tbench tasks did NOT — the hard tasks (cobol,
 db-wal) run the toolchain cleanly and are model-limited, so they don't surface
-harness bugs; the leverage is in probing edge cases of `tool_bash`, grep, Read,
-Write, Edit. Fixes v3.0.93–99:
-- **93** binary/non-UTF8 bash output → errors="replace" (was "(no output)" crash).
+harness bugs; the leverage is in probing edge cases of every tool. A whole *class*
+emerged: local models send args as the wrong type (a JSON array of lines, a
+stringified number, a wrapped path) → uncaught crashes. Fixes:
+- **93** binary/non-UTF8 bash output → `errors="replace"` (was "(no output)" crash).
 - **94** `_sanitize_bash_output()` strips ANSI + drops NUL.
 - **95** partial bash output preserved on timeout (tail-bounded).
 - **96** `_coerce_timeout()` — string/0/negative/absurd timeout params.
-- **97** Grep surfaces grep errors (invalid regex/bad path) instead of a false
-  "(no matches)"; grep/Read binary-safe.
-- **98–99** wrong-type tool args coerced across write/edit/read/grep (list/int/None
-  content, list new_string/file_path, string offset/limit) — were uncaught
-  TypeErrors. Helpers: `_as_text`, `_as_str_arg`, `_coerce_int`.
+- **97** Grep surfaces grep errors (invalid regex/bad path) vs false "(no matches)";
+  grep/Read binary-safe.
+- **98–99** wrong-type args coerced across write/edit/read/grep. Helpers
+  `_as_text` (list→newline-join), `_as_str_arg` (unwrap single-elem list),
+  `_coerce_int` — the reusable coercers for this whole class.
+- **100** (operator, `5bad1b1`) STOP/Esc preserves partial bash output.
+- **101** Edit honors **replace_all** (was silently ignored → multi-match loop).
+- **102** Glob no-crash on missing/list pattern; clear empty-old_string error.
+- **103** GitCommit/Knowledge/Consult/WebFetch/WebSearch coerce wrong-type args
+  (were `.strip()` AttributeErrors).
 
-- **v3.0.93** binary/non-UTF8 output no longer crashes the reader thread →
-  "(no output)"; now `errors="replace"` (text survives).
-- **v3.0.94** `_sanitize_bash_output()` strips ANSI escapes + drops NUL bytes.
-- **v3.0.95** partial output preserved when a command times out (tail-bounded).
-- **v3.0.96** `_coerce_timeout()` — string/0/negative/absurd timeout params fixed.
-- **v3.0.100** STOP (Esc) now preserves partial bash output matching timeout
-  behaviour (5bad1b1 + version bump); Read strips NUL (fixed in 97, confirmed).
-`tool_bash`/Read/Grep/Write are now the most-hardened surfaces. `cd` not
-persisting across bash calls is by design. Next: probe Edit tool edge cases
-(old_string not found, empty string, replace_all=True on no matches); probe
-multi-tool-turn flows (long bash → Edit → bash chain under real LLM traffic).
+**All 23 tools now audited** for missing + wrong-type args. git/graph/web/dispatch
+already validated missing args; the crash class lived in the file tools + the
+`.strip()` tools (now fixed). Probing tools >> grinding hard-reasoning tbench tasks
+for harness bugs. `cd` not persisting across bash calls is by design. Remaining
+probe idea: multi-tool-turn flows under real LLM traffic (long bash → Edit → bash).
 
 ## ⭐ 2026-07-03 — second-model advisor + 7 tbench-through-TUI fixes + Graphify (v3.0.82 → 3.0.92)
 
