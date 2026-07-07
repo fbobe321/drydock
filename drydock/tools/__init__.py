@@ -192,13 +192,16 @@ SCHEMAS = [
     },
     {
         "name": "Edit",
-        "description": "Replace exact text in a file. old_string must match exactly.",
+        "description": "Replace exact text in a file. old_string must match exactly. "
+                       "By default old_string must be unique; pass replace_all:true "
+                       "to replace every occurrence.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "file_path": {"type": "string"},
                 "old_string": {"type": "string", "description": "Exact text to find"},
                 "new_string": {"type": "string", "description": "Replacement text"},
+                "replace_all": {"type": "boolean", "description": "Replace ALL occurrences (default false)"},
             },
             "required": ["file_path", "old_string", "new_string"],
         },
@@ -875,9 +878,15 @@ def tool_edit(params: dict, config: dict) -> str:
                     f"to copy the exact text (including indentation)."
                 )
         count = content.count(old)
-        if count > 1:
-            return f"Error: old_string found {count} times in {fp}. Add more context to make it unique."
-        updated = content.replace(old, new, 1)
+        # replace_all (models expect it, like the standard Edit tool): replace
+        # EVERY occurrence. Without it, multiple matches are ambiguous → error.
+        replace_all = bool(params.get("replace_all", False))
+        if count > 1 and not replace_all:
+            return (
+                f"Error: old_string found {count} times in {fp}. Add more context "
+                f"to make it unique, or pass replace_all: true to replace all."
+            )
+        updated = content.replace(old, new) if replace_all else content.replace(old, new, 1)
         if updated == content:
             # No-op edit (old_string == new_string, or the replacement changes
             # nothing). Reporting "Edited" here is a false success that invites
@@ -893,6 +902,8 @@ def tool_edit(params: dict, config: dict) -> str:
         Path(fp).write_text(updated, encoding="utf-8")
         _record_undo(config, fp, content)
         result = f"Edited {fp}: replaced {len(old)} chars with {len(new)} chars"
+        if replace_all and count > 1:
+            result += f" ({count} occurrences)"
         # Advisory post-edit syntax check.
         warn = python_syntax_warning(fp, updated)
         if warn:
