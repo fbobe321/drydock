@@ -1067,6 +1067,11 @@ def tool_bash(params: dict, config: dict) -> str:
             if cancel is not None and cancel.is_set():
                 kill_process_group(proc)
                 proc.wait()
+                # The drain thread blocks in read(8192) until the buffer fills or
+                # EOF; killing the process delivers EOF, so join lets it append the
+                # last buffered output BEFORE we read chunks (else partial races
+                # the drain and comes back empty for small-output commands).
+                reader.join(1.0)
                 partial = _sanitize_bash_output(
                     _collapse_repeated_lines("".join(list(chunks)))
                 ).rstrip()
@@ -1090,6 +1095,7 @@ def tool_bash(params: dict, config: dict) -> str:
             if time.monotonic() - start > timeout:
                 kill_process_group(proc)
                 proc.wait()
+                reader.join(1.0)  # flush buffered output before building partial
                 bigger = min(timeout * 4, 1800)
                 msg = (
                     f"Error: command timed out after {timeout}s. If it is "

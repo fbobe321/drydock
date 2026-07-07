@@ -62,7 +62,7 @@ def _extract_pdf(path: str | Path) -> str | None:
         pass
     # 2) pypdf (optional dependency: drydock-cli[pdf]).
     try:
-        import pypdf
+        import pypdf  # pyright: ignore[reportMissingImports]
 
         reader = pypdf.PdfReader(str(path))
         text = "\n\n".join((pg.extract_text() or "") for pg in reader.pages).strip()
@@ -113,7 +113,7 @@ def pdf_backend_available() -> bool:
     if which("pdftotext"):
         return True
     try:
-        import pypdf  # noqa: F401
+        import pypdf  # noqa: F401  # pyright: ignore[reportMissingImports]
 
         return True
     except ImportError:
