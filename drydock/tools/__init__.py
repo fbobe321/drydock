@@ -82,14 +82,20 @@ def _detect_bash() -> str | None:
     found = shutil.which("bash")
     if found:
         return found
-    for p in ("/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash"):
+    # Common absolute locations, incl. Git-for-Windows and WSL bash on Windows.
+    for p in ("/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash",
+              r"C:\Program Files\Git\bin\bash.exe",
+              r"C:\Program Files (x86)\Git\bin\bash.exe",
+              r"C:\Windows\System32\bash.exe"):
         if os.path.exists(p):
             return p
     return None
 
 
-# Resolved once at import (in whatever environment drydock runs — host or the
-# task container). None → bash unavailable, fall back to the default shell.
+_IS_WINDOWS = os.name == "nt"
+# Resolved once at import (in whatever environment drydock runs — host, the task
+# container, Linux, or Windows). None → bash unavailable, fall back to the
+# platform's default shell (cmd.exe on Windows, /bin/sh on POSIX).
 _BASH_SHELL = _detect_bash()
 
 
@@ -928,6 +934,18 @@ def kill_process_group(proc) -> None:
     if the group can't be resolved (e.g. process already gone)."""
     if proc is None:
         return
+    if _IS_WINDOWS:
+        # No process groups / SIGKILL on Windows — taskkill /T kills the whole
+        # child tree (the shell + everything it spawned).
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           capture_output=True, timeout=10)
+        except Exception:  # noqa: BLE001
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+        return
     try:
         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
     except (ProcessLookupError, PermissionError, OSError):
@@ -1016,9 +1034,19 @@ def tool_bash(params: dict, config: dict) -> str:
     # overall timeout between slices.
     cancel = config.get("_cancel")
     proc = None
+    # Invoke bash explicitly as [bash, "-c", cmd] rather than shell=True +
+    # executable — cross-platform correctness: on Windows shell=True builds
+    # `{executable} /c {cmd}` (cmd.exe syntax), so a real bash.exe (Git Bash/WSL)
+    # would be called as `bash /c ...` and fail. `[bash, "-c", cmd]` runs the same
+    # on Linux and Windows. Without bash, fall back to the platform default shell
+    # (cmd.exe on Windows, /bin/sh on POSIX) via shell=True.
+    if _BASH_SHELL:
+        popen_cmd, use_shell = [_BASH_SHELL, "-c", cmd], False
+    else:
+        popen_cmd, use_shell = cmd, True
     try:
         proc = subprocess.Popen(
-            cmd, shell=True, executable=_BASH_SHELL,
+            popen_cmd, shell=use_shell,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             # stdin=DEVNULL so a command that reads stdin gets immediate EOF
             # (correct for a non-interactive tool) instead of inheriting the
@@ -1033,7 +1061,12 @@ def tool_bash(params: dict, config: dict) -> str:
             # which killed the thread and handed the agent "(no output)", losing
             # even the text parts of mixed output.
             text=True, encoding="utf-8", errors="replace",
-            cwd=config.get("cwd"), start_new_session=True,
+            cwd=config.get("cwd"),
+            # Own process group / job so kill_process_group takes down the whole
+            # tree: setsid on POSIX; a new process group on Windows (getattr keeps
+            # the Windows-only flag out of the POSIX code path — it resolves to 0).
+            start_new_session=not _IS_WINDOWS,
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
         )
         config.setdefault("_abort", {})["proc"] = proc
         # Read output in a daemon thread with a HARD byte cap, so memory can't
