@@ -1256,7 +1256,7 @@ def tool_consult(params: dict, config: dict) -> str:
     """Ask the configured second/advisor model (e.g. Gemini) for a second opinion."""
     from drydock import advisor
 
-    question = (params.get("question") or params.get("prompt") or "").strip()
+    question = _as_str_arg(params.get("question") or params.get("prompt")).strip()
     if not question:
         return "Error: Consult needs a `question`."
     return advisor.consult(question, config, context=params.get("context", "") or "")
@@ -1398,7 +1398,7 @@ def tool_gitcommit(params: dict, config: dict) -> str:
     try:
         return gittools.commit(
             _git_cwd(config),
-            params.get("message") or "",
+            _as_text(params.get("message")),
             add_all=params.get("add_all", True) is not False,
         )
     except gittools.GitError as e:
@@ -1578,7 +1578,7 @@ def tool_websearch(params: dict, config: dict) -> str:
     """Search the internet (DuckDuckGo). Read-only; clean message when offline."""
     from drydock import web
 
-    query = (params.get("query") or "").strip()
+    query = _as_str_arg(params.get("query")).strip()
     if not query:
         return "Error: `WebSearch` needs a `query`."
     try:
@@ -1596,7 +1596,7 @@ def tool_webfetch(params: dict, config: dict) -> str:
     """Fetch a URL and return readable text. Read-only; clean message offline."""
     from drydock import web
 
-    url = (params.get("url") or "").strip()
+    url = _as_str_arg(params.get("url")).strip()
     if not url:
         return "Error: `WebFetch` needs a `url`."
     try:
@@ -1616,7 +1616,7 @@ def tool_knowledge(params: dict, config: dict) -> str:
     If no index exists, says so cleanly rather than erroring."""
     from drydock import graphrag
 
-    query = (params.get("query") or "").strip()
+    query = _as_str_arg(params.get("query")).strip()
     if not query:
         return "Error: `Knowledge` needs a `query` describing what to look up."
     cwd = config.get("cwd") or os.getcwd()
