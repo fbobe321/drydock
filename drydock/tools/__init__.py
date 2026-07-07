@@ -833,6 +833,11 @@ def tool_edit(params: dict, config: dict) -> str:
     # crashing with a TypeError in the substring search / replace.
     old = _as_text(params.get("old_string", ""))
     new = _as_text(params.get("new_string", ""))
+    if old == "":
+        # An empty old_string matches between every char (count = len+1) → the
+        # generic "found N times" is baffling. Say what's actually wrong.
+        return ("Error: old_string is empty. Edit replaces existing text — give the "
+                "exact text to find. To create a file or add to the end, use Write.")
     if has_conflict_markers(new):
         return conflict_marker_refusal(fp)
     # If a directory was passed, try to infer the intended file (avoids a
@@ -1138,8 +1143,10 @@ def tool_bash(params: dict, config: dict) -> str:
 
 
 def tool_glob(params: dict, config: dict) -> str:
-    pattern = params["pattern"]
-    base = params.get("path") or config.get("cwd") or "."
+    pattern = _as_str_arg(params.get("pattern"))
+    if not pattern:
+        return "Error: Glob needs a 'pattern' (e.g. '**/*.py')."
+    base = _as_str_arg(params.get("path")) or config.get("cwd") or "."
     try:
         matches = sorted(_glob.glob(os.path.join(base, pattern), recursive=True))
         if not matches:
@@ -1154,7 +1161,7 @@ def tool_glob(params: dict, config: dict) -> str:
 def tool_grep(params: dict, config: dict) -> str:
     pattern = _as_str_arg(params.get("pattern"))
     path = _as_str_arg(params.get("path")) or config.get("cwd") or "."
-    include = params.get("include", "")
+    include = _as_str_arg(params.get("include", ""))
     try:
         cmd = ["grep", "-rn", "--color=never"]
         if include:
