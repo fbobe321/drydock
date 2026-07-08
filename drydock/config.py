@@ -34,6 +34,11 @@ DEFAULTS: dict[str, object] = {
     # real window BEFORE compacting (the server 400s) — set this to your -c
     # value. Default 65536 matches the bundled gemma4 server (-c 65536).
     "context_limit": 65536,
+    # Auto-retry a hung model call: if the server produces NOTHING for this many
+    # seconds, drydock abandons the wedged request and re-issues it (a fresh
+    # generation usually isn't stalled — a known gemma/llama.cpp hang). 0 = off.
+    # Set to e.g. 600 on a stall-prone local server. Bounded to a few retries.
+    "stall_retry_secs": 0,
     "theme": "harbor",
     # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
     # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The

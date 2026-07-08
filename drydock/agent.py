@@ -19,7 +19,7 @@ def _plan_has_unfinished(config: dict) -> bool:
     todo = config.get("_todo")
     return bool(todo) and any(status != "done" for _, status in todo)
 
-from drydock.providers import stream, AssistantTurn, ReasoningChunk, TextChunk
+from drydock.providers import stream, AssistantTurn, ReasoningChunk, TextChunk, StallRetry
 from drydock.tool_registry import schemas, execute
 from drydock.tools import register_all
 
@@ -159,6 +159,7 @@ def run(
 
         # Stream from LLM — with retry on context-length 400 error
         retries = 0
+        stall_retries = 0
         while retries < 2:
             try:
                 available = schemas()
@@ -178,6 +179,19 @@ def run(
                     elif isinstance(event, AssistantTurn):
                         assistant_turn = event
                 break  # success
+            except StallRetry:
+                # The local server hung mid-generation (config stall_retry_secs).
+                # Re-issue the same request — a fresh generation usually isn't
+                # stalled. Bounded so a truly-dead server can't loop forever; on
+                # exhaustion end the turn cleanly. Stalls have their OWN budget,
+                # separate from the context-error `retries`.
+                stall_retries += 1
+                if stall_retries > 3:
+                    yield TextChunk("\n[model server kept stalling — giving up on this step.]\n")
+                    assistant_turn = None
+                    break
+                yield TextChunk("\n[model server stalled — retrying...]\n")
+                continue
             except Exception as e:
                 err = str(e)
                 if is_context_length_error(err):

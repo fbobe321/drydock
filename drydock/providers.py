@@ -23,6 +23,13 @@ _LLM_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_pre
 class _StopRequested(Exception):
     """Internal: STOP was pressed during a blocking LLM call."""
 
+
+class StallRetry(Exception):
+    """The model server produced no progress for `stall_retry_secs` — the local
+    server has hung mid-generation (a known gemma/llama.cpp failure). The agent
+    abandons the wedged request and re-issues it; a fresh generation usually
+    doesn't stall. Opt-in via config `stall_retry_secs` (0 = off)."""
+
 from drydock.loop_detect import runaway_repetition_len
 from drydock.tuning import extract_thinking, strip_leaked_tool_calls, strip_thinking_tokens, use_streaming
 
@@ -138,19 +145,26 @@ def _safe_create(client, kwargs: dict, base_url: str, provider: str, timeout_s: 
 
 
 def _create_abortable(client, kwargs: dict, base_url: str, provider: str, cancel,
-                      timeout_s: float = 600.0):
+                      timeout_s: float = 600.0, stall_secs: float = 0.0):
     """Like _safe_create, but runs off-thread and polls a cancel Event so STOP
     can abandon a blocked decode (raising _StopRequested). The orphaned request
-    runs to completion in the pool thread and its result is dropped."""
+    runs to completion in the pool thread and its result is dropped.
+
+    If stall_secs > 0 and the request produces nothing in that long, raise
+    StallRetry so the caller can abandon a hung server and re-issue."""
     import openai
+    import time as _time
 
     fut = _LLM_POOL.submit(client.chat.completions.create, **kwargs)
+    start = _time.monotonic()
     while True:
         try:
             return fut.result(timeout=0.2)
         except concurrent.futures.TimeoutError:
             if cancel is not None and cancel.is_set():
                 raise _StopRequested
+            if stall_secs and (_time.monotonic() - start) > stall_secs:
+                raise StallRetry(stall_secs)  # orphan the wedged request; caller retries
         # APITimeoutError subclasses APIConnectionError — catch it FIRST.
         except openai.APITimeoutError as e:
             raise LLMUnreachable(_friendly_timeout(base_url, timeout_s)) from e
@@ -158,12 +172,17 @@ def _create_abortable(client, kwargs: dict, base_url: str, provider: str, cancel
             raise LLMUnreachable(_friendly_unreachable(base_url, provider)) from e
 
 
-def _stream_chunks(response, cancel):
+def _stream_chunks(response, cancel, stall_secs: float = 0.0):
     """Yield streamed chunks, but pull them via a background thread + queue so a
     STOP can abandon a read that's blocked waiting for the first token (the
     thinking phase). On cancel we just stop reading; the orphaned producer
-    drains in the background."""
+    drains in the background.
+
+    If stall_secs > 0 and no chunk arrives for that long, raise StallRetry — a
+    hung server. (A slow-but-alive stream still emits chunks, which reset the
+    timer, so this fires only on a true stall.)"""
     import queue as _queue
+    import time as _time
 
     q: _queue.Queue = _queue.Queue()
     _DONE = object()
@@ -178,13 +197,17 @@ def _stream_chunks(response, cancel):
             q.put(_DONE)
 
     _LLM_POOL.submit(_produce)
+    last = _time.monotonic()
     while True:
         if cancel is not None and cancel.is_set():
             return
         try:
             item = q.get(timeout=0.2)
         except _queue.Empty:
+            if stall_secs and (_time.monotonic() - last) > stall_secs:
+                raise StallRetry(stall_secs)
             continue
+        last = _time.monotonic()
         if item is _DONE:
             return
         if isinstance(item, Exception):
@@ -410,6 +433,10 @@ def stream(
         read_timeout = float(config.get("request_timeout") or 1800.0)
     except (TypeError, ValueError):
         read_timeout = 1800.0
+    try:
+        stall_secs = float(config.get("stall_retry_secs") or 0)  # 0 = disabled
+    except (TypeError, ValueError):
+        stall_secs = 0.0
     client = OpenAI(
         api_key=api_key,
         base_url=base_url,
@@ -461,7 +488,7 @@ def stream(
         # streaming. If STOP closes the client mid-call the blocking request
         # raises — swallow that as a clean cancel rather than an error.
         try:
-            yield from _complete_nonstreaming(client, kwargs, base_url, provider, cancel, read_timeout)
+            yield from _complete_nonstreaming(client, kwargs, base_url, provider, cancel, read_timeout, stall_secs)
         except _StopRequested:
             return  # STOP — abandon the in-flight request, clean stop
         except Exception:
@@ -482,11 +509,11 @@ def stream(
     _rep_checked_at = 0
 
     try:
-        response = _create_abortable(client, kwargs, base_url, provider, cancel, read_timeout)
+        response = _create_abortable(client, kwargs, base_url, provider, cancel, read_timeout, stall_secs)
     except _StopRequested:
         config.get("_abort", {}).pop("client", None)
         return
-    for chunk in _stream_chunks(response, cancel):
+    for chunk in _stream_chunks(response, cancel, stall_secs):
         if not chunk.choices:
             if hasattr(chunk, "usage") and chunk.usage:
                 in_tok = chunk.usage.prompt_tokens or in_tok
@@ -557,13 +584,13 @@ def stream(
 
 def _complete_nonstreaming(
     client, kwargs: dict, base_url: str = "", provider: str = "", cancel=None,
-    timeout_s: float = 600.0,
+    timeout_s: float = 600.0, stall_secs: float = 0.0,
 ) -> Generator:
     """Single non-streaming completion. Yields one TextChunk (if any text)
     then the AssistantTurn. Used when streaming would corrupt tool-call JSON.
     Runs off-thread so STOP can abandon a blocked decode.
     """
-    resp = _create_abortable(client, kwargs, base_url, provider, cancel, timeout_s)
+    resp = _create_abortable(client, kwargs, base_url, provider, cancel, timeout_s, stall_secs)
     choice = resp.choices[0]
     msg = choice.message
 
