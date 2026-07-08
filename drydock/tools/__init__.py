@@ -93,9 +93,32 @@ def _detect_bash() -> str | None:
 
 
 _IS_WINDOWS = os.name == "nt"
-# Resolved once at import (in whatever environment drydock runs — host, the task
-# container, Linux, or Windows). None → bash unavailable, fall back to the
-# platform's default shell (cmd.exe on Windows, /bin/sh on POSIX).
+
+
+def _detect_shell() -> tuple[str, str]:
+    """Pick the shell tool_bash runs commands in — returns (kind, path).
+
+    POSIX → bash (so the model's bash-isms work), else /bin/sh.
+    Windows → PowerShell (what users actually launch drydock in — pwsh, else
+    Windows PowerShell), else cmd.exe. WSL / Git-Bash is NOT required on Windows;
+    if you'd rather use them, install bash and it's picked up on POSIX-like paths.
+    """
+    import shutil
+    if _IS_WINDOWS:
+        for name in ("pwsh", "powershell"):
+            p = shutil.which(name)
+            if p:
+                return ("powershell", p)
+        return ("cmd", shutil.which("cmd") or "cmd.exe")
+    b = _detect_bash()
+    if b:
+        return ("bash", b)
+    return ("sh", shutil.which("sh") or "/bin/sh")
+
+
+# Resolved once at import (in whatever environment drydock runs — Linux/macOS,
+# the task container, or native Windows). _BASH_SHELL kept for back-compat.
+_SHELL_KIND, _SHELL_PATH = _detect_shell()
 _BASH_SHELL = _detect_bash()
 
 
@@ -1040,9 +1063,15 @@ def tool_bash(params: dict, config: dict) -> str:
     # would be called as `bash /c ...` and fail. `[bash, "-c", cmd]` runs the same
     # on Linux and Windows. Without bash, fall back to the platform default shell
     # (cmd.exe on Windows, /bin/sh on POSIX) via shell=True.
-    if _BASH_SHELL:
-        popen_cmd, use_shell = [_BASH_SHELL, "-c", cmd], False
-    else:
+    # Build the invocation for the detected shell. Explicit argv (shell=False)
+    # for bash/PowerShell so it's correct on every OS; shell=True lets the
+    # platform default (/bin/sh on POSIX, cmd.exe on Windows) handle the rest.
+    if _SHELL_KIND == "bash":
+        popen_cmd, use_shell = [_SHELL_PATH, "-c", cmd], False
+    elif _SHELL_KIND == "powershell":
+        popen_cmd, use_shell = [_SHELL_PATH, "-NoProfile", "-NonInteractive",
+                                "-Command", cmd], False
+    else:  # "sh" (POSIX) or "cmd" (Windows) → platform default shell
         popen_cmd, use_shell = cmd, True
     try:
         proc = subprocess.Popen(

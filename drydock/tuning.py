@@ -272,10 +272,36 @@ _DRYDOCK_COMMANDS_HELP = (
 )
 
 
+def _shell_env_note() -> str:
+    """On Windows, tell the model its shell is PowerShell/cmd so it stops
+    emitting bash it can't run. Empty on POSIX (bash is the default assumption)."""
+    import os
+    import shutil
+    if os.name != "nt":
+        return ""
+    if shutil.which("pwsh") or shutil.which("powershell"):
+        return (
+            "\nENVIRONMENT: You are on WINDOWS and the Bash tool runs your commands "
+            "through POWERSHELL, not bash. Use PowerShell / Windows commands: "
+            "Get-ChildItem (ls), Get-Content (cat), Select-String (grep), Copy-Item, "
+            "Move-Item, Remove-Item, New-Item, Test-Path, Where-Object. Many Unix "
+            "aliases (ls, cat, cp, rm, pwd, echo) also work. Do NOT use bash-only "
+            "syntax ([[ ]], <<<, $(...) subshells, grep/sed/awk pipelines) — it "
+            "fails. Use Windows paths (backslashes) and $env:VAR for environment "
+            "variables. Chain commands with ';' (not '&&')."
+        )
+    return (
+        "\nENVIRONMENT: You are on WINDOWS and the Bash tool runs your commands "
+        "through cmd.exe, not bash. Use Windows/cmd commands (dir, type, findstr, "
+        "copy, del, move, mkdir); do NOT use bash syntax. Use backslash paths, "
+        "%VAR% for environment variables, and '&' or '&&' to chain commands."
+    )
+
+
 def system_prompt_for_model(model: str | None) -> str:
     """Return the system prompt best suited to the model."""
     base = _GEMMA_SYSTEM_PROMPT if is_gemma(model) else _DEFAULT_SYSTEM_PROMPT
-    return base + _DRYDOCK_COMMANDS_HELP
+    return base + _DRYDOCK_COMMANDS_HELP + _shell_env_note()
 
 
 def thinking_level_for_turn(turn_count: int, is_user_turn: bool) -> str:
