@@ -13,6 +13,20 @@ from typing import Generator
 # stall-loop while letting a long, productive plan run as far as it needs.
 PLAN_CONTINUE_CAP = 3
 
+# Over-think interrupt: when a call keeps stalling/over-thinking (repeated
+# StallRetry), re-issue in "decisive mode" — a forcing suffix + a hard token cap
+# so the model physically cannot burn thousands of reasoning tokens without
+# acting. The model that produced this loop (gemma) generates 5-15 min / 5k+
+# token "thinking" turns that stall_retry alone can't break (tokens flow); this
+# forces a short, single-action turn instead.
+_DECISIVE_MAX_TOKENS = 1500
+_DECISIVE_SUFFIX = (
+    "\n\nURGENT — you have spent too long reasoning without acting. STOP "
+    "analyzing. Your reply must be SHORT and take exactly ONE concrete action "
+    "right now: emit a single tool call (run a command or write a file) with "
+    "little or no explanation. Do NOT lay out a plan; act."
+)
+
 
 def _plan_has_unfinished(config: dict) -> bool:
     """True if the model laid out a `todo` plan that still has non-done items."""
@@ -160,6 +174,7 @@ def run(
         # Stream from LLM — with retry on context-length 400 error
         retries = 0
         stall_retries = 0
+        decisive = False  # over-think interrupt: force a short, single-action turn
         while retries < 2:
             try:
                 available = schemas()
@@ -167,7 +182,7 @@ def run(
                     available = [s for s in available if s.get("name") in allow]
                 for event in stream(
                     model=turn_config["model"],
-                    system=system_prompt,
+                    system=(system_prompt + _DECISIVE_SUFFIX) if decisive else system_prompt,
                     messages=state.messages,
                     tool_schemas=filter_tool_schemas(available, turn_config.get("model")),
                     config=turn_config,
@@ -180,17 +195,25 @@ def run(
                         assistant_turn = event
                 break  # success
             except StallRetry:
-                # The local server hung mid-generation (config stall_retry_secs).
-                # Re-issue the same request — a fresh generation usually isn't
-                # stalled. Bounded so a truly-dead server can't loop forever; on
-                # exhaustion end the turn cleanly. Stalls have their OWN budget,
-                # separate from the context-error `retries`.
+                # The call stalled or over-thought past stall_retry_secs. First
+                # retry re-issues as-is (handles a transient server hang cheaply);
+                # if it KEEPS happening it's over-thinking, so escalate to decisive
+                # mode — a forcing suffix + a hard token cap that make a long
+                # reasoning turn impossible. Bounded; on exhaustion end cleanly.
                 stall_retries += 1
                 if stall_retries > 3:
-                    yield TextChunk("\n[model server kept stalling — giving up on this step.]\n")
+                    yield TextChunk("\n[model kept stalling/over-thinking — giving up on this step.]\n")
                     assistant_turn = None
                     break
-                yield TextChunk("\n[model server stalled — retrying...]\n")
+                if stall_retries >= 2 and not decisive:
+                    decisive = True
+                    turn_config = dict(turn_config)
+                    cur = int(turn_config.get("max_tokens", 8192) or 8192)
+                    turn_config["max_tokens"] = min(cur, _DECISIVE_MAX_TOKENS)
+                    turn_config["reasoning_effort"] = "low"
+                    yield TextChunk("\n[taking too long — forcing a decisive, single-action step...]\n")
+                else:
+                    yield TextChunk("\n[model server stalled — retrying...]\n")
                 continue
             except Exception as e:
                 err = str(e)
