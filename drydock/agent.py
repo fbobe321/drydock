@@ -33,7 +33,7 @@ def _plan_has_unfinished(config: dict) -> bool:
     todo = config.get("_todo")
     return bool(todo) and any(status != "done" for _, status in todo)
 
-from drydock.providers import stream, AssistantTurn, ReasoningChunk, TextChunk, StallRetry
+from drydock.providers import stream, AssistantTurn, ReasoningChunk, TextChunk, StallRetry, RepetitionDetected
 from drydock.tool_registry import schemas, execute
 from drydock.tools import register_all
 
@@ -194,24 +194,28 @@ def run(
                     elif isinstance(event, AssistantTurn):
                         assistant_turn = event
                 break  # success
-            except StallRetry:
-                # The call stalled or over-thought past stall_retry_secs. First
-                # retry re-issues as-is (handles a transient server hang cheaply);
-                # if it KEEPS happening it's over-thinking, so escalate to decisive
-                # mode — a forcing suffix + a hard token cap that make a long
-                # reasoning turn impossible. Bounded; on exhaustion end cleanly.
+            except StallRetry as _sr:
+                # Stalled/over-thought past stall_retry_secs (wall-time), OR collapsed
+                # into a pure-repetition loop (RepetitionDetected, content-based). A
+                # first wall-time retry re-issues as-is (a transient hang clears); a
+                # persistent stall OR any repetition loop goes straight to decisive
+                # mode — a forcing suffix + hard token cap that make a long reasoning
+                # turn impossible. Repetition escalates immediately (re-issuing a loop
+                # just loops again). Bounded; on exhaustion end cleanly.
+                is_rep = isinstance(_sr, RepetitionDetected)
                 stall_retries += 1
                 if stall_retries > 3:
-                    yield TextChunk("\n[model kept stalling/over-thinking — giving up on this step.]\n")
+                    yield TextChunk("\n[model kept stalling/looping — giving up on this step.]\n")
                     assistant_turn = None
                     break
-                if stall_retries >= 2 and not decisive:
+                if (is_rep or stall_retries >= 2) and not decisive:
                     decisive = True
                     turn_config = dict(turn_config)
                     cur = int(turn_config.get("max_tokens", 8192) or 8192)
                     turn_config["max_tokens"] = min(cur, _DECISIVE_MAX_TOKENS)
                     turn_config["reasoning_effort"] = "low"
-                    yield TextChunk("\n[taking too long — forcing a decisive, single-action step...]\n")
+                    why = "output looping" if is_rep else "taking too long"
+                    yield TextChunk(f"\n[{why} — forcing a decisive, single-action step...]\n")
                 else:
                     yield TextChunk("\n[model server stalled — retrying...]\n")
                 continue

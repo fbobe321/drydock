@@ -30,6 +30,14 @@ class StallRetry(Exception):
     abandons the wedged request and re-issues it; a fresh generation usually
     doesn't stall. Opt-in via config `stall_retry_secs` (0 = off)."""
 
+
+class RepetitionDetected(StallRetry):
+    """CONTENT trigger for the over-think interrupt: the model collapsed into a
+    pure-repetition loop (same short unit ×6+, 600+ chars) and produced no usable
+    action. Unlike the wall-time StallRetry this fires on the *content*, so it
+    never trips on productive-but-long reasoning — only genuine spinning. A plain
+    re-issue would just loop again, so the agent goes straight to decisive mode."""
+
 from drydock.loop_detect import runaway_repetition_len
 from drydock.tuning import extract_thinking, strip_leaked_tool_calls, strip_thinking_tokens, use_streaming
 
@@ -540,6 +548,11 @@ def stream(
                     _rep_checked_at = len(text)
                     run = runaway_repetition_len(text)
                     if run:
+                        # With the over-think interrupt on, a genuine loop escalates
+                        # to a decisive retry (recover) instead of returning a
+                        # truncated turn. Otherwise keep the advisory trim+stop.
+                        if stall_secs:
+                            raise RepetitionDetected(0)
                         text = (
                             text[: len(text) - run]
                             + "\n[… output began repeating — stopped by drydock]"
@@ -599,10 +612,6 @@ def _complete_nonstreaming(
     # the generic special-token pass would eat the tool_call markers.
     text, had_leak = strip_leaked_tool_calls(msg.content or "")
     thinking, text = extract_thinking(text)
-    if thinking:
-        yield ReasoningChunk(thinking)
-    if text.strip():
-        yield TextChunk(text)
 
     tool_calls = []
     for i, tc in enumerate(getattr(msg, "tool_calls", None) or []):
@@ -612,6 +621,21 @@ def _complete_nonstreaming(
             "name": tc.function.name,
             "input": inp,
         })
+
+    # Repetition trigger for the over-think interrupt (gated by the same
+    # stall_secs feature). Non-streaming gemma turns are where the over-think
+    # lives; if the turn collapsed into a pure loop and produced NO usable action,
+    # go decisive rather than feeding the garbage turn into the conversation. Only
+    # fires on genuine repetition, so productive-but-long reasoning is never hit.
+    if stall_secs and not tool_calls and (
+        runaway_repetition_len(thinking or "") or runaway_repetition_len(text or "")
+    ):
+        raise RepetitionDetected(0)
+
+    if thinking:
+        yield ReasoningChunk(thinking)
+    if text.strip():
+        yield TextChunk(text)
 
     usage = getattr(resp, "usage", None)
     in_tok = usage.prompt_tokens if usage else 0
