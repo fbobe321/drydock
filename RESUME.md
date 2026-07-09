@@ -51,6 +51,48 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-07-08 — over-think interrupt, native Windows, GraphRAG fixes, Screenshot + ACTIVATION STEERING PROVEN (v3.0.107 → 3.0.114)
+
+🔔 **FIRST: the GitHub push token is EXPIRED** (401). PyPI publishing still works;
+`git push` does not. v3.0.114 (`89dc2b9`) + any later commits are on PyPI but NOT on
+GitHub. User to refresh a classic PAT (`repo` scope) into `~/.config/drydock/github_token`,
+then `git push origin master`. See memory `project_reminder_github_token`.
+
+**Shipped (all on PyPI; GitHub behind from 3.0.114):**
+- **3.0.107 over-think interrupt** — escalating stall-retry → "decisive mode": on a
+  persistent stall/over-think, re-issue with a forcing system suffix + max_tokens cap
+  (1500) + reasoning_effort=low, so gemma physically can't burn a 5k-token no-action
+  turn. Gated by stall_retry_secs. + no-pip-dependency prompt nudge (openssl lesson).
+- **3.0.108-110 native Windows** — runs in PowerShell/cmd, NO WSL/bash. `_detect_shell()`
+  (Windows→PowerShell else cmd; never bash), `tool_bash` builds `pwsh -NoProfile
+  -NonInteractive -Command`; `DRYDOCK_SHELL` env override; bulletproof `_is_windows_env`
+  (WINDIR catches MSYS/Git-Bash Pythons); `/shell` diagnostic command. Prompt tells the
+  model its real shell.
+- **3.0.111** — the Bash tool DISPLAYS as its real shell ("PowerShell"/"cmd") on Windows
+  (schema name stays "Bash" for the model).
+- **3.0.112-113 GraphRAG** — `_unquote()` strips quotes around a path (Windows "No text
+  found" bug); per-file try/except so one bad doc can't crash a folder build; NEW
+  **BuildKnowledge** tool so the MODEL can build the KB itself instead of punting to
+  `/graphrag`.
+- **3.0.114 Screenshot tool** — captures the screen to PNG and the model SEES it (auto-
+  attach, same path as ViewImage). Windows PowerShell/System.Drawing, macOS screencapture,
+  Linux grabbers.
+
+**🎯 ACTIVATION STEERING PROVEN** (the operator's "hooks INTO the model, not just prompting"
+goal). Full detail in memory `project_activation_steering` + `/data3/build/steer/`.
+- llama-server supports `--control-vector-scaled` + `--control-vector-layer-range`; built
+  `llama-cvector-generator`. v1 (12 pairs, trait words in prompt, all layers) FAILED (no
+  usable window). **v2 (30 clean pairs — same task, only response differs decisive-vs-
+  deliberating; layers 20-45) WORKS**: coherent at +3..+5, "count ERROR" 127→58 tok.
+- **Real agentic test**: password-recovery went 0→10 tool calls steered (baseline over-
+  thought 5.8k tok, no action) — but still FAILED (capability wall). Proves steering fixes
+  BEHAVIORAL failures, not capability.
+- **RSI measurement loop** (`/data3/tbench_local/steer_measure.sh` + `classify.py`): runs
+  tbench baseline-vs-steered through the real TUI, splits failures into behavioral
+  (steering-recoverable) vs capability-limited → the "wasted-capability slice". RUNNING
+  overnight 2026-07-08; results in `steer_measure_out/report.txt`.
+- Apply: `bash /data3/build/steer/APPLY_v2.sh 4 20 45`; revert: `REVERT_main_server.sh`.
+
 ## ⭐ 2026-07-06 — full tool I/O-path + arg hardening via direct probing (v3.0.93 → 3.0.103)
 
 **Key insight this session:** *directly probing drydock's own tool paths* found
