@@ -607,6 +607,34 @@ SCHEMAS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "BuildKnowledge",
+        "description": (
+            "BUILD or extend the user's GraphRAG knowledge base FROM THEIR documents "
+            "or code. Call this YOURSELF when the user asks you to index / ingest / "
+            "'make a knowledge base from' a folder or file (e.g. 'create a knowledge "
+            "base from my Documents'). Give `path` (a file or directory). mode 'build' "
+            "= (re)build from scratch; 'add' = merge into an existing base. When it "
+            "succeeds you can search it with the Knowledge tool. Do NOT tell the user "
+            "to type a '/graphrag' slash command — actually do it with this tool."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "File or directory to index. A normal path — on "
+                                   "Windows e.g. C:\\Users\\me\\Documents (quotes optional).",
+                },
+                "mode": {
+                    "type": "string",
+                    "description": "'build' (rebuild from scratch, default) or 'add' "
+                                   "(merge into the existing base).",
+                },
+            },
+            "required": ["path"],
+        },
+    },
 ]
 
 # ── Tool implementations ──────────────────────────────────────────────────
@@ -1741,6 +1769,34 @@ def tool_knowledge(params: dict, config: dict) -> str:
     return graphrag.format_results(result, query)
 
 
+def tool_build_knowledge(params: dict, config: dict) -> str:
+    """Build/extend the GraphRAG knowledge base from a file or directory of docs —
+    the model-callable equivalent of `/graphrag build|add`, so the agent can do it
+    itself when asked instead of telling the user to run a slash command."""
+    from drydock import graphrag
+
+    path = _as_str_arg(params.get("path")).strip()
+    if not path:
+        return ("Error: `BuildKnowledge` needs a `path` — a file or directory of "
+                "documents/code to index.")
+    mode = (_as_str_arg(params.get("mode")) or "build").strip().lower()
+    if mode not in ("build", "add"):
+        mode = "build"
+    cwd = config.get("cwd") or os.getcwd()
+    store = config.get("graphrag_store") or graphrag.default_store_path(cwd)
+    try:
+        fn = graphrag.build_index if mode == "build" else graphrag.add_to_index
+        stats = fn([path], store, cwd=cwd)
+    except Exception as e:  # noqa: BLE001 — report, never crash the agent loop
+        return f"Error building the knowledge base from {path}: {e}"
+    if not stats.get("chunks"):
+        return (f"No indexable text found under {path}. Nothing was added. (Supported: "
+                "text/code files, .docx, .pdf, .md, etc. Check the path is correct.)")
+    verb = "Built" if mode == "build" else "Updated"
+    return (f"{verb} the knowledge base: {stats['files']} files, {stats['chunks']} "
+            f"chunks, {stats['entities']} entities. Search it with the Knowledge tool.")
+
+
 # ── Register all tools ────────────────────────────────────────────────────
 
 _TOOLS = [
@@ -1754,6 +1810,7 @@ _TOOLS = [
     ("task", tool_task, True),
     ("Dispatch", tool_dispatch, True),
     ("Knowledge", tool_knowledge, True),
+    ("BuildKnowledge", tool_build_knowledge, False),
     ("GraphQuery", tool_graphquery, True),
     ("GraphAdd", tool_graphadd, False),
     ("StigRules", tool_stigrules, True),
@@ -1776,6 +1833,7 @@ def register_all():
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
             "Consult": tool_consult, "Knowledge": tool_knowledge,
+            "BuildKnowledge": tool_build_knowledge,
             "GraphQuery": tool_graphquery, "GraphAdd": tool_graphadd,
             "StigRules": tool_stigrules, "StigRule": tool_stigrule, "StigSet": tool_stigset,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,

@@ -134,25 +134,28 @@ def _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip_sources):
     cleaned = [_unquote(p) for p in paths]
     for fp in _iter_text_files([str(Path(cwd) / p) if not os.path.isabs(p) else p
                                 for p in cleaned]):
-        rel = os.path.relpath(str(fp), cwd)
-        if rel in skip_sources:
-            continue
-        if fp.suffix.lower() in extract.EXTRACTABLE_EXT:
-            text = extract.extract_document(fp)  # PDF/Word → text (or None)
-            if not text:
-                continue  # unreadable / no PDF backend — skip cleanly
-        else:
-            try:
-                text = fp.read_text("utf-8", "ignore")
-            except OSError:
+        # Per-file isolation: ONE unreadable/odd file (a locked Word doc, a weird
+        # encoding, a PDF backend quirk) must never crash a whole-folder build —
+        # skip it and keep indexing the rest.
+        try:
+            rel = os.path.relpath(str(fp), cwd)
+            if rel in skip_sources:
                 continue
-        if not text.strip():
+            if fp.suffix.lower() in extract.EXTRACTABLE_EXT:
+                text = extract.extract_document(fp)  # PDF/Word → text (or None)
+            else:
+                text = fp.read_text("utf-8", "ignore")
+            if not text or not text.strip():
+                continue  # unreadable / empty — skip cleanly
+            # Build this file's chunks locally; commit only if it ALL succeeds so a
+            # mid-file failure leaves no partial state and isn't miscounted.
+            local = [(body, extract_entities(body)) for body in _chunk_text(text)]
+        except Exception:  # noqa: BLE001 — isolate a bad file, never abort the build
             continue
         added += 1
         skip_sources.add(rel)  # don't double-ingest the same file in one call
-        for body in _chunk_text(text):
+        for body, ents in local:
             cid = len(chunks)
-            ents = extract_entities(body)
             chunks.append({"id": cid, "source": rel, "text": body, "entities": ents})
             for e in ents:
                 entity_chunks[e].add(cid)
