@@ -88,10 +88,20 @@ goal). Full detail in memory `project_activation_steering` + `/data3/build/steer
   thought 5.8k tok, no action) — but still FAILED (capability wall). Proves steering fixes
   BEHAVIORAL failures, not capability.
 - **RSI measurement loop** (`/data3/tbench_local/steer_measure.sh` + `classify.py`): runs
-  tbench baseline-vs-steered through the real TUI, splits failures into behavioral
-  (steering-recoverable) vs capability-limited → the "wasted-capability slice". RUNNING
-  overnight 2026-07-08; results in `steer_measure_out/report.txt`.
-- Apply: `bash /data3/build/steer/APPLY_v2.sh 4 20 45`; revert: `REVERT_main_server.sh`.
+  tbench baseline-vs-intervention through the real TUI, splits failures into behavioral
+  (recoverable) vs capability-limited → the "wasted-capability slice".
+- **VERDICT (5 tasks, 2026-07-09): behavioral interventions don't move pass-rate here.**
+  Steering @+4: recovered **0/3** failures, **regressed 2** passing tasks. Wall-time interrupt
+  (steer_measure/interrupt_measure.sh, thresholds 300 & 480): ~net-zero, reliably regressed a
+  productive-reasoning task (adaptive-rejection-sampler) at both. On this set gemma's failures
+  are **capability-bound, not behavioral** — all three cut over-think tokens, none reliably
+  flip fail→pass. (n=5, single-run — directional.) Full numbers: `STEERING_RESULTS.md`.
+- **Repetition detector (v3.0.115)** kept as the one behavioral win: `RepetitionDetected`
+  fires on a genuine pure-repetition loop only (never productive reasoning) → decisive mode.
+  Precise + safe (no regressions), unlike wall-time. Gated by `stall_retry_secs`.
+- Apply steering: `bash /data3/build/steer/APPLY_v2.sh 4 20 45`; revert: `REVERT_main_server.sh`.
+- **Next hypothesis (pass-rate = INFORMATION, not behavior):** few-shot task exemplars,
+  retrieved tool recipes via GraphRAG, environment priming, requirement self-check.
 
 ## ⭐ 2026-07-06 — full tool I/O-path + arg hardening via direct probing (v3.0.93 → 3.0.103)
 

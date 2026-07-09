@@ -1,7 +1,32 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.103, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.115, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-07-08/09) — over-think handling, native Windows, GraphRAG, Screenshot,
+> and the ACTIVATION-STEERING investigation (v3.0.107–3.0.115):**
+> - **Over-think interrupt (3.0.107)** — escalating stall-retry → "decisive mode" (forcing
+>   suffix + max_tokens cap + low effort) so gemma can't burn a 5k-token no-action turn.
+> - **Repetition detector (3.0.115)** — CONTENT trigger for the interrupt: fires on a genuine
+>   pure-repetition loop (`runaway_repetition_len`, 6+ reps/600+ chars), never on productive
+>   reasoning — the precise, no-false-positive version of the wall-time trigger.
+> - **Native Windows (3.0.108–111)** — runs in PowerShell/cmd, no WSL/bash; `_detect_shell`,
+>   `DRYDOCK_SHELL` override, WINDIR-based detection, `/shell` diagnostic, shell-aware label.
+> - **GraphRAG (3.0.112–113)** — quote-stripping path fix + per-file isolation + `BuildKnowledge`
+>   tool (agent builds the KB itself). **Screenshot tool (3.0.114)** — capture screen → vision.
+> - **🎯 Activation steering PROVEN but net-negative on pass-rate.** llama.cpp control vectors
+>   (`--control-vector-scaled`); v2 (30 clean pairs, layers 20-45) is coherent + cuts over-think
+>   tokens ~2x. But the **RSI measurement loop** (baseline-vs-intervention through the real TUI,
+>   `classify.py`) showed, across 5 tasks: steering recovered **0/3** failures and **regressed 2**
+>   passing tasks; wall-time interrupt ~net-zero and reliably regressed a productive-reasoning task.
+>   **Finding: on this set gemma's failures are CAPABILITY-bound, not behavioral** — all three
+>   interventions cut over-thinking but none reliably convert a fail→pass. The "wasted-capability"
+>   slice steering can recover is ~0%. (n=5, single-run — directional.) The repetition detector is
+>   the one behavioral win kept: precise + safe, catches degenerate loops with no regressions.
+>   Artifacts + full numbers: `/data3/build/steer/STEERING_RESULTS.md`.
+> - **Next hypothesis:** pass-rate needs INFORMATION not behavior-shaping — few-shot task
+>   exemplars, retrieved tool recipes (GraphRAG), environment priming, requirement self-check.
+> 544 tests. GitHub push token was rotated (old one expired); PyPI + GitHub back in sync.
 
 > **Progress (2026-07-06) — full tool I/O-path + arg hardening (v3.0.93–3.0.103):** Found
 > by directly PROBING drydock's own tool I/O paths (higher-yield than grinding hard
