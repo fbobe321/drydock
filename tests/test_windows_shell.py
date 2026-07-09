@@ -77,3 +77,18 @@ def test_env_override_forces_cmd():
 def test_env_override_forces_bash():
     with mock.patch.dict("os.environ", {"DRYDOCK_SHELL": "bash"}):
         assert T._detect_shell()[0] in ("bash", "sh")
+
+
+def test_is_windows_detection_signals():
+    from drydock.tools import _is_windows_env
+    # native Windows
+    assert _is_windows_env("nt", "win32", {})
+    # MSYS/Git-Bash Python: posix os.name but WINDIR set
+    assert _is_windows_env("posix", "msys", {"WINDIR": r"C:\Windows"})
+    # Cygwin
+    assert _is_windows_env("posix", "cygwin", {})
+    # SystemRoot fallback
+    assert _is_windows_env("posix", "linux", {"SystemRoot": r"C:\Windows"})
+    # real Linux / WSL (no Windows env)
+    assert not _is_windows_env("posix", "linux", {})
+    assert not _is_windows_env("posix", "linux", {"HOME": "/home/x"})

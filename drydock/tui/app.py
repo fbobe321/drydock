@@ -501,6 +501,8 @@ class DrydockApp(App):
             self._cmd_compact()
         elif cmd == "/context":
             self._cmd_context(arg)
+        elif cmd == "/shell":
+            self._cmd_shell()
         elif cmd == "/advisor":
             self._cmd_advisor(arg)
         elif cmd == "/ask":
@@ -806,6 +808,30 @@ class DrydockApp(App):
             self._refresh_status()
         else:
             self._begin(prompt)
+
+    def _cmd_shell(self) -> None:
+        """Show exactly which shell the Bash tool runs commands through, plus the
+        platform signals — so a 'still using bash on Windows' report is instantly
+        diagnosable. (The tool is NAMED 'Bash' on every OS; on Windows it actually
+        invokes PowerShell/cmd underneath.)"""
+        import os as _os
+        import sys as _sys
+
+        from drydock import tools
+        kind, path = tools._detect_shell()
+        lines = [
+            f"The Bash tool runs your commands through: {kind.upper()}",
+            f"  shell path : {path}",
+            f"  os.name={_os.name}  sys.platform={_sys.platform}  detected_windows={tools._IS_WINDOWS}",
+            f"  DRYDOCK_SHELL env = {_os.environ.get('DRYDOCK_SHELL') or '(unset)'}",
+            f"  bash on system    = {tools._detect_bash() or '(none)'}",
+        ]
+        if kind == "bash" and tools._IS_WINDOWS:
+            lines.append("  ⚠ on Windows but using bash — set  $env:DRYDOCK_SHELL=\"powershell\"  and restart.")
+        elif kind == "powershell":
+            lines.append("  ✓ using PowerShell (the 'Bash' label is just the tool's name).")
+        lines.append("  Force a shell any time: set env DRYDOCK_SHELL to powershell / cmd / bash.")
+        self._info("\n".join(lines))
 
     def _cmd_context(self, arg: str) -> None:
         """View or change the context-window budget (tokens) — the cap that drives

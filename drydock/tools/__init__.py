@@ -93,9 +93,19 @@ def _detect_bash() -> str | None:
     return None
 
 
-# Windows even if a non-native Python (rare) reports a posix os.name — sys.platform
-# is the reliable signal on CPython.
-_IS_WINDOWS = os.name == "nt" or sys.platform.startswith("win")
+def _is_windows_env(os_name: str, platform: str, environ) -> bool:
+    """Treat as Windows if ANY signal says so — native CPython (os.name 'nt' /
+    sys.platform 'win32') AND odd Pythons run from Git-Bash/MSYS/Cygwin (which
+    report posix but where Windows always exports WINDIR/SystemRoot). WSL (real
+    Linux) does not set WINDIR, so it correctly stays POSIX/bash."""
+    return (
+        os_name == "nt"
+        or platform in ("win32", "cygwin", "msys")
+        or bool(environ.get("WINDIR") or environ.get("SystemRoot"))
+    )
+
+
+_IS_WINDOWS = _is_windows_env(os.name, sys.platform, os.environ)
 
 
 def _detect_shell() -> tuple[str, str]:
