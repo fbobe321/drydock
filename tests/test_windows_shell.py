@@ -32,21 +32,16 @@ def test_powershell_invocation_argv(monkeypatch):
     """When the shell is PowerShell, Popen is called [pwsh -NoProfile
     -NonInteractive -Command <cmd>] with shell=False — not shell=True."""
     seen = {}
-    real = subprocess.Popen
 
-    class FakeProc:
-        stdout = None
-        pid = 1
-        def wait(self): return 0
-        def poll(self): return 0
     def spy(popen_cmd, *a, **kw):
-        seen["cmd"] = popen_cmd; seen["shell"] = kw.get("shell")
+        seen["cmd"] = popen_cmd
+        seen["shell"] = kw.get("shell")
         raise RuntimeError("stop-after-capture")  # don't actually run pwsh on Linux
 
     monkeypatch.setattr(T, "_SHELL_KIND", "powershell")
     monkeypatch.setattr(T, "_SHELL_PATH", r"C:\ps\pwsh.exe")
     monkeypatch.setattr(subprocess, "Popen", spy)
-    out = T.tool_bash({"command": "Get-ChildItem", "timeout": 5}, {"cwd": "."})
+    T.tool_bash({"command": "Get-ChildItem", "timeout": 5}, {"cwd": "."})
     assert seen["shell"] is False
     assert seen["cmd"][:4] == [r"C:\ps\pwsh.exe", "-NoProfile", "-NonInteractive", "-Command"]
     assert seen["cmd"][4] == "Get-ChildItem"
@@ -65,3 +60,20 @@ def test_prompt_note_windows_cmd():
 
 def test_prompt_note_empty_on_posix():
     assert tuning._shell_env_note() == ""
+
+
+def test_env_override_forces_powershell():
+    with mock.patch.dict("os.environ", {"DRYDOCK_SHELL": "powershell"}), \
+         mock.patch("shutil.which", side_effect=lambda n: r"C:\pwsh.exe" if n in ("pwsh", "powershell") else None):
+        assert T._detect_shell()[0] == "powershell"
+
+
+def test_env_override_forces_cmd():
+    with mock.patch.dict("os.environ", {"DRYDOCK_SHELL": "cmd"}), \
+         mock.patch("shutil.which", return_value=r"C:\cmd.exe"):
+        assert T._detect_shell()[0] == "cmd"
+
+
+def test_env_override_forces_bash():
+    with mock.patch.dict("os.environ", {"DRYDOCK_SHELL": "bash"}):
+        assert T._detect_shell()[0] in ("bash", "sh")

@@ -6,6 +6,7 @@ Each tool is a function (params, config) -> str.
 from __future__ import annotations
 
 import os
+import sys
 import re
 import difflib
 import glob as _glob
@@ -92,28 +93,40 @@ def _detect_bash() -> str | None:
     return None
 
 
-_IS_WINDOWS = os.name == "nt"
+# Windows even if a non-native Python (rare) reports a posix os.name — sys.platform
+# is the reliable signal on CPython.
+_IS_WINDOWS = os.name == "nt" or sys.platform.startswith("win")
 
 
 def _detect_shell() -> tuple[str, str]:
     """Pick the shell tool_bash runs commands in — returns (kind, path).
 
+    Override with env DRYDOCK_SHELL=powershell|cmd|bash to force one. Otherwise:
     POSIX → bash (so the model's bash-isms work), else /bin/sh.
     Windows → PowerShell (what users actually launch drydock in — pwsh, else
-    Windows PowerShell), else cmd.exe. WSL / Git-Bash is NOT required on Windows;
-    if you'd rather use them, install bash and it's picked up on POSIX-like paths.
+    Windows PowerShell), else cmd.exe. WSL / Git-Bash is NEVER required on Windows.
     """
     import shutil
-    if _IS_WINDOWS:
-        for name in ("pwsh", "powershell"):
-            p = shutil.which(name)
-            if p:
-                return ("powershell", p)
+
+    def _powershell():
+        p = shutil.which("pwsh") or shutil.which("powershell")
+        return ("powershell", p) if p else None
+
+    def _bash():
+        b = _detect_bash()
+        return ("bash", b) if b else ("sh", shutil.which("sh") or "/bin/sh")
+
+    forced = os.environ.get("DRYDOCK_SHELL", "").strip().lower()
+    if forced in ("powershell", "pwsh"):
+        return _powershell() or ("cmd", shutil.which("cmd") or "cmd.exe")
+    if forced == "cmd":
         return ("cmd", shutil.which("cmd") or "cmd.exe")
-    b = _detect_bash()
-    if b:
-        return ("bash", b)
-    return ("sh", shutil.which("sh") or "/bin/sh")
+    if forced in ("bash", "sh"):
+        return _bash()
+
+    if _IS_WINDOWS:
+        return _powershell() or ("cmd", shutil.which("cmd") or "cmd.exe")
+    return _bash()
 
 
 # Resolved once at import (in whatever environment drydock runs — Linux/macOS,
