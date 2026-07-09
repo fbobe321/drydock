@@ -245,6 +245,22 @@ SCHEMAS = [
         },
     },
     {
+        "name": "Screenshot",
+        "description": "CAPTURE the current screen and SEE it with your vision — use "
+                       "when the user asks you to look at their screen, review what's "
+                       "displayed, debug a GUI, or read something shown on screen. Takes "
+                       "the screenshot and shows it to you directly (no need to call "
+                       "ViewImage after). Works on Windows (PowerShell), macOS, and "
+                       "Linux with a display. Optionally pass `path` to also save the PNG.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string",
+                         "description": "Optional file to save the PNG to. Omit to use a temp file."},
+            },
+        },
+    },
+    {
         "name": "Write",
         "description": "Write content to a file, creating parent directories as needed.",
         "input_schema": {
@@ -709,6 +725,74 @@ def tool_viewimage(params: dict, config: dict) -> str:
     # The absolute path in this text is what the API boundary attaches.
     return (f"Loaded image {fp} ({kind}, {size // 1024 or 1}KB) — it is now visible "
             "to you. Describe it, read any text in it, or use it to answer the task.")
+
+
+def _capture_screen(out: str) -> str | None:
+    """Grab the whole (virtual) screen to PNG `out`. Returns an error string, or
+    None on success. Per-OS: Windows uses PowerShell + System.Drawing; macOS uses
+    screencapture; Linux tries the common grabbers in turn."""
+    import shutil
+    import subprocess
+    try:
+        if _IS_WINDOWS:
+            ps = (
+                "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
+                "$s=[System.Windows.Forms.SystemInformation]::VirtualScreen; "
+                "$b=New-Object System.Drawing.Bitmap $s.Width,$s.Height; "
+                "$g=[System.Drawing.Graphics]::FromImage($b); "
+                "$g.CopyFromScreen($s.Left,$s.Top,0,0,$b.Size); "
+                f"$b.Save('{out}',[System.Drawing.Imaging.ImageFormat]::Png); "
+                "$g.Dispose(); $b.Dispose()"
+            )
+            exe = shutil.which("pwsh") or shutil.which("powershell") or "powershell"
+            subprocess.run([exe, "-NoProfile", "-NonInteractive", "-Command", ps],
+                           capture_output=True, timeout=30)
+        elif sys.platform == "darwin":
+            subprocess.run(["screencapture", "-x", out], capture_output=True, timeout=30)
+        else:  # Linux/BSD — try grabbers in order of ubiquity (X11 + wayland)
+            grabbers = (["scrot", "-o", out], ["import", "-window", "root", out],
+                        ["gnome-screenshot", "-f", out], ["grim", out],
+                        ["spectacle", "-b", "-n", "-o", out], ["maim", out])
+            tried = [g[0] for g in grabbers if shutil.which(g[0])]
+            if not tried:
+                return ("no screenshot tool found. Install one of: scrot, imagemagick "
+                        "(import), gnome-screenshot, grim (wayland), spectacle, maim.")
+            for g in grabbers:
+                if shutil.which(g[0]):
+                    subprocess.run(g, capture_output=True, timeout=30)
+                    if os.path.isfile(out) and os.path.getsize(out):
+                        break
+    except subprocess.TimeoutExpired:
+        return "screen capture timed out (30s)."
+    except Exception as e:  # noqa: BLE001 — report, never crash the loop
+        return f"screen capture failed: {e}"
+    return None
+
+
+def tool_screenshot(params: dict, config: dict) -> str:
+    """Capture the screen to a PNG and make it visible to the vision model — the
+    returned absolute path is auto-attached by the API boundary, same as ViewImage."""
+    import tempfile
+
+    raw = _as_str_arg(params.get("path")).strip()
+    out = os.path.abspath(_resolve_path(raw, config) if raw
+                          else os.path.join(tempfile.gettempdir(), "drydock_screenshot.png"))
+    try:
+        if os.path.dirname(out):
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+    except OSError:
+        pass
+    err = _capture_screen(out)
+    if err:
+        return (f"Error: {err} (On a headless server there is no display to capture.)")
+    if not os.path.isfile(out) or not os.path.getsize(out):
+        return "Error: screen capture produced no image (no display, or the grabber failed)."
+    size = os.path.getsize(out)
+    if size > _MAX_VIEW_IMAGE_BYTES:
+        return (f"Captured the screen to {out} but it is {size // 1_000_000}MB — too "
+                "large to view (limit 20MB). The file is saved; open it manually.")
+    return (f"Captured the screen to {out} (PNG, {size // 1024 or 1}KB) — it is now "
+            "visible to you. Describe what's on screen or use it to answer the task.")
 
 
 def tool_read(params: dict, config: dict) -> str:
@@ -1801,6 +1885,7 @@ def tool_build_knowledge(params: dict, config: dict) -> str:
 
 _TOOLS = [
     ("Read", tool_read, True),
+    ("Screenshot", tool_screenshot, True),
     ("Write", tool_write, False),
     ("Edit", tool_edit, False),
     ("Bash", tool_bash, False),
@@ -1829,6 +1914,7 @@ def register_all():
         name = schema["name"]
         func = {
             "Read": tool_read, "ViewImage": tool_viewimage,
+            "Screenshot": tool_screenshot,
             "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
@@ -1843,7 +1929,7 @@ def register_all():
         # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
         # GitCommit + GraphAdd write).
         read_only = name in (
-            "Read", "ViewImage", "Glob", "Grep", "task", "Dispatch", "Consult",
+            "Read", "ViewImage", "Screenshot", "Glob", "Grep", "task", "Dispatch", "Consult",
             "Knowledge", "GraphQuery", "StigRules", "StigRule",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
         )
