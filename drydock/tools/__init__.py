@@ -145,6 +145,20 @@ _SHELL_KIND, _SHELL_PATH = _detect_shell()
 _BASH_SHELL = _detect_bash()
 
 
+def shell_display_name() -> str:
+    """Human label for the shell the Bash tool actually runs commands in — so the
+    TUI can show 'PowerShell'/'cmd' on Windows instead of the schema name 'Bash'."""
+    return {"powershell": "PowerShell", "cmd": "cmd",
+            "bash": "Bash", "sh": "sh"}.get(_SHELL_KIND, "Bash")
+
+
+def tool_display_name(name: str) -> str:
+    """Map a tool's schema name to its display label. The `Bash` tool (the name
+    the model calls) is shown as the actual shell — so on Windows a user sees
+    'PowerShell', not 'Bash'."""
+    return shell_display_name() if name == "Bash" else name
+
+
 # ANSI escape sequences (CSI colour/cursor, OSC title, and lone two-char escapes).
 # Some tools emit these even to a pipe (--color=always, forced-colour test runners),
 # and they're pure display control — noise that wastes the model's tokens.

@@ -92,3 +92,11 @@ def test_is_windows_detection_signals():
     # real Linux / WSL (no Windows env)
     assert not _is_windows_env("posix", "linux", {})
     assert not _is_windows_env("posix", "linux", {"HOME": "/home/x"})
+
+
+def test_tool_display_name_maps_bash_to_shell():
+    from unittest import mock
+    for kind, expect in [("powershell", "PowerShell"), ("cmd", "cmd"), ("bash", "Bash"), ("sh", "sh")]:
+        with mock.patch.object(T, "_SHELL_KIND", kind):
+            assert T.tool_display_name("Bash") == expect
+            assert T.tool_display_name("Read") == "Read"  # other tools unchanged

@@ -130,7 +130,8 @@ def run_oneshot(prompt: str, config: dict) -> None:
                 # under -p) shows WHAT each tool did, not just its name. Without
                 # this, a timed-out run is an opaque wall of "[Bash]" with no way
                 # to tell a genuine 100-command exploration from a tight loop.
-                print(f"  [{event.name}] {_summarize(event.inputs)}",
+                from drydock.tools import tool_display_name
+                print(f"  [{tool_display_name(event.name)}] {_summarize(event.inputs)}",
                       file=sys.stderr, flush=True)
             elif isinstance(event, ToolEnd):
                 # One-line outcome so failures/repeats are visible in the trace.

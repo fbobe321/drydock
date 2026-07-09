@@ -1214,7 +1214,8 @@ class DrydockApp(App):
             self._render_todo(m.inputs.get("tasks", ""))
             self._last_card = None  # tool_end is a no-op for the checklist
             return
-        card = ToolCard(m.name, summarize_inputs(m.inputs))
+        from drydock.tools import tool_display_name
+        card = ToolCard(tool_display_name(m.name), summarize_inputs(m.inputs))
         self._last_card = card
         self._mount(card)
 
