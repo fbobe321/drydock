@@ -53,3 +53,11 @@ def test_not_injected_when_disabled():
     cfg = {"model": "gemma4", "max_tokens": 8192, "context_limit": 65536, "recipes": False}
     sysp = _run_capture(cfg, "recover the deleted password from launchcode.txt forensic")
     assert "TECHNIQUE RECIPES" not in sysp
+
+
+def test_ml_skills_bundled():
+    from drydock.skills import load_skills
+    sk = load_skills(".")
+    for name in ("ml-train", "ml-metrics", "ml-finetune", "ml-debug", "ml-rl", "ml-data"):
+        assert name in sk, f"bundled ML skill /{name} missing"
+    assert "MCC" in sk["ml-metrics"].body or "mcc" in sk["ml-metrics"].body.lower()
