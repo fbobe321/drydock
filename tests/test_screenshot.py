@@ -21,6 +21,7 @@ def test_registered_and_available_to_gemma():
 def test_graceful_when_no_grabber(monkeypatch):
     monkeypatch.setattr(tools, "_IS_WINDOWS", False)
     monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setenv("DISPLAY", ":0")  # a display exists, but no grabber is installed
     monkeypatch.setattr("shutil.which", lambda _n: None)  # no grabbers installed
     out = tools.tool_screenshot({}, {"cwd": os.getcwd()})
     assert out.startswith("Error") and "screenshot tool" in out
