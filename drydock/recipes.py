@@ -132,6 +132,119 @@ RECIPES: list[tuple[str, list[str], str]] = [
      "  log f from tangent lines at support points; sample from the hull's exp, accept/\n"
      "  reject, and ADD each rejected point to the hull so it tightens over time.\n"
      "Seed the RNG for reproducibility and validate the sample mean/var against f."),
+
+    ("Classification metrics — accuracy, precision, recall, F1, MCC, ROC/AUC, confusion matrix",
+     ["metric", "metrics", "accuracy", "precision", "recall", "f1", "mcc", "roc",
+      "auc", "confusion", "tp", "fp", "fn", "tn", "classification", "eval",
+      "evaluate", "score", "true", "positive", "negative"],
+     "Given y_true and y_pred (and y_score = P(positive) for ROC):\n"
+     "  from sklearn.metrics import (accuracy_score, precision_score, recall_score,\n"
+     "    f1_score, matthews_corrcoef, roc_auc_score, roc_curve, confusion_matrix)\n"
+     "  acc=accuracy_score(y_true,y_pred); f1=f1_score(y_true,y_pred)\n"
+     "  prec=precision_score(y_true,y_pred); rec=recall_score(y_true,y_pred)\n"
+     "  mcc=matthews_corrcoef(y_true,y_pred); auc=roc_auc_score(y_true,y_score)\n"
+     "  tn,fp,fn,tp = confusion_matrix(y_true,y_pred).ravel()   # BINARY order!\n"
+     "  fpr,tpr,thr = roc_curve(y_true,y_score)   # plot tpr vs fpr; AUC=area\n"
+     "Definitions: precision=TP/(TP+FP), recall=TP/(TP+FN), F1=2PR/(P+R),\n"
+     "MCC=(TP*TN-FP*FN)/sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN)). Multiclass: pass\n"
+     "average='macro'/'weighted'. Save metrics as JSON; plot ROC with matplotlib\n"
+     "(plt.plot(fpr,tpr); savefig). Watch class order and the positive label."),
+
+    ("PyTorch training / eval loop (correct structure)",
+     ["pytorch", "torch", "train", "training", "model", "loss", "optimizer",
+      "epoch", "cnn", "network", "nn", "fit", "gpu", "cuda", "dataloader"],
+     "  import torch, torch.nn as nn\n"
+     "  dev = 'cuda' if torch.cuda.is_available() else 'cpu'; model.to(dev)\n"
+     "  opt = torch.optim.AdamW(model.parameters(), lr=1e-3)\n"
+     "  loss_fn = nn.CrossEntropyLoss()   # expects raw logits + int class targets\n"
+     "  for epoch in range(E):\n"
+     "    model.train()\n"
+     "    for xb,yb in train_loader:\n"
+     "      xb,yb = xb.to(dev), yb.to(dev)\n"
+     "      opt.zero_grad(); out = model(xb); loss = loss_fn(out, yb)\n"
+     "      loss.backward(); opt.step()\n"
+     "    model.eval()\n"
+     "    with torch.no_grad(): ... # compute val metric, no grad\n"
+     "Gotchas: zero_grad EVERY step; CrossEntropyLoss takes logits (no softmax);\n"
+     "targets are Long class indices; move BOTH model and batch to the same device;\n"
+     "set model.eval() (disables dropout/BN update) for validation. Seed torch for repro."),
+
+    ("LoRA / full fine-tuning with transformers + peft",
+     ["lora", "peft", "finetune", "fine-tune", "fine", "tuning", "adapter",
+      "transformers", "pretrained", "huggingface", "bert", "gpt", "vit", "freeze"],
+     "FULL fine-tune: load a pretrained model, train ALL params on your data with a\n"
+     "small LR (2e-5..5e-5), AdamW, a few epochs; save with model.save_pretrained(dir).\n"
+     "LoRA (train ~0.1% of params): \n"
+     "  from peft import LoraConfig, get_peft_model, TaskType\n"
+     "  cfg = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.05,\n"
+     "                   target_modules=['q_proj','v_proj'], task_type=TaskType.SEQ_CLS)\n"
+     "  model = get_peft_model(base_model, cfg)\n"
+     "  model.print_trainable_parameters()   # sanity: only adapters train\n"
+     "  ... train ... ; model.save_pretrained('adapter')\n"
+     "Reload: PeftModel.from_pretrained(base, 'adapter'). target_modules names differ\n"
+     "per architecture — inspect model.named_modules() to find the linear layers."),
+
+    ("Prepare / organize / split a dataset",
+     ["data", "dataset", "prep", "prepare", "organize", "split", "train", "val",
+      "test", "normalize", "preprocess", "balance", "stratify", "label", "clean"],
+     "  from sklearn.model_selection import train_test_split\n"
+     "  Xtr,Xtmp,ytr,ytmp = train_test_split(X,y,test_size=0.3,stratify=y,random_state=0)\n"
+     "  Xval,Xte,yval,yte = train_test_split(Xtmp,ytmp,test_size=0.5,stratify=ytmp,random_state=0)\n"
+     "Normalize features on TRAIN ONLY, then apply to val/test (no leakage):\n"
+     "  from sklearn.preprocessing import StandardScaler\n"
+     "  sc=StandardScaler().fit(Xtr); Xtr=sc.transform(Xtr); Xte=sc.transform(Xte)\n"
+     "Images: resize + ToTensor + Normalize(mean,std). Keep a fixed split (seed) and\n"
+     "check class balance (np.bincount(y)). Never fit scalers/encoders on test data."),
+
+    ("Read/write HDF5 (.h5) and convert to/from JSON",
+     ["h5", "hdf5", "h5py", "json", "convert", "dataset", "array", "save", "load",
+      "file", "format", "serialize"],
+     "  import h5py, numpy as np, json\n"
+     "  with h5py.File('data.h5','r') as f:\n"
+     "    print(list(f.keys())); arr = f['images'][:]; labels = f['labels'][:]\n"
+     "    attrs = dict(f['images'].attrs)   # metadata\n"
+     "  with h5py.File('out.h5','w') as f:\n"
+     "    f.create_dataset('images', data=arr, compression='gzip')\n"
+     "H5<->JSON: arrays aren't JSON-native — use arr.tolist() to dump, np.array to\n"
+     "reload. json.dump({'shape':list(arr.shape),'data':arr.tolist()}, open('x.json','w')).\n"
+     "For big arrays keep them in H5 and put only metadata/paths in JSON."),
+
+    ("Implement a Transformer block / ViT",
+     ["transformer", "attention", "vit", "vision", "encoder", "block", "self-attention",
+      "multihead", "patch", "embedding", "positional", "layernorm"],
+     "Transformer encoder block (pre-norm):\n"
+     "  attn = nn.MultiheadAttention(d, heads, batch_first=True)\n"
+     "  x = x + attn(ln1(x), ln1(x), ln1(x))[0]      # residual\n"
+     "  x = x + mlp(ln2(x))   # mlp: Linear(d,4d)->GELU->Linear(4d,d)\n"
+     "ViT: split image into patches (Conv2d(kernel=stride=patch) -> flatten), prepend a\n"
+     "learnable [CLS] token, ADD positional embeddings, run N encoder blocks, classify\n"
+     "from the CLS token. Shapes: (B,C,H,W)->(B, num_patches+1, d). Verify a forward\n"
+     "pass runs and output is (B, num_classes); check grads flow (loss.backward())."),
+
+    ("Diagnose a broken PyTorch training run",
+     ["debug", "diagnose", "nan", "loss", "not", "learning", "overfit", "underfit",
+      "shape", "mismatch", "error", "troubleshoot", "fix", "exploding", "gradient"],
+     "- Loss is NaN/Inf: LR too high (lower it), log/sqrt of <=0, divide-by-zero, or\n"
+     "  unnormalized inputs. Add torch.autograd.set_detect_anomaly(True); clip grads\n"
+     "  (nn.utils.clip_grad_norm_); check for NaN in the data.\n"
+     "- Loss flat / not learning: forgot opt.zero_grad or opt.step; LR too low; wrong\n"
+     "  loss (softmax before CrossEntropyLoss); labels/logits misaligned; model not in\n"
+     "  train(); frozen params. Print loss each step + a param's grad norm.\n"
+     "- Shape mismatch: print .shape at each layer; CrossEntropyLoss wants logits\n"
+     "  (N,C) + targets (N,) Long. - Train acc high, val low: overfitting -> augment/\n"
+     "  regularize/early-stop. Always overfit a tiny batch first as a sanity check."),
+
+    ("Generate a LaTeX report / results table",
+     ["latex", "report", "table", "pdf", "document", "tex", "pdflatex", "figure",
+      "results", "write", "tabular", "booktabs"],
+     "Emit a compilable .tex, then build it:\n"
+     "  \\documentclass{article}\\usepackage{booktabs,graphicx}\\begin{document}\n"
+     "  \\begin{tabular}{lr}\\toprule Metric & Value\\\\\\midrule\n"
+     "  Accuracy & 0.94\\\\ F1 & 0.92\\\\\\bottomrule\\end{tabular}\n"
+     "  \\includegraphics[width=.6\\linewidth]{roc.png}\\end{document}\n"
+     "Build: pdflatex -interaction=nonstopmode report.tex  (run twice for refs).\n"
+     "Escape %, _, &, # in text. pandas: df.to_latex('t.tex', index=False). Confirm\n"
+     "report.pdf exists and pdflatex exit code is 0."),
 ]
 
 _WORD = re.compile(r"[a-z0-9.]+")
