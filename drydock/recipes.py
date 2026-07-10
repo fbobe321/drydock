@@ -245,6 +245,25 @@ RECIPES: list[tuple[str, list[str], str]] = [
      "Build: pdflatex -interaction=nonstopmode report.tex  (run twice for refs).\n"
      "Escape %, _, &, # in text. pandas: df.to_latex('t.tex', index=False). Confirm\n"
      "report.pdf exists and pdflatex exit code is 0."),
+
+    ("Reinforcement learning — Q-learning / policy on a small environment",
+     ["rl", "reinforcement", "q-learning", "qlearning", "policy", "reward", "agent",
+      "environment", "gridworld", "episode", "bellman", "value", "action", "dqn",
+      "exploration", "epsilon", "gym", "cartpole", "bandit"],
+     "Tabular Q-learning for a discrete env with reset()/step(a)->(s2,r,done):\n"
+     "  Q = np.zeros((nS, nA))\n"
+     "  for ep in range(N):\n"
+     "    s = env.reset()\n"
+     "    for t in range(max_steps):\n"
+     "      a = randint(nA) if rand() < eps else int(Q[s].argmax())   # eps-greedy\n"
+     "      s2, r, done = env.step(a)\n"
+     "      Q[s,a] += alpha * (r + gamma * Q[s2].max() - Q[s,a])       # Bellman update\n"
+     "      s = s2\n"
+     "      if done: break\n"
+     "Greedy policy = Q.argmax(1). Typical alpha=0.5, gamma=0.95, eps=0.1-0.2 (decay it).\n"
+     "Sanity: average episode reward should rise and the greedy policy should reach the\n"
+     "goal. For large/continuous states use a neural Q (DQN: replay buffer + target net)\n"
+     "or a policy network (REINFORCE: maximize sum of log_prob(a)*return)."),
 ]
 
 _WORD = re.compile(r"[a-z0-9.]+")
