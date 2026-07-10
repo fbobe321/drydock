@@ -111,6 +111,8 @@ class DrydockApp(App):
         height: auto; margin: 0 2 1 2; padding: 0 1; color: #d7e6ee;
         border-left: thick #c9a227; background: #14241c;
     }
+    /* Dimmed recommended-next-command hint (empty → 0 lines). */
+    #suggest { height: auto; margin: 0 3; color: #4a6b78; text-style: italic; }
     /* One bottom-docked footer holds, top→bottom: working-line, prompt, status. */
     #footer { dock: bottom; height: auto; background: #0b1f2a; }
     #prompt {
@@ -140,6 +142,7 @@ class DrydockApp(App):
         # does the same. priority so it isn't swallowed by the focused prompt.
         Binding("escape", "stop", "Stop the running turn", priority=True),
         Binding("ctrl+o", "toggle_tools", "Expand/collapse details"),
+        Binding("ctrl+n", "use_suggestion", "Use suggested next command", show=False),
         # Scroll the transcript from the keyboard (focus stays on the prompt,
         # and SSH sessions often don't forward the mouse wheel). priority=True
         # so the prompt's TextArea doesn't swallow PageUp/PageDown first.
@@ -250,6 +253,13 @@ class DrydockApp(App):
         self._skills = load_skills(config.get("cwd") or ".")
         self._current_assistant: AssistantMessage | None = None
         self._last_card: ToolCard | None = None
+        # Recommended-next-command hint state.
+        self._turn_tools: set[str] = set()   # tool names used this turn
+        self._turn_error = False
+        self._plan_remaining = False
+        self._suggestion = ""
+        import os
+        self._in_git = os.path.isdir(os.path.join(config.get("cwd") or ".", ".git"))
         self._busy = False
         # STOP signal: Escape / "/stop" sets it; the agent loop checks it at safe
         # points and ends the turn cleanly (session preserved). Lives in config
@@ -300,6 +310,7 @@ class DrydockApp(App):
         with Vertical(id="footer"):
             yield Static("", id="todo")     # pinned task checklist (empty = hidden)
             yield Static("", id="working")  # in-line activity (empty when idle)
+            yield Static("", id="suggest")  # dimmed recommended-next-command hint
             yield PromptArea(id="prompt")
             yield Static(self._status_text(), id="status")
 
@@ -446,6 +457,9 @@ class DrydockApp(App):
         # turn. If this turn emits its own todo, _render_todo repopulates it.
         self.config.pop("_todo", None)
         self.query_one("#todo", Static).update("")
+        self._turn_tools = set()
+        self._turn_error = False
+        self.query_one("#suggest", Static).update("")  # hide the hint while working
         self._busy = True
         self._work_start = time.monotonic()
         self._last_progress = self._work_start
@@ -1210,6 +1224,7 @@ class DrydockApp(App):
 
     def on_agent_tool_start(self, m: AgentToolStart) -> None:
         self._current_assistant = None  # end the current text block
+        self._turn_tools.add(m.name)
         if m.name == "todo":
             self._render_todo(m.inputs.get("tasks", ""))
             self._last_card = None  # tool_end is a no-op for the checklist
@@ -1229,6 +1244,7 @@ class DrydockApp(App):
 
         items = parse_todo(tasks)
         panel = self.query_one("#todo", Static)
+        self._plan_remaining = any(s != "done" for _, s in items)
         if not items:
             panel.update("")  # collapses to 0 height
             return
@@ -1269,9 +1285,38 @@ class DrydockApp(App):
             return
         self._repeat = None
         self._refresh_status()
+        self._update_suggestion()
         self.query_one("#prompt", PromptArea).focus()
 
+    def _update_suggestion(self) -> None:
+        """Compute + render the dimmed recommended-next-command hint (Claude-Code-
+        style). Empty when nothing useful to suggest."""
+        from drydock.suggest import suggest_next_command
+        limit = self.config.get("context_limit", 65536) or 65536
+        pct = min(100, round(self._ctx_tokens / limit * 100)) if limit else 0
+        wrote = bool(self._turn_tools & {"Write", "Edit"})
+        ran = "Bash" in self._turn_tools
+        self._suggestion = suggest_next_command(
+            ctx_pct=pct, wrote_files=wrote, ran_bash=ran, had_error=self._turn_error,
+            in_git=self._in_git, plan_remaining=self._plan_remaining,
+        ) or ""
+        hint = self.query_one("#suggest", Static)
+        if self._suggestion:
+            from rich.markup import escape
+            hint.update(f"→ next: {escape(self._suggestion)}   [dim](ctrl+n to use)[/]")
+        else:
+            hint.update("")
+
+    def action_use_suggestion(self) -> None:
+        """Accept the recommended next command — drop it into the prompt to edit/send."""
+        if self._suggestion and not self._busy:
+            prompt = self.query_one("#prompt", PromptArea)
+            prompt.text = self._suggestion
+            prompt.move_cursor(prompt.document.end)
+            prompt.focus()
+
     def on_agent_error(self, m: AgentError) -> None:
+        self._turn_error = True
         self._mount(ErrorMessage(m.error))
 
 
