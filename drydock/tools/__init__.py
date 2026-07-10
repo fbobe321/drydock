@@ -750,6 +750,10 @@ def _capture_screen(out: str) -> str | None:
         elif sys.platform == "darwin":
             subprocess.run(["screencapture", "-x", out], capture_output=True, timeout=30)
         else:  # Linux/BSD — try grabbers in order of ubiquity (X11 + wayland)
+            if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+                # Fail fast — a grabber on a headless box blocks until timeout.
+                return ("no display ($DISPLAY/$WAYLAND_DISPLAY unset) — cannot capture "
+                        "the screen on a headless server.")
             grabbers = (["scrot", "-o", out], ["import", "-window", "root", out],
                         ["gnome-screenshot", "-f", out], ["grim", out],
                         ["spectacle", "-b", "-n", "-o", out], ["maim", out])

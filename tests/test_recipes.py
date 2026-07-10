@@ -61,3 +61,10 @@ def test_ml_skills_bundled():
     for name in ("ml-train", "ml-metrics", "ml-finetune", "ml-debug", "ml-rl", "ml-data"):
         assert name in sk, f"bundled ML skill /{name} missing"
     assert "MCC" in sk["ml-metrics"].body or "mcc" in sk["ml-metrics"].body.lower()
+
+
+def test_retrieve_handles_non_string():
+    from drydock.recipes import retrieve_recipes, recipe_context
+    for v in (b"train a cnn", ["train", "cnn"], 5, None):
+        assert isinstance(retrieve_recipes(v), list)   # never raises
+    assert isinstance(recipe_context(123), str)

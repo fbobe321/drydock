@@ -57,3 +57,15 @@ def test_macos_uses_screencapture(monkeypatch):
     monkeypatch.setattr("subprocess.run", lambda a, **k: calls.setdefault("argv", a))
     tools._capture_screen("/tmp/x.png")
     assert calls["argv"][0] == "screencapture"
+
+
+def test_headless_linux_fails_fast(monkeypatch):
+    import time
+    monkeypatch.setattr(tools, "_IS_WINDOWS", False)
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    t = time.time()
+    err = tools._capture_screen("/tmp/x.png")
+    assert time.time() - t < 1.0            # no 30s grabber hang
+    assert err and "display" in err.lower()

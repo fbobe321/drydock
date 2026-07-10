@@ -274,6 +274,8 @@ def retrieve_recipes(task_text: str, k: int = 2) -> list[tuple[str, str]]:
     overlap. Empty if nothing scores — never inject irrelevant noise."""
     if not task_text:
         return []
+    if not isinstance(task_text, str):  # defensive: never crash the agent loop
+        task_text = str(task_text)
     words = set(_WORD.findall(task_text.lower()))
     scored = []
     for title, keywords, body in RECIPES:
