@@ -39,6 +39,11 @@ DEFAULTS: dict[str, object] = {
     # generation usually isn't stalled — a known gemma/llama.cpp hang). 0 = off.
     # Set to e.g. 600 on a stall-prone local server. Bounded to a few retries.
     "stall_retry_secs": 0,
+    # Inject bundled technique recipes (drydock/recipes.py) relevant to the task
+    # into the system prompt, so a local model has the *method* a task needs
+    # instead of guessing. Retrieval is keyword-overlap; only relevant recipes are
+    # added (none = nothing injected). Set false to disable.
+    "recipes": True,
     "theme": "harbor",
     # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
     # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The

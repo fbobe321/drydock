@@ -114,6 +114,16 @@ def run(
     """
     state.messages.append({"role": "user", "content": user_message})
 
+    # Recipe retrieval: give the model the TECHNIQUE this task needs (forensics,
+    # git-history rewrite, numpy-2.0 fix, cert gen, …) by appending the relevant
+    # bundled recipes to the system prompt. Keyword-matched, so only fitting ones
+    # are added; none matched = no change. Gated by config `recipes`.
+    if config.get("recipes", True):
+        from drydock.recipes import recipe_context
+        extra = recipe_context(user_message)
+        if extra:
+            system_prompt = system_prompt + extra
+
     max_turns = config.get("max_turns", 200)
     max_tool_calls = config.get("max_tool_calls", 0)  # 0 = unlimited
     # When set (sub-agents pass this), the model is offered ONLY these tools and
