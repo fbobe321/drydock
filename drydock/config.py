@@ -48,6 +48,10 @@ DEFAULTS: dict[str, object] = {
     # system prompt every turn so they survive context compaction — the model can't
     # drift off the original goal on a long task. Set false to disable.
     "task_anchor": True,
+    # Verification gate (PRD Epic B): if the model claims "done" after changing
+    # files but never ran a test/check/its own code, nudge it to verify first
+    # instead of accepting completion. Bounded. Set false to disable.
+    "verify_gate": True,
     "theme": "harbor",
     # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
     # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The

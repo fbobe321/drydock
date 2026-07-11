@@ -48,6 +48,7 @@ from drydock.compaction import (
 )
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
+from drydock.verification import looks_like_verification
 from drydock.tuning import (
     filter_tool_schemas,
     hallucinated_tool_message,
@@ -153,6 +154,8 @@ def run(
         return cancel is not None and cancel.is_set()
     tool_call_count = 0
     session_has_edited = False
+    ran_verification = False   # a test/check/exec command ran (verification gate)
+    verify_gate_nudges = 0     # bounded "verify before you finish" nudges
     leaked_call_retries = 0
     plan_continue_nudges = 0  # consecutive "you stopped mid-plan" nudges
     empty_response_nudges = 0  # consecutive "you returned nothing" nudges
@@ -332,6 +335,32 @@ def run(
                     ),
                 })
                 continue
+            # VERIFICATION GATE (PRD Epic B): a text-only "done" is not evidence.
+            # If the agent CHANGED files but never ran a test/check/its own code,
+            # don't accept completion — make it verify first. Bounded so it can't
+            # wedge; once it runs any check (ran_verification) the gate is satisfied.
+            if (
+                config.get("verify_gate", True)
+                and session_has_edited
+                and not ran_verification
+                and verify_gate_nudges < 2
+            ):
+                verify_gate_nudges += 1
+                state.task.phase = "verify"
+                state.messages.append({
+                    "role": "user",
+                    "content": (
+                        "[SYSTEM] You changed files but have not VERIFIED the work. "
+                        "Before finishing, run a concrete check: the task's own test/"
+                        "eval/build (pytest, test.sh, make, npm test, …) or run the "
+                        "code/script you produced and confirm the output is correct "
+                        "and meets EVERY requirement. Do that now with a tool call; "
+                        "if it fails, fix it and re-check."
+                    ),
+                })
+                continue
+            if session_has_edited and ran_verification:
+                state.task.phase = "complete"
             break
 
         # Execute each tool call
@@ -339,6 +368,10 @@ def run(
             tool_call_count += 1
             if tc["name"] in ("Edit", "Write"):
                 session_has_edited = True
+            elif tc["name"] == "Bash" and looks_like_verification(
+                (tc.get("input") or {}).get("command", "")
+            ):
+                ran_verification = True  # the agent actually ran a test/check/its code
 
             # STOP pressed: don't run the remaining tools, but still record a
             # paired result for each (the assistant message already lists all
