@@ -11,6 +11,7 @@ gate) so it drops into the current loop without a rewrite. Logic original to Dry
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 # Explicit test / lint / type-check / build commands.
 _VERIFY_KEYWORDS = re.compile(
@@ -32,3 +33,43 @@ def looks_like_verification(cmd) -> bool:
     if not cmd or not isinstance(cmd, str):
         return False
     return bool(_VERIFY_KEYWORDS.search(cmd) or _EXEC.search(cmd))
+
+
+@dataclass
+class VerificationEvidence:
+    """Structured outcome of a verification command — did the check PASS, not just
+    run (PRD verification/evidence). status: 'pass' | 'fail' | 'unknown'."""
+    command: str
+    status: str
+    tests_passed: int | None = None
+    tests_failed: int | None = None
+    exit_code: int | None = None
+    summary: str = ""
+
+
+# tool_bash appends "[exit code: N]" ONLY on non-zero exit; absent => exit 0.
+_EXIT = re.compile(r"\[exit code:\s*(-?\d+)\]")
+# pytest/unittest-style tallies: "3 passed", "2 failed", "1 error".
+_TALLY = re.compile(r"(\d+)\s+(passed|failed|errors?|skipped|xfailed|xpassed)\b", re.I)
+
+
+def parse_evidence(command, result_text) -> VerificationEvidence:
+    """Classify a verification command's result as pass/fail. Exit code is the
+    primary signal (drydock reports non-zero); pytest-style tallies refine it.
+    Best-effort; never raises."""
+    cmd = command if isinstance(command, str) else ""
+    text = result_text if isinstance(result_text, str) else str(result_text or "")
+    m = _EXIT.search(text)
+    exit_code = int(m.group(1)) if m else 0
+    passed = failed = None
+    tally = {}
+    for n, k in _TALLY.findall(text):
+        tally[k.lower().rstrip("s")] = tally.get(k.lower().rstrip("s"), 0) + int(n)
+    if tally:
+        passed = tally.get("passed")
+        failed = tally.get("failed", 0) + tally.get("error", 0)
+    status = "fail" if ((failed and failed > 0) or exit_code != 0) else "pass"
+    parts = [f"exit {exit_code}"]
+    if passed is not None or failed:
+        parts.append(f"{passed or 0} passed, {failed or 0} failed")
+    return VerificationEvidence(cmd, status, passed, failed, exit_code, "; ".join(parts)[:200])

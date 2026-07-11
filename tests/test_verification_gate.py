@@ -69,3 +69,35 @@ def test_disabled():
     done = AssistantTurn("done", [], 5, 5)
     st, _ = _drive({**CFG, "verify_gate": False}, [write, done])
     assert not any("VERIFIED" in m.get("content", "") for m in st.messages if m.get("role") == "user")
+
+
+def test_evidence_pass_fail():
+    from drydock.verification import parse_evidence
+    assert parse_evidence("pytest", "5 passed in 0.1s").status == "pass"
+    assert parse_evidence("pytest", "2 failed, 3 passed\n\n[exit code: 1]").status == "fail"
+    assert parse_evidence("python x.py", "boom\n\n[exit code: 1]").status == "fail"
+    ev = parse_evidence("pytest", "2 failed, 3 passed\n\n[exit code: 1]")
+    assert ev.tests_passed == 3 and ev.tests_failed == 2 and ev.exit_code == 1
+
+
+def test_failed_check_triggers_repair_not_complete():
+    # write, then run a FAILING check, then claim done -> gate nudges to REPAIR
+    write = AssistantTurn("", [{"id": "1", "name": "Write",
+                                "input": {"file_path": "/tmp/dd_vg_f.txt", "content": "x"}}], 5, 5)
+    fail = AssistantTurn("", [{"id": "2", "name": "Bash",
+                              "input": {"command": "python -c 'import sys; sys.exit(1)'"}}], 5, 5)
+    done = AssistantTurn("all done", [], 5, 5)
+    st, n = _drive(CFG, [write, fail, done, done])
+    assert st.task.phase == "repair"
+    assert any("FAILED" in m.get("content", "") for m in st.messages if m.get("role") == "user")
+
+
+def test_passing_check_accepts_completion():
+    write = AssistantTurn("", [{"id": "1", "name": "Write",
+                                "input": {"file_path": "/tmp/dd_vg_p.txt", "content": "x"}}], 5, 5)
+    ok = AssistantTurn("", [{"id": "2", "name": "Bash",
+                            "input": {"command": "python -c 'print(1)'"}}], 5, 5)
+    done = AssistantTurn("done, verified", [], 5, 5)
+    st, _ = _drive(CFG, [write, ok, done])
+    assert st.task.phase == "complete"
+    assert not any("FAILED" in m.get("content", "") for m in st.messages if m.get("role") == "user")

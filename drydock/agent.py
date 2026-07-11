@@ -48,7 +48,7 @@ from drydock.compaction import (
 )
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
-from drydock.verification import looks_like_verification
+from drydock.verification import looks_like_verification, parse_evidence
 from drydock.events import emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
@@ -159,8 +159,8 @@ def run(
         return cancel is not None and cancel.is_set()
     tool_call_count = 0
     session_has_edited = False
-    ran_verification = False   # a test/check/exec command ran (verification gate)
-    verify_gate_nudges = 0     # bounded "verify before you finish" nudges
+    last_verification = None    # VerificationEvidence of the most recent check (gate)
+    verify_gate_nudges = 0      # bounded "verify before you finish" nudges
     leaked_call_retries = 0
     plan_continue_nudges = 0  # consecutive "you stopped mid-plan" nudges
     empty_response_nudges = 0  # consecutive "you returned nothing" nudges
@@ -347,32 +347,42 @@ def run(
             # If the agent CHANGED files but never ran a test/check/its own code,
             # don't accept completion — make it verify first. Bounded so it can't
             # wedge; once it runs any check (ran_verification) the gate is satisfied.
-            if (
+            # A text-only "done" after editing is accepted only when a check has
+            # PASSED. Never ran one → nudge to VERIFY. Ran one that FAILED → the work
+            # isn't done → nudge to REPAIR. Bounded so it can't wedge.
+            _needs_gate = (
                 config.get("verify_gate", True)
                 and allow is None            # main task only — not scoped sub-agents
                 and session_has_edited
-                and not ran_verification
                 and verify_gate_nudges < 2
-            ):
+                and (last_verification is None or last_verification.status == "fail")
+            )
+            if _needs_gate:
                 verify_gate_nudges += 1
-                state.task.phase = "verify"
-                _emit(state, "verify_gate", nudge=verify_gate_nudges)
-                state.messages.append({
-                    "role": "user",
-                    "content": (
+                if last_verification is None:
+                    state.task.phase = "verify"
+                    _emit(state, "verify_gate", kind="unverified", nudge=verify_gate_nudges)
+                    msg = (
                         "[SYSTEM] You changed files but have not VERIFIED the work. "
-                        "Before finishing, run a concrete check: the task's own test/"
-                        "eval/build (pytest, test.sh, make, npm test, …) or run the "
-                        "code/script you produced and confirm the output is correct "
-                        "and meets EVERY requirement. Do that now with a tool call; "
-                        "if it fails, fix it and re-check."
-                    ),
-                })
+                        "Run a concrete check now: the task's own test/eval/build "
+                        "(pytest, test.sh, make, npm test, …) or run the code you "
+                        "produced, and confirm it meets EVERY requirement."
+                    )
+                else:  # a check ran and FAILED
+                    state.task.phase = "repair"
+                    _emit(state, "verify_gate", kind="failed", nudge=verify_gate_nudges,
+                          summary=last_verification.summary)
+                    msg = (
+                        f"[SYSTEM] Your verification FAILED ({last_verification.summary}). "
+                        "The task is NOT complete. Read the failure, fix the cause, then "
+                        "re-run the SAME check until it passes."
+                    )
+                state.messages.append({"role": "user", "content": msg})
                 continue
-            if session_has_edited and ran_verification:
+            if session_has_edited and last_verification and last_verification.status == "pass":
                 state.task.phase = "complete"
             _emit(state, "done", phase=state.task.phase, edited=session_has_edited,
-                  verified=ran_verification)
+                  verified=bool(last_verification and last_verification.status == "pass"))
             break
 
         # Execute each tool call
@@ -380,10 +390,6 @@ def run(
             tool_call_count += 1
             if tc["name"] in ("Edit", "Write"):
                 session_has_edited = True
-            elif tc["name"] == "Bash" and looks_like_verification(
-                (tc.get("input") or {}).get("command", "")
-            ):
-                ran_verification = True  # the agent actually ran a test/check/its code
 
             # STOP pressed: don't run the remaining tools, but still record a
             # paired result for each (the assistant message already lists all
@@ -434,6 +440,15 @@ def run(
             # Guide (never block) on exact-repeat tool calls: prepend an
             # advisory note when the same call is made again.
             result = loop_tracker.annotate(tc["name"], tc["input"], result)
+
+            # Verification evidence: if this Bash call was a test/check/exec, parse
+            # its result so the completion gate knows whether it PASSED, not just ran.
+            if tc["name"] == "Bash":
+                _vcmd = (tc.get("input") or {}).get("command", "")
+                if looks_like_verification(_vcmd):
+                    last_verification = parse_evidence(_vcmd, result)
+                    _emit(state, "verification", status=last_verification.status,
+                          exit_code=last_verification.exit_code)
 
             _emit(state, "tool", name=tc["name"],
                   input=str(tc.get("input"))[:200],
