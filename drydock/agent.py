@@ -341,6 +341,7 @@ def run(
             # wedge; once it runs any check (ran_verification) the gate is satisfied.
             if (
                 config.get("verify_gate", True)
+                and allow is None            # main task only — not scoped sub-agents
                 and session_has_edited
                 and not ran_verification
                 and verify_gate_nudges < 2

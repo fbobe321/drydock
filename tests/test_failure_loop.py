@@ -38,7 +38,7 @@ def test_changing_args_do_not_trip_valve(monkeypatch):
     monkeypatch.setattr(agent_mod, "stream", lambda **kw: iter([seq.pop(0)]))
     st = AgentState()
     import tempfile
-    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
+    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp(), "verify_gate": False}, "sys"))
     assert any(m.get("role") == "assistant" and m.get("content") == "done"
                for m in st.messages)
 
@@ -57,7 +57,7 @@ def test_identical_SUCCESS_streak_ends_turn(monkeypatch):
 
     monkeypatch.setattr(agent_mod, "stream", counting)
     st = AgentState()
-    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
+    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp(), "verify_gate": False}, "sys"))
     assert calls["n"] <= 12  # identical success → stopped at the cap, not 200
 
 
@@ -73,7 +73,7 @@ def test_polling_with_changing_result_not_tripped(monkeypatch):
     seq.append(AssistantTurn("done", [], 1, 1))
     monkeypatch.setattr(agent_mod, "stream", lambda **kw: iter([seq.pop(0)]))
     st = AgentState()
-    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp()}, "sys"))
+    list(run("go", st, {"model": "m", "cwd": tempfile.mkdtemp(), "verify_gate": False}, "sys"))
     assert any(m.get("content") == "done" for m in st.messages)
 
 
