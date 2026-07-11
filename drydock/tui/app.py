@@ -84,6 +84,17 @@ def _fmt_tokens(n: int) -> str:
     return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
 
 
+def is_slash_command(text: str) -> bool:
+    """True only for a real ``/command``, NOT a message that merely starts with a
+    path — e.g. ``/app/env.py defines ...`` or ``/report.tex``. A command name is a
+    single leading token of word chars (no path separators, no dots); anything with
+    ``/``, ``\\`` or ``.`` in that first token is treated as a normal agent message."""
+    if not text.startswith("/"):
+        return False
+    head = text[1:].split(maxsplit=1)[0] if len(text) > 1 else ""
+    return bool(head) and not any(c in head for c in "/\\.")
+
+
 class DrydockApp(App):
     CSS = """
     Screen { background: #0b1f2a; }
@@ -425,7 +436,7 @@ class DrydockApp(App):
         prompt.clear()
         if not text:
             return
-        if text.startswith("/"):
+        if is_slash_command(text):
             self._handle_slash(text)  # meta commands stay out of history
             return
         prompt.cmd_history.add(text)
