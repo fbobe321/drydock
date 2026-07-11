@@ -49,6 +49,7 @@ from drydock.compaction import (
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
 from drydock.verification import looks_like_verification
+from drydock.events import emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
     hallucinated_tool_message,
@@ -83,6 +84,7 @@ class AgentState:
     turn_count: int = 0
     current_effort: str = ""  # "high"/"low" of the in-flight LLM call (for the UI)
     task: "TaskState" = field(default_factory=lambda: TaskState())  # structured objective
+    events: object | None = None  # optional EventLog for a durable execution trace
 
 
 def drop_last_turn(messages: list) -> bool:
@@ -121,6 +123,9 @@ def run(
     # outside the transcript. The original objective is authoritative for the task.
     if not state.task.is_set() and isinstance(user_message, str) and user_message.strip():
         state.task = TaskState.from_objective(user_message)
+        _emit(state, "task_start", objective=state.task.objective,
+              acceptance_criteria=state.task.acceptance_criteria)
+    _emit(state, "user_message", chars=len(user_message or ""))
     # Keep the objective + acceptance criteria in the SYSTEM PROMPT every turn, so
     # they survive compaction (which only touches the message transcript, never the
     # system prompt) — the model can't drift off the goal on a long task.
@@ -281,6 +286,9 @@ def run(
         state.total_output_tokens += assistant_turn.output_tokens
         state.last_input_tokens = assistant_turn.input_tokens
         yield TurnDone(assistant_turn.input_tokens, assistant_turn.output_tokens)
+        _emit(state, "turn", in_tok=assistant_turn.input_tokens,
+              out_tok=assistant_turn.output_tokens,
+              tool_calls=len(assistant_turn.tool_calls or []))
 
         # No tool calls = conversation complete — UNLESS the model emitted a
         # tool call as text (a Gemma quirk the API can't structure). In that
@@ -348,6 +356,7 @@ def run(
             ):
                 verify_gate_nudges += 1
                 state.task.phase = "verify"
+                _emit(state, "verify_gate", nudge=verify_gate_nudges)
                 state.messages.append({
                     "role": "user",
                     "content": (
@@ -362,6 +371,8 @@ def run(
                 continue
             if session_has_edited and ran_verification:
                 state.task.phase = "complete"
+            _emit(state, "done", phase=state.task.phase, edited=session_has_edited,
+                  verified=ran_verification)
             break
 
         # Execute each tool call
@@ -424,6 +435,10 @@ def run(
             # advisory note when the same call is made again.
             result = loop_tracker.annotate(tc["name"], tc["input"], result)
 
+            _emit(state, "tool", name=tc["name"],
+                  input=str(tc.get("input"))[:200],
+                  result_chars=len(str(result)),
+                  error=str(result)[:80].lower().startswith("error"))
             yield ToolEnd(tc["name"], result)
 
             # Append tool result

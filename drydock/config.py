@@ -52,6 +52,9 @@ DEFAULTS: dict[str, object] = {
     # files but never ran a test/check/its own code, nudge it to verify first
     # instead of accepting completion. Bounded. Set false to disable.
     "verify_gate": True,
+    # Durable per-session execution trace (events.py) written as JSONL to
+    # ~/.drydock/events/ — inspect/diagnose/replay a task. Set false to disable.
+    "event_log": True,
     "theme": "harbor",
     # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
     # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The

@@ -259,6 +259,9 @@ class DrydockApp(App):
         super().__init__()
         self.config = config
         self.state = AgentState()
+        if config.get("event_log", True):
+            from drydock.events import EventLog, default_event_log_path
+            self.state.events = EventLog(config.get("event_log_path") or default_event_log_path())
         self.system = self._build_system(config.get("model"))
         from drydock.skills import load_skills
         self._skills = load_skills(config.get("cwd") or ".")
