@@ -44,6 +44,10 @@ DEFAULTS: dict[str, object] = {
     # instead of guessing. Retrieval is keyword-overlap; only relevant recipes are
     # added (none = nothing injected). Set false to disable.
     "recipes": True,
+    # Keep the structured objective + acceptance criteria (task_state.py) in the
+    # system prompt every turn so they survive context compaction — the model can't
+    # drift off the original goal on a long task. Set false to disable.
+    "task_anchor": True,
     "theme": "harbor",
     # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
     # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The

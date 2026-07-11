@@ -47,6 +47,7 @@ from drydock.compaction import (
     maybe_compact, emergency_compact, is_context_length_error, is_image_load_error,
 )
 from drydock.loop_detect import LoopTracker
+from drydock.task_state import TaskState
 from drydock.tuning import (
     filter_tool_schemas,
     hallucinated_tool_message,
@@ -80,6 +81,7 @@ class AgentState:
     last_input_tokens: int = 0  # prompt tokens the SERVER counted on the last call
     turn_count: int = 0
     current_effort: str = ""  # "high"/"low" of the in-flight LLM call (for the UI)
+    task: "TaskState" = field(default_factory=lambda: TaskState())  # structured objective
 
 
 def drop_last_turn(messages: list) -> bool:
@@ -113,6 +115,18 @@ def run(
     When the model responds with text only (no tools), the turn ends.
     """
     state.messages.append({"role": "user", "content": user_message})
+
+    # Capture the structured objective the FIRST time a task arrives, so it lives
+    # outside the transcript. The original objective is authoritative for the task.
+    if not state.task.is_set() and isinstance(user_message, str) and user_message.strip():
+        state.task = TaskState.from_objective(user_message)
+    # Keep the objective + acceptance criteria in the SYSTEM PROMPT every turn, so
+    # they survive compaction (which only touches the message transcript, never the
+    # system prompt) — the model can't drift off the goal on a long task.
+    if config.get("task_anchor", True) and state.task.is_set():
+        anchor = state.task.anchor_text()
+        if anchor:
+            system_prompt = system_prompt + "\n\n" + anchor
 
     # Recipe retrieval: give the model the TECHNIQUE this task needs (forensics,
     # git-history rewrite, numpy-2.0 fix, cert gen, …) by appending the relevant
