@@ -389,6 +389,8 @@ def run(
         for tc in assistant_turn.tool_calls:
             tool_call_count += 1
             if tc["name"] in ("Edit", "Write"):
+                if not session_has_edited and state.task.phase in ("understand", "discover", "plan"):
+                    state.task.phase = "implement"  # first change → building
                 session_has_edited = True
 
             # STOP pressed: don't run the remaining tools, but still record a

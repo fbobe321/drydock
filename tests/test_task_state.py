@@ -67,3 +67,25 @@ def test_disabled_when_task_anchor_false():
     cfg = {"model": "gemma4", "max_tokens": 8192, "context_limit": 65536, "task_anchor": False}
     sysp, _ = _run_capture(cfg, "Do the thing.\n1. a criterion")
     assert "TASK" not in sysp
+
+
+def test_phase_transitions_understand_implement_complete():
+    from drydock.providers import AssistantTurn
+    cfg = {"model": "gemma4", "max_tokens": 8192, "context_limit": 65536}
+    turns = [
+        AssistantTurn("", [{"id": "1", "name": "Write",
+                            "input": {"file_path": "/tmp/dd_ph.txt", "content": "x"}}], 5, 5),
+        AssistantTurn("", [{"id": "2", "name": "Bash", "input": {"command": "python -c 'print(1)'"}}], 5, 5),
+        AssistantTurn("done, verified", [], 5, 5),
+    ]
+    i = {"n": 0}
+    def fake(model, system, messages, tool_schemas, config):
+        t = turns[min(i["n"], len(turns) - 1)]; i["n"] += 1; yield t
+    st = agent.AgentState()
+    assert st.task.phase == "understand"
+    orig = agent.stream; agent.stream = fake
+    try:
+        list(agent.run("Fix it and verify.\n1. tests pass", st, cfg, "SYS"))
+    finally:
+        agent.stream = orig
+    assert st.task.phase == "complete"   # understand -> implement -> verify -> complete

@@ -362,8 +362,11 @@ class DrydockApp(App):
         flag = "⚓ working" if self._busy else "⚓ ready"
         # Busy → show the interrupt keys; idle → the quit hint.
         keys = "Esc/Ctrl+C stop" if self._busy else "Ctrl+C×2 quit"
+        # Show the task phase once it's past the default (understand).
+        ph = getattr(self.state, "task", None)
+        phase = f"  ·  {ph.phase}" if (ph and ph.is_set() and ph.phase != "understand") else ""
         return (
-            f"{flag}  ·  {model}  ·  {keys} · PgUp/PgDn scroll · "
+            f"{flag}  ·  {model}{phase}  ·  {keys} · PgUp/PgDn scroll · "
             f"Ctrl+O details  ·  {ctx}"
         )
 
