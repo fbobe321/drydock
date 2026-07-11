@@ -56,3 +56,36 @@ def test_run_writes_full_trace():
 def test_disabled_no_events_attr():
     st = agent.AgentState()
     assert st.events is None  # off by default on a bare AgentState
+
+
+def test_reconstruct_task_state_from_trace():
+    from drydock.events import EventLog, reconstruct_task_state
+    p = os.path.join(tempfile.mkdtemp(), "r.jsonl")
+    log = EventLog(p)
+    log.emit("task_start", objective="Recover the password", acceptance_criteria=["23 chars", "write out.txt"])
+    log.emit("tool", name="Write")
+    log.emit("done", phase="complete")
+    ts = reconstruct_task_state(p)
+    assert ts.objective == "Recover the password"
+    assert ts.acceptance_criteria == ["23 chars", "write out.txt"]
+    assert ts.phase == "complete"
+
+
+def test_summarize_digest():
+    from drydock.events import EventLog, summarize
+    p = os.path.join(tempfile.mkdtemp(), "s.jsonl")
+    log = EventLog(p)
+    log.emit("task_start", objective="do X", acceptance_criteria=["a"])
+    log.emit("turn", in_tok=100, out_tok=50)
+    log.emit("tool", name="Bash"); log.emit("tool", name="Bash")
+    log.emit("verification", status="fail"); log.emit("verification", status="pass")
+    log.emit("done", phase="complete")
+    s = summarize(p)
+    assert s["turns"] == 1 and s["tools"] == {"Bash": 2}
+    assert s["verifications"] == {"pass": 1, "fail": 1} and s["final_phase"] == "complete"
+    assert s["in_tok"] == 100 and s["out_tok"] == 50
+
+
+def test_reconstruct_empty_trace():
+    from drydock.events import reconstruct_task_state
+    assert reconstruct_task_state([]).objective == ""

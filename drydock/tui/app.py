@@ -531,6 +531,8 @@ class DrydockApp(App):
             self._cmd_context(arg)
         elif cmd == "/shell":
             self._cmd_shell()
+        elif cmd == "/events":
+            self._cmd_events()
         elif cmd == "/advisor":
             self._cmd_advisor(arg)
         elif cmd == "/ask":
@@ -836,6 +838,27 @@ class DrydockApp(App):
             self._refresh_status()
         else:
             self._begin(prompt)
+
+    def _cmd_events(self) -> None:
+        """Show a digest of this session's durable execution trace (event log)."""
+        log = self.state.events
+        if log is None:
+            self._info("Event log is off (config event_log = false).")
+            return
+        from drydock.events import summarize
+        s = summarize(str(log.path))
+        tools = ", ".join(f"{k}×{v}" for k, v in sorted(s["tools"].items())) or "none"
+        v = s["verifications"]
+        lines = [
+            f"Task trace — {log.path}",
+            f"  objective    : {(s['objective'] or '(none yet)')[:80]}",
+            f"  criteria     : {len(s['acceptance_criteria'])}",
+            f"  phase        : {s['final_phase']}",
+            f"  turns        : {s['turns']}   tools: {tools}",
+            f"  verifications: {v['pass']} passed, {v['fail']} failed",
+            f"  tokens       : {s['in_tok']:,} in / {s['out_tok']:,} out   ({s['event_count']} events)",
+        ]
+        self._info("\n".join(lines))
 
     def _cmd_shell(self) -> None:
         """Show exactly which shell the Bash tool runs commands through, plus the
