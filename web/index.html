@@ -4,149 +4,261 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Drydock — a local-first terminal coding agent</title>
-<meta name="description" content="Drydock is an open-source, provider-agnostic terminal coding agent for your own local LLM. No accounts, no telemetry, no cloud. Web search, GraphRAG, git tools, multi-agent, MCP, vision, ML &amp; NIST RMF/CSF skills. Runs on Windows, macOS, Linux.">
+<meta name="description" content="Drydock is an open-source, provider-agnostic terminal coding agent for your own local LLM. No accounts, no telemetry, no cloud. Web search, GraphRAG, git tools, multi-agent, MCP, vision, ML & NIST RMF/CSF skills. Runs on Windows, macOS, Linux.">
+<meta property="og:title" content="Drydock — a local-first terminal coding agent">
+<meta property="og:description" content="A clean-room, provider-agnostic terminal coding agent for your own local LLM. No accounts, no telemetry, no cloud.">
+<meta property="og:type" content="website">
 <style>
   :root{
-    --bg:#0b1f2a; --panel:#0e2731; --line:#2e5a6b; --cyan:#58c4dc;
-    --gold:#ffd479; --text:#d7e6ee; --dim:#9bb4c0; --green:#2e8b6b; --indigo:#6a5acd;
+    --bg:#081820; --bg2:#0b222d; --panel:#0e2731; --panel2:#102e3a;
+    --line:#22485a; --line2:#2e5a6b; --cyan:#5cc9e0; --cyan-dim:#3a8fa3;
+    --gold:#ffd479; --text:#e6f1f6; --dim:#9fb8c4; --dim2:#7b97a4;
+    --green:#3aa885; --indigo:#8a7ff0;
   }
   *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
   html,body{margin:0;padding:0}
   body{
-    background:var(--bg); color:var(--text); font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;
+    background:var(--bg); color:var(--text);
+    font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
   }
-  a{color:var(--cyan); text-decoration:none}
-  a:hover{text-decoration:underline}
-  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-  .wrap{max-width:980px; margin:0 auto; padding:0 22px}
-  header{padding:64px 0 28px; text-align:center}
-  .anchor{font-size:54px; line-height:1}
-  h1{font-size:40px; margin:14px 0 6px; letter-spacing:.5px}
-  .tag{color:var(--dim); font-size:19px; margin:0 auto 26px; max-width:680px}
-  .cta{display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:18px}
+  a{color:var(--cyan); text-decoration:none; transition:color .15s}
+  a:hover{color:var(--gold)}
+  code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+  .wrap{max-width:1000px; margin:0 auto; padding:0 24px}
+
+  /* ---- hero ---- */
+  .hero{position:relative; text-align:center; padding:88px 0 44px; overflow:hidden}
+  .hero::before{
+    content:""; position:absolute; inset:-40% 0 auto 0; height:620px; z-index:0;
+    background:radial-gradient(60% 60% at 50% 0%, rgba(92,201,224,.16), rgba(92,201,224,0) 70%),
+               radial-gradient(40% 40% at 75% 10%, rgba(255,212,121,.10), rgba(255,212,121,0) 70%);
+    pointer-events:none;
+  }
+  .hero > *{position:relative; z-index:1}
+  .anchor{font-size:60px; line-height:1; filter:drop-shadow(0 4px 18px rgba(92,201,224,.35))}
+  h1{font-size:clamp(38px,6vw,58px); margin:12px 0 4px; letter-spacing:.5px; font-weight:800}
+  .tag{color:var(--dim); font-size:clamp(17px,2.4vw,21px); margin:6px auto 8px; max-width:620px}
+  .sub{color:var(--dim2); font-size:15px; max-width:560px; margin:0 auto}
+  .badges{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:20px 0 4px}
+  .badge{
+    font-size:12.5px; color:var(--dim); background:var(--panel); border:1px solid var(--line);
+    border-radius:999px; padding:4px 12px;
+  }
+  .badge b{color:var(--cyan)}
+  .cta{display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:22px}
   .btn{
-    display:inline-block; padding:11px 18px; border:1px solid var(--line);
-    border-radius:10px; background:var(--panel); color:var(--text); font-weight:600;
+    display:inline-flex; align-items:center; gap:7px; padding:12px 20px; border:1px solid var(--line2);
+    border-radius:11px; background:var(--panel); color:var(--text); font-weight:650; font-size:15px;
+    transition:transform .12s, border-color .15s, background .15s;
   }
-  .btn.primary{border-color:var(--cyan); color:var(--cyan)}
-  pre.install{
-    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--cyan);
-    border-radius:10px; padding:14px 16px; max-width:420px; margin:26px auto 0; text-align:left;
-    color:var(--text); overflow:auto;
+  .btn:hover{transform:translateY(-2px); border-color:var(--cyan); color:var(--text)}
+  .btn.primary{background:linear-gradient(180deg,#12414f,#0e3140); border-color:var(--cyan)}
+  .btn.primary:hover{background:linear-gradient(180deg,#155163,#103a4b)}
+
+  /* ---- terminal mockup ---- */
+  .term{
+    max-width:720px; margin:36px auto 0; text-align:left; border-radius:14px; overflow:hidden;
+    border:1px solid var(--line2); background:#07161d;
+    box-shadow:0 24px 60px -24px rgba(0,0,0,.7), 0 0 0 1px rgba(92,201,224,.06);
   }
-  pre.install .p{color:var(--green)}
-  .rule{border:none; border-top:1px solid var(--line); margin:48px 0}
-  h2{font-size:24px; color:var(--cyan); margin:0 0 18px}
-  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px}
+  .term-bar{
+    display:flex; align-items:center; gap:8px; padding:11px 14px; background:#0b222d;
+    border-bottom:1px solid var(--line);
+  }
+  .dot{width:11px; height:11px; border-radius:50%}
+  .dot.r{background:#e06c6c}.dot.y{background:#e0b24c}.dot.g{background:#4caf7d}
+  .term-title{margin-left:8px; color:var(--dim2); font-size:12.5px; font-family:ui-monospace,monospace}
+  .term-body{padding:18px 18px 20px; font-family:ui-monospace,monospace; font-size:13.5px; line-height:1.85}
+  .term-body .u{color:var(--text)} .term-body .p{color:var(--cyan)}
+  .term-body .t{color:var(--dim)} .term-body .ok{color:var(--green)}
+  .term-body .g{color:var(--gold)} .term-body .d{color:var(--dim2)}
+  .cursor{display:inline-block; width:8px; height:16px; background:var(--cyan); vertical-align:-3px;
+          margin-left:2px; animation:blink 1.1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ---- sections ---- */
+  section{padding:24px 0}
+  .rule{border:none; border-top:1px solid var(--line); margin:26px auto; max-width:1000px}
+  h2{font-size:clamp(22px,3vw,28px); margin:0 0 6px; font-weight:750}
+  h2 .em{color:var(--cyan)}
+  .lead{color:var(--dim); margin:0 auto 22px; max-width:760px}
+  .center{text-align:center}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px}
   .card{
-    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--line);
-    border-radius:10px; padding:16px 18px;
+    background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line);
+    border-radius:14px; padding:18px 20px; transition:transform .14s, border-color .15s, box-shadow .15s;
   }
-  .card h3{margin:0 0 6px; font-size:17px}
-  .card p{margin:0; color:var(--dim); font-size:14.5px}
-  .card.git{border-left-color:var(--green)}
-  .card.web{border-left-color:var(--cyan)}
-  .card.kb{border-left-color:var(--gold)}
-  .card.agents{border-left-color:var(--indigo)}
-  .priv{
-    background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:22px 24px; margin-top:8px;
+  .card:hover{transform:translateY(-3px); border-color:var(--cyan-dim);
+              box-shadow:0 16px 34px -20px rgba(0,0,0,.7)}
+  .card .ico{font-size:22px; margin-bottom:9px; display:block}
+  .card h3{margin:0 0 6px; font-size:16.5px}
+  .card p{margin:0; color:var(--dim); font-size:14px; line-height:1.6}
+  .card.git{border-top:2px solid var(--green)}
+  .card.web{border-top:2px solid var(--cyan)}
+  .card.kb{border-top:2px solid var(--gold)}
+  .card.agents{border-top:2px solid var(--indigo)}
+  .card.gov{border-top:2px solid #d98c5f}
+  code.k{background:#0c2531; border:1px solid var(--line); border-radius:6px; padding:.5px 6px;
+         font-size:12.5px; color:var(--text)}
+
+  /* ---- privacy band ---- */
+  .band{background:linear-gradient(180deg,var(--bg2),var(--bg)); border-top:1px solid var(--line);
+        border-bottom:1px solid var(--line); padding:38px 0}
+  .priv{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:26px 28px}
+  .priv ul{margin:14px 0 0; padding-left:0; list-style:none; display:grid; gap:11px}
+  .priv li{margin:0; color:var(--dim); padding-left:28px; position:relative}
+  .priv li::before{content:"⚓"; position:absolute; left:0; color:var(--cyan); font-size:14px}
+  .priv li b{color:var(--text)}
+
+  /* ---- skills chips ---- */
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
+  .chip{font-family:ui-monospace,monospace; font-size:12.5px; color:var(--text);
+        background:#0c2531; border:1px solid var(--line); border-radius:8px; padding:4px 10px}
+
+  /* ---- tools ---- */
+  .tools{color:var(--dim); font-size:13.5px; line-height:2.1; background:var(--panel);
+         border:1px solid var(--line); border-radius:14px; padding:20px 22px}
+  .tools b{color:var(--cyan); font-weight:650}
+  .tools .mono{color:var(--text)}
+
+  pre.install{
+    display:inline-block; text-align:left; background:#07161d; border:1px solid var(--line2);
+    border-left:3px solid var(--cyan); border-radius:11px; padding:14px 20px; margin:8px 0 0;
+    font-size:14.5px; color:var(--text);
   }
-  .priv ul{margin:10px 0 0; padding-left:20px; color:var(--dim)}
-  .priv li{margin:6px 0}
-  .tools{color:var(--dim); font-size:14px; line-height:2}
-  .tools b{color:var(--text)}
-  footer{color:var(--dim); font-size:13.5px; text-align:center; padding:40px 0 56px}
-  .kbd{
-    background:#13303b; border:1px solid var(--line); border-radius:6px;
-    padding:1px 7px; font-family:ui-monospace,monospace; font-size:13px; color:var(--text);
-  }
+  pre.install .p{color:var(--green)} pre.install .c{color:var(--dim2)}
+
+  footer{color:var(--dim2); font-size:13.5px; text-align:center; padding:44px 0 60px}
+  footer a{color:var(--dim)} footer a:hover{color:var(--cyan)}
+  .kbd{background:#0c2531; border:1px solid var(--line); border-radius:6px; padding:1px 7px;
+       font-family:ui-monospace,monospace; font-size:12.5px; color:var(--text)}
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <div class="anchor">⚓</div>
-    <h1>Drydock</h1>
-    <p class="tag">A local-first, provider-agnostic <b>terminal coding agent</b> for your own LLM.
-       No accounts, no telemetry, no cloud — your code and credentials never leave your machine.</p>
-    <pre class="install"><span class="p">$</span> pip install drydock-cli
-<span class="p">$</span> drydock</pre>
-    <div class="cta">
-      <a class="btn primary" href="https://pypi.org/project/drydock-cli/">PyPI →</a>
-      <a class="btn" href="https://github.com/fbobe321/drydock">GitHub →</a>
+  <!-- HERO -->
+  <header class="hero">
+    <div class="wrap">
+      <div class="anchor">⚓</div>
+      <h1>Drydock</h1>
+      <p class="tag">A local-first, provider-agnostic <b>terminal coding agent</b> for your own LLM.</p>
+      <p class="sub">No accounts, no telemetry, no cloud — your code and credentials never leave your machine.</p>
+      <div class="badges">
+        <span class="badge"><b>Apache-2.0</b> · clean-room</span>
+        <span class="badge">100% <b>local</b></span>
+        <span class="badge">Windows · macOS · Linux</span>
+        <span class="badge">pip · <b>drydock-cli</b></span>
+      </div>
+
+      <!-- terminal mockup -->
+      <div class="term" role="img" aria-label="Example Drydock terminal session">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">drydock — gemma4 @ localhost</span>
+        </div>
+        <div class="term-body">
+          <div><span class="p">❯</span> <span class="u">fix the failing auth test</span></div>
+          <div class="t">  ▸ <span class="g">Bash</span> · pytest tests/test_auth.py -q &nbsp;<span class="d">✗ 1 failed</span></div>
+          <div class="t">  ▸ <span class="g">Read</span> · src/auth.py</div>
+          <div class="t">  ▸ <span class="g">Edit</span> · src/auth.py &nbsp;<span class="d">token-expiry check was inverted</span></div>
+          <div class="t">  ▸ <span class="g">Bash</span> · pytest tests/test_auth.py -q &nbsp;<span class="ok">✓ 4 passed</span></div>
+          <div><span class="ok">✓ verified</span> <span class="u">— expiry comparison was flipped; fixed and the tests pass.</span></div>
+          <div class="d" style="margin-top:6px">⚓ ready · gemma4 · verify-gate ✓ · ctx 12k/64k<span class="cursor"></span></div>
+        </div>
+      </div>
+
+      <div class="cta">
+        <a class="btn primary" href="https://pypi.org/project/drydock-cli/">Install from PyPI →</a>
+        <a class="btn" href="https://github.com/fbobe321/drydock">View source on GitHub →</a>
+      </div>
+      <pre class="install"><span class="p">$</span> pip install drydock-cli
+<span class="p">$</span> drydock  <span class="c"># autodetects your local model server</span></pre>
     </div>
   </header>
 
   <hr class="rule">
 
-  <section>
-    <h2>What it does</h2>
-    <p style="color:var(--dim); margin-top:-6px">A full agentic CLI harness in a Textual TUI — scrolling
-      transcript, collapsible tool &amp; reasoning cards, a live activity line. The model calls every tool
-      below autonomously. Everything is clean-room and dependency-free.</p>
+  <!-- WHAT IT DOES -->
+  <section class="wrap">
+    <div class="center">
+      <h2>Everything an agent needs — <span class="em">on your machine</span></h2>
+      <p class="lead">A full agentic CLI harness in a Textual TUI: scrolling transcript, collapsible tool &amp;
+        reasoning cards, a live activity line. The model drives every tool below autonomously — all clean-room,
+        dependency-free (nothing beyond <code class="k">openai</code> + <code class="k">textual</code>).</p>
+    </div>
     <div class="grid">
-      <div class="card"><h3>Files &amp; shell</h3><p>Read (with a structure index for huge files), Write, Edit, Bash, Glob, Grep — with advisory write guards.</p></div>
-      <div class="card"><h3>Vision (multimodal)</h3><p>Reference an image path in your message — a screenshot, mockup, or diagram — and it's attached for a vision-capable model to <b>see</b>: describe a UI, read text off a screenshot, debug a diagram. Any <code>--mmproj</code> server.</p></div>
-      <div class="card git"><h3>Version control</h3><p>First-class GitStatus / GitDiff / GitLog / GitCommit — structured, truncated; commits are local and reversible.</p></div>
-      <div class="card web"><h3>Internet search</h3><p>WebSearch + WebFetch bring live web results and pages into context. Offline-safe — degrades cleanly with no network.</p></div>
-      <div class="card kb"><h3>GraphRAG knowledge base</h3><p>Ingest your docs — text, <b>PDF, Word, and STIG checklists</b> — with <code>/graphrag build &lt;path&gt;</code> (and <code>/graphrag add</code> for more); the agent then retrieves project facts via the Knowledge tool.</p></div>
-      <div class="card agents"><h3>Multi-agent</h3><p>Dispatch runs several read-only sub-agents in parallel, each in a fresh context, for focused investigation.</p></div>
-      <div class="card agents"><h3>Second-model advisor</h3><p>Wire in a stronger model (e.g. <b>Gemini</b>, any OpenAI-compatible endpoint) with <code>/advisor</code>. The agent calls the <code>Consult</code> tool for a second opinion when stuck; you can <code>/ask</code> directly. Opt-in, no extra dependency.</p></div>
-      <div class="card"><h3>MCP support</h3><p>Connect to Model Context Protocol servers; their tools appear to the agent as <code>mcp__server__tool</code>. Works with third-party servers like <a href="https://github.com/safishamsi/graphify">Graphify</a> for a queryable code knowledge graph.</p></div>
-      <div class="card"><h3>Skills</h3><p>Create reusable <code>/&lt;name&gt;</code> commands with <code>/skills new &lt;name&gt; &lt;prompt&gt;</code> (<code>$ARGS</code> substitution), or author them as markdown.</p></div>
-      <div class="card"><h3>Loops</h3><p><code>/loop &lt;count&gt; &lt;prompt&gt;</code> runs a prompt iteratively — "fix the next failing test and run pytest". <span class="kbd">Esc</span> stops.</p></div>
-      <div class="card kb"><h3>RMF automation</h3><p>Ingest the NIST SP 800-53 catalog (<code>/rmf bootstrap</code>) + bundled RMF skills (<code>/rmf-control</code>, <code>-categorize</code>, <code>-review</code>, <code>-poam</code>). 100% local for CUI.</p></div>
-      <div class="card kb"><h3>DISA STIG automation</h3><p>A raw STIG benchmark → completed checklist, all local: <code>/stig new &lt;xccdf&gt;</code> builds a blank <code>.ckl</code>, <code>/stig-assess</code> evaluates each rule vs your evidence, <code>/stig-remediate</code> writes a fix script, <code>/stig graph</code> auto-links rules to NIST controls via DISA's CCI map, and <code>/stig poam</code> exports the open findings to a deterministic eMASS POA&amp;M CSV.</p></div>
-      <div class="card kb"><h3>NIST governance skills</h3><p>Defensive, clean-room skills for AI &amp; cyber risk management: <code>/nist-ai-rmf</code> (AI RMF 1.0 — Govern / Map / Measure / Manage + the seven trustworthiness characteristics) and <code>/nist-csf</code> (Cybersecurity Framework 2.0 — the six Functions, Implementation Tiers, current→target roadmap).</p></div>
-      <div class="card"><h3>ML engineering skills</h3><p>Built-in workflows for PyTorch work: <code>/ml-train</code>, <code>/ml-metrics</code> (accuracy · precision · recall · F1 · MCC · ROC-AUC · confusion), <code>/ml-finetune</code> (full &amp; LoRA), <code>/ml-debug</code>, <code>/ml-rl</code>, <code>/ml-data</code> — plus technique recipes retrieved into context per task.</p></div>
-      <div class="card agents"><h3>Governed reliability</h3><p>A deterministic controller governs the loop: the objective &amp; acceptance criteria live in structured state that survives compaction, a <b>verification gate</b> blocks a self-declared "done" on an unrun or failing check, and every run writes a durable event trace you can inspect with <code>/events</code>.</p></div>
-      <div class="card"><h3>Runs on Windows too</h3><p>Native on Windows via <b>PowerShell</b> or <code>cmd</code> — no WSL or Git-Bash required — as well as Linux and macOS. <code>/shell</code> shows exactly which shell your commands run in.</p></div>
-      <div class="card"><h3>Screen capture</h3><p>The agent can take a <b>Screenshot</b> of your screen and see it with vision — review a GUI, read what's displayed, or debug a rendered result. Works on Windows, macOS, and Linux.</p></div>
-      <div class="card"><h3>Context control</h3><p><code>/context</code> shows and sets the context-window budget (persisted), so a stale config or smaller model server never silently caps your window.</p></div>
+      <div class="card"><span class="ico">🗂️</span><h3>Files &amp; shell</h3><p>Read (with a structure index for huge files), Write, Edit, Bash, Glob, Grep — with advisory write guards.</p></div>
+      <div class="card"><span class="ico">👁️</span><h3>Vision</h3><p>Point at an image — a screenshot, mockup, or diagram — and a vision model <b>sees</b> it. The agent can also <b>Screenshot</b> your screen and read it back.</p></div>
+      <div class="card git"><span class="ico">🔀</span><h3>Version control</h3><p>First-class GitStatus / GitDiff / GitLog / GitCommit — structured and truncated; commits are local and reversible.</p></div>
+      <div class="card web"><span class="ico">🌐</span><h3>Internet search</h3><p>WebSearch + WebFetch bring live results and pages into context — and degrade cleanly offline.</p></div>
+      <div class="card kb"><span class="ico">📚</span><h3>GraphRAG knowledge base</h3><p>Ingest your docs — text, <b>PDF, Word, STIG checklists</b> — with <code class="k">/graphrag build</code>; the agent retrieves facts via the Knowledge tool.</p></div>
+      <div class="card agents"><span class="ico">🧭</span><h3>Multi-agent</h3><p>Dispatch runs read-only sub-agents in parallel, each in a fresh context, for focused investigation.</p></div>
+      <div class="card agents"><span class="ico">🧠</span><h3>Second-model advisor</h3><p>Wire in a stronger model (e.g. <b>Gemini</b>, any OpenAI-compatible endpoint) with <code class="k">/advisor</code>; the agent consults it when stuck.</p></div>
+      <div class="card"><span class="ico">🔌</span><h3>MCP support</h3><p>Connect Model Context Protocol servers; their tools appear as <code class="k">mcp__server__tool</code> — works with third-party servers like <a href="https://github.com/safishamsi/graphify">Graphify</a>.</p></div>
+      <div class="card gov"><span class="ico">🛡️</span><h3>Governed reliability</h3><p>A deterministic controller wraps the loop: the objective survives context compaction, a <b>verification gate</b> blocks a self-declared "done" until a check passes, and every run leaves a durable trace (<code class="k">/events</code>).</p></div>
+    </div>
+  </section>
+
+  <!-- LOCAL-FIRST BAND -->
+  <div class="band">
+    <section class="wrap">
+      <h2 class="center">Local-first, <span class="em">by design</span></h2>
+      <div class="priv" style="margin-top:18px">
+        <p style="margin:0; color:var(--text)">Drydock is an original, Apache-2.0, clean-room codebase owned end to end.</p>
+        <ul>
+          <li>The only outbound calls are to the <b>model endpoint you configure</b> and (optionally) the web tools you invoke.</li>
+          <li><b>No telemetry</b>, no phone-home, no hardcoded third-party hosts, no credential transmission — ever.</li>
+          <li>A credential-exfiltration <b>scanner gates every release</b> and blocks anything reaching off-box.</li>
+          <li>Safety is <b>advisory, never blocking</b>: catastrophic commands are refused; sensitive ones prompt Allow / Always / Deny.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <!-- SKILLS -->
+  <section class="wrap">
+    <div class="center">
+      <h2>Bundled <span class="em">skills</span></h2>
+      <p class="lead">Reusable <code class="k">/&lt;name&gt;</code> commands — author your own as markdown, or use the built-in families for compliance and ML engineering.</p>
+    </div>
+    <div class="grid">
+      <div class="card kb"><span class="ico">⚖️</span><h3>NIST governance</h3><p>Defensive, clean-room skills for AI &amp; cyber risk management.</p>
+        <div class="chips"><span class="chip">/nist-ai-rmf</span><span class="chip">/nist-csf</span></div></div>
+      <div class="card kb"><span class="ico">📋</span><h3>RMF &amp; STIG automation</h3><p>Ingest the NIST 800-53 catalog and DISA STIG benchmarks; assess, remediate, and export POA&amp;Ms — 100% local for CUI.</p>
+        <div class="chips"><span class="chip">/rmf-*</span><span class="chip">/stig-*</span></div></div>
+      <div class="card"><span class="ico">🔬</span><h3>ML engineering</h3><p>PyTorch workflows: training, full &amp; LoRA fine-tuning, metrics (F1 · MCC · ROC-AUC), RL, and data prep.</p>
+        <div class="chips"><span class="chip">/ml-train</span><span class="chip">/ml-finetune</span><span class="chip">/ml-metrics</span><span class="chip">/ml-debug</span><span class="chip">/ml-rl</span><span class="chip">/ml-data</span></div></div>
     </div>
   </section>
 
   <hr class="rule">
 
-  <section>
-    <h2>Local-first, by design</h2>
-    <div class="priv">
-      <p style="margin:0">Drydock is an original, Apache-2.0, clean-room codebase owned end to end.</p>
-      <ul>
-        <li>The only outbound calls are to the <b>model endpoint you configure</b> and (optionally) the web tools you invoke.</li>
-        <li>No telemetry, no phone-home, no hardcoded third-party hosts, no credential transmission — ever.</li>
-        <li>A credential-exfiltration <b>scanner gates every release</b> and blocks anything reaching off-box.</li>
-        <li>Safety is <b>advisory, never blocking</b>: catastrophic commands are refused; sensitive ones prompt Allow / Always / Deny.</li>
-      </ul>
+  <!-- HARDWARE / TOOLS -->
+  <section class="wrap">
+    <div class="center">
+      <h2>Runs on <span class="em">your</span> hardware</h2>
+      <p class="lead">Provider-agnostic — any OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM Studio).
+        Tuned against dense <b>Gemma-4-31B</b> (QAT, 64K) on a single workstation; first launch autodetects
+        a local model server with no account or API-key prompt.</p>
     </div>
-  </section>
-
-  <hr class="rule">
-
-  <section>
-    <h2>Runs on your hardware</h2>
-    <p style="color:var(--dim); margin-top:-6px">Provider-agnostic — any OpenAI-compatible endpoint (llama.cpp, vLLM,
-      Ollama, LM Studio). Tuned against dense <b>Gemma-4-31B</b> (QAT, 64K) on a single workstation; first launch
-      autodetects a local model server and wires it up with no account or API-key prompt.</p>
     <p class="tools">
-      <b>Tools:</b> Read · Write · Edit · Bash · Glob · Grep · ViewImage · Screenshot · todo · task · Dispatch ·
-      GitStatus · GitDiff · GitLog · GitCommit · WebSearch · WebFetch · Knowledge · BuildKnowledge · mcp__&lt;server&gt;__&lt;tool&gt;<br>
-      <b>Slash commands:</b> /help · /model · /cwd · /undo · /back · /stop · /status · /compact · /context ·
-      /graphrag build|add|query|status|clear · /events · /shell · /skills · /skills new · /loop · /mcp · /clear · /quit<br>
-      <b>Bundled skills:</b> /rmf-* · /stig-* · /nist-ai-rmf · /nist-csf · /ml-train · /ml-metrics · /ml-finetune · /ml-debug · /ml-rl · /ml-data<br>
-      <span style="color:var(--cyan)">Or just ask the agent</span> — "how do I add my own docs?" — it knows its own commands.
+      <b>Tools</b> &nbsp;<span class="mono">Read · Write · Edit · Bash · Glob · Grep · ViewImage · Screenshot · todo · task · Dispatch · GitStatus · GitDiff · GitLog · GitCommit · WebSearch · WebFetch · Knowledge · BuildKnowledge · mcp__&lt;server&gt;__&lt;tool&gt;</span><br><br>
+      <b>Commands</b> &nbsp;<span class="mono">/help · /model · /cwd · /undo · /back · /compact · /context · /graphrag · /events · /shell · /skills · /loop · /mcp · /advisor · /ask · /status · /clear · /quit</span><br><br>
+      <span style="color:var(--cyan)">Or just ask the agent</span> <span class="mono" style="color:var(--dim)">— "how do I add my own docs?" — it knows its own commands.</span>
     </p>
   </section>
 
   <footer>
-    Apache-2.0 · © 2026 Frank Bobe III ·
-    <a href="https://pypi.org/project/drydock-cli/">drydock-cli on PyPI</a> ·
-    <a href="https://github.com/fbobe321/drydock">source on GitHub</a>
+    <div class="wrap">
+      ⚓ &nbsp;Apache-2.0 · © 2026 Frank Bobe III &nbsp;·&nbsp;
+      <a href="https://pypi.org/project/drydock-cli/">PyPI</a> ·
+      <a href="https://github.com/fbobe321/drydock">GitHub</a> ·
+      <a href="https://github.com/fbobe321/drydock/blob/main/README.md">Docs</a>
+    </div>
   </footer>
 
-</div>
 </body>
 </html>
