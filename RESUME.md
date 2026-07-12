@@ -51,6 +51,66 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-07-10/12 — GOVERNED-RUNTIME PRD build-out + ML task suite + NIST skills (v3.0.116 → 3.0.133)
+
+**Agent-Buildout PRD (`Agent_Buildout_PRD.docx`) — evolve drydock into a governed
+agentic runtime: a deterministic controller governs; the model proposes.** Built the
+whole core backbone INCREMENTALLY into the existing loop (no rewrite), each piece
+self-contained + config-gated + tested:
+- **v3.0.123 structured task state** (`task_state.py`, Epic A) — objective + acceptance
+  criteria (auto-extracted) live in `TaskState` OUTSIDE the transcript, re-injected into
+  the SYSTEM PROMPT every turn so they survive compaction. `task_anchor` (default on).
+- **v3.0.125 verification gating** (Epic B) — a text-only "done" after editing files is
+  NOT accepted until a check runs. Bounded nudges; main-task only (skips sub-agents).
+- **v3.0.126 event log** (`events.py`) — durable JSONL trace per session
+  (`~/.drydock/events/`): task_start, turn, tool, verification, verify_gate, plan, done.
+  Append-only + defensive (never raises). `event_log` (default on).
+- **v3.0.127 verification EVIDENCE** — `parse_evidence()` → pass/fail from exit code +
+  pytest-style tallies. Gate now branches: never-ran→verify, FAILED→repair, PASSED→complete.
+- **v3.0.128 task reconstruct + `/events`** — `reconstruct_task_state()`/`summarize()`
+  rebuild a task from its trace; `/events` shows the digest.
+- **v3.0.129 phase tracking** — TaskState.phase understand→implement→verify→repair→complete,
+  shown in the status line.
+- **v3.0.130 rolling plan** (Epic C) — `RollingPlan`: stable text-derived step ids,
+  1 active + ≤4 pending, versioned, synced from the `todo` checklist, revisions logged.
+- **v3.0.132 structured tool results** (7.4) — `execute_structured()` wraps a tool's
+  string in a `ToolResult` (status/error_code/retryable/changed_state/exit_code/
+  duration). NO tool rewritten; `execute()` still returns str (backward-compat). Rich
+  metadata → event trace.
+- **v3.0.131** fixed a CI pyright error (typed `AgentState.events`).
+
+**ML TASK SUITE (operator: "build/train transformers, CNNs, LoRA/full finetune, data
+prep, diagnose, pytorch, ViT, H5, JSON, LaTeX, metrics, RL").** In
+`/data3/tbench_local/tasks/ml-suite/` (terminal-bench format); base image
+`drydock-ml-base` (CPU torch + sklearn/h5py/transformers/peft/matplotlib/texlive).
+**10 validated tasks (ref solution → reward 1)**: classification-metrics, multiclass-
+metrics, h5-to-json, data-split, transformer-block, latex-report, train-cnn, debug-
+training, rl-qlearning, finetune-full. Runner `ml_run.sh`. **gemma solves 9-10/10 through
+the real TUI** with recipes+skills in context.
+- **Found + fixed a real bug via the suite (v3.0.122):** a message starting with a file
+  path (`/app/env.py …`) was parsed as a slash command → "unknown command" → instant
+  fail. `is_slash_command()` now excludes path-like leading tokens. This masked 4 ML
+  "failures" that were actually passes.
+- ML skills shipped as USER-FACING skills (v3.0.120): `/ml-train /ml-metrics /ml-finetune
+  /ml-debug /ml-rl /ml-data`; ML recipes in `recipes.py` (v3.0.117/119).
+- Recommended-next-command ghost hint (v3.0.118, `suggest.py`); recipe robustness +
+  headless-screenshot fast-fail (v3.0.121).
+
+**RECIPE KB (v3.0.116)** — `recipes.py`: ~20 command-first technique recipes retrieved
+by keyword into the system prompt (forensics, git-history, numpy-2.0, cert, metrics,
+pytorch, LoRA, ViT, RL, LaTeX, …). Hypothesis: pass-rate needs INFORMATION not behavior.
+
+**NIST governance skills (v3.0.133)** — reviewed a third-party cyber-skills repo
+(mukul975/Anthropic-Cybersecurity-Skills); DECLINED to import (overwhelmingly OFFENSIVE
+— C2/pentest/social-eng — against the no-hacking guardrail + clean-room provenance).
+Instead AUTHORED fresh, defensive-only, own-copyright: **`/nist-ai-rmf`** (AI RMF 1.0:
+Govern/Map/Measure/Manage + 7 trustworthiness characteristics) and **`/nist-csf`** (CSF
+2.0: 6 Functions + Implementation Tiers + current→target roadmap). Complements the
+existing `rmf-*`/`stig-*` families.
+
+**594 tests, all on PyPI + GitHub, CI green. GitHub push token was rotated 2026-07-09.**
+
+---
 ## ⭐ 2026-07-08 — over-think interrupt, native Windows, GraphRAG fixes, Screenshot + ACTIVATION STEERING PROVEN (v3.0.107 → 3.0.114)
 
 🔔 **FIRST: the GitHub push token is EXPIRED** (401). PyPI publishing still works;

@@ -1,7 +1,14 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.115, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.0.133, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-07-10/12) — GOVERNED-RUNTIME backbone shipped (v3.0.116-133):** The
+> Agent-Buildout PRD core landed incrementally (no rewrite): structured task state (survives
+> compaction), verification gating + evidence (no self-declared done on a red check), durable
+> event log + task reconstruction, phase tracking, rolling plan, and structured ToolResults.
+> Plus a 10-task ML suite (gemma 9-10/10 via the real TUI), the recipe KB, ML skills, and
+> clean-room /nist-ai-rmf + /nist-csf governance skills. 594 tests.
 
 > **Progress (2026-07-08/09) — over-think handling, native Windows, GraphRAG, Screenshot,
 > and the ACTIVATION-STEERING investigation (v3.0.107–3.0.115):**
