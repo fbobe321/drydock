@@ -452,6 +452,13 @@ def run(
                     _emit(state, "verification", status=last_verification.status,
                           exit_code=last_verification.exit_code)
 
+            # Sync the rolling plan when the model updates its checklist, keeping
+            # stable step ids + capping pending steps; record each revision.
+            if tc["name"] == "todo" and isinstance(config.get("_todo"), list):
+                if state.task.plan.update_from_items(config["_todo"]):
+                    _emit(state, "plan", version=state.task.plan.version,
+                          steps=[(s["id"], s["status"]) for s in state.task.plan.steps])
+
             _emit(state, "tool", name=tc["name"],
                   input=str(tc.get("input"))[:200],
                   result_chars=len(str(result)),

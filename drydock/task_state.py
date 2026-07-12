@@ -40,12 +40,64 @@ def extract_acceptance_criteria(objective: str, limit: int = 10) -> list[str]:
     return out[:limit]
 
 
+def _step_id(text: str) -> str:
+    """Stable short id for a plan step, derived from its text (so the SAME step
+    keeps its id across plan revisions). Deterministic — no randomness/time."""
+    h = 0
+    for ch in text.strip().lower():
+        h = (h * 131 + ord(ch)) & 0xFFFFFFFF
+    return f"s{h:08x}"
+
+
+@dataclass
+class RollingPlan:
+    """A short, updateable plan (PRD Epic C): one ACTIVE step + a few pending ones,
+    each with a stable id. Rebuilt from the checklist the model maintains; ids are
+    text-derived so an unchanged step keeps its id across revisions."""
+    steps: list[dict] = field(default_factory=list)  # {id, text, status}
+    version: int = 0
+    max_pending: int = 4
+
+    def update_from_items(self, items: list[tuple[str, str]]) -> bool:
+        """Sync from (text, status) checklist pairs. Caps pending steps (keeps the
+        active + first max_pending pending). Returns True if the plan CHANGED."""
+        steps = [{"id": _step_id(t), "text": t, "status": s} for t, s in items if t]
+        # active = first in_progress, else first pending
+        active = next((s for s in steps if s["status"] == "in_progress"), None)
+        if active is None:
+            active = next((s for s in steps if s["status"] == "pending"), None)
+        kept, pending_kept = [], 0
+        for s in steps:
+            if s["status"] == "done" or s is active:
+                kept.append(s)
+            elif s["status"] == "pending" and pending_kept < self.max_pending:
+                kept.append(s); pending_kept += 1
+            elif s["status"] == "in_progress":
+                kept.append(s)
+        changed = [(s["id"], s["status"]) for s in kept] != [(s["id"], s["status"]) for s in self.steps]
+        if changed:
+            self.steps = kept
+            self.version += 1
+        return changed
+
+    def active_step(self) -> dict | None:
+        return next((s for s in self.steps if s["status"] == "in_progress"), None) \
+            or next((s for s in self.steps if s["status"] == "pending"), None)
+
+    def remaining(self) -> int:
+        return sum(1 for s in self.steps if s["status"] != "done")
+
+    def to_dict(self) -> dict:
+        return {"steps": list(self.steps), "version": self.version}
+
+
 @dataclass
 class TaskState:
     """Authoritative task facts, independent of the message transcript."""
     objective: str = ""
     acceptance_criteria: list[str] = field(default_factory=list)
     phase: str = "understand"
+    plan: RollingPlan = field(default_factory=RollingPlan)
 
     @classmethod
     def from_objective(cls, objective: str) -> TaskState:
@@ -61,14 +113,20 @@ class TaskState:
             "objective": self.objective,
             "acceptance_criteria": list(self.acceptance_criteria),
             "phase": self.phase,
+            "plan": self.plan.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> TaskState:
+        plan = RollingPlan()
+        pd = d.get("plan") or {}
+        plan.steps = list(pd.get("steps", []))
+        plan.version = pd.get("version", 0)
         return cls(
             objective=d.get("objective", ""),
             acceptance_criteria=list(d.get("acceptance_criteria", [])),
             phase=d.get("phase", "understand"),
+            plan=plan,
         )
 
     def anchor_text(self) -> str:
