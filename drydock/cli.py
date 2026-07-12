@@ -248,6 +248,27 @@ def _summarize(inputs: dict) -> str:
 
 # ── Entry point ───────────────────────────────────────────────────────────
 
+def _resolve_first_run(cfg: dict, args, cfg_path, cfgmod, interactive: bool) -> tuple[dict, str]:
+    """First-launch model-server resolution. AUTODETECT a live local server and
+    wire it up with ZERO prompts (the frictionless path). Only when nothing is
+    detected AND we're interactive do we ask the user to enter their own URL — so
+    the easy install (server already running) needs no input, while a custom
+    endpoint is still one prompt (or `--base-url`, or `/model url` later)."""
+    from drydock import detect
+
+    found = detect.detect_local_llms()
+    if found:
+        cfg["provider"] = found[0]["provider"]
+        cfg["base_url"] = found[0]["base_url"]
+        if found[0].get("models") and not getattr(args, "model", None):
+            cfg["model"] = found[0]["models"][0]
+        cfgmod.save_file(cfg, cfg_path)
+        return cfg, detect.onboarding_message(found)
+    if interactive:
+        return _first_run_setup(cfg, cfg_path, cfgmod)
+    return cfg, detect.onboarding_message(found)
+
+
 def _first_run_setup(cfg: dict, cfg_path, cfgmod) -> tuple[dict, str]:
     """Interactive first-launch: ask for the model server URL + model name and
     persist them to config.toml. Autodetect (if anything is listening) supplies
@@ -346,22 +367,11 @@ def main():
         "context_limit": args.context_limit,
     }, cfg_path)
 
-    # First launch: ask the user for their model server URL + model name and
-    # persist them to config.toml. Interactive only — when stdin isn't a TTY
-    # (piped / -p / cron) we fall back to silent autodetect so nothing blocks.
+    # First launch: autodetect a local server and wire it up (see _resolve_first_run).
     onboarding = ""
     if first_run and not args.provider and not args.base_url:
-        if sys.stdin.isatty() and not args.prompt:
-            cfg, onboarding = _first_run_setup(cfg, cfg_path, cfgmod)
-        else:
-            from drydock import detect
-
-            found = detect.detect_local_llms()
-            onboarding = detect.onboarding_message(found)
-            if found:
-                cfg["provider"] = found[0]["provider"]
-                cfg["base_url"] = found[0]["base_url"]
-                cfgmod.save_file(cfg, cfg_path)
+        interactive = sys.stdin.isatty() and not args.prompt
+        cfg, onboarding = _resolve_first_run(cfg, args, cfg_path, cfgmod, interactive)
 
     config = {
         # context_limit now comes from cfg (DEFAULTS < config.toml < --context-limit)
