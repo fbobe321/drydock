@@ -59,6 +59,17 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
   and the copy-paste [example config](examples/mcp/graphify.json).
 - **Skills** — reusable `/<name>` commands authored as markdown in
   `~/.drydock/skills/` (or `<project>/.drydock/skills/`); `$ARGS` substitution.
+  Bundled skill families: **RMF** (`/rmf-*`), **STIG** (`/stig-*`), **NIST
+  governance** (`/nist-ai-rmf`, `/nist-csf`), and **ML engineering** (`/ml-train`,
+  `/ml-metrics`, `/ml-finetune`, `/ml-debug`, `/ml-rl`, `/ml-data`).
+- **Screen capture** — the `Screenshot` tool grabs the screen and the vision model
+  *sees* it (Windows/macOS/Linux) — review a GUI, read what's displayed, debug a render.
+- **Governed reliability** — a deterministic controller wraps the loop: the objective
+  + acceptance criteria live in structured state that survives context compaction; a
+  **verification gate** blocks a self-declared "done" until a test/check actually runs
+  and passes; every run writes a durable event trace (inspect with `/events`).
+- **Cross-platform** — runs natively on Linux, macOS, and **Windows via PowerShell/cmd**
+  (no WSL or Git-Bash required); `/shell` shows which shell your commands run in.
 - **Loops** — `/loop <count> <prompt>` runs a prompt iteratively (Esc stops).
 
 ## Slash commands
@@ -79,6 +90,8 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/mcp` | List connected MCP servers + their tools |
 | `/rmf bootstrap [families]` | Ingest the NIST SP 800-53 catalog (RMF automation) |
 | `/rmf-control` · `/rmf-categorize` · `/rmf-review` · `/rmf-poam` | Bundled RMF skills |
+| `/nist-ai-rmf` · `/nist-csf` | NIST AI RMF 1.0 · Cybersecurity Framework 2.0 (defensive governance) |
+| `/ml-train` · `/ml-metrics` · `/ml-finetune` · `/ml-debug` · `/ml-rl` · `/ml-data` | ML-engineering skills (PyTorch, full/LoRA fine-tune, metrics, RL, data prep) |
 | `/stig new <xccdf>` | Generate a blank `.ckl` from a DISA STIG benchmark |
 | `/stig <ckl>` · `/stig <ckl> open` | Summarize a checklist · list findings by status |
 | `/stig graph <ckl>` | Ingest a checklist into the RMF graph (auto-links rules→controls via CCI) |
@@ -87,6 +100,7 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/undo` · `/back` | Revert the last write · rewind the last turn |
 | `/compact` · `/context [n]` | Shrink context now · view/set the context-window budget |
 | `/advisor` · `/ask <q>` | Set up a 2nd 'advisor' model (Gemini etc.) · consult it |
+| `/events` · `/shell` | Show this run's execution trace · which shell Bash uses (Win/macOS/Linux) |
 | `/status` · `/clear` · `/help` · `/quit` | Session stats · reset · help · exit |
 
 ### Knowledge base (GraphRAG) — ingesting your documents

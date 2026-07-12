@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Drydock — a local-first terminal coding agent</title>
-<meta name="description" content="Drydock is an open-source, provider-agnostic terminal coding agent for your own local LLM. No accounts, no telemetry, no cloud. Web search, GraphRAG, git tools, multi-agent, MCP.">
+<meta name="description" content="Drydock is an open-source, provider-agnostic terminal coding agent for your own local LLM. No accounts, no telemetry, no cloud. Web search, GraphRAG, git tools, multi-agent, MCP, vision, ML &amp; NIST RMF/CSF skills. Runs on Windows, macOS, Linux.">
 <style>
   :root{
     --bg:#0b1f2a; --panel:#0e2731; --line:#2e5a6b; --cyan:#58c4dc;
@@ -100,6 +100,11 @@
       <div class="card"><h3>Loops</h3><p><code>/loop &lt;count&gt; &lt;prompt&gt;</code> runs a prompt iteratively — "fix the next failing test and run pytest". <span class="kbd">Esc</span> stops.</p></div>
       <div class="card kb"><h3>RMF automation</h3><p>Ingest the NIST SP 800-53 catalog (<code>/rmf bootstrap</code>) + bundled RMF skills (<code>/rmf-control</code>, <code>-categorize</code>, <code>-review</code>, <code>-poam</code>). 100% local for CUI.</p></div>
       <div class="card kb"><h3>DISA STIG automation</h3><p>A raw STIG benchmark → completed checklist, all local: <code>/stig new &lt;xccdf&gt;</code> builds a blank <code>.ckl</code>, <code>/stig-assess</code> evaluates each rule vs your evidence, <code>/stig-remediate</code> writes a fix script, <code>/stig graph</code> auto-links rules to NIST controls via DISA's CCI map, and <code>/stig poam</code> exports the open findings to a deterministic eMASS POA&amp;M CSV.</p></div>
+      <div class="card kb"><h3>NIST governance skills</h3><p>Defensive, clean-room skills for AI &amp; cyber risk management: <code>/nist-ai-rmf</code> (AI RMF 1.0 — Govern / Map / Measure / Manage + the seven trustworthiness characteristics) and <code>/nist-csf</code> (Cybersecurity Framework 2.0 — the six Functions, Implementation Tiers, current→target roadmap).</p></div>
+      <div class="card"><h3>ML engineering skills</h3><p>Built-in workflows for PyTorch work: <code>/ml-train</code>, <code>/ml-metrics</code> (accuracy · precision · recall · F1 · MCC · ROC-AUC · confusion), <code>/ml-finetune</code> (full &amp; LoRA), <code>/ml-debug</code>, <code>/ml-rl</code>, <code>/ml-data</code> — plus technique recipes retrieved into context per task.</p></div>
+      <div class="card agents"><h3>Governed reliability</h3><p>A deterministic controller governs the loop: the objective &amp; acceptance criteria live in structured state that survives compaction, a <b>verification gate</b> blocks a self-declared "done" on an unrun or failing check, and every run writes a durable event trace you can inspect with <code>/events</code>.</p></div>
+      <div class="card"><h3>Runs on Windows too</h3><p>Native on Windows via <b>PowerShell</b> or <code>cmd</code> — no WSL or Git-Bash required — as well as Linux and macOS. <code>/shell</code> shows exactly which shell your commands run in.</p></div>
+      <div class="card"><h3>Screen capture</h3><p>The agent can take a <b>Screenshot</b> of your screen and see it with vision — review a GUI, read what's displayed, or debug a rendered result. Works on Windows, macOS, and Linux.</p></div>
       <div class="card"><h3>Context control</h3><p><code>/context</code> shows and sets the context-window budget (persisted), so a stale config or smaller model server never silently caps your window.</p></div>
     </div>
   </section>
@@ -127,10 +132,11 @@
       Ollama, LM Studio). Tuned against dense <b>Gemma-4-31B</b> (QAT, 64K) on a single workstation; first launch
       autodetects a local model server and wires it up with no account or API-key prompt.</p>
     <p class="tools">
-      <b>Tools:</b> Read · Write · Edit · Bash · Glob · Grep · todo · task · Dispatch ·
-      GitStatus · GitDiff · GitLog · GitCommit · WebSearch · WebFetch · Knowledge · mcp__&lt;server&gt;__&lt;tool&gt;<br>
-      <b>Slash commands:</b> /help · /model · /cwd · /undo · /back · /stop · /status · /compact ·
-      /graphrag build|add|query|status|clear · /skills · /skills new · /loop · /mcp · /clear · /quit<br>
+      <b>Tools:</b> Read · Write · Edit · Bash · Glob · Grep · ViewImage · Screenshot · todo · task · Dispatch ·
+      GitStatus · GitDiff · GitLog · GitCommit · WebSearch · WebFetch · Knowledge · BuildKnowledge · mcp__&lt;server&gt;__&lt;tool&gt;<br>
+      <b>Slash commands:</b> /help · /model · /cwd · /undo · /back · /stop · /status · /compact · /context ·
+      /graphrag build|add|query|status|clear · /events · /shell · /skills · /skills new · /loop · /mcp · /clear · /quit<br>
+      <b>Bundled skills:</b> /rmf-* · /stig-* · /nist-ai-rmf · /nist-csf · /ml-train · /ml-metrics · /ml-finetune · /ml-debug · /ml-rl · /ml-data<br>
       <span style="color:var(--cyan)">Or just ask the agent</span> — "how do I add my own docs?" — it knows its own commands.
     </p>
   </section>
