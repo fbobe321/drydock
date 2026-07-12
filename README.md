@@ -83,6 +83,7 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/graphrag add <path>` | Incrementally add more documents to the base |
 | `/graphrag query <q>` | Test what the base returns (no model) |
 | `/graphrag status` · `clear` | List indexed sources · wipe the base |
+| `/graphrag migrate` | Convert a legacy JSON index to the fast SQLite store |
 | `/skills` | List your skills |
 | `/skills new <name> <prompt>` | Create a reusable `/<name>` skill (use `$ARGS` for input) |
 | `/<name>` | Run a skill |
@@ -118,8 +119,8 @@ tool) when a question touches your material. Ingests text formats
 checklists (`.ckl`/`.cklb`)** — checklists are flattened to per-rule findings so
 you can ask "which findings are open?". `.docx`/`.ckl` need nothing extra; PDF
 uses the `pdftotext` binary (poppler) if present, else `pip install
-drydock-cli[pdf]` (pypdf). The index is a single JSON at
-`<project>/.drydock/graphrag.json` — clean-room, no embeddings.
+drydock-cli[pdf]` (pypdf). The index is a SQLite database at
+`<project>/.drydock/graphrag.db` (FTS5-indexed, so queries stay fast at multi-GB scale) — clean-room, no embeddings.
 
 ### Custom skills
 

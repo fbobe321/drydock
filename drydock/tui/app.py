@@ -1125,23 +1125,43 @@ class DrydockApp(App):
                 self._info("No knowledge base yet. Build one:  /graphrag build <path>")
             else:
                 srcs = graphrag.sources(index)
+                st = graphrag.index_stats(index)
                 shown = "\n".join(f"    · {s}" for s in srcs[:20])
                 more = f"\n    … +{len(srcs) - 20} more" if len(srcs) > 20 else ""
+                resolved = graphrag._resolve_store(store)
+                legacy = "  ⚠ legacy JSON — run /graphrag migrate for fast queries" \
+                    if str(resolved).endswith(".json") else ""
                 self._info(
-                    f"Knowledge base: {len(index.get('chunks', []))} chunks · "
-                    f"{len(index.get('entities', {}))} entities · {len(srcs)} sources "
-                    f"({store}).\n{shown}{more}"
+                    f"Knowledge base: {st['chunks']} chunks · {st['entities']} entities · "
+                    f"{len(srcs)} sources ({resolved}).{legacy}\n{shown}{more}"
                 )
+        elif sub == "migrate":
+            resolved = graphrag._resolve_store(store)
+            if not str(resolved).endswith(".json"):
+                self._info("Already using the fast SQLite store — nothing to migrate.")
+                return
+            db = resolved.with_suffix(".db")
+            self._info(f"Migrating legacy index → {db} (one-time; loads the JSON once) …")
+            try:
+                m = graphrag.migrate_json_to_sqlite(resolved, db)
+            except Exception as e:  # noqa: BLE001
+                self._mount(ErrorMessage(f"migrate failed: {e}"))
+                return
+            self._info(
+                f"✓ Migrated: {m['chunks']} chunks · {m['entities']} entities → {db}. "
+                f"Queries now hit the index directly (no full-file load). You can delete "
+                f"the old {resolved.name} once you've confirmed queries work."
+            )
         elif sub == "clear":
             try:
-                store.unlink(missing_ok=True)
+                graphrag._resolve_store(store).unlink(missing_ok=True)
                 self._info("Knowledge base cleared.")
             except OSError as e:
                 self._mount(ErrorMessage(f"could not clear: {e}"))
         else:
             self._info(
                 "usage:  /graphrag build <path>  ·  add <path>  ·  query <question>  "
-                "·  status  ·  clear"
+                "·  status  ·  migrate  ·  clear"
             )
 
     def _persist_config(self) -> None:
