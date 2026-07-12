@@ -229,7 +229,7 @@ drydock
 ```
 
 Requires Python 3.11+. From source instead:
-`git clone https://github.com/fbobe321/drydock-v3.git && cd drydock-v3 && pip install -e .`
+`git clone https://github.com/fbobe321/drydock.git && cd drydock-v3 && pip install -e .`
 
 On first launch with no config, Drydock probes localhost for a running local
 LLM (llama.cpp/vLLM `:8000`, Ollama `:11434`, LM Studio `:1234`) and wires up
