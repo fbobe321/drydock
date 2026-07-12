@@ -83,8 +83,11 @@ def test_adaptive_reasoning_high_to_plan_then_low(monkeypatch):
             yield AssistantTurn("done", [], 1, 1)
 
     monkeypatch.setattr(agent_mod, "stream", fake_stream)
-    # execute() would run a real Bash; stub it to keep the test hermetic.
-    monkeypatch.setattr(agent_mod, "execute", lambda name, inp, cfg: "ok")
+    # execute would run a real Bash; stub it to keep the test hermetic. The loop
+    # now calls execute_structured (returns a ToolResult with .text).
+    from drydock.tool_result import ToolResult
+    monkeypatch.setattr(agent_mod, "execute_structured",
+                        lambda name, inp, cfg: ToolResult(name=name, text="ok"))
     st = AgentState()
     list(run("go", st, {"model": "gemma4"}, "sys"))
     # First (planning) turn high, the continuation that consumes the tool result low.

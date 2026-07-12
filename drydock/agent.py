@@ -34,7 +34,7 @@ def _plan_has_unfinished(config: dict) -> bool:
     return bool(todo) and any(status != "done" for _, status in todo)
 
 from drydock.providers import stream, AssistantTurn, ReasoningChunk, TextChunk, StallRetry, RepetitionDetected
-from drydock.tool_registry import schemas, execute
+from drydock.tool_registry import schemas, execute_structured
 from drydock.tools import register_all
 
 # Register the built-in tools as a side effect of importing the agent. This is
@@ -422,14 +422,17 @@ def run(
             halluc = hallucinated_tool_message(tc["name"])
             if halluc is not None:
                 result = halluc
+                tool_result = None
             elif allow is not None and tc["name"] not in allow:
                 result = (
                     f"[The '{tc['name']}' tool is not available here. You may use "
                     f"only: {', '.join(allow)}. Use one of those, or reply with "
                     "your final summary.]"
                 )
+                tool_result = None
             else:
-                result = execute(tc["name"], tc["input"], config)
+                tool_result = execute_structured(tc["name"], tc["input"], config)
+                result = tool_result.text
             # Track consecutive byte-identical calls — same name, args AND raw
             # result (captured before annotate prepends its note, which changes
             # each call) — for the safety valve below. A differing result
@@ -459,10 +462,14 @@ def run(
                     _emit(state, "plan", version=state.task.plan.version,
                           steps=[(s["id"], s["status"]) for s in state.task.plan.steps])
 
-            _emit(state, "tool", name=tc["name"],
-                  input=str(tc.get("input"))[:200],
-                  result_chars=len(str(result)),
-                  error=str(result)[:80].lower().startswith("error"))
+            if tool_result is not None:
+                _emit(state, "tool", input=str(tc.get("input"))[:200],
+                      **tool_result.to_event())
+            else:
+                _emit(state, "tool", name=tc["name"],
+                      input=str(tc.get("input"))[:200],
+                      result_chars=len(str(result)),
+                      status="ok")
             yield ToolEnd(tc["name"], result)
 
             # Append tool result
