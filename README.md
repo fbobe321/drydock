@@ -236,6 +236,20 @@ LLM (llama.cpp/vLLM `:8000`, Ollama `:11434`, LM Studio `:1234`) and wires up
 the first one it finds — no account or API-key prompt. Override anytime with
 `--model` / `--provider` / `--base-url` or `~/.drydock/config.toml`.
 
+### Docker
+
+A prebuilt image is on Docker Hub. Drydock is just the agent — point it at your
+own OpenAI-compatible model server (e.g. one running on the host):
+
+```
+docker run -it --add-host=host.docker.internal:host-gateway \
+  -v "$PWD:/work" fbobe3/drydock \
+  --base-url http://host.docker.internal:8000/v1 --model gemma4
+```
+
+`-v "$PWD:/work"` mounts your project so the agent can read/edit it. Tags:
+`fbobe3/drydock:latest` and `fbobe3/drydock:<version>` (e.g. `:3.0.135`).
+
 ## Using it
 
 Type a task and press **Enter**. Drydock reads/writes/edits files and runs
