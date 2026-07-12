@@ -49,7 +49,7 @@ from drydock.compaction import (
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
 from drydock.verification import looks_like_verification, parse_evidence
-from drydock.events import emit as _emit
+from drydock.events import EventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
     hallucinated_tool_message,
@@ -84,7 +84,7 @@ class AgentState:
     turn_count: int = 0
     current_effort: str = ""  # "high"/"low" of the in-flight LLM call (for the UI)
     task: "TaskState" = field(default_factory=lambda: TaskState())  # structured objective
-    events: object | None = None  # optional EventLog for a durable execution trace
+    events: "EventLog | None" = None  # optional durable execution trace
 
 
 def drop_last_turn(messages: list) -> bool:
