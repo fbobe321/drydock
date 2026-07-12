@@ -68,3 +68,34 @@ def test_resolve_prefers_db_then_json():
 
 def test_missing_store_returns_none():
     assert g.load_index("/no/such/graphrag.db") is None
+
+
+def test_streaming_build_reports_progress():
+    """SQLite build streams to disk and calls progress per file (so the UI can show
+    it and never looks frozen)."""
+    d, docs = _docs()
+    open(os.path.join(docs, "c.md"), "w").write("# More\nExtra content about billing.")
+    seen = []
+    store = os.path.join(d, ".drydock", "graphrag.db")
+    stats = g.build_index([docs], store, cwd=d, progress=lambda n, s: seen.append((n, s)))
+    assert stats["files"] == 3 and len(seen) == 3
+    assert seen[-1][0] == 3                    # last progress reports 3 files done
+    # index is queryable
+    assert g.query_index(g.load_index(store), "billing", k=2)["chunks"]
+
+
+def test_streaming_append_skips_existing_and_reports():
+    d, docs = _docs()
+    store = os.path.join(d, ".drydock", "graphrag.db")
+    g.build_index([docs], store, cwd=d)
+    open(os.path.join(docs, "n.md"), "w").write("# New\nThe RefundBot processes claims.")
+    seen = []
+    s2 = g.add_to_index([docs], store, cwd=d, progress=lambda n, s: seen.append(s))
+    assert s2["files"] == 1 and seen == ["docs/n.md"]   # only the new file ingested
+    assert g.query_index(g.load_index(store), "refundbot claims", k=2)["chunks"]
+
+
+def test_build_without_progress_is_backward_compatible():
+    d, docs = _docs()
+    store = os.path.join(d, ".drydock", "graphrag.db")
+    assert g.build_index([docs], store, cwd=d)["files"] == 2   # no progress arg → still works

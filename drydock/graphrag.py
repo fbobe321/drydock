@@ -270,16 +270,16 @@ def _iter_text_files(paths: list[str]):
                         yield fp
 
 
-def _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip_sources):
-    """Chunk + extract + graph every text file under paths into the (mutable)
-    accumulators, skipping any source already present. Returns files added."""
-    added = 0
+def _iter_file_chunks(paths, cwd, skip_sources, progress=None):
+    """Yield (rel_source, [(body, entities), …]) for each ingestible file, one file
+    at a time (so callers never hold every file's text at once). Per-file isolation:
+    one unreadable/odd file (a locked Word doc, weird encoding, PDF quirk) is skipped,
+    not fatal. Calls progress(files_done, rel) after each file so a long build can
+    report instead of appearing frozen."""
     cleaned = [_unquote(p) for p in paths]
+    files_done = 0
     for fp in _iter_text_files([str(Path(cwd) / p) if not os.path.isabs(p) else p
                                 for p in cleaned]):
-        # Per-file isolation: ONE unreadable/odd file (a locked Word doc, a weird
-        # encoding, a PDF backend quirk) must never crash a whole-folder build —
-        # skip it and keep indexing the rest.
         try:
             rel = os.path.relpath(str(fp), cwd)
             if rel in skip_sources:
@@ -289,14 +289,25 @@ def _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip_sources):
             else:
                 text = fp.read_text("utf-8", "ignore")
             if not text or not text.strip():
-                continue  # unreadable / empty — skip cleanly
-            # Build this file's chunks locally; commit only if it ALL succeeds so a
-            # mid-file failure leaves no partial state and isn't miscounted.
+                continue
             local = [(body, extract_entities(body)) for body in _chunk_text(text)]
         except Exception:  # noqa: BLE001 — isolate a bad file, never abort the build
             continue
+        skip_sources.add(rel)
+        files_done += 1
+        if progress:
+            try:
+                progress(files_done, rel)
+            except Exception:  # noqa: BLE001 — a progress callback must never break a build
+                pass
+        yield rel, local
+
+
+def _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip_sources, progress=None):
+    """In-memory ingest into the accumulators (legacy JSON path — small indexes)."""
+    added = 0
+    for rel, local in _iter_file_chunks(paths, cwd, skip_sources, progress):
         added += 1
-        skip_sources.add(rel)  # don't double-ingest the same file in one call
         for body, ents in local:
             cid = len(chunks)
             chunks.append({"id": cid, "source": rel, "text": body, "entities": ents})
@@ -307,6 +318,56 @@ def _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip_sources):
                     edges[a][b] += 1
                     edges[b][a] += 1
     return added
+
+
+def _build_sqlite_stream(paths, store_path, cwd, skip_sources, progress=None, append=False):
+    """Streaming SQLite build: chunk text is inserted per-file (never held for the
+    whole corpus, so memory stays bounded even for a huge folder). Entities/edges
+    aggregate in memory (far smaller than the text) and are written at the end."""
+    sp = Path(store_path)
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    if not append and sp.exists():
+        sp.unlink()
+    con = sqlite3.connect(str(sp))
+    entity_chunks: dict[str, set[int]] = defaultdict(set)
+    edges: dict[str, Counter] = defaultdict(Counter)
+    added = 0
+    try:
+        con.executescript(_SCHEMA)
+        # continue chunk ids after any existing rows (append mode)
+        row = con.execute("SELECT COALESCE(MAX(id), -1) FROM chunks").fetchone()
+        next_id = (row[0] if row else -1) + 1
+        if append:  # seed the in-memory graph with what's already stored
+            for r in con.execute("SELECT entity, chunk_id FROM entities"):
+                entity_chunks[r[0]].add(r[1])
+            for r in con.execute("SELECT a, b, weight FROM edges"):
+                edges[r[0]][r[1]] = r[2]
+            con.execute("DELETE FROM entities"); con.execute("DELETE FROM edges")
+        for rel, local in _iter_file_chunks(paths, cwd, skip_sources, progress):
+            added += 1
+            rows = []
+            for body, ents in local:
+                cid = next_id; next_id += 1
+                con.execute("INSERT INTO chunks(id,source,text) VALUES(?,?,?)", (cid, rel, body))
+                con.execute("INSERT INTO chunks_fts(rowid,text) VALUES(?,?)", (cid, body))
+                for e in ents:
+                    entity_chunks[e].add(cid)
+                for i, a in enumerate(ents):
+                    for b in ents[i + 1:]:
+                        edges[a][b] += 1; edges[b][a] += 1
+                rows.append(cid)
+            if added % 200 == 0:
+                con.commit()
+        con.executemany("INSERT INTO entities(entity,chunk_id) VALUES(?,?)",
+                        ((e, cid) for e, cids in entity_chunks.items() for cid in cids))
+        con.executemany("INSERT INTO edges(a,b,weight) VALUES(?,?,?)",
+                        ((a, b, w) for a, nbrs in edges.items() for b, w in nbrs.items()))
+        con.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('version','2')")
+        con.commit()
+        return {"files": added, "chunks": next_id, "entities": len(entity_chunks),
+                "edges": sum(len(n) for n in edges.values()) // 2}
+    finally:
+        con.close()
 
 
 def _save(store_path, chunks, entity_chunks, edges, files_added):
@@ -334,13 +395,17 @@ def _save(store_path, chunks, entity_chunks, edges, files_added):
     }
 
 
-def build_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") -> dict:
+def build_index(paths: list[str], store_path: str | Path, *, cwd: str = ".",
+                progress=None) -> dict:
     """Build (or REBUILD from scratch) the knowledge graph from paths; persist to
-    store_path. Returns {files, chunks, entities, edges}."""
+    store_path. Returns {files, chunks, entities, edges}. `progress(files_done, src)`
+    is called per file (for a UI). SQLite stores stream to disk (bounded memory)."""
+    if _is_sqlite(store_path):
+        return _build_sqlite_stream(paths, store_path, cwd, set(), progress, append=False)
     chunks: list[dict] = []
     entity_chunks: dict[str, set[int]] = defaultdict(set)
     edges: dict[str, Counter] = defaultdict(Counter)
-    added = _ingest_files(paths, cwd, chunks, entity_chunks, edges, set())
+    added = _ingest_files(paths, cwd, chunks, entity_chunks, edges, set(), progress)
     return _save(store_path, chunks, entity_chunks, edges, added)
 
 
@@ -366,13 +431,17 @@ def _read_all(store_path) -> dict:
     return json.loads(Path(sp).read_text("utf-8"))
 
 
-def add_to_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") -> dict:
+def add_to_index(paths: list[str], store_path: str | Path, *, cwd: str = ".",
+                 progress=None) -> dict:
     """Incrementally ADD documents to an existing index (build it if none yet).
     Files already indexed (by relative path) are skipped — clear+build to refresh
     changed files. Returns {files (added), chunks, entities, edges} totals."""
     sp = _resolve_store(store_path)
     if not sp.exists():
-        return build_index(paths, store_path, cwd=cwd)
+        return build_index(paths, store_path, cwd=cwd, progress=progress)
+    if _is_sqlite(sp):
+        skip = {r[0] for r in sqlite3.connect(str(sp)).execute("SELECT DISTINCT source FROM chunks")}
+        return _build_sqlite_stream(paths, sp, cwd, skip, progress, append=True)
     existing = _read_all(sp)
     chunks: list[dict] = list(existing.get("chunks", []))
     entity_chunks: dict[str, set[int]] = defaultdict(set)
@@ -382,7 +451,7 @@ def add_to_index(paths: list[str], store_path: str | Path, *, cwd: str = ".") ->
     for a, nbrs in existing.get("edges", {}).items():
         edges[a] = Counter(nbrs)
     skip = {c["source"] for c in chunks}
-    added = _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip)
+    added = _ingest_files(paths, cwd, chunks, entity_chunks, edges, skip, progress)
     return _save(sp, chunks, entity_chunks, edges, added)
 
 
