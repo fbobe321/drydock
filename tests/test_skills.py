@@ -59,6 +59,7 @@ def test_no_user_or_project_skills_yields_only_builtins(tmp_path):
         "rmf-control", "rmf-categorize", "rmf-review", "rmf-poam",
         "stig-assess", "stig-remediate",
         "ml-train", "ml-metrics", "ml-finetune", "ml-debug", "ml-rl", "ml-data",
+        "nist-ai-rmf", "nist-csf",
     }
 
 
