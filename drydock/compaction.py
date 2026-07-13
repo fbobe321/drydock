@@ -6,6 +6,7 @@ DryDock v3 — layered compaction:
 3. Emergency mode: aggressive truncation on 400 errors
 """
 from __future__ import annotations
+import re
 
 
 # Substrings that mark a context-overflow 400 across providers/servers
@@ -32,6 +33,22 @@ def is_context_length_error(err: str) -> bool:
         return True
     # Catch generic phrasings like "... exceeds the model's context ..." too.
     return "context" in e and ("exceed" in e or "too long" in e or "too large" in e)
+
+
+def extract_server_n_ctx(err: str) -> int | None:
+    """Parse the actual server n_ctx from a llama.cpp 400 error message.
+
+    llama.cpp returns: {'n_ctx': 32768, 'n_prompt_tokens': 32830, ...}
+    Returns the integer n_ctx, or None if not found.
+    """
+    m = re.search(r"['\"]?n_ctx['\"]?\s*:\s*(\d+)", err)
+    if m:
+        return int(m.group(1))
+    # Also catch "available context size (32768 tokens)"
+    m = re.search(r"available context size \((\d+) token", err)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 def is_image_load_error(err: str) -> bool:

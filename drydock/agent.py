@@ -45,6 +45,7 @@ from drydock.tools import register_all
 register_all()
 from drydock.compaction import (
     maybe_compact, emergency_compact, is_context_length_error, is_image_load_error,
+    extract_server_n_ctx,
 )
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
@@ -256,6 +257,25 @@ def run(
                 if is_context_length_error(err):
                     retries += 1
                     limit = config.get("context_limit", 131072)
+                    # The server told us its real n_ctx (llama.cpp 400 body includes
+                    # 'n_ctx': <N>). ADOPT it as the runtime context_limit when it's
+                    # smaller than the configured value — so it self-heals: from now
+                    # on the ctx gauge, PROACTIVE compaction (maybe_compact at ~60%),
+                    # and this emergency path all target the REAL window instead of a
+                    # too-high config. Without this, a user with context_limit=64K on a
+                    # 32K server re-hits the wall every long turn (GitHub issue #25).
+                    server_ctx = extract_server_n_ctx(err)
+                    if server_ctx and server_ctx < limit:
+                        limit = server_ctx
+                        if server_ctx < config.get("context_limit", limit):
+                            config["context_limit"] = server_ctx
+                            yield TextChunk(
+                                f"\n[Your model server reports only {server_ctx:,} tokens available "
+                                "PER REQUEST (n_ctx). If the server's TOTAL context is larger, this "
+                                "is usually PARALLEL SLOTS dividing it — llama.cpp splits -c across "
+                                "-np slots (e.g. 262144 / 8 = 32768 each). For the full window per "
+                                "request, restart the server with -np 1. drydock will use "
+                                f"{server_ctx:,} for now.]\n")
                     state.messages = emergency_compact(state.messages, limit)
                     if retries >= 2:
                         raise

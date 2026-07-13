@@ -935,10 +935,16 @@ class DrydockApp(App):
                    f"Your effective cap is the smaller of drydock's {limit:,} and the "
                    "server's own -c/--ctx-size.")
         elif n_ctx < limit:
-            msg = (f"⚠ Model server reports n_ctx = {n_ctx:,} tokens — SMALLER than "
-                   f"drydock's {limit:,}. The SERVER is your real cap (you'll stick near "
-                   f"{n_ctx // 1024}k). Restart it with a larger -c/--ctx-size/max_model_len, "
-                   "or lower /context to match.")
+            # Auto-adopt the server's real per-request window so proactive
+            # compaction + the gauge target it (prevents the context-overflow 400).
+            self.config["context_limit"] = n_ctx
+            self.call_from_thread(self._refresh_status)
+            msg = (f"⚠ Model server allows n_ctx = {n_ctx:,} tokens PER REQUEST — SMALLER "
+                   f"than drydock's {limit:,}, so it's your real cap. drydock is now using "
+                   f"{n_ctx:,} (compaction targets it). If the server's TOTAL context is "
+                   "bigger, this is usually PARALLEL SLOTS dividing it (llama.cpp splits -c "
+                   "across -np, e.g. 262144/8 = 32768 each) — restart with -np 1 for the "
+                   f"full window, or set context_limit = {n_ctx} in config.toml to keep this.")
         else:
             msg = (f"✓ Model server reports n_ctx = {n_ctx:,} tokens (≥ drydock's {limit:,}), "
                    "so drydock's budget is the effective limit — no server-side cap.")
