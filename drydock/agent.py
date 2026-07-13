@@ -383,6 +383,9 @@ def run(
                 state.task.phase = "complete"
             _emit(state, "done", phase=state.task.phase, edited=session_has_edited,
                   verified=bool(last_verification and last_verification.status == "pass"))
+            if config.get("trajectory_file"):
+                from drydock import trajectory
+                trajectory.record(system_prompt, state, config)
             break
 
         # Execute each tool call

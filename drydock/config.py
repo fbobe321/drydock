@@ -55,6 +55,10 @@ DEFAULTS: dict[str, object] = {
     # Durable per-session execution trace (events.py) written as JSONL to
     # ~/.drydock/events/ — inspect/diagnose/replay a task. Set false to disable.
     "event_log": True,
+    # Verified-trajectory export (RSI training-data collection). When set to a path,
+    # drydock writes the full task trajectory (system prompt + transcript) there at
+    # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.
+    "trajectory_file": "",
     "theme": "harbor",
     # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
     # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The
