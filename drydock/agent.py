@@ -55,6 +55,8 @@ from drydock.recovery import RecoveryController
 from drydock.loop_detect import tool_signature
 from drydock.phases import AgentPhase, PhaseController
 from drydock.tool_select import select_tools, DEFAULT_MAX_TOOLS
+from drydock.tool_registry import get as tool_get
+from drydock.tool_validate import repair_and_validate, INVALID_ARGUMENTS
 from drydock.events import EventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
@@ -493,8 +495,24 @@ def run(
                 )
                 tool_result = None
             else:
-                tool_result = execute_structured(tc["name"], tc["input"], config)
-                result = tool_result.text
+                # Deterministic arg repair + validation (PRD Epic G): fix the safe
+                # slips (raw JSON, trailing comma, "10"->10) and refuse a call with
+                # missing/mistyped required args with a typed error instead of
+                # executing it and looping on a confusing failure.
+                _tool = tool_get(tc["name"])
+                _errs: list[str] = []
+                if _tool is not None:
+                    tc["input"], _errs, _ = repair_and_validate(_tool.schema, tc["input"] or {})
+                if _errs:
+                    result = (
+                        f"[{INVALID_ARGUMENTS}] {tc['name']} was not run — its "
+                        f"arguments are invalid: {'; '.join(_errs)}. Fix them and "
+                        f"call {tc['name']} again."
+                    )
+                    tool_result = None
+                else:
+                    tool_result = execute_structured(tc["name"], tc["input"], config)
+                    result = tool_result.text
             # Track consecutive byte-identical calls — same name, args AND raw
             # result (captured before annotate prepends its note, which changes
             # each call) — for the safety valve below. A differing result
