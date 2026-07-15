@@ -50,6 +50,7 @@ from drydock.compaction import (
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
 from drydock.verification import looks_like_verification, parse_evidence
+from drydock.progress import ProgressTracker, assess_action
 from drydock.events import EventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
@@ -176,6 +177,8 @@ def run(
     IDENTICAL_REPEAT_CAP = 8
     run_iteration = 0  # stream calls within THIS run() (resets per user message)
     loop_tracker = LoopTracker()
+    progress_tracker = ProgressTracker()  # scores each action; flags a stalled run
+    prev_failing = None  # failing-test count from the previous verification (delta)
 
     while state.turn_count < max_turns:
         if _stopped():
@@ -477,6 +480,28 @@ def run(
                     last_verification = parse_evidence(_vcmd, result)
                     _emit(state, "verification", status=last_verification.status,
                           exit_code=last_verification.exit_code)
+
+            # Progress evaluation (PRD Epic L): score what this action actually
+            # achieved and slide it through a window so a stalled run — repeated
+            # actions that change nothing — is noticed even when no single call
+            # repeats byte-for-byte. Advisory: it recommends a recovery stage,
+            # it does not stop the loop.
+            _failing_before = prev_failing
+            _failing_after = None
+            if last_verification is not None and tc["name"] == "Bash" \
+                    and looks_like_verification((tc.get("input") or {}).get("command", "")):
+                _failing_after = last_verification.tests_failed
+                prev_failing = _failing_after
+            assessment = progress_tracker.record(assess_action(
+                changed_state=bool(tool_result and tool_result.changed_state),
+                repeat_count=loop_tracker.count(tc["name"], tc["input"]),
+                failing_tests_before=_failing_before if _failing_after is not None else None,
+                failing_tests_after=_failing_after,
+            ))
+            _emit(state, "progress", score=assessment.progress_score,
+                  types=assessment.progress_types,
+                  cumulative=progress_tracker.cumulative(),
+                  streak=progress_tracker.no_progress_streak())
 
             # Sync the rolling plan when the model updates its checklist, keeping
             # stable step ids + capping pending steps; record each revision.

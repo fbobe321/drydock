@@ -142,6 +142,12 @@ class LoopTracker:
         self._counts[sig] = self._counts.get(sig, 0) + 1
         return self._counts[sig]
 
+    def count(self, name: str, inputs: dict) -> int:
+        """How many times this exact call has occurred so far, WITHOUT recording a
+        new one. Lets progress evaluation read the exact-repeat count after
+        annotate() has already recorded the call."""
+        return self._counts.get(tool_signature(name, inputs), 0)
+
     def record_path_write(self, name: str, inputs: dict) -> str | None:
         """Track Write/Edit per target path and return a thrash note if the
         same path has now been written 3+ times (regardless of content)."""
