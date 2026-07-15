@@ -53,6 +53,7 @@ from drydock.verification import looks_like_verification, parse_evidence
 from drydock.progress import ProgressTracker, assess_action
 from drydock.recovery import RecoveryController
 from drydock.loop_detect import tool_signature
+from drydock.phases import AgentPhase, PhaseController
 from drydock.events import EventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
@@ -183,6 +184,7 @@ def run(
     prev_failing = None  # failing-test count from the previous verification (delta)
     recovery = RecoveryController()  # escalates when progress stalls (PRD Epic K)
     recovery_terminate = False  # set by stage-5 recovery to end the run honestly
+    phases = PhaseController()  # owns phase transitions (PRD Epic B)
 
     while state.turn_count < max_turns:
         if _stopped():
@@ -387,7 +389,7 @@ def run(
             if _needs_gate:
                 verify_gate_nudges += 1
                 if last_verification is None:
-                    state.task.phase = "verify"
+                    state.task.phase = phases.advance(state.task.phase, AgentPhase.VERIFY)
                     _emit(state, "verify_gate", kind="unverified", nudge=verify_gate_nudges)
                     msg = (
                         "[SYSTEM] You changed files but have not VERIFIED the work. "
@@ -396,7 +398,7 @@ def run(
                         "produced, and confirm it meets EVERY requirement."
                     )
                 else:  # a check ran and FAILED
-                    state.task.phase = "repair"
+                    state.task.phase = phases.advance(state.task.phase, AgentPhase.REPAIR)
                     _emit(state, "verify_gate", kind="failed", nudge=verify_gate_nudges,
                           summary=last_verification.summary)
                     msg = (
@@ -407,7 +409,11 @@ def run(
                 state.messages.append({"role": "user", "content": msg})
                 continue
             if session_has_edited and last_verification and last_verification.status == "pass":
-                state.task.phase = "complete"
+                # A check ran and PASSED — verification evidence exists, so the
+                # controller approves completion (from VERIFY, its only legal
+                # predecessor). This is the one path to COMPLETE.
+                state.task.phase = phases.advance(
+                    AgentPhase.VERIFY, AgentPhase.COMPLETE, verified=True)
             _emit(state, "done", phase=state.task.phase, edited=session_has_edited,
                   verified=bool(last_verification and last_verification.status == "pass"))
             if config.get("trajectory_file"):
@@ -420,7 +426,8 @@ def run(
             tool_call_count += 1
             if tc["name"] in ("Edit", "Write"):
                 if not session_has_edited and state.task.phase in ("understand", "discover", "plan"):
-                    state.task.phase = "implement"  # first change → building
+                    state.task.phase = phases.advance(
+                        state.task.phase, AgentPhase.IMPLEMENT)  # first change → building
                 session_has_edited = True
 
             # STOP pressed: don't run the remaining tools, but still record a
