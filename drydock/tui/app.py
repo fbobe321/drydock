@@ -65,6 +65,10 @@ _SPINNER = "◜◠◝◞◡◟"
 # think before the first tool call) so normal slow turns don't nag; observed
 # stalls ran 3–5 min+, so 180s still flags them well before the 30-min timeout.
 _STALL_HINT_SECS = 180
+# Recovery-stage labels for the status line (PRD Epic K) — short enough to sit in
+# the footer, so the operator can watch the governor escalate.
+_STAGE_NAMES = {1: "advisory", 2: "reflection", 3: "suppressing",
+                4: "reset", 5: "stopping"}
 _WORKING_WORDS = [
     "Battening", "Splicing", "Hoisting", "Heaving", "Trimming", "Tacking",
     "Mooring", "Charting", "Navigating", "Sounding", "Caulking", "Rigging",
@@ -365,8 +369,12 @@ class DrydockApp(App):
         # Show the task phase once it's past the default (understand).
         ph = getattr(self.state, "task", None)
         phase = f"  ·  {ph.phase}" if (ph and ph.is_set() and ph.phase != "understand") else ""
+        # Show the recovery stage when the governor is intervening, so the operator
+        # can see it working (advisory → reflection → suppression → reset → stop).
+        stage = getattr(self.state, "recovery_stage", 0)
+        recov = f"  ·  ⚠ recovery: {_STAGE_NAMES.get(stage, stage)}" if stage else ""
         return (
-            f"{flag}  ·  {model}{phase}  ·  {keys} · PgUp/PgDn scroll · "
+            f"{flag}  ·  {model}{phase}{recov}  ·  {keys} · PgUp/PgDn scroll · "
             f"Ctrl+O details  ·  {ctx}"
         )
 

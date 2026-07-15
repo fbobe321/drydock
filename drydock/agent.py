@@ -91,6 +91,8 @@ class AgentState:
     current_effort: str = ""  # "high"/"low" of the in-flight LLM call (for the UI)
     task: "TaskState" = field(default_factory=lambda: TaskState())  # structured objective
     events: "EventLog | None" = None  # optional durable execution trace
+    recovery_stage: int = 0  # live recovery escalation stage (0 = normal); for the TUI
+    progress_streak: int = 0  # consecutive no-progress (stall) actions; for the TUI
 
 
 def drop_last_turn(messages: list) -> bool:
@@ -124,6 +126,8 @@ def run(
     When the model responds with text only (no tools), the turn ends.
     """
     state.messages.append({"role": "user", "content": user_message})
+    state.recovery_stage = 0  # clear the governor's display for a fresh request
+    state.progress_streak = 0
 
     # Capture the structured objective the FIRST time a task arrives, so it lives
     # outside the transcript. The original objective is authoritative for the task.
@@ -552,6 +556,9 @@ def run(
                     result = f"{directive.note}\n{result}"
                 if directive.terminate:
                     recovery_terminate = True
+            # Surface the governor's live state to the TUI status line.
+            state.recovery_stage = recovery.stage
+            state.progress_streak = progress_tracker.no_progress_streak()
 
             # Sync the rolling plan when the model updates its checklist, keeping
             # stable step ids + capping pending steps; record each revision.

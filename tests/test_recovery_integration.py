@@ -43,6 +43,21 @@ def test_alternating_write_test_loop_is_stopped_before_max_turns(monkeypatch):
     assert st.turn_count < 40, f"loop ran {st.turn_count} turns — recovery didn't fire"
 
 
+def test_governor_state_is_surfaced_on_agent_state(monkeypatch):
+    # The TUI reads state.recovery_stage / state.progress_streak to show the
+    # governor working. A fresh state starts clean; the alternating loop drives
+    # the stage up.
+    st = AgentState()
+    assert st.recovery_stage == 0 and st.progress_streak == 0
+    macro = tempfile.NamedTemporaryFile(suffix=".vim", delete=False).name
+    monkeypatch.setattr(agent_mod, "stream", _alternating_model(macro))
+    list(run("loop task", st,
+             {"model": "m", "cwd": tempfile.mkdtemp(), "verify_gate": False,
+              "max_turns": 200}, "sys"))
+    # recovery escalated during the stall
+    assert st.recovery_stage >= 3
+
+
 def test_healthy_distinct_work_runs_to_completion(monkeypatch):
     # Guard against over-eager recovery: a model doing DISTINCT productive work
     # and then finishing must not be cut off.
