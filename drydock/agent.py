@@ -54,6 +54,7 @@ from drydock.progress import ProgressTracker, assess_action
 from drydock.recovery import RecoveryController
 from drydock.loop_detect import tool_signature
 from drydock.phases import AgentPhase, PhaseController
+from drydock.budget import BudgetState
 from drydock.tool_select import select_tools, DEFAULT_MAX_TOOLS
 from drydock.tool_registry import get as tool_get, canonical_name
 from drydock.tool_validate import repair_and_validate, INVALID_ARGUMENTS
@@ -99,6 +100,7 @@ class AgentState:
     events: "EventLog | None" = None  # optional durable execution trace
     recovery_stage: int = 0  # live recovery escalation stage (0 = normal); for the TUI
     progress_streak: int = 0  # consecutive no-progress (stall) actions; for the TUI
+    budget: "BudgetState" = field(default_factory=lambda: BudgetState())  # scoped budgets
 
 
 def drop_last_turn(messages: list) -> bool:
@@ -160,8 +162,15 @@ def run(
         if extra:
             system_prompt = system_prompt + extra
 
-    max_turns = config.get("max_turns", 200)
-    max_tool_calls = config.get("max_tool_calls", 0)  # 0 = unlimited
+    # Scoped budgets (PRD Epic N): the loop bounds itself on a PER-REQUEST
+    # iteration budget that resets each user message (so a long session doesn't
+    # starve later requests), while session totals stay cumulative. Limits come
+    # from config; the BudgetState persists on the AgentState across requests.
+    budget = state.budget
+    budget.max_model_iterations = config.get("max_turns", 200)
+    budget.max_tool_calls = config.get("max_tool_calls", 0)  # 0 = unlimited
+    budget.max_recovery_attempts = config.get("max_recovery_attempts", 0)
+    budget.start_request()
     # When set (sub-agents pass this), the model is offered ONLY these tools and
     # a call to anything else is refused — never executed. Keeps a read-only
     # sub-agent read-only and stops it from recursing into `task`.
@@ -197,10 +206,11 @@ def run(
     recovery_terminate = False  # set by stage-5 recovery to end the run honestly
     phases = PhaseController()  # owns phase transitions (PRD Epic B)
 
-    while state.turn_count < max_turns:
+    while not budget.iterations_exhausted():
         if _stopped():
             break
-        state.turn_count += 1
+        state.turn_count += 1     # cumulative session counter (telemetry / status line)
+        budget.record_turn()      # per-request iteration budget (PRD Epic N)
         run_iteration += 1
         assistant_turn: AssistantTurn | None = None
 
@@ -445,6 +455,7 @@ def run(
         # Execute each tool call
         for tc in assistant_turn.tool_calls:
             tool_call_count += 1
+            budget.record_tool_call()  # task-scoped tool-call budget (PRD Epic N)
             if tc["name"] in ("Edit", "Write"):
                 if not session_has_edited and state.task.phase in ("understand", "discover", "plan"):
                     state.task.phase = phases.advance(
@@ -463,8 +474,8 @@ def run(
                 })
                 continue
 
-            # Check tool call limit
-            if max_tool_calls > 0 and tool_call_count > max_tool_calls:
+            # Check tool call limit (task budget)
+            if budget.tool_budget_exhausted():
                 state.messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
