@@ -10,7 +10,7 @@ def test_first_run_setup_persists_url_and_model(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "_first_run_setup", cli._first_run_setup)  # ensure present
     import drydock.detect as detect
     monkeypatch.setattr(detect, "detect_local_llms", lambda: [])
-    answers = iter(["http://127.0.0.1:8000/v1", "gemma4"])
+    answers = iter(["http://127.0.0.1:8000/v1", "gemma4", "131072"])
     monkeypatch.setattr("builtins.input", lambda *_: next(answers))
 
     cfg_path = tmp_path / "config.toml"
@@ -18,11 +18,32 @@ def test_first_run_setup_persists_url_and_model(tmp_path, monkeypatch):
 
     assert cfg["base_url"] == "http://127.0.0.1:8000/v1"
     assert cfg["model"] == "gemma4"
+    assert cfg["context_limit"] == 131072  # asked for + persisted
     # Persisted to disk.
     on_disk = cfgmod.load_file(cfg_path)
     assert on_disk["base_url"] == "http://127.0.0.1:8000/v1"
     assert on_disk["model"] == "gemma4"
+    assert on_disk["context_limit"] == 131072
     assert "gemma4" in onboarding and "127.0.0.1:8000" in onboarding
+
+
+def test_first_run_setup_asks_for_context_size(tmp_path, monkeypatch):
+    # The requested feature: install asks for context size; a k-suffix is accepted.
+    import drydock.detect as detect
+    monkeypatch.setattr(detect, "detect_local_llms", lambda: [])
+    answers = iter(["", "", "32k"])  # default url+model, context "32k"
+    monkeypatch.setattr("builtins.input", lambda *_: next(answers))
+    cfg, _ = cli._first_run_setup(dict(cfgmod.DEFAULTS), tmp_path / "c.toml", cfgmod)
+    assert cfg["context_limit"] == 32 * 1024
+
+
+def test_first_run_setup_bad_context_falls_back(tmp_path, monkeypatch):
+    import drydock.detect as detect
+    monkeypatch.setattr(detect, "detect_local_llms", lambda: [])
+    answers = iter(["", "", "not-a-number"])
+    monkeypatch.setattr("builtins.input", lambda *_: next(answers))
+    cfg, _ = cli._first_run_setup(dict(cfgmod.DEFAULTS), tmp_path / "c.toml", cfgmod)
+    assert cfg["context_limit"] == 65536  # the default
 
 
 def test_first_run_setup_uses_defaults_on_empty_input(tmp_path, monkeypatch):

@@ -282,20 +282,46 @@ def _first_run_setup(cfg: dict, cfg_path, cfgmod) -> tuple[dict, str]:
         if found and found[0].get("models")
         else (cfg.get("model") or "gemma4")
     )
+    default_ctx = int(cfg.get("context_limit") or 65536)
     print("\n  ⚓ Drydock — first-time setup")
     print("  Point Drydock at your local model server (any OpenAI-compatible URL).\n")
     try:
         url = input(f"  Model server URL [{default_url}]: ").strip() or default_url
         model = input(f"  Model name [{default_model}]: ").strip() or default_model
+        # Context size is the #1 footgun: it MUST match the server's -c /
+        # --max-model-len, or the ctx gauge lies and compaction fires at the wrong
+        # point (the "stuck at 32k" trap). Ask up front so it's right from the start.
+        print("\n  Context window size, in tokens. This MUST match your server's")
+        print("  -c / --max-model-len (llama.cpp / vLLM). Common: 32768, 65536, 131072.")
+        ctx = _prompt_context_size(default_ctx)
     except (EOFError, KeyboardInterrupt):
-        url, model = default_url, default_model
+        url, model, ctx = default_url, default_model, default_ctx
         print()
     cfg["base_url"] = url
     cfg["model"] = model
+    cfg["context_limit"] = ctx
     cfg.setdefault("provider", found[0]["provider"] if found else "vllm")
     cfgmod.save_file(cfg, cfg_path)
-    print(f"\n  Saved to {cfg_path} — change it anytime with /model or by editing that file.\n")
-    return cfg, f"⚓ Using {model} at {url}"
+    print(f"\n  Saved to {cfg_path} — change it anytime with /context, /model, or by "
+          "editing that file.\n")
+    return cfg, f"⚓ Using {model} at {url}  ·  ctx {ctx:,}"
+
+
+def _prompt_context_size(default_ctx: int) -> int:
+    """Prompt for the context window, re-asking on obviously bad input. Accepts a
+    bare number (65536) or a k-suffixed one (64k). Returns default on empty/invalid."""
+    raw = input(f"  Context size [{default_ctx}]: ").strip().lower()
+    if not raw:
+        return default_ctx
+    try:
+        val = int(raw[:-1]) * 1024 if raw.endswith("k") else int(raw)
+    except ValueError:
+        print(f"    (didn't understand '{raw}' — using {default_ctx:,})")
+        return default_ctx
+    if val < 2048:
+        print(f"    ({val} is very small for a context window — using {default_ctx:,})")
+        return default_ctx
+    return val
 
 
 def _connect_mcp(config: dict) -> None:
