@@ -1542,24 +1542,34 @@ def _cap_summary(text: str) -> str:
 
 def _run_subagent(prompt: str, config: dict, *, tools=SUBAGENT_TOOLS,
                   system: str | None = None, max_turns: int = 24,
-                  max_tool_calls: int = 20) -> str:
+                  max_tool_calls: int = 20, read_only: bool = True) -> str:
     """Run one sub-agent to completion in a FRESH context and return its final
     summary. Shared by `task`/`Dispatch` (read-only) and `Worker` (can write).
     Hard-capped; never raises (a sub-agent must not crash the parent turn). The
     summary is size-capped (_cap_summary) so a sub-agent can never bloat the main
-    context — its tool output stays entirely in the sub-agent's own context."""
-    from drydock.agent import run as agent_run, AgentState, TurnDone
+    context — its tool output stays entirely in the sub-agent's own context.
 
+    The run is described by a WorkerSpec (PRD Epic R), which STRUCTURALLY enforces
+    read-only: a read-only worker has every mutating tool stripped, so it cannot
+    edit files even if `tools` mistakenly included one."""
+    from drydock.agent import run as agent_run, AgentState, TurnDone
+    from drydock.subagents import WorkerSpec
+
+    spec = WorkerSpec(
+        objective=prompt, allowed_tools=list(tools), read_only=read_only,
+        system_prompt=system or _SUBAGENT_SYSTEM, max_turns=max_turns,
+        max_tool_calls=max_tool_calls, summary_cap=_SUBAGENT_SUMMARY_CAP,
+    )
     sub_state = AgentState()
     sub_config = dict(config)
-    sub_config["tool_allowlist"] = list(tools)
+    sub_config["tool_allowlist"] = spec.enforced_tools()
     sub_config["force_first_tool"] = False
-    sub_config["max_turns"] = max_turns       # bound the helper hard
-    sub_config["max_tool_calls"] = max_tool_calls
+    sub_config["max_turns"] = spec.max_turns       # bound the helper hard
+    sub_config["max_tool_calls"] = spec.max_tool_calls
     sub_config.pop("_todo", None)      # the sub-agent keeps no checklist of its own
     sub_config.pop("_plan_autocontinue", None)
     sub_config["trajectory_file"] = ""  # a sub-agent never overwrites the parent's trajectory
-    _sys = system or _SUBAGENT_SYSTEM
+    _sys = spec.system_prompt
     # Own abort holder so parallel sub-agents don't clobber each other's (or the
     # parent's) in-flight client/proc handles in the shared dict.
     sub_config["_abort"] = {}
@@ -1633,7 +1643,7 @@ def tool_worker(params: dict, config: dict) -> str:
         return ("Error: `Worker` needs a `prompt` — a clear, self-contained task to do "
                 "(e.g. 'implement parse_config() in config.py and make its unit test pass').")
     return _run_subagent(prompt, config, tools=WORKER_TOOLS, system=_WORKER_SYSTEM,
-                         max_turns=40, max_tool_calls=40)
+                         max_turns=40, max_tool_calls=40, read_only=False)
 
 
 def _git_cwd(config: dict) -> str:
