@@ -419,6 +419,30 @@ SCHEMAS = [
         },
     },
     {
+        "name": "Worker",
+        "description": (
+            "Delegate a self-contained CHUNK OF WORK to a sub-agent that runs in its "
+            "OWN fresh context and CAN write — it has Read, Write, Edit, Bash, Glob, "
+            "Grep, does the task end to end (creating/editing files, running commands, "
+            "verifying), and returns only a short summary of what it changed. Use this "
+            "to KEEP A BIG, SELF-CONTAINED SUBTASK OUT OF YOUR CONTEXT — e.g. 'implement "
+            "and test the CSV parser in parser.py', 'add logging to every handler in "
+            "api/'. Give it ONE clear task with enough detail to finish independently; "
+            "it cannot ask you questions or spawn its own workers. Its file changes are "
+            "real and shared with you. For read-only investigation use `task`/`Dispatch`."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The self-contained task to complete (with enough detail to finish independently).",
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
+    {
         "name": "GitStatus",
         "description": (
             "Show the current branch and a concise list of changed/staged/"
@@ -1472,6 +1496,23 @@ _SUBAGENT_SYSTEM = (
     "dump. Do NOT try to edit or create files — the main agent acts on your findings."
 )
 
+# A WRITABLE worker sub-agent: it can actually DO the work (Write/Edit/Bash), in
+# its own fresh context, and reports back only a summary. No recursion tools, so
+# it can't spawn its own sub-agents.
+WORKER_TOOLS = ("Read", "Write", "Edit", "Bash", "Glob", "Grep", "ViewImage")
+
+_WORKER_SYSTEM = (
+    "You are a focused WORKER sub-agent inside Drydock, running in your own fresh "
+    "context. You have full working tools — Read, Write, Edit, Bash, Glob, Grep — "
+    "so you can actually DO the task: create and edit files, run commands, and "
+    "verify your work. Complete the ONE task you are given, end to end. If it ships "
+    "a test or check, RUN it and fix failures until it passes. When done, STOP and "
+    "reply with a concise summary of WHAT YOU CHANGED — the files you created/edited "
+    "and the outcome (e.g. 'tests pass'). Aim for under ~200 words; the main agent "
+    "only receives this summary, not your tool output, so report results, not "
+    "narration. Do not ask the main agent questions — just do the work."
+)
+
 
 def tool_consult(params: dict, config: dict) -> str:
     """Ask the configured second/advisor model (e.g. Gemini) for a second opinion."""
@@ -1499,27 +1540,32 @@ def _cap_summary(text: str) -> str:
             "of the main context. Ask a narrower follow-up sub-agent task if you need more.]")
 
 
-def _run_subagent(prompt: str, config: dict) -> str:
-    """Run one read-only sub-agent to completion and return its final summary.
-    Shared by `task` (one) and `Dispatch` (many in parallel). Hard-capped; never
-    raises (a sub-agent must not crash the parent turn). The returned summary is
-    size-capped (_cap_summary) so a sub-agent can never bloat the main context."""
+def _run_subagent(prompt: str, config: dict, *, tools=SUBAGENT_TOOLS,
+                  system: str | None = None, max_turns: int = 24,
+                  max_tool_calls: int = 20) -> str:
+    """Run one sub-agent to completion in a FRESH context and return its final
+    summary. Shared by `task`/`Dispatch` (read-only) and `Worker` (can write).
+    Hard-capped; never raises (a sub-agent must not crash the parent turn). The
+    summary is size-capped (_cap_summary) so a sub-agent can never bloat the main
+    context — its tool output stays entirely in the sub-agent's own context."""
     from drydock.agent import run as agent_run, AgentState, TurnDone
 
     sub_state = AgentState()
     sub_config = dict(config)
-    sub_config["tool_allowlist"] = list(SUBAGENT_TOOLS)
+    sub_config["tool_allowlist"] = list(tools)
     sub_config["force_first_tool"] = False
-    sub_config["max_turns"] = 24       # bound the helper hard
-    sub_config["max_tool_calls"] = 20
+    sub_config["max_turns"] = max_turns       # bound the helper hard
+    sub_config["max_tool_calls"] = max_tool_calls
     sub_config.pop("_todo", None)      # the sub-agent keeps no checklist of its own
     sub_config.pop("_plan_autocontinue", None)
+    sub_config["trajectory_file"] = ""  # a sub-agent never overwrites the parent's trajectory
+    _sys = system or _SUBAGENT_SYSTEM
     # Own abort holder so parallel sub-agents don't clobber each other's (or the
     # parent's) in-flight client/proc handles in the shared dict.
     sub_config["_abort"] = {}
     steps = 0
     try:
-        for ev in agent_run(prompt, sub_state, sub_config, _SUBAGENT_SYSTEM):
+        for ev in agent_run(prompt, sub_state, sub_config, _sys):
             if isinstance(ev, TurnDone):
                 steps += 1
     except Exception as e:  # a sub-agent must never crash the parent turn
@@ -1576,6 +1622,18 @@ def tool_dispatch(params: dict, config: dict) -> str:
         label = t["label"] or f"agent {i + 1}"
         parts.append(f"\n=== {label} ===\n{results[i]}")
     return "\n".join(parts)
+
+
+def tool_worker(params: dict, config: dict) -> str:
+    """Delegate a self-contained CHUNK OF WORK to a WRITABLE sub-agent that runs in
+    its own fresh context (can Read/Write/Edit/Bash), does the task end-to-end, and
+    returns only a summary — so the work stays out of the main context window."""
+    prompt = (params.get("prompt") or params.get("task") or params.get("description") or "").strip()
+    if not prompt:
+        return ("Error: `Worker` needs a `prompt` — a clear, self-contained task to do "
+                "(e.g. 'implement parse_config() in config.py and make its unit test pass').")
+    return _run_subagent(prompt, config, tools=WORKER_TOOLS, system=_WORKER_SYSTEM,
+                         max_turns=40, max_tool_calls=40)
 
 
 def _git_cwd(config: dict) -> str:
@@ -1898,6 +1956,7 @@ _TOOLS = [
     ("todo", tool_todo, False),
     ("task", tool_task, True),
     ("Dispatch", tool_dispatch, True),
+    ("Worker", tool_worker, False),
     ("Knowledge", tool_knowledge, True),
     ("BuildKnowledge", tool_build_knowledge, False),
     ("GraphQuery", tool_graphquery, True),
@@ -1922,6 +1981,7 @@ def register_all():
             "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
+            "Worker": tool_worker,
             "Consult": tool_consult, "Knowledge": tool_knowledge,
             "BuildKnowledge": tool_build_knowledge,
             "GraphQuery": tool_graphquery, "GraphAdd": tool_graphadd,

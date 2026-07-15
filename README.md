@@ -46,8 +46,10 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
 - **Knowledge base (GraphRAG)** — build a local entity-graph index from your
   docs/code with `/graphrag build <path>`; the agent retrieves from it via the
   read-only `Knowledge` tool.
-- **Multi-agent** — `Dispatch` runs several read-only sub-agents in parallel;
-  `task` runs one — each in a fresh context, for focused investigation.
+- **Multi-agent** — `Dispatch` runs several read-only sub-agents in parallel and
+  `task` runs one (investigation); **`Worker`** delegates a self-contained chunk of
+  WORK to a writable sub-agent. Each runs in a FRESH context and returns only a
+  summary — so a big subtask never fills the main context window.
 - **Second-model advisor** — point `/advisor` at a stronger model on any
   OpenAI-compatible endpoint (e.g. Gemini, or a proxy on another box); the agent
   calls the `Consult` tool for a second opinion when stuck, and you can `/ask
