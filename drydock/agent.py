@@ -55,7 +55,7 @@ from drydock.recovery import RecoveryController
 from drydock.loop_detect import tool_signature
 from drydock.phases import AgentPhase, PhaseController
 from drydock.tool_select import select_tools, DEFAULT_MAX_TOOLS
-from drydock.tool_registry import get as tool_get
+from drydock.tool_registry import get as tool_get, canonical_name
 from drydock.tool_validate import repair_and_validate, INVALID_ARGUMENTS
 from drydock.tool_policy import (
     requires_approval as tool_requires_approval,
@@ -611,11 +611,14 @@ def run(
                     _emit(state, "plan", version=state.task.plan.version,
                           steps=[(s["id"], s["status"]) for s in state.task.plan.steps])
 
+            # Canonical namespaced identity (PRD Epic D) for telemetry/routing —
+            # 'builtin.read' / 'github.create_issue' — alongside the bare name.
+            _canon = canonical_name(tc["name"])
             if tool_result is not None:
                 _emit(state, "tool", input=str(tc.get("input"))[:200],
-                      **tool_result.to_event())
+                      canonical=_canon, **tool_result.to_event())
             else:
-                _emit(state, "tool", name=tc["name"],
+                _emit(state, "tool", name=tc["name"], canonical=_canon,
                       input=str(tc.get("input"))[:200],
                       result_chars=len(str(result)),
                       status="ok")

@@ -26,6 +26,33 @@ def get(name: str) -> ToolDef | None:
 def all_tools() -> list[ToolDef]:
     return list(_registry.values())
 
+
+def canonical_name(name: str) -> str:
+    """The namespaced canonical identity for a tool (PRD Epic D), used for routing,
+    policy and telemetry — NOT what the model sees. Built-in tools keep their bare
+    display name for the model (gemma is prompted with 'Read'/'Bash'), but their
+    canonical identity is 'builtin.read'; an MCP tool 'mcp__github__create_issue'
+    canonicalises to 'github.create_issue'. So builtin + MCP share one naming
+    scheme without changing the model-facing names."""
+    if name.startswith("mcp__"):
+        rest = name[len("mcp__"):]
+        server, _, tool = rest.partition("__")
+        return f"{server}.{tool}" if tool else f"mcp.{server}"
+    return f"builtin.{name.lower()}"
+
+
+def has_namespace_collision(names) -> bool:
+    """True if any two tool names map to the SAME canonical identity (PRD D1.3).
+    The mcp__<server>__<tool> scheme keeps two servers' identically-named tools
+    distinct, so this should stay False."""
+    seen: set[str] = set()
+    for n in names:
+        c = canonical_name(n)
+        if c in seen:
+            return True
+        seen.add(c)
+    return False
+
 def schemas() -> list[dict]:
     return [t.schema for t in _registry.values()]
 
