@@ -54,6 +54,7 @@ from drydock.progress import ProgressTracker, assess_action
 from drydock.recovery import RecoveryController
 from drydock.loop_detect import tool_signature
 from drydock.phases import AgentPhase, PhaseController
+from drydock.tool_select import select_tools, DEFAULT_MAX_TOOLS
 from drydock.events import EventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
@@ -222,6 +223,16 @@ def run(
                 available = schemas()
                 if allow is not None:
                     available = [s for s in available if s.get("name") in allow]
+                # Dynamic tool selection (PRD Epic F): expose only the tools
+                # relevant to this task + phase, capped at max_tools (default 12).
+                # Trims nothing when already under the cap; core coding tools are
+                # never dropped.
+                available = select_tools(
+                    available,
+                    phase=str(state.task.phase),
+                    task_text=state.task.objective,
+                    max_tools=turn_config.get("max_tools", DEFAULT_MAX_TOOLS),
+                )
                 for event in stream(
                     model=turn_config["model"],
                     system=(system_prompt + _DECISIVE_SUFFIX) if decisive else system_prompt,
