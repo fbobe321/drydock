@@ -110,7 +110,14 @@ def assess_action(
         evidence.append("acceptance criterion satisfied")
 
     # --- repository / information progress ---
-    if changed_state and not edit_reversal:
+    exact_repeat = repeat_count >= 2
+    # A byte-identical repeat of a mutating call (same file, same content) writes
+    # the same bytes again — the repository does NOT actually change relative to
+    # before, so it must not be credited as progress (this is what let a model
+    # re-write an identical macro 26× and still look busy). A genuine iterative
+    # edit changes its arguments, so its signature differs and repeat_count stays 1.
+    effective_change = changed_state and not edit_reversal and not exact_repeat
+    if effective_change:
         score += 2
         types.append("state_changed")
         evidence.append("repository state changed")
@@ -124,8 +131,10 @@ def assess_action(
         evidence.append("useful diagnostic surfaced")
 
     # --- penalties: standing still or going backwards ---
-    exact_repeat = repeat_count >= 2
-    no_new_info = not (changed_state or discovered_new or diagnostic or types)
+    # "no new info" = nothing above earned any points (no state change, discovery,
+    # diagnostic, verification or criterion progress). score holds only positive
+    # contributions at this point; penalties are applied below.
+    no_new_info = score <= 0 and not (effective_change or discovered_new or diagnostic)
     if repeated_outcome:
         score -= 1
         types.append("repeated_outcome")
@@ -146,6 +155,18 @@ def assess_action(
         repeated_outcome_detected=repeated_outcome,
         no_state_change_detected=not changed_state,
         edit_reversal_detected=edit_reversal,
+    )
+
+
+def is_stall(a: ProgressAssessment) -> bool:
+    """A stall is a non-positive action that is also REPETITIVE — the model
+    going in circles, not exploring. Neutral novel actions (score 0, no repeat
+    signal) are NOT stalls, so a run reading many distinct files or trying many
+    distinct commands is never mistaken for a loop."""
+    return a.progress_score <= 0 and (
+        a.exact_repeat_detected
+        or a.repeated_outcome_detected
+        or a.edit_reversal_detected
     )
 
 
@@ -171,12 +192,19 @@ class ProgressTracker:
 
     def record(self, assessment: ProgressAssessment) -> ProgressAssessment:
         """Push an assessment's score into the window; returns it unchanged so
-        callers can `a = tracker.record(assess_action(...))` in one line."""
+        callers can `a = tracker.record(assess_action(...))` in one line.
+
+        The no-progress streak — what drives recovery — counts only genuine
+        STALLS: a non-positive action that is also REPETITIVE (an exact repeat,
+        a repeated outcome, or an edit reversal). A neutral *novel* action
+        (exploring, reading a new file, a distinct succeeding command) is not a
+        stall and resets the streak, so legitimate exploration is never mistaken
+        for a loop."""
         self._scores.append(assessment.progress_score)
-        if assessment.progress_score > 0:
-            self._no_progress_streak = 0
-        else:
+        if is_stall(assessment):
             self._no_progress_streak += 1
+        else:
+            self._no_progress_streak = 0
         return assessment
 
     def cumulative(self) -> int:
@@ -186,9 +214,10 @@ class ProgressTracker:
         return self._no_progress_streak
 
     def should_recover(self) -> bool:
-        """True once the window is full AND its cumulative score is <= threshold —
-        i.e. a whole window of actions bought us nothing."""
-        return len(self._scores) >= self.window and self.cumulative() <= self.threshold
+        """True once a stall streak has reached the first recovery threshold — i.e.
+        the run is genuinely looping, not merely exploring. Neutral novel actions
+        never trip this."""
+        return self.recommended_stage() is not None
 
     def recommended_stage(self) -> int | None:
         """Map the current no-progress streak to a recovery stage (0 = normal).

@@ -67,3 +67,35 @@ def test_tracker_never_raises_on_unserializable_input():
     # signatures use repr() fallback; two distinct objects differ, so no note —
     # the point is simply that annotate() does not raise.
     assert "ok" in result2
+
+
+def test_repeated_identical_failure_body_is_pruned_after_third():
+    # PRD Epic J3 / the large-scale-text-editing trajectory: the same failing test
+    # rerun 55× with a byte-identical error. First two failures keep their text
+    # (it's the fix); the 3rd+ identical failure gets its body pruned so it stops
+    # bloating context.
+    t = LoopTracker()
+    err = "Error: expected foo but got bar\n" + "x" * 500
+    r1 = t.annotate("Bash", {"command": "pytest"}, err)
+    r2 = t.annotate("Bash", {"command": "pytest"}, err)
+    r3 = t.annotate("Bash", {"command": "pytest"}, err)
+    assert "x" * 500 in r1  # first failure: full text kept
+    assert "x" * 500 in r2  # second: still kept (fix info)
+    assert "x" * 500 not in r3  # third: body pruned
+    assert "identical error" in r3
+
+
+def test_changing_failure_body_is_not_pruned():
+    # A failing call whose error is actually CHANGING is progress — never prune it.
+    t = LoopTracker()
+    for i in range(4):
+        r = t.annotate("Bash", {"command": "pytest"}, f"Error: failure number {i}\n")
+        assert f"failure number {i}" in r
+
+
+def test_record_outcome_counts_identical_bodies():
+    t = LoopTracker()
+    assert t.record_outcome("Bash", {"command": "x"}, "same") == 1
+    assert t.record_outcome("Bash", {"command": "x"}, "same") == 2
+    # different body -> its own counter
+    assert t.record_outcome("Bash", {"command": "x"}, "different") == 1

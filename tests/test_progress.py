@@ -81,63 +81,92 @@ def test_diagnostic_scores_one():
     assert a.progress_score == 1
 
 
+def test_identical_repeated_write_is_not_progress():
+    # The masking bug: a byte-identical re-write reports changed_state=True but
+    # writes the same bytes — it must NOT score as progress, and IS a stall.
+    first = assess_action(changed_state=True, repeat_count=1)
+    again = assess_action(changed_state=True, repeat_count=3)
+    assert first.progress_score == 2          # the genuine first write
+    assert again.progress_score < 0           # re-writing identical bytes: stall
+    assert "state_changed" not in again.progress_types
+
+
+def test_distinct_edits_each_score_progress():
+    # Legit iterative editing changes its arguments, so repeat_count stays 1 and
+    # every distinct edit is still credited.
+    for _ in range(4):
+        a = assess_action(changed_state=True, repeat_count=1)
+        assert a.progress_score == 2
+
+
 # --- sliding window (PRD Req L1: progress window triggers recovery) ---
 
-def test_window_not_full_does_not_recover():
+def _stall():
+    """A repetitive no-progress action (exact repeat, no state change) — the
+    kind that should accrue toward recovery."""
+    return assess_action(repeat_count=2, changed_state=False)
+
+
+def test_neutral_novel_actions_do_not_trigger_recovery():
+    # The key false-positive guard: distinct succeeding/exploring actions score 0
+    # but are NOT a loop, so they must never trip recovery no matter how many.
     t = ProgressTracker(window=5)
-    for _ in range(4):
-        t.record(assess_action())  # zero-score actions
-    assert t.should_recover() is False  # window not yet full
+    for _ in range(10):
+        t.record(assess_action())  # neutral, non-repetitive
+    assert t.no_progress_streak() == 0
+    assert t.should_recover() is False
+    assert t.recommended_stage() is None
 
 
-def test_full_window_of_no_progress_triggers_recovery():
-    # PRD Test L1.3: cumulative score across the window is zero -> recommend recovery.
-    t = ProgressTracker(window=5, threshold=0)
+def test_stall_streak_triggers_recovery():
+    # PRD Test L1.3: a run genuinely looping (repetitive no-progress actions)
+    # recommends recovery.
+    t = ProgressTracker()
     for _ in range(5):
-        t.record(assess_action())
-    assert t.cumulative() == 0
+        t.record(_stall())
     assert t.should_recover() is True
     assert t.recommended_stage() is not None
 
 
-def test_progress_resets_the_window_verdict():
-    t = ProgressTracker(window=3, threshold=0)
-    t.record(assess_action())                       # 0
-    t.record(assess_action())                       # 0
-    t.record(assess_action(changed_state=True))     # +2 -> cumulative 2
-    assert t.cumulative() == 2
+def test_progress_resets_the_stall_streak():
+    t = ProgressTracker()
+    t.record(_stall())
+    t.record(_stall())
+    assert t.no_progress_streak() == 2
+    t.record(assess_action(changed_state=True))  # +2 real progress
+    assert t.no_progress_streak() == 0
     assert t.should_recover() is False
 
 
-def test_progress_clears_the_no_progress_streak():
-    t = ProgressTracker(window=5)
-    for _ in range(4):
-        t.record(assess_action())
-    assert t.no_progress_streak() == 4
-    t.record(assess_action(changed_state=True))  # real progress
+def test_novel_action_resets_the_stall_streak():
+    # A stall streak is broken by a novel action, not just by positive progress.
+    t = ProgressTracker()
+    t.record(_stall())
+    t.record(_stall())
+    assert t.no_progress_streak() == 2
+    t.record(assess_action())  # neutral novel — interrupts the loop
     assert t.no_progress_streak() == 0
 
 
-def test_recommended_stage_escalates_with_streak():
+def test_recommended_stage_escalates_with_stall_streak():
     # PRD §13 thresholds: stage 1 after 2, stage 2 after 3, stage 3 after 4...
     t = ProgressTracker(window=20)
-    t.record(assess_action())
+    t.record(_stall())
     assert t.recommended_stage() is None            # streak 1, below stage 1
-    t.record(assess_action())
+    t.record(_stall())
     assert t.recommended_stage() == 1               # streak 2
-    t.record(assess_action())
+    t.record(_stall())
     assert t.recommended_stage() == 2               # streak 3
-    t.record(assess_action())
+    t.record(_stall())
     assert t.recommended_stage() == 3               # streak 4
 
 
-def test_negative_window_triggers_recovery():
-    t = ProgressTracker(window=3, threshold=0)
-    t.record(assess_action(repeat_count=2))         # -2
-    t.record(assess_action(repeated_outcome=True))  # -1
-    t.record(assess_action())                       # 0
-    assert t.cumulative() < 0
-    assert t.should_recover() is True
+def test_edit_reversal_counts_toward_recovery():
+    t = ProgressTracker()
+    t.record(assess_action(changed_state=True, edit_reversal=True))  # -3 stall
+    t.record(assess_action(changed_state=True, edit_reversal=True))
+    assert t.no_progress_streak() == 2
+    assert t.recommended_stage() == 1
 
 
 def test_default_window_matches_prd_config():

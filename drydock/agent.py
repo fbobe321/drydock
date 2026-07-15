@@ -51,6 +51,8 @@ from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
 from drydock.verification import looks_like_verification, parse_evidence
 from drydock.progress import ProgressTracker, assess_action
+from drydock.recovery import RecoveryController
+from drydock.loop_detect import tool_signature
 from drydock.events import EventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
@@ -179,6 +181,8 @@ def run(
     loop_tracker = LoopTracker()
     progress_tracker = ProgressTracker()  # scores each action; flags a stalled run
     prev_failing = None  # failing-test count from the previous verification (delta)
+    recovery = RecoveryController()  # escalates when progress stalls (PRD Epic K)
+    recovery_terminate = False  # set by stage-5 recovery to end the run honestly
 
     while state.turn_count < max_turns:
         if _stopped():
@@ -443,10 +447,20 @@ def run(
 
             yield ToolStart(tc["name"], tc["input"])
 
+            # Recovery stage-3 suppression (PRD Epic K): if this exact call was
+            # flagged as a no-progress loop, redirect it to a guidance string
+            # instead of running it again — same advisory-not-blocking pattern as
+            # hallucinated tools. Narrow (this signature only) and self-expiring.
+            recovery.tick(run_iteration)
+            recovery_sig = tool_signature(tc["name"], tc["input"])
+
             # Redirect hallucinated tool names to a benign hint instead of a
             # "tool not found" error the model would loop on.
             halluc = hallucinated_tool_message(tc["name"])
-            if halluc is not None:
+            if recovery.is_suppressed(recovery_sig):
+                result = recovery.suppression_message(tc["name"])
+                tool_result = None
+            elif halluc is not None:
                 result = halluc
                 tool_result = None
             elif allow is not None and tc["name"] not in allow:
@@ -503,6 +517,24 @@ def run(
                   cumulative=progress_tracker.cumulative(),
                   streak=progress_tracker.no_progress_streak())
 
+            # Recovery escalation (PRD Epic K): turn the progress window's verdict
+            # into graduated action. Advisory stages prepend guidance to this
+            # result; stage 3 suppresses THIS looping signature next time; stage 5
+            # asks the loop to stop honestly. The offender is the current call —
+            # only suppressed when the window says it's a no-progress loop.
+            directive = recovery.escalate(
+                progress_tracker.recommended_stage(),
+                offender_signature=recovery_sig,
+                iteration=run_iteration,
+            )
+            if directive.active:
+                _emit(state, "recovery", stage=directive.stage,
+                      suppressed=directive.suppress, terminate=directive.terminate)
+                if directive.note:
+                    result = f"{directive.note}\n{result}"
+                if directive.terminate:
+                    recovery_terminate = True
+
             # Sync the rolling plan when the model updates its checklist, keeping
             # stable step ids + capping pending steps; record each revision.
             if tc["name"] == "todo" and isinstance(config.get("_todo"), list):
@@ -527,6 +559,17 @@ def run(
                 "name": tc["name"],
                 "content": result,
             })
+
+        # Recovery ceiling (PRD Epic K, stage 5): the progress window stayed
+        # negative through every escalation stage. Stop the run honestly rather
+        # than spin to MAX_TOOL_TURNS — the stage-5 note was already injected so
+        # the model's final message reports the truth instead of claiming success.
+        if recovery_terminate:
+            yield TextChunk(
+                "\n[Stopped: repeated attempts stopped making progress and "
+                "escalating recovery did not help. Control is back to you.]\n"
+            )
+            break
 
         # Safety valve: the same call has run identically (same args AND result)
         # too many times in a row — repeating it changes nothing. End the turn
