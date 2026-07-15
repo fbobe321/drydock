@@ -57,6 +57,10 @@ from drydock.phases import AgentPhase, PhaseController
 from drydock.tool_select import select_tools, DEFAULT_MAX_TOOLS
 from drydock.tool_registry import get as tool_get
 from drydock.tool_validate import repair_and_validate, INVALID_ARGUMENTS
+from drydock.tool_policy import (
+    requires_approval as tool_requires_approval,
+    effect_of as tool_effect_of,
+)
 from drydock.events import EventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
@@ -500,15 +504,37 @@ def run(
                 # missing/mistyped required args with a typed error instead of
                 # executing it and looping on a confusing failure.
                 _tool = tool_get(tc["name"])
+                _ro = bool(_tool.read_only) if _tool else False
                 _errs: list[str] = []
                 if _tool is not None:
                     tc["input"], _errs, _ = repair_and_validate(_tool.schema, tc["input"] or {})
+                _refusal = None
                 if _errs:
-                    result = (
+                    _refusal = (
                         f"[{INVALID_ARGUMENTS}] {tc['name']} was not run — its "
                         f"arguments are invalid: {'; '.join(_errs)}. Fix them and "
                         f"call {tc['name']} again."
                     )
+                # Effect-based approval (PRD Epic H): external mutations / credential
+                # access / destructive tools need the operator's okay first. Bash
+                # keeps its own finer command-level approval (bash_safety), so it's
+                # exempt here.
+                elif tc["name"] != "Bash" and not config.get("_approve_all") \
+                        and tool_requires_approval(tc["name"], read_only=_ro, config=config):
+                    approver = config.get("request_approval")
+                    if approver is not None:
+                        _eff = tool_effect_of(tc["name"], _ro)
+                        decision = approver(
+                            f"{tc['name']}  {str(tc['input'])[:120]}", f"{_eff.value} action")
+                        if decision == "always":
+                            config["_approve_all"] = True
+                        elif decision != "allow":
+                            _refusal = (
+                                f"REFUSED: you declined to approve this "
+                                f"{tc['name']} call ({_eff.value})."
+                            )
+                if _refusal is not None:
+                    result = _refusal
                     tool_result = None
                 else:
                     tool_result = execute_structured(tc["name"], tc["input"], config)
