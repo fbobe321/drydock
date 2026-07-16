@@ -235,7 +235,9 @@
         <div class="card agents reveal"><span class="ico">🧭</span><h3>Multi-agent</h3><p>Dispatch runs read-only sub-agents in parallel, each in a fresh context, for focused investigation.</p></div>
         <div class="card agents reveal"><span class="ico">🧠</span><h3>Second-model advisor</h3><p>Wire in a stronger model (e.g. <b>Gemini</b>, any OpenAI-compatible endpoint) with <code class="k">/advisor</code>; the agent consults it when stuck.</p></div>
         <div class="card reveal"><span class="ico">🔌</span><h3>MCP support</h3><p>Connect Model Context Protocol servers; their tools appear as <code class="k">mcp__server__tool</code> — works with third-party servers like <a href="https://github.com/safishamsi/graphify">Graphify</a>.</p></div>
-        <div class="card gov reveal"><span class="ico">🛡️</span><h3>Governed reliability</h3><p>A deterministic controller wraps the loop: the objective survives context compaction, a <b>verification gate</b> blocks a self-declared "done" until a check passes, and every run leaves a durable trace (<code class="k">/events</code>).</p></div>
+        <div class="card gov reveal"><span class="ico">🛡️</span><h3>Governed reliability</h3><p>The model proposes; the harness governs. Explicit task phases, a <b>verification gate</b> on "done", per-action <b>progress scoring</b>, and <b>graduated recovery</b> when a run stalls — advisory → reflection → suppressing the looping call → an honest stop. Watch it work: <code class="k">/events</code> · <code class="k">/trace</code>.</p></div>
+        <div class="card gov reveal"><span class="ico">⏯️</span><h3>Interrupt &amp; resume</h3><p>Every turn checkpoints the session. Killed mid-task? The next launch offers <code class="k">/resume</code> — the transcript and objective come back, and anything left in-flight is flagged before it's retried.</p></div>
+        <div class="card reveal"><span class="ico">🧮</span><h3>Model registry</h3><p>Keep several model servers configured and switch live: <code class="k">/model add qwen http://box2:8001/v1</code>, then <code class="k">/model qwen</code> — each model routes to its <b>own endpoint</b>, with a configurable default.</p></div>
       </div>
     </div>
   </section>
@@ -287,7 +289,7 @@
       </div>
       <p class="tools reveal">
         <b>Tools</b> &nbsp;<span class="mono">Read · Write · Edit · Bash · Glob · Grep · ViewImage · Screenshot · todo · task · Dispatch · Worker · GitStatus · GitDiff · GitLog · GitCommit · WebSearch · WebFetch · Knowledge · BuildKnowledge · mcp__&lt;server&gt;__&lt;tool&gt;</span><br><br>
-        <b>Commands</b> &nbsp;<span class="mono">/help · /model · /cwd · /undo · /back · /compact · /context · /graphrag · /events · /shell · /skills · /loop · /mcp · /advisor · /ask · /status · /clear · /quit</span><br><br>
+        <b>Commands</b> &nbsp;<span class="mono">/help · /model · /cwd · /undo · /back · /resume · /compact · /context · /graphrag · /events · /trace · /shell · /skills · /loop · /mcp · /advisor · /ask · /status · /clear · /quit</span><br><br>
         <span style="color:var(--cyan)">Or just ask the agent</span> <span class="mono" style="color:var(--dim)">— "how do I add my own docs?" — it knows its own commands.</span>
       </p>
     </div>

@@ -67,9 +67,24 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
 - **Screen capture** — the `Screenshot` tool grabs the screen and the vision model
   *sees* it (Windows/macOS/Linux) — review a GUI, read what's displayed, debug a render.
 - **Governed reliability** — a deterministic controller wraps the loop: the objective
-  + acceptance criteria live in structured state that survives context compaction; a
-  **verification gate** blocks a self-declared "done" until a test/check actually runs
-  and passes; every run writes a durable event trace (inspect with `/events`).
+  + acceptance criteria live in structured state that survives context compaction;
+  **explicit task phases** (understand → implement → verify → complete) are owned by
+  the controller, so the model can never self-declare "done" — a **verification
+  gate** requires a test/check to actually run and pass. Every action is
+  **progress-scored**; a stalled run (repeating equivalent actions, rerunning the
+  same failing test) triggers **graduated recovery** — advisory → forced reflection →
+  suppressing the looping call → strategy reset → an honest stop — visible live in
+  the status line (`⚠ recovery: …`). Tool arguments are schema-validated and
+  deterministically repaired before execution; the model sees only the ~12 tools
+  relevant to the task and phase. Every run writes a durable event trace — digest
+  with `/events`, timeline with `/trace` (JSONL or SQLite backend).
+- **Interrupt & resume** — every turn checkpoints the session (transcript + task
+  state) atomically; if drydock is killed mid-task, the next launch offers
+  **`/resume`** to continue exactly where it left off — with anything that was
+  in-flight flagged (an interrupted *external* action is never blindly retried).
+- **Model registry** — keep several model servers configured (`/model add qwen
+  http://box2:8001/v1`) and switch with `/model qwen` — each registered model
+  routes to its **own endpoint**, with a configurable launch default.
 - **Cross-platform** — runs natively on Linux, macOS, and **Windows via PowerShell/cmd**
   (no WSL or Git-Bash required); `/shell` shows which shell your commands run in.
 - **Loops** — `/loop <count> <prompt>` runs a prompt iteratively (Esc stops).
@@ -99,11 +114,15 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/stig <ckl>` · `/stig <ckl> open` | Summarize a checklist · list findings by status |
 | `/stig graph <ckl>` | Ingest a checklist into the RMF graph (auto-links rules→controls via CCI) |
 | `/stig-assess <ckl>` · `/stig-remediate <ckl> <rule>` | Assess a rule vs evidence · write a fix script |
-| `/model` · `/cwd` | Show/set model & endpoint · working directory |
+| `/model` | List registered models & switch — each routes to its own endpoint |
+| `/model add <name> <url>` · `default <name>` | Register a model server · set the launch default |
+| `/cwd` | Show/set the working directory |
 | `/undo` · `/back` | Revert the last write · rewind the last turn |
 | `/compact` · `/context [n]` | Shrink context now · view/set the context-window budget |
+| `/resume [id]` | Continue an interrupted session (offered automatically on launch) |
 | `/advisor` · `/ask <q>` | Set up a 2nd 'advisor' model (Gemini etc.) · consult it |
-| `/events` · `/shell` | Show this run's execution trace · which shell Bash uses (Win/macOS/Linux) |
+| `/events` · `/trace [n]` | Trace digest (incl. governor activity) · ordered event timeline |
+| `/shell` | Which shell Bash uses (Win/macOS/Linux) |
 | `/status` · `/clear` · `/help` · `/quit` | Session stats · reset · help · exit |
 
 ### Knowledge base (GraphRAG) — ingesting your documents
@@ -236,8 +255,10 @@ Requires Python 3.11+. From source instead:
 
 On first launch with no config, Drydock probes localhost for a running local
 LLM (llama.cpp/vLLM `:8000`, Ollama `:11434`, LM Studio `:1234`) and wires up
-the first one it finds — no account or API-key prompt. Override anytime with
-`--model` / `--provider` / `--base-url` or `~/.drydock/config.toml`.
+the first one it finds — no account or API-key prompt. If nothing is detected it
+asks for the server URL, model name, and **context size** (which must match your
+server's `-c` / `--max-model-len` — accepts `65536` or `64k`). Override anytime
+with `--model` / `--provider` / `--base-url` or `~/.drydock/config.toml`.
 
 ### Docker
 
@@ -266,12 +287,14 @@ commands to do the work, showing each as a collapsible tool card.
 - A live activity line shows progress while it works:
   `◡ Keelhauling…  (12s · ↓ 6.2k tokens · thinking with high effort)`
 - Submit while it's working and the prompt **queues** (drains in order)
-- Slash commands: `/model` · `/cwd` · `/undo` (revert last write) · `/back`
-  (rewind last turn) · `/status` · `/compact` (shrink context) · `/context`
-  (view/set the context-window budget) · `/graphrag` (build/query a knowledge
-  base) · `/skills` (list your `/<name>` skills) · `/loop` (repeat a prompt) ·
-  `/mcp` (list MCP servers) · `/rmf` & `/stig` (NIST 800-53 / DISA STIG
-  automation) · `/clear` · `/help` · `/quit`
+- Slash commands: `/model` (switch between registered model servers) · `/cwd` ·
+  `/undo` (revert last write) · `/back` (rewind last turn) · `/resume` (continue
+  an interrupted session) · `/status` · `/compact` (shrink context) · `/context`
+  (view/set the context-window budget) · `/events` & `/trace` (execution trace +
+  governor activity) · `/graphrag` (build/query a knowledge base) · `/skills`
+  (list your `/<name>` skills) · `/loop` (repeat a prompt) · `/mcp` (list MCP
+  servers) · `/rmf` & `/stig` (NIST 800-53 / DISA STIG automation) · `/clear` ·
+  `/help` · `/quit`
 
 It honors `AGENTS.md` / `DRYDOCK.md` in the working directory for project
 conventions.
@@ -285,6 +308,9 @@ blocked:
   writes, and fork bombs are refused outright (never run).
 - **Approval prompt** — sensitive-but-legitimate commands (`sudo`, package
   installs, network fetches, `git push`) pause for **Allow / Always / Deny**.
+  Non-Bash tools are gated the same way **by effect**: an external mutation
+  (e.g. an MCP server's `create_issue`), credential access, or destructive
+  action requires approval before it runs; local reads/edits stay automatic.
 - **Advisory write guards** — Drydock flags (never blocks) Python syntax errors,
   stub-only files, imports of sibling modules that don't exist yet, bare
   `raise` outside an except, and refuses to write git conflict-marker content.
