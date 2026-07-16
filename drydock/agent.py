@@ -450,6 +450,11 @@ def run(
             if config.get("trajectory_file"):
                 from drydock import trajectory
                 trajectory.record(system_prompt, state, config)
+            # Task finished cleanly — drop the resume snapshot so a leftover file
+            # always means "interrupted" (PRD P2.1).
+            if config.get("resume_path"):
+                from drydock import resume as _resume
+                _resume.clear_snapshot(config["resume_path"])
             break
 
         # Execute each tool call
@@ -679,6 +684,14 @@ def run(
         # this turn's tools were running, before spending another LLM call.
         if _stopped():
             break
+
+        # Durable snapshot (PRD P2.1): persist the transcript + task state here, at
+        # a consistent point, so a crash/kill can resume this task. Gated on a
+        # configured path; atomic + defensive (never breaks the run).
+        _resume_path = config.get("resume_path")
+        if _resume_path:
+            from drydock import resume as _resume
+            _resume.save_snapshot(state, config, _resume_path)
 
         # Real progress this turn — reset the consecutive stall-nudge counter so
         # a long, productive plan can run as far as it needs (the cap only
