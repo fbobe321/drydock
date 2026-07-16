@@ -61,6 +61,13 @@ DEFAULTS: dict[str, object] = {
     # Durable per-turn session snapshot so an interrupted task can be continued
     # with /resume (writes to ~/.drydock/resume/). Set false to disable.
     "resume": True,
+    # Recovery tuning (PRD Epic K / §13). no_progress_window: how many actions of
+    # no progress before recovery escalates; suppression_iterations: how long a
+    # looping action stays suppressed; max_recovery_attempts: recovery interventions
+    # before a controlled stop (0 = unlimited).
+    "recovery_no_progress_window": 5,
+    "recovery_suppression_iterations": 2,
+    "max_recovery_attempts": 0,
     # Verified-trajectory export (RSI training-data collection). When set to a path,
     # drydock writes the full task trajectory (system prompt + transcript) there at
     # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.

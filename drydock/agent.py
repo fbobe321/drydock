@@ -50,8 +50,8 @@ from drydock.compaction import (
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
 from drydock.verification import looks_like_verification, parse_evidence
-from drydock.progress import ProgressTracker, assess_action
-from drydock.recovery import RecoveryController
+from drydock.progress import ProgressTracker, assess_action, NO_PROGRESS_WINDOW
+from drydock.recovery import RecoveryController, SUPPRESSION_ITERATIONS
 from drydock.loop_detect import tool_signature
 from drydock.phases import AgentPhase, PhaseController
 from drydock.budget import BudgetState
@@ -200,9 +200,15 @@ def run(
     IDENTICAL_REPEAT_CAP = 8
     run_iteration = 0  # stream calls within THIS run() (resets per user message)
     loop_tracker = LoopTracker()
-    progress_tracker = ProgressTracker()  # scores each action; flags a stalled run
+    # Recovery tuning (PRD §13) is configurable; defaults match the PRD.
+    progress_tracker = ProgressTracker(
+        window=config.get("recovery_no_progress_window", NO_PROGRESS_WINDOW),
+    )  # scores each action; flags a stalled run
     prev_failing = None  # failing-test count from the previous verification (delta)
-    recovery = RecoveryController()  # escalates when progress stalls (PRD Epic K)
+    recovery = RecoveryController(
+        suppression_iterations=config.get("recovery_suppression_iterations",
+                                          SUPPRESSION_ITERATIONS),
+    )  # escalates when progress stalls (PRD Epic K)
     recovery_terminate = False  # set by stage-5 recovery to end the run honestly
     phases = PhaseController()  # owns phase transitions (PRD Epic B)
 
@@ -619,11 +625,18 @@ def run(
                 iteration=run_iteration,
             )
             if directive.active:
+                # Count real interventions (reflection and beyond, not the mild
+                # advisory) against the recovery budget; hitting the ceiling forces
+                # a controlled stop even if tool/iteration budget remains (PRD N1.4).
+                if directive.stage >= 2:
+                    budget.record_recovery()
+                terminate = directive.terminate or budget.recovery_exhausted()
                 _emit(state, "recovery", stage=directive.stage,
-                      suppressed=directive.suppress, terminate=directive.terminate)
+                      suppressed=directive.suppress, terminate=terminate,
+                      attempts=budget.recovery_attempts)
                 if directive.note:
                     result = f"{directive.note}\n{result}"
-                if directive.terminate:
+                if terminate:
                     recovery_terminate = True
             # Surface the governor's live state to the TUI status line.
             state.recovery_stage = recovery.stage
