@@ -62,7 +62,7 @@ from drydock.tool_policy import (
     requires_approval as tool_requires_approval,
     effect_of as tool_effect_of,
 )
-from drydock.events import EventLog, emit as _emit
+from drydock.events import EventLog, SQLiteEventLog, emit as _emit
 from drydock.tuning import (
     filter_tool_schemas,
     hallucinated_tool_message,
@@ -97,7 +97,7 @@ class AgentState:
     turn_count: int = 0
     current_effort: str = ""  # "high"/"low" of the in-flight LLM call (for the UI)
     task: "TaskState" = field(default_factory=lambda: TaskState())  # structured objective
-    events: "EventLog | None" = None  # optional durable execution trace
+    events: "EventLog | SQLiteEventLog | None" = None  # optional durable execution trace
     recovery_stage: int = 0  # live recovery escalation stage (0 = normal); for the TUI
     progress_streak: int = 0  # consecutive no-progress (stall) actions; for the TUI
     budget: "BudgetState" = field(default_factory=lambda: BudgetState())  # scoped budgets

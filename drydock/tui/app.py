@@ -264,8 +264,13 @@ class DrydockApp(App):
         self.config = config
         self.state = AgentState()
         if config.get("event_log", True):
-            from drydock.events import EventLog, default_event_log_path
-            self.state.events = EventLog(config.get("event_log_path") or default_event_log_path())
+            from drydock.events import default_event_log_path, make_event_log
+            backend = config.get("event_store", "jsonl")
+            path = config.get("event_log_path") or default_event_log_path()
+            # a .db/.sqlite path (or event_store="sqlite") selects the SQLite backend
+            if backend == "sqlite" and str(path).endswith(".jsonl"):
+                path = str(path)[:-len(".jsonl")] + ".db"
+            self.state.events = make_event_log(path, backend)
         self.system = self._build_system(config.get("model"))
         from drydock.skills import load_skills
         self._skills = load_skills(config.get("cwd") or ".")

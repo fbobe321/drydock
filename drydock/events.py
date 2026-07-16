@@ -53,6 +53,93 @@ class EventLog:
         return out
 
 
+class SQLiteEventLog:
+    """Append-only SQLite sink for execution events — same interface as EventLog,
+    but backed by an indexed table so a long/large trace can be queried by seq or
+    type without scanning a growing JSONL (the same scaling move GraphRAG made).
+    Append-only (INSERT only, never UPDATE/DELETE); never raises."""
+
+    def __init__(self, path):
+        import sqlite3
+
+        self.path = Path(path)
+        self._seq = 0
+        self._conn = None
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS events ("
+                "seq INTEGER PRIMARY KEY, ts REAL, type TEXT, data TEXT)"
+            )
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(type)")
+            self._conn.commit()
+            # continue seq past any existing rows (resume-friendly)
+            row = self._conn.execute("SELECT MAX(seq) FROM events").fetchone()
+            self._seq = row[0] or 0
+        except Exception:  # noqa: BLE001 — logging must never break a run
+            self._conn = None
+
+    def emit(self, type: str, **data) -> None:
+        if self._conn is None:
+            return
+        self._seq += 1
+        try:
+            payload = json.dumps(data, default=str, ensure_ascii=False)
+            self._conn.execute(
+                "INSERT INTO events (seq, ts, type, data) VALUES (?, ?, ?, ?)",
+                (self._seq, round(time.time(), 3), type, payload),
+            )
+            self._conn.commit()
+        except Exception:  # noqa: BLE001
+            pass  # never break a run on a logging failure
+
+    @staticmethod
+    def read(path) -> list[dict]:
+        """Return every event as a dict (seq/ts/type + the flattened data), ordered
+        by seq. Missing/unreadable db -> []."""
+        import sqlite3
+
+        out: list[dict] = []
+        try:
+            conn = sqlite3.connect(f"file:{Path(path)}?mode=ro", uri=True)
+        except sqlite3.Error:
+            return out
+        try:
+            rows = conn.execute("SELECT seq, ts, type, data FROM events ORDER BY seq").fetchall()
+        except sqlite3.Error:
+            conn.close()
+            return out
+        conn.close()
+        for seq, ts, type_, data in rows:
+            rec = {"seq": seq, "ts": ts, "type": type_}
+            try:
+                rec.update(json.loads(data) if data else {})
+            except (json.JSONDecodeError, TypeError):
+                pass
+            out.append(rec)
+        return out
+
+
+def read_events(path) -> list[dict]:
+    """Read an event trace regardless of backend — SQLite for .db/.sqlite paths,
+    JSONL otherwise. Lets summarize()/reconstruct_task_state() work with either."""
+    s = str(path)
+    if s.endswith((".db", ".sqlite", ".sqlite3")):
+        return SQLiteEventLog.read(path)
+    return EventLog.read(path)
+
+
+def make_event_log(path, backend: str = "jsonl"):
+    """Construct the configured event-log backend for `path`. backend 'sqlite'
+    (or a .db/.sqlite path) -> SQLiteEventLog, else JSONL EventLog."""
+    s = str(path)
+    if backend == "sqlite" or s.endswith((".db", ".sqlite", ".sqlite3")):
+        return SQLiteEventLog(path)
+    return EventLog(path)
+
+
 def emit(state, type: str, **data) -> None:
     """Emit to the run's event log if it has one — a no-op otherwise. Lets the agent
     loop log unconditionally without a log everywhere."""
@@ -69,7 +156,7 @@ def default_event_log_path():
 
 
 def _events(events_or_path):
-    return events_or_path if isinstance(events_or_path, list) else EventLog.read(events_or_path)
+    return events_or_path if isinstance(events_or_path, list) else read_events(events_or_path)
 
 
 def reconstruct_task_state(events_or_path):

@@ -52,9 +52,12 @@ DEFAULTS: dict[str, object] = {
     # files but never ran a test/check/its own code, nudge it to verify first
     # instead of accepting completion. Bounded. Set false to disable.
     "verify_gate": True,
-    # Durable per-session execution trace (events.py) written as JSONL to
-    # ~/.drydock/events/ — inspect/diagnose/replay a task. Set false to disable.
+    # Durable per-session execution trace (events.py) written to ~/.drydock/events/
+    # — inspect/diagnose/replay a task. Set false to disable.
     "event_log": True,
+    # Event-store backend: "jsonl" (one file, human-readable) or "sqlite" (indexed,
+    # queryable by seq/type — better for long/large traces). Both are append-only.
+    "event_store": "jsonl",
     # Verified-trajectory export (RSI training-data collection). When set to a path,
     # drydock writes the full task trajectory (system prompt + transcript) there at
     # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.
