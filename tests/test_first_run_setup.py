@@ -61,10 +61,11 @@ class _Args:
 
 def test_autowire_uses_detected_server_no_prompt(tmp_path, monkeypatch):
     """First launch with a live server: wire it up automatically, NO input()."""
-    from drydock import cli, config as cfgmod, detect
+    from drydock import cli, config as cfgmod, detect, providers
     monkeypatch.setattr(detect, "detect_local_llms",
                         lambda: [{"provider": "ollama", "base_url": "http://localhost:11434/v1",
                                   "models": ["llama3"]}])
+    monkeypatch.setattr(providers, "probe_server_context", lambda url: None)  # hermetic
     # input() must NOT be called on the auto-wire path
     monkeypatch.setattr("builtins.input", lambda *a: (_ for _ in ()).throw(AssertionError("prompted!")))
     cfg_path = tmp_path / "c.toml"
@@ -72,13 +73,30 @@ def test_autowire_uses_detected_server_no_prompt(tmp_path, monkeypatch):
     assert cfg["base_url"] == "http://localhost:11434/v1"
     assert cfg["provider"] == "ollama" and cfg["model"] == "llama3"
     assert "Detected" in onboarding and cfg_path.exists()   # persisted
+    assert cfg["context_limit"] == cfgmod.DEFAULTS["context_limit"]  # probe unknown -> default
+
+
+def test_autowire_probes_and_persists_real_context(tmp_path, monkeypatch):
+    """Auto-wire asks the detected server its REAL n_ctx and persists it — a blind
+    65536 default overflows a server running -c 32768."""
+    from drydock import cli, config as cfgmod, detect, providers
+    monkeypatch.setattr(detect, "detect_local_llms",
+                        lambda: [{"provider": "vllm", "base_url": "http://localhost:8000/v1",
+                                  "models": ["gemma4"]}])
+    monkeypatch.setattr(providers, "probe_server_context", lambda url: 32768)
+    cfg_path = tmp_path / "c.toml"
+    cfg, onboarding = cli._resolve_first_run(dict(cfgmod.DEFAULTS), _Args(), cfg_path, cfgmod, interactive=True)
+    assert cfg["context_limit"] == 32768
+    assert "32,768" in onboarding                      # surfaced to the user
+    assert cfgmod.load_file(cfg_path)["context_limit"] == 32768  # persisted
 
 
 def test_autowire_respects_explicit_model(tmp_path, monkeypatch):
-    from drydock import cli, config as cfgmod, detect
+    from drydock import cli, config as cfgmod, detect, providers
     monkeypatch.setattr(detect, "detect_local_llms",
                         lambda: [{"provider": "vllm", "base_url": "http://localhost:8000/v1",
                                   "models": ["served-model"]}])
+    monkeypatch.setattr(providers, "probe_server_context", lambda url: None)
     cfg, _ = cli._resolve_first_run(dict(cfgmod.DEFAULTS), _Args(model="gemma4"),
                                     tmp_path / "c.toml", cfgmod, interactive=True)
     assert cfg["model"] == "gemma4"   # --model wins over the detected id

@@ -262,8 +262,18 @@ def _resolve_first_run(cfg: dict, args, cfg_path, cfgmod, interactive: bool) -> 
         cfg["base_url"] = found[0]["base_url"]
         if found[0].get("models") and not getattr(args, "model", None):
             cfg["model"] = found[0]["models"][0]
+        # Ask the detected server its REAL context window and persist it, so the
+        # zero-prompt path still gets context_limit right (a blind 65536 default
+        # overflows a server running -c 32768 — the "stuck at 32k" class of bug).
+        # Best-effort: unknown -> keep the default.
+        from drydock.providers import probe_server_context
+        n_ctx = probe_server_context(cfg["base_url"])
+        onboard_ctx = ""
+        if n_ctx:
+            cfg["context_limit"] = n_ctx
+            onboard_ctx = f"  ·  ctx {n_ctx:,} (probed from the server)"
         cfgmod.save_file(cfg, cfg_path)
-        return cfg, detect.onboarding_message(found)
+        return cfg, detect.onboarding_message(found) + onboard_ctx
     if interactive:
         return _first_run_setup(cfg, cfg_path, cfgmod)
     return cfg, detect.onboarding_message(found)
