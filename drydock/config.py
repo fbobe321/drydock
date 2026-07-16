@@ -68,6 +68,11 @@ DEFAULTS: dict[str, object] = {
     "recovery_no_progress_window": 5,
     "recovery_suppression_iterations": 2,
     "max_recovery_attempts": 0,
+    # An exact (call, result) pair recurring this many times — consecutively or
+    # not — is treated as cycling and that signature is suppressed (stage 3),
+    # even when interleaved actions look productive. Polling is exempt (its
+    # result changes each time).
+    "recovery_same_outcome_threshold": 6,
     # Verified-trajectory export (RSI training-data collection). When set to a path,
     # drydock writes the full task trajectory (system prompt + transcript) there at
     # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.

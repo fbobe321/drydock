@@ -83,6 +83,20 @@ def test_escalation_is_monotonic_until_progress():
     assert rc.stage == 0
 
 
+def test_second_fresh_suppression_of_same_signature_terminates():
+    # PRD K1.6: the first suppression ran its course and the model came straight
+    # back to the same call — suppress-expire-repeat forever is dishonest; stop.
+    rc = RecoveryController(suppression_iterations=2)
+    d1 = rc.escalate(3, offender_signature="sig", iteration=1)
+    assert d1.stage == 3 and not d1.terminate
+    # window refresh while still suppressed does NOT count as a second arming
+    d2 = rc.escalate(3, offender_signature="sig", iteration=2)
+    assert not d2.terminate
+    rc.tick(10)  # suppression expires
+    d3 = rc.escalate(3, offender_signature="sig", iteration=10)  # fresh re-arm
+    assert d3.stage == 5 and d3.terminate is True
+
+
 def test_directive_dataclass_defaults():
     d = RecoveryDirective()
     assert d.stage == 0 and d.note is None and not d.suppress and not d.terminate

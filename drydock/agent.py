@@ -596,7 +596,15 @@ def run(
                 identical_repeat_streak, last_call_sig = 1, sig
             # Guide (never block) on exact-repeat tool calls: prepend an
             # advisory note when the same call is made again.
+            _raw_result = result  # outcome identity = the un-annotated body
             result = loop_tracker.annotate(tc["name"], tc["input"], result)
+            # Cycling detection (gov162 bench, large-scale-text-editing): the same
+            # exact (call, result) pair recurring — NON-consecutively — is a loop
+            # even when interleaved actions look productive (an identical macro
+            # rewritten 22× between exit-0 test runs). annotate() just recorded
+            # this pair, so the count includes the current call. Polling is exempt
+            # (its result changes → different pair each time).
+            _same_outcome = loop_tracker.outcome_count(tc["name"], tc["input"], _raw_result)
 
             # Verification evidence: if this Bash call was a test/check/exec, parse
             # its result so the completion gate knows whether it PASSED, not just ran.
@@ -632,8 +640,12 @@ def run(
                 _failing_after = last_verification.tests_failed
                 prev_failing = _failing_after
             assessment = progress_tracker.record(assess_action(
+                # OUTCOME-aware repeat count: "repeated action without new
+                # information" means the same call returned the SAME result again
+                # — a poll whose output changes each time is novel information and
+                # must not accrue stall (found suppressing legit polling).
                 changed_state=bool(tool_result and tool_result.changed_state),
-                repeat_count=loop_tracker.count(tc["name"], tc["input"]),
+                repeat_count=_same_outcome,
                 failing_tests_before=_failing_before if _failing_after is not None else None,
                 failing_tests_after=_failing_after,
                 repeated_outcome=_repeated_outcome,
@@ -648,10 +660,21 @@ def run(
             # result; stage 3 suppresses THIS looping signature next time; stage 5
             # asks the loop to stop honestly. The offender is the current call —
             # only suppressed when the window says it's a no-progress loop.
+            _rec_stage = progress_tracker.recommended_stage()
+            # A call whose exact (call, result) pair has recurred past the
+            # threshold is cycling regardless of the global streak (interleaved
+            # "productive" actions kept resetting it) — floor the recommendation
+            # at stage 3 so THIS signature gets suppressed. Cycles alternate with
+            # other actions, so arm a window wide enough to outlast the period
+            # (the default window expires exactly when a period-2 cycle returns).
+            _cycling = _same_outcome >= config.get("recovery_same_outcome_threshold", 6)
+            if _cycling:
+                _rec_stage = max(_rec_stage or 0, 3)
             directive = recovery.escalate(
-                progress_tracker.recommended_stage(),
+                _rec_stage,
                 offender_signature=recovery_sig,
                 iteration=run_iteration,
+                suppress_window=(recovery.suppression_iterations + 3) if _cycling else None,
             )
             if directive.active:
                 # Count real interventions (reflection and beyond, not the mild

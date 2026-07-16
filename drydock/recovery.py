@@ -61,6 +61,10 @@ class RecoveryController:
         self.suppression_iterations = max(1, suppression_iterations)
         # signature -> iteration index at which the suppression expires
         self._suppressed: dict[str, int] = {}
+        # signature -> how many times it has EVER been suppressed this run; a
+        # second arming means suppression didn't change the model's behavior —
+        # per the PRD that's the stage-5 condition (controlled, honest stop).
+        self._suppress_counts: dict[str, int] = {}
 
     # --- suppression bookkeeping ---
 
@@ -91,6 +95,7 @@ class RecoveryController:
         *,
         offender_signature: str | None,
         iteration: int,
+        suppress_window: int | None = None,
     ) -> RecoveryDirective:
         """Advance to `recommended_stage` (never downgrade mid-plateau) and return
         the directive for the current action. `offender_signature` is the exact
@@ -119,8 +124,29 @@ class RecoveryController:
                 "action you will avoid repeating.]"
             ))
         if stage == 3:
-            if offender_signature:
-                self._suppressed[offender_signature] = iteration + self.suppression_iterations
+            if offender_signature and offender_signature not in self._suppressed:
+                # A FRESH arming (not a refresh of a live window). A second fresh
+                # arming of the same signature means the first suppression ran its
+                # course — guidance included — and the model came straight back to
+                # the same call with the same result. Stage 4 failed implicitly;
+                # stop honestly rather than suppress-expire-repeat forever
+                # (PRD K1.6).
+                self._suppress_counts[offender_signature] = \
+                    self._suppress_counts.get(offender_signature, 0) + 1
+                if self._suppress_counts[offender_signature] >= 2:
+                    self.stage = 5
+                    return RecoveryDirective(stage=5, terminate=True, note=(
+                        "[Recovery ceiling reached: this exact action kept "
+                        "repeating even after being suppressed once — continuing "
+                        "will not make progress. Stop and report honestly what "
+                        "was accomplished and what remains; do NOT claim the "
+                        "task is complete if it is not verified.]"
+                    ))
+                # A caller may widen the window (`suppress_window`) — an action
+                # cycling with period N evades the default window when N >= it
+                # (armed at k, retried at k+N, already expired).
+                self._suppressed[offender_signature] = iteration + (
+                    suppress_window or self.suppression_iterations)
             return RecoveryDirective(stage=3, suppress=bool(offender_signature), note=(
                 "[This repeated action is now temporarily suppressed because it "
                 "has not been making progress. Take a genuinely different step.]"

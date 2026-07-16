@@ -149,6 +149,15 @@ class LoopTracker:
         annotate() has already recorded the call."""
         return self._counts.get(tool_signature(name, inputs), 0)
 
+    def outcome_count(self, name: str, inputs: dict, result: str) -> int:
+        """How many times this exact (call, result) pair has been seen so far,
+        WITHOUT recording. Non-consecutive repeats count — the signal that a call
+        is cycling (an identical Write re-issued between other actions) even when
+        it never repeats back-to-back. Polling is naturally exempt: its result
+        changes, so each poll is a different pair."""
+        key = f"{tool_signature(name, inputs)}\x00{hash(result or '')}"
+        return self._outcome_counts.get(key, 0)
+
     def record_outcome(self, name: str, inputs: dict, result: str) -> int:
         """Record that this exact call produced this exact result body; return how
         many times that (call, outcome) pair has now been seen. A repeated-OUTCOME
@@ -177,13 +186,22 @@ class LoopTracker:
         count = self.record(name, inputs)
         failed = (result or "").lstrip().startswith(("Error", "REFUSED"))
         outcome_count = self.record_outcome(name, inputs, result)
-        note = loop_note(name, count, failed=failed)
+        # Outcome-aware repeat handling: a repeated call whose RESULT is also
+        # repeating is a loop; a repeated call whose result CHANGES is polling —
+        # legit, and must get neither notes nor pruning (pruning it to a constant
+        # stub both loses the fresh output AND makes the poll look like a loop
+        # downstream). Failed repeats keep their fix-it notes on call identity
+        # alone (the error text is the fix, sameness of body not required).
+        if failed:
+            note = loop_note(name, count, failed=True)
+        else:
+            note = loop_note(name, outcome_count, failed=False)
         path_note = self.record_path_write(name, inputs)
-        # Prune the BODY of a repeated *successful* call (3rd+ identical): the
-        # model already has this content, and re-feeding it both wastes context
-        # and lets it mindlessly re-call. Replace the body with a stub so the
-        # repeat yields nothing new.
-        if note and not failed and count >= 3:
+        # Prune the BODY of a repeated *successful, unchanged* outcome (3rd+ time
+        # this exact call returned this exact body): the model already has this
+        # content, and re-feeding it both wastes context and lets it mindlessly
+        # re-call. Replace the body with a stub so the repeat yields nothing new.
+        if not failed and outcome_count >= 3:
             result = (
                 "(identical to your earlier call to this tool — body omitted. "
                 "Re-running it returns nothing new; act on the content you "
