@@ -271,6 +271,17 @@ class DrydockApp(App):
             if backend == "sqlite" and str(path).endswith(".jsonl"):
                 path = str(path)[:-len(".jsonl")] + ".db"
             self.state.events = make_event_log(path, backend)
+        # Resume: note any PRIOR interrupted session (captured BEFORE we claim our
+        # own snapshot path), then arm per-turn snapshots for THIS session.
+        if config.get("resume", True):
+            from drydock import resume as _resume
+            self._prior_snapshot = _resume.latest_snapshot()
+            import time as _t
+            sid = config.get("session_id") or f"session-{int(_t.time())}"
+            config["session_id"] = sid
+            config["resume_path"] = str(_resume.snapshot_path(sid))
+        else:
+            self._prior_snapshot = None
         self.system = self._build_system(config.get("model"))
         from drydock.skills import load_skills
         self._skills = load_skills(config.get("cwd") or ".")
@@ -351,6 +362,14 @@ class DrydockApp(App):
         onboarding = self.config.get("onboarding")
         if onboarding:
             self._info(onboarding)
+        # Offer to resume a previously interrupted session.
+        prior = getattr(self, "_prior_snapshot", None)
+        if prior:
+            from drydock import resume as _resume
+            snap = _resume.load_snapshot(prior) or {}
+            obj = (snap.get("task") or {}).get("objective", "") or "(unknown task)"
+            self._info(f"⚓ An interrupted session was found: \"{obj[:70]}\".  "
+                       f"Type /resume to continue it, or start a new task.")
         prompt.focus()
         # Drive the animated working line (only repaints while a turn is busy).
         self.set_interval(0.18, self._tick_work)
@@ -549,6 +568,8 @@ class DrydockApp(App):
             self._cmd_shell()
         elif cmd == "/events":
             self._cmd_events()
+        elif cmd == "/resume":
+            self._cmd_resume(arg)
         elif cmd == "/advisor":
             self._cmd_advisor(arg)
         elif cmd == "/ask":
@@ -578,6 +599,8 @@ class DrydockApp(App):
                 "  /status          session model, cwd, turns, tokens\n"
                 "  /compact         shrink old context to free up the window\n"
                 "  /context         view/set the context-window budget (e.g. /context 65536)\n"
+                "  /events          digest of this session's execution trace + governor activity\n"
+                "  /resume          continue an interrupted session (/resume [session_id])\n"
                 "  /advisor         set up a 2nd 'advisor' model (Gemini etc.); /ask <q> = you, /ask! = feed to agent\n"
                 "  /graphrag        ingest docs into a knowledge base the agent can use\n"
                 "                   build <path> · add <path> · query <q> · status · clear\n"
@@ -886,6 +909,46 @@ class DrydockApp(App):
         lines.append(
             f"  tokens       : {s['in_tok']:,} in / {s['out_tok']:,} out   ({s['event_count']} events)")
         self._info("\n".join(lines))
+
+    def _cmd_resume(self, arg: str) -> None:
+        """Continue an interrupted session (PRD P2.1). /resume picks the most recent
+        interrupted session; /resume <session_id> picks a specific one. Restores the
+        transcript + task state and continues; an in-flight external mutation is
+        flagged (not auto-retried)."""
+        from pathlib import Path
+
+        from drydock import resume as _resume
+
+        arg = (arg or "").strip()
+        target = _resume.snapshot_path(arg) if arg else (
+            getattr(self, "_prior_snapshot", None) or _resume.latest_snapshot())
+        if not target or not Path(target).exists():
+            self._info(f"No snapshot for session {arg!r}." if arg
+                       else "No interrupted session to resume.")
+            return
+        info = _resume.restore(target)
+        if info is None:
+            self._info("Could not read that snapshot.")
+            return
+        _resume.apply_to_state(info, self.state)
+        # route to the resumed session's endpoint/model
+        for k in ("model", "provider", "base_url", "cwd"):
+            v = getattr(info, k, None)
+            if v:
+                self.config[k] = v
+        self.system = self._build_system(self.config.get("model"))
+        summary = [f"Resumed: {info.objective[:70] or '(task)'}  ·  "
+                   f"{len(info.messages)} messages restored"]
+        summary += [f"  ⚠ {w}" for w in info.warnings]
+        self._info("\n".join(summary))
+        # adopt the snapshot into THIS session; don't re-offer it
+        if str(target) != self.config.get("resume_path"):
+            _resume.clear_snapshot(target)
+        self._prior_snapshot = None
+        self._refresh_status()
+        # continue the task with a note so the model knows it's resuming
+        if not self._busy:
+            self._begin(_resume.resume_note(info))
 
     def _cmd_shell(self) -> None:
         """Show exactly which shell the Bash tool runs commands through, plus the

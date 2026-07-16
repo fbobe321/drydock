@@ -69,6 +69,27 @@ def test_loop_writes_snapshot_each_turn_and_clears_on_done(tmp_path, monkeypatch
     assert not path.exists()              # cleared on clean completion
 
 
+def test_interrupted_run_leaves_resumable_snapshot(tmp_path, monkeypatch):
+    # A run stopped short of completion (max_turns) leaves its snapshot behind so
+    # it can be resumed; restore() rebuilds the objective + transcript.
+    from drydock.events import EventLog
+    path = tmp_path / "sess.json"
+    ev = EventLog(tmp_path / "e.jsonl")
+
+    def never_done(**kw):
+        return iter([AssistantTurn(
+            "", [{"id": "1", "name": "Bash", "input": {"command": "echo step"}}], 1, 1)])
+    monkeypatch.setattr(agent_mod, "stream", never_done)
+    st = AgentState()
+    st.events = ev
+    list(run("fix the CSV bug", st, {"model": "m", "cwd": tempfile.mkdtemp(),
+             "verify_gate": False, "resume_path": str(path), "max_turns": 2}, "sys"))
+    assert path.exists()  # interrupted (hit max_turns) -> snapshot survives
+    info = resume.restore(path)
+    assert info.objective == "fix the CSV bug"
+    assert len(info.messages) >= 1
+
+
 def test_list_and_latest(tmp_path, monkeypatch):
     monkeypatch.setattr(resume, "snapshot_dir", lambda: tmp_path)
     st = AgentState()

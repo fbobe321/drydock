@@ -58,6 +58,9 @@ DEFAULTS: dict[str, object] = {
     # Event-store backend: "jsonl" (one file, human-readable) or "sqlite" (indexed,
     # queryable by seq/type — better for long/large traces). Both are append-only.
     "event_store": "jsonl",
+    # Durable per-turn session snapshot so an interrupted task can be continued
+    # with /resume (writes to ~/.drydock/resume/). Set false to disable.
+    "resume": True,
     # Verified-trajectory export (RSI training-data collection). When set to a path,
     # drydock writes the full task trajectory (system prompt + transcript) there at
     # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.
