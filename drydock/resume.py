@@ -15,7 +15,12 @@ from __future__ import annotations
 import json
 import os
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
+
+# Effects that must NOT be blindly retried on resume (PRD P2.3): an interrupted
+# external mutation may or may not have taken effect on the far side.
+_UNSAFE_TO_RETRY = frozenset({"external_mutation", "credential_access", "destructive"})
 
 
 def snapshot_dir() -> Path:
@@ -82,3 +87,86 @@ def list_snapshots() -> list[Path]:
 def latest_snapshot() -> Path | None:
     snaps = list_snapshots()
     return snaps[0] if snaps else None
+
+
+# ── Reconstruction ────────────────────────────────────────────────────────
+
+@dataclass
+class ResumeInfo:
+    """Everything needed to continue an interrupted task (PRD P2.1/P2.2)."""
+    session_id: str = ""
+    model: str | None = None
+    provider: str | None = None
+    base_url: str | None = None
+    cwd: str | None = None
+    turn_count: int = 0
+    task: dict = field(default_factory=dict)      # TaskState.to_dict()
+    budget: dict = field(default_factory=dict)
+    messages: list = field(default_factory=list)
+    unresolved: list = field(default_factory=list)  # in-flight tool_started dicts
+    warnings: list = field(default_factory=list)
+
+    @property
+    def objective(self) -> str:
+        return self.task.get("objective", "")
+
+    @property
+    def has_unsafe_unresolved(self) -> bool:
+        return any(a.get("effect") in _UNSAFE_TO_RETRY for a in self.unresolved)
+
+
+def restore(snapshot_path, event_trace=None) -> ResumeInfo | None:
+    """Build a ResumeInfo from a session snapshot, cross-referencing the event
+    trace for in-flight (unresolved) actions. Returns None if the snapshot is
+    missing/unreadable. Classifies unresolved external mutations as unsafe to
+    retry (P2.3) and records a warning."""
+    snap = load_snapshot(snapshot_path)
+    if snap is None:
+        return None
+    info = ResumeInfo(
+        session_id=snap.get("session_id", ""),
+        model=snap.get("model"), provider=snap.get("provider"),
+        base_url=snap.get("base_url"), cwd=snap.get("cwd"),
+        turn_count=snap.get("turn_count", 0),
+        task=snap.get("task") or {}, budget=snap.get("budget") or {},
+        messages=snap.get("messages") or [],
+    )
+    if event_trace is not None:
+        from drydock.events import find_unresolved
+        info.unresolved = find_unresolved(event_trace)
+    for a in info.unresolved:
+        eff = a.get("effect")
+        if eff in _UNSAFE_TO_RETRY:
+            info.warnings.append(
+                f"{a.get('name')} ({eff}) was in-flight when interrupted — it may "
+                f"have taken effect; verify before retrying.")
+        else:
+            info.warnings.append(
+                f"{a.get('name')} was interrupted mid-call; it's read-only/local, "
+                f"safe to redo.")
+    return info
+
+
+def resume_note(info: ResumeInfo) -> str:
+    """A message to inject into the resumed transcript so the model knows it's
+    continuing an interrupted task and re-checks anything left in-flight."""
+    lines = ["[RESUMING an interrupted task. The objective and history above are "
+             "restored — continue from where it left off; do not restart.]"]
+    if info.unresolved:
+        lines.append("When it was interrupted, these actions were IN-FLIGHT and may "
+                     "not have finished — check their effect before repeating them:")
+        for a in info.unresolved:
+            lines.append(f"  - {a.get('name')} ({a.get('effect', 'unknown')})")
+    return "\n".join(lines)
+
+
+def apply_to_state(info: ResumeInfo, state) -> None:
+    """Populate an AgentState from a ResumeInfo: restore the transcript, structured
+    task state and cumulative budget so the run continues seamlessly."""
+    from drydock.task_state import TaskState
+    state.messages = list(info.messages)
+    state.task = TaskState.from_dict(info.task) if info.task else state.task
+    state.turn_count = info.turn_count
+    if getattr(state, "budget", None) is not None:
+        state.budget.session_turns = info.budget.get("session_turns", 0)
+        state.budget.session_tool_calls = info.budget.get("session_tool_calls", 0)
