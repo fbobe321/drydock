@@ -39,9 +39,14 @@ class ToolResult:
 
 _EXIT = re.compile(r"\[exit code:\s*(-?\d+)\]")
 _MUTATING_BASH = re.compile(
+    # Word-y mutating commands need the trailing \b; output redirection (>, >>)
+    # must NOT — `echo hi > file` has no word char right after '>', so a shared
+    # \b silently missed every space-separated redirect (found via a bench trace
+    # where 38 heredoc/redirect writes all scored as "nothing changed").
     r"(?:^|[\s;&|])(?:rm|mv|cp|mkdir|touch|tee|sed\s+-i|dd|chmod|chown|ln|"
     r"git\s+(?:commit|add|apply|checkout|reset|rm|mv)|pip\s+install|npm\s+i|"
-    r"apt|make(?:\s|$)|cargo\s+build|>|>>)\b", re.I,
+    r"apt|make(?:\s|$)|cargo\s+build)\b"
+    r"|(?:^|[\s;&|])>>?", re.I,
 )
 # Error phrases that usually mean "try again might work" (transient).
 _RETRYABLE = re.compile(

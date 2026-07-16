@@ -40,6 +40,18 @@ def test_classify_changed_state_and_retryable():
     assert r.status == "error" and r.retryable and r.error_code == "transient"
 
 
+def test_classify_redirect_writes_are_mutations():
+    # Regression (gov162 make-mips-interpreter trace): the shared \b after '>'
+    # missed every space-separated redirect, so 38 heredoc/redirect writes all
+    # scored as "nothing changed".
+    assert classify("Bash", {"command": "echo hi > out.txt"}, "", 1).changed_state
+    assert classify("Bash", {"command": "cat <<EOF > prog.py\nx\nEOF"}, "", 1).changed_state
+    assert classify("Bash", {"command": "python gen.py >> log.txt"}, "", 1).changed_state
+    # fd-redirection is NOT a file write; plain reads stay non-mutating
+    assert not classify("Bash", {"command": "diff a b"}, "", 1).changed_state
+    assert not classify("Bash", {"command": "cat file.txt"}, "x", 1).changed_state
+
+
 def test_error_prefix_string():
     r = classify("Edit", {}, "Error: old_string not found", 1)
     assert r.status == "error" and not r.changed_state   # failed edit didn't mutate
