@@ -570,6 +570,20 @@ def run(
                           input=str(tc.get("input"))[:200])
                     tool_result = execute_structured(tc["name"], tc["input"], config)
                     result = tool_result.text
+            # Emit the completion event IMMEDIATELY after execution (before
+            # annotate/verify/progress post-processing) so the trace reads in
+            # execution order — ▶ start → ✓ done → its progress/verification —
+            # and result_chars reflects the RAW result, not one with advisory
+            # notes prepended.
+            _canon = canonical_name(tc["name"])
+            if tool_result is not None:
+                _emit(state, "tool", input=str(tc.get("input"))[:200],
+                      canonical=_canon, **tool_result.to_event())
+            else:
+                _emit(state, "tool", name=tc["name"], canonical=_canon,
+                      input=str(tc.get("input"))[:200],
+                      result_chars=len(str(result)),
+                      status="ok")
             # Track consecutive byte-identical calls — same name, args AND raw
             # result (captured before annotate prepends its note, which changes
             # each call) — for the safety valve below. A differing result
@@ -649,17 +663,6 @@ def run(
                     _emit(state, "plan", version=state.task.plan.version,
                           steps=[(s["id"], s["status"]) for s in state.task.plan.steps])
 
-            # Canonical namespaced identity (PRD Epic D) for telemetry/routing —
-            # 'builtin.read' / 'github.create_issue' — alongside the bare name.
-            _canon = canonical_name(tc["name"])
-            if tool_result is not None:
-                _emit(state, "tool", input=str(tc.get("input"))[:200],
-                      canonical=_canon, **tool_result.to_event())
-            else:
-                _emit(state, "tool", name=tc["name"], canonical=_canon,
-                      input=str(tc.get("input"))[:200],
-                      result_chars=len(str(result)),
-                      status="ok")
             yield ToolEnd(tc["name"], result)
 
             # Append tool result
