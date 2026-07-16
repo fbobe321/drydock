@@ -159,6 +159,25 @@ def _events(events_or_path):
     return events_or_path if isinstance(events_or_path, list) else read_events(events_or_path)
 
 
+def find_unresolved(events_or_path) -> list[dict]:
+    """In-flight actions the process never finished (PRD P2.2): a `tool_started`
+    with no following `tool` (completed) event. Returns the started-event dicts,
+    in order. Pairing is by order — execution is single-threaded within a turn, so
+    a started is always immediately followed by its completion unless interrupted.
+
+    Each returned dict carries `effect` so the caller can refuse to blindly retry
+    an external mutation (P2.3): a read-only in-flight call is safe to redo, a
+    mutation is not."""
+    pending: list[dict] = []
+    for e in _events(events_or_path):
+        t = e.get("type")
+        if t == "tool_started":
+            pending.append(e)
+        elif t == "tool" and pending:
+            pending.pop()  # this completion clears the most recent started
+    return pending
+
+
 def reconstruct_task_state(events_or_path):
     """Rebuild a TaskState (objective, acceptance criteria, phase) from an event
     trace — the PRD "a task can be reconstructed from serialized state" / resume.

@@ -548,6 +548,15 @@ def run(
                     result = _refusal
                     tool_result = None
                 else:
+                    # Mark the action STARTED before running it (PRD P1.1/P2.2): a
+                    # tool_started with no matching tool_completed in the trace means
+                    # the process died mid-tool, so resume knows it's unresolved. The
+                    # effect lets resume decide whether it's safe to retry (read-only)
+                    # or needs approval (external mutation, P2.3).
+                    _emit(state, "tool_started", name=tc["name"],
+                          canonical=canonical_name(tc["name"]),
+                          effect=tool_effect_of(tc["name"], _ro).value,
+                          input=str(tc.get("input"))[:200])
                     tool_result = execute_structured(tc["name"], tc["input"], config)
                     result = tool_result.text
             # Track consecutive byte-identical calls — same name, args AND raw
