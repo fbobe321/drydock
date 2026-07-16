@@ -570,6 +570,8 @@ class DrydockApp(App):
             self._cmd_events()
         elif cmd == "/resume":
             self._cmd_resume(arg)
+        elif cmd == "/trace":
+            self._cmd_trace(arg)
         elif cmd == "/advisor":
             self._cmd_advisor(arg)
         elif cmd == "/ask":
@@ -600,6 +602,7 @@ class DrydockApp(App):
                 "  /compact         shrink old context to free up the window\n"
                 "  /context         view/set the context-window budget (e.g. /context 65536)\n"
                 "  /events          digest of this session's execution trace + governor activity\n"
+                "  /trace           ordered event timeline (/trace [N] for the last N)\n"
                 "  /resume          continue an interrupted session (/resume [session_id])\n"
                 "  /advisor         set up a 2nd 'advisor' model (Gemini etc.); /ask <q> = you, /ask! = feed to agent\n"
                 "  /graphrag        ingest docs into a knowledge base the agent can use\n"
@@ -949,6 +952,21 @@ class DrydockApp(App):
         # continue the task with a note so the model knows it's resuming
         if not self._busy:
             self._begin(_resume.resume_note(info))
+
+    def _cmd_trace(self, arg: str = "") -> None:
+        """An ordered timeline of this session's events (turns, tools, verifications,
+        and every governor intervention) — /trace [N] shows the last N (default 40)."""
+        log = self.state.events
+        if log is None:
+            self._info("Event log is off (config event_log = false).")
+            return
+        try:
+            limit = int(arg.strip()) if arg.strip() else 40
+        except ValueError:
+            limit = 40
+        from drydock.events import format_timeline
+        lines = format_timeline(str(log.path), limit=limit)
+        self._info("Task timeline:\n" + ("\n".join(lines) if lines else "  (no events yet)"))
 
     def _cmd_shell(self) -> None:
         """Show exactly which shell the Bash tool runs commands through, plus the

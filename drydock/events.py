@@ -122,6 +122,46 @@ class SQLiteEventLog:
         return out
 
 
+def format_timeline(events_or_path, limit: int = 40) -> list[str]:
+    """A compact one-line-per-event timeline for operator inspection (the /trace
+    view). Returns the most recent `limit` events, oldest-first, each rendered to a
+    short string highlighting what happened — especially governor activity."""
+    evs = _events(events_or_path)
+    shown = evs[-limit:] if limit and len(evs) > limit else evs
+    out: list[str] = []
+    if limit and len(evs) > limit:
+        out.append(f"… {len(evs) - limit} earlier events omitted …")
+    for e in shown:
+        t = e.get("type")
+        seq = e.get("seq", "?")
+        if t == "task_start":
+            detail = f"objective: {(e.get('objective') or '')[:60]}"
+        elif t == "turn":
+            detail = f"turn  (+{e.get('in_tok', 0)}/{e.get('out_tok', 0)} tok)"
+        elif t == "tool_started":
+            detail = f"▶ {e.get('name')}  ({e.get('effect', '?')})"
+        elif t == "tool":
+            detail = f"✓ {e.get('name', '?')}  → {e.get('status', 'ok')}"
+        elif t == "verification":
+            detail = f"verify: {e.get('status', '?')}"
+        elif t == "progress":
+            detail = f"progress {e.get('score', 0):+d}  (streak {e.get('streak', 0)})"
+        elif t == "recovery":
+            extra = " SUPPRESS" if e.get("suppressed") else ""
+            extra += " STOP" if e.get("terminate") else ""
+            detail = f"⚠ recovery stage {e.get('stage', '?')}{extra}"
+        elif t == "plan":
+            detail = f"plan v{e.get('version', '?')}"
+        elif t == "verify_gate":
+            detail = f"gate: {e.get('kind', '?')}"
+        elif t == "done":
+            detail = f"done  (phase {e.get('phase', '?')})"
+        else:
+            detail = t or "?"
+        out.append(f"  {seq:>3}  {detail}")
+    return out
+
+
 def read_events(path) -> list[dict]:
     """Read an event trace regardless of backend — SQLite for .db/.sqlite paths,
     JSONL otherwise. Lets summarize()/reconstruct_task_state() work with either."""
