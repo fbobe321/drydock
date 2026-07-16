@@ -205,6 +205,7 @@ def run(
         window=config.get("recovery_no_progress_window", NO_PROGRESS_WINDOW),
     )  # scores each action; flags a stalled run
     prev_failing = None  # failing-test count from the previous verification (delta)
+    verif_fail_counts: dict[str, int] = {}  # failure-summary -> times seen (Epic J3)
     recovery = RecoveryController(
         suppression_iterations=config.get("recovery_suppression_iterations",
                                           SUPPRESSION_ITERATIONS),
@@ -599,12 +600,25 @@ def run(
 
             # Verification evidence: if this Bash call was a test/check/exec, parse
             # its result so the completion gate knows whether it PASSED, not just ran.
+            _repeated_outcome = False
             if tc["name"] == "Bash":
                 _vcmd = (tc.get("input") or {}).get("command", "")
                 if looks_like_verification(_vcmd):
                     last_verification = parse_evidence(_vcmd, result)
                     _emit(state, "verification", status=last_verification.status,
                           exit_code=last_verification.exit_code)
+                    # Repeated-outcome detection (PRD Epic J3): the SAME failing
+                    # verification outcome recurring — regardless of which command
+                    # produced it (pytest vs python -m pytest vs a reworded check)
+                    # — is a stall signal even though no exact call repeats. Keyed
+                    # on the parsed failure summary, so a CHANGING failure (real
+                    # progress) never counts. Found in the wild: a bench task ran
+                    # 25 failing verifications in 38 turns with zero recovery
+                    # because every command differed slightly.
+                    if last_verification.status == "fail":
+                        _vkey = last_verification.summary or f"exit:{last_verification.exit_code}"
+                        verif_fail_counts[_vkey] = verif_fail_counts.get(_vkey, 0) + 1
+                        _repeated_outcome = verif_fail_counts[_vkey] >= 2
 
             # Progress evaluation (PRD Epic L): score what this action actually
             # achieved and slide it through a window so a stalled run — repeated
@@ -622,6 +636,7 @@ def run(
                 repeat_count=loop_tracker.count(tc["name"], tc["input"]),
                 failing_tests_before=_failing_before if _failing_after is not None else None,
                 failing_tests_after=_failing_after,
+                repeated_outcome=_repeated_outcome,
             ))
             _emit(state, "progress", score=assessment.progress_score,
                   types=assessment.progress_types,
