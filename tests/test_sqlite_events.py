@@ -76,6 +76,23 @@ def test_make_event_log_picks_backend(tmp_path):
     assert isinstance(make_event_log(tmp_path / "a.jsonl"), EventLog)
 
 
+def test_summarize_captures_governor_metrics(tmp_path):
+    # Recovery/progress events (Epics L/K) surface as inspection metrics.
+    db = tmp_path / "g.db"
+    log = SQLiteEventLog(db)
+    log.emit("task_start", objective="loop task")
+    log.emit("progress", score=-2, streak=1)
+    log.emit("progress", score=-2, streak=4)
+    log.emit("recovery", stage=2, suppressed=False)
+    log.emit("recovery", stage=3, suppressed=True)
+    d = summarize(db)
+    rec = d["recovery"]
+    assert rec["max_stage"] == 3
+    assert rec["interventions"] == 2
+    assert rec["suppressions"] == 1
+    assert rec["max_no_progress_streak"] == 4
+
+
 def test_missing_db_reads_empty(tmp_path):
     assert SQLiteEventLog.read(tmp_path / "nope.db") == []
 

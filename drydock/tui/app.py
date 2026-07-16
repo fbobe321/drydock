@@ -866,6 +866,7 @@ class DrydockApp(App):
         s = summarize(str(log.path))
         tools = ", ".join(f"{k}×{v}" for k, v in sorted(s["tools"].items())) or "none"
         v = s["verifications"]
+        rec = s.get("recovery", {})
         lines = [
             f"Task trace — {log.path}",
             f"  objective    : {(s['objective'] or '(none yet)')[:80]}",
@@ -873,8 +874,17 @@ class DrydockApp(App):
             f"  phase        : {s['final_phase']}",
             f"  turns        : {s['turns']}   tools: {tools}",
             f"  verifications: {v['pass']} passed, {v['fail']} failed",
-            f"  tokens       : {s['in_tok']:,} in / {s['out_tok']:,} out   ({s['event_count']} events)",
         ]
+        if rec.get("interventions"):
+            from drydock.recovery import STAGE_NAMES
+            stage = STAGE_NAMES.get(rec["max_stage"], rec["max_stage"])
+            lines.append(
+                f"  governor     : recovery reached '{stage}' "
+                f"({rec['interventions']} interventions, {rec['suppressions']} suppressions, "
+                f"worst no-progress streak {rec['max_no_progress_streak']})"
+            )
+        lines.append(
+            f"  tokens       : {s['in_tok']:,} in / {s['out_tok']:,} out   ({s['event_count']} events)")
         self._info("\n".join(lines))
 
     def _cmd_shell(self) -> None:

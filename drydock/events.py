@@ -185,6 +185,10 @@ def summarize(events_or_path) -> dict:
     tools: dict[str, int] = {}
     turns = in_tok = out_tok = verify_pass = verify_fail = 0
     phase = "understand"
+    # Governor metrics (Epics L/K): how hard the harness had to work to stay on
+    # track — the recovery stage it reached and how often it intervened, plus the
+    # worst no-progress streak. Inspection only (not an eval harness).
+    max_recovery_stage = recovery_interventions = suppressions = max_streak = 0
     for e in evs:
         t = e.get("type")
         if t == "turn":
@@ -194,6 +198,12 @@ def summarize(events_or_path) -> dict:
         elif t == "verification":
             if e.get("status") == "pass": verify_pass += 1
             elif e.get("status") == "fail": verify_fail += 1
+        elif t == "progress":
+            max_streak = max(max_streak, e.get("streak", 0) or 0)
+        elif t == "recovery":
+            recovery_interventions += 1
+            max_recovery_stage = max(max_recovery_stage, e.get("stage", 0) or 0)
+            if e.get("suppressed"): suppressions += 1
         elif t == "done":
             phase = e.get("phase", phase)
     ts = reconstruct_task_state(evs)
@@ -202,5 +212,7 @@ def summarize(events_or_path) -> dict:
         "final_phase": phase, "turns": turns, "tools": tools,
         "in_tok": in_tok, "out_tok": out_tok,
         "verifications": {"pass": verify_pass, "fail": verify_fail},
+        "recovery": {"max_stage": max_recovery_stage, "interventions": recovery_interventions,
+                     "suppressions": suppressions, "max_no_progress_streak": max_streak},
         "event_count": len(evs),
     }
