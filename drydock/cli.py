@@ -399,6 +399,11 @@ def main():
         interactive = sys.stdin.isatty() and not args.prompt
         cfg, onboarding = _resolve_first_run(cfg, args, cfg_path, cfgmod, interactive)
 
+    # If a registered model is the launch default (or was passed via --model),
+    # route to ITS endpoint — unless the user pinned --base-url explicitly.
+    if not args.base_url:
+        cfgmod.resolve_active_model(cfg)
+
     config = {
         # context_limit now comes from cfg (DEFAULTS < config.toml < --context-limit)
         # — it drives the ctx gauge AND when compaction fires, so it must match the

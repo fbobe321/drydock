@@ -563,8 +563,9 @@ class DrydockApp(App):
             self._info(
                 "Commands:\n"
                 "  /help            this help\n"
-                "  /model           show/set model, provider, endpoint URL\n"
-                "                   /model <name> · /model url <url> · /model provider <p>\n"
+                "  /model           list/switch models; each routes to its endpoint\n"
+                "                   /model <name> · /model add <name> <url> [prov] ·\n"
+                "                   /model default <name> · /model url <url>\n"
                 "  /cwd [path]      show or change the working directory\n"
                 "  /undo            revert the last file write/edit\n"
                 "  /back            rewind the last turn from the model's context\n"
@@ -1213,26 +1214,51 @@ class DrydockApp(App):
 
     def _cmd_model(self, arg: str) -> None:
         """Model + endpoint setup. Subcommands persist so they survive restart:
-          /model                      show model, provider, endpoint
-          /model <name>               set the model name
-          /model url <base_url>       set the server URL (e.g. http://localhost:8000/v1)
-          /model provider <name>      vllm | ollama | lmstudio | openai
+          /model                          show current + registered models
+          /model <name>                   switch model (routes to its endpoint if
+                                          registered, else just sets the name)
+          /model add <name> <url> [prov]  register a model + its endpoint
+          /model default <name>           set the launch default
+          /model remove <name>            unregister a model
+          /model url <base_url>           set the CURRENT server URL
+          /model provider <name>          vllm | ollama | lmstudio | openai
         """
+        from drydock import config as cfgmod
+
         arg = (arg or "").strip()
         if not arg:
-            prov = self.config.get("provider") or "(default)"
-            url = self.config.get("base_url") or "(provider default)"
-            self._info(
-                f"model:    {self.config.get('model')}\n"
-                f"provider: {prov}\n"
-                f"endpoint: {url}\n"
-                "Set up:  /model <name>  ·  /model url <http://localhost:8000/v1>  ·  "
-                "/model provider <vllm|ollama|lmstudio|openai>"
-            )
+            self._show_models()
             return
         parts = arg.split(maxsplit=1)
         sub = parts[0].lower()
         val = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "add":
+            bits = val.split()
+            if len(bits) < 2:
+                self._info("usage: /model add <name> <base_url> [provider]")
+                return
+            name, url = bits[0], bits[1]
+            provider = bits[2] if len(bits) > 2 else (self.config.get("provider") or "vllm")
+            cfgmod.upsert_model(self.config, name, url, provider)
+            self._persist_config()
+            self._info(f"registered {name} → {url} ({provider}). Switch with /model {name}.")
+            return
+        if sub == "default":
+            if not cfgmod.find_model(self.config, val):
+                self._info(f"{val!r} is not a registered model. Add it: /model add {val} <url>")
+                return
+            self.config["default_model"] = val
+            self._persist_config()
+            self._info(f"default model → {val}  (saved)")
+            return
+        if sub == "remove":
+            if cfgmod.remove_model(self.config, val):
+                self._persist_config()
+                self._info(f"removed {val} from the registry.")
+            else:
+                self._info(f"{val!r} is not a registered model.")
+            return
         if sub == "url":
             if not val:
                 self._info("usage: /model url <http://localhost:8000/v1>")
@@ -1251,12 +1277,43 @@ class DrydockApp(App):
             self._persist_config()
             self._info(f"provider → {val}  (saved)")
             return
-        # Otherwise: set the model name (the whole arg, so names with spaces work).
-        self.config["model"] = arg
+
+        # Otherwise: switch to `arg` as the model name. If it's a REGISTERED model,
+        # route to its endpoint + provider too (the fix for 'switched name but
+        # traffic still hit the first server').
+        routed = cfgmod.apply_model(self.config, arg)
         self.system = self._build_system(arg)  # prompt may be model-specific
         self._persist_config()
         self._refresh_status()
-        self._info(f"model → {arg}  (saved)")
+        if routed:
+            self._info(f"model → {arg}  ·  endpoint {self.config.get('base_url')}  "
+                       f"({self.config.get('provider')})  (saved)")
+        else:
+            self._info(f"model → {arg}  (saved). Not in the registry, so the endpoint "
+                       f"is unchanged ({self.config.get('base_url')}). Register it with "
+                       f"/model add {arg} <url>.")
+
+    def _show_models(self) -> None:
+        from drydock import config as cfgmod
+
+        cur = self.config.get("model")
+        default = self.config.get("default_model") or "(none)"
+        lines = [
+            f"model:    {cur}",
+            f"provider: {self.config.get('provider') or '(default)'}",
+            f"endpoint: {self.config.get('base_url') or '(provider default)'}",
+            f"default:  {default}",
+        ]
+        registered = cfgmod.list_models(self.config)
+        if registered:
+            lines.append("registered models:")
+            for m in registered:
+                mark = " ←" if m.get("name") == cur else ""
+                lines.append(f"  · {m['name']}  →  {m.get('base_url')} "
+                             f"({m.get('provider', 'vllm')}){mark}")
+        lines.append("Add:  /model add <name> <url> [provider]  ·  "
+                     "Switch:  /model <name>  ·  Default:  /model default <name>")
+        self._info("\n".join(lines))
 
     def _cmd_cwd(self, path: str) -> None:
         if not path:

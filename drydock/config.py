@@ -67,11 +67,79 @@ DEFAULTS: dict[str, object] = {
     "advisor_model": "",
     "advisor_base_url": "",
     "advisor_api_key": "",
+    # Registry of known models so you can keep several servers configured and
+    # switch between them with `/model <name>` — each entry routes to its OWN
+    # endpoint (this is why switching by name alone wasn't enough). A list of
+    # {name, base_url, provider}. `default_model` names the one used at launch
+    # (falls back to `model`). Manage with `/model add|default|remove`.
+    "models": [],
+    "default_model": "",
 }
 
 
 def default_config_path() -> Path:
     return Path.home() / ".drydock" / "config.toml"
+
+
+# ── Model registry ────────────────────────────────────────────────────────
+# A model entry is {"name", "base_url", "provider"}. Kept in cfg["models"];
+# cfg["default_model"] names the launch default. These helpers keep the list
+# clean and let `/model <name>` route to the RIGHT endpoint.
+
+def list_models(cfg: dict) -> list[dict]:
+    return [m for m in (cfg.get("models") or []) if isinstance(m, dict) and m.get("name")]
+
+
+def find_model(cfg: dict, name: str) -> dict | None:
+    for m in list_models(cfg):
+        if m.get("name") == name:
+            return m
+    return None
+
+
+def upsert_model(cfg: dict, name: str, base_url: str, provider: str = "vllm") -> None:
+    """Add or update a registered model (by name). Persist with save_file after."""
+    entry = {"name": name, "base_url": base_url, "provider": provider or "vllm"}
+    models = list_models(cfg)
+    for i, m in enumerate(models):
+        if m.get("name") == name:
+            models[i] = entry
+            break
+    else:
+        models.append(entry)
+    cfg["models"] = models
+
+
+def remove_model(cfg: dict, name: str) -> bool:
+    models = list_models(cfg)
+    kept = [m for m in models if m.get("name") != name]
+    cfg["models"] = kept
+    if cfg.get("default_model") == name:
+        cfg["default_model"] = ""
+    return len(kept) != len(models)
+
+
+def apply_model(cfg: dict, name: str) -> bool:
+    """Switch the active model to `name`. If it's a REGISTERED model, also route
+    to its endpoint + provider (the fix for 'switched name but traffic went to the
+    first server'). Returns True if it matched a registered entry."""
+    cfg["model"] = name
+    entry = find_model(cfg, name)
+    if entry:
+        cfg["base_url"] = entry.get("base_url") or cfg.get("base_url")
+        cfg["provider"] = entry.get("provider") or cfg.get("provider")
+        return True
+    return False
+
+
+def resolve_active_model(cfg: dict) -> dict:
+    """At launch, if the config names a default_model (or the current `model`
+    matches a registered entry), apply its endpoint so traffic routes correctly.
+    Mutates and returns cfg."""
+    name = cfg.get("default_model") or cfg.get("model")
+    if name and find_model(cfg, name):
+        apply_model(cfg, name)
+    return cfg
 
 
 def load_file(path: Path) -> dict:
@@ -90,6 +158,13 @@ def _toml_value(value: object) -> str:
         return "true" if value else "false"
     if isinstance(value, (int, float)):
         return repr(value)
+    if isinstance(value, dict):
+        # inline table: {k = v, ...} — used for a models-registry entry.
+        inner = ", ".join(f"{k} = {_toml_value(v)}" for k, v in value.items())
+        return "{" + inner + "}"
+    if isinstance(value, (list, tuple)):
+        # array (of inline tables or scalars) — used for the models list.
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
     # string: escape backslash and quote, emit a basic TOML string
     s = str(value).replace("\\", "\\\\").replace('"', '\\"')
     return f'"{s}"'
@@ -158,7 +233,11 @@ def resolve(cli_overrides: dict, path: Path | None = None) -> dict:
         # the endpoint is visible and editable (the v2->v3 upgrade path). A real
         # v3 file (>=1 recognized key) is left untouched — we never reformat it or
         # drop keys we don't recognize.
-        if file_cfg and not any(k in DEFAULTS for k in file_cfg):
+        # `models` is EXCLUDED from the v3 markers: v2 also had a [[models]] array,
+        # so a file whose only recognized key is `models` is still a v2 file to be
+        # migrated (not a v3 file to preserve).
+        _v3_markers = set(DEFAULTS) - {"models"}
+        if file_cfg and not any(k in _v3_markers for k in file_cfg):
             backup = path.with_name(path.name + ".bak")
             try:
                 if not backup.exists():
