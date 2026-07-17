@@ -73,6 +73,11 @@ DEFAULTS: dict[str, object] = {
     # even when interleaved actions look productive. Polling is exempt (its
     # result changes each time).
     "recovery_same_outcome_threshold": 6,
+    # Time-aware effort governor: once any single LLM turn takes longer than this
+    # many seconds, the rest of the request runs decisive (low reasoning effort,
+    # tight token cap) to protect the time budget — a think-bound task otherwise
+    # burns a whole window on a handful of giant reasoning turns. 0 = off.
+    "turn_seconds_soft_cap": 240,
     # Verified-trajectory export (RSI training-data collection). When set to a path,
     # drydock writes the full task trajectory (system prompt + transcript) there at
     # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.

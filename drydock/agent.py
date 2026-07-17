@@ -5,6 +5,7 @@ DryDock v3 — clean, provider-agnostic, no model-specific hacks.
 from __future__ import annotations
 
 import os
+import time as _time
 from dataclasses import dataclass, field
 from typing import Generator
 
@@ -213,6 +214,13 @@ def run(
     verif_fail_counts: dict[str, int] = {}  # failure-summary -> times seen (Epic J3)
     verification_text = ""    # concatenated verification commands+results (coverage)
     coverage_nudges = 0       # bounded "your checks never touched X" nudges
+    # Time-aware effort governor (bench taxonomy: think-bound runs burn a 30-min
+    # window on 3-9 turns of reasoning). Once ANY turn's LLM call overruns the
+    # soft cap, every later turn in this request runs decisive: low effort, the
+    # forcing suffix, and a tight token cap. Sticky per request — persistent
+    # slowness doesn't flip-flop; a new user message resets it.
+    time_pressed = False
+    turn_soft_cap = float(config.get("turn_seconds_soft_cap", 240) or 0)
     recovery = RecoveryController(
         suppression_iterations=config.get("recovery_suppression_iterations",
                                           SUPPRESSION_ITERATIONS),
@@ -252,6 +260,15 @@ def run(
         retries = 0
         stall_retries = 0
         decisive = False  # over-think interrupt: force a short, single-action turn
+        if time_pressed:
+            # A prior turn overran the soft cap — stay decisive for the request.
+            decisive = True
+            turn_config = dict(turn_config)
+            turn_config["reasoning_effort"] = "low"
+            cur = int(turn_config.get("max_tokens", 8192) or 8192)
+            turn_config["max_tokens"] = min(cur, _DECISIVE_MAX_TOKENS)
+            state.current_effort = "low"
+        _turn_t0 = _time.monotonic()
         while retries < 2:
             try:
                 available = schemas()
@@ -280,6 +297,19 @@ def run(
                         yield event
                     elif isinstance(event, AssistantTurn):
                         assistant_turn = event
+                # Time-aware effort governor: this turn's wall time decides how
+                # hard the NEXT turns may think. Trigger once per request.
+                if (turn_soft_cap > 0 and not time_pressed
+                        and _time.monotonic() - _turn_t0 > turn_soft_cap):
+                    time_pressed = True
+                    _emit(state, "effort_governor", engaged=True,
+                          turn_seconds=round(_time.monotonic() - _turn_t0, 1),
+                          cap=turn_soft_cap)
+                    yield TextChunk(
+                        f"\n[turn took {int(_time.monotonic() - _turn_t0)}s — "
+                        "switching to decisive, low-effort steps for the rest of "
+                        "this task to protect the time budget.]\n"
+                    )
                 break  # success
             except StallRetry as _sr:
                 # Stalled/over-thought past stall_retry_secs (wall-time), OR collapsed
