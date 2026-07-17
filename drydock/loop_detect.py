@@ -129,6 +129,34 @@ def runaway_repetition_len(
     return best
 
 
+def degenerate_argument(text, *, min_unit: int = 4, min_reps: int = 4) -> str | None:
+    """The repeated unit if `text` contains a substring of >= min_unit chars
+    consecutively repeated >= min_reps times — the signature of an
+    ESCALATING-ARGUMENT loop (observed: a model renaming a directory
+    `x_temp` -> `x_temp_temp` -> ... until the path held `_temp` 8+ times; every
+    command was unique and every mv "changed state", so repeat/cycle/streak
+    detection were all blind to it). Returns None for healthy text. Checked
+    against tool COMMANDS/PATHS only — content bodies legitimately repeat."""
+    if not text or not isinstance(text, str) or len(text) < min_unit * min_reps:
+        return None
+    n = len(text)
+    # For each candidate unit length, slide and count consecutive repeats.
+    # Linear slide is fine: commands/paths are short (O(64·n) worst case).
+    for p in range(min_unit, min(64, n // min_reps) + 1):
+        for i in range(0, n - p * min_reps + 1):
+            unit = text[i:i + p]
+            if not unit.strip():
+                continue
+            reps = 1
+            j = i + p
+            while j + p <= n and text[j:j + p] == unit:
+                reps += 1
+                j += p
+            if reps >= min_reps:
+                return unit
+    return None
+
+
 class LoopTracker:
     """Counts identical tool calls across a run and produces advisory notes."""
 

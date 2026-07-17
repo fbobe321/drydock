@@ -48,7 +48,7 @@ from drydock.compaction import (
     maybe_compact, emergency_compact, is_context_length_error, is_image_load_error,
     extract_server_n_ctx,
 )
-from drydock.loop_detect import LoopTracker
+from drydock.loop_detect import LoopTracker, degenerate_argument
 from drydock.task_state import TaskState
 from drydock.verification import (
     looks_like_verification,
@@ -662,9 +662,27 @@ def run(
             # (its result changes → different pair each time).
             _same_outcome = loop_tracker.outcome_count(tc["name"], tc["input"], _raw_result)
 
+            # Escalating-argument loop (full166 bench, build-pmars): a repeated
+            # unit amplifying INSIDE the argument (mv x_temp -> x_temp_temp ->
+            # ...) makes every call unique and every mv "productive", blinding
+            # repeat/cycle/streak detection. The degenerate argument itself is
+            # the tell — flag it, warn the model, and score it as a repeated
+            # outcome so the stall streak escalates normally.
+            _degen_src = ""
+            if isinstance(tc.get("input"), dict):
+                _degen_src = str(tc["input"].get("command") or tc["input"].get("file_path") or "")
+            _degen = degenerate_argument(_degen_src)
+            if _degen:
+                result = (
+                    f"[NOTE: this argument contains '{_degen}' repeated many times "
+                    f"— you are compounding the same rename/step instead of making "
+                    f"progress. STOP amplifying it; go back to the original name/"
+                    f"path and take a different approach.]\n" + result
+                )
+
             # Verification evidence: if this Bash call was a test/check/exec, parse
             # its result so the completion gate knows whether it PASSED, not just ran.
-            _repeated_outcome = False
+            _repeated_outcome = bool(_degen)
             if tc["name"] == "Bash":
                 _vcmd = (tc.get("input") or {}).get("command", "")
                 if looks_like_verification(_vcmd):
@@ -704,7 +722,10 @@ def run(
                 # information" means the same call returned the SAME result again
                 # — a poll whose output changes each time is novel information and
                 # must not accrue stall (found suppressing legit polling).
-                changed_state=bool(tool_result and tool_result.changed_state),
+                # A degenerate-argument call gets NO state-change credit — the
+                # compounding rename "changes" the repo every time while going
+                # nowhere; crediting it would reset the stall streak forever.
+                changed_state=bool(tool_result and tool_result.changed_state) and not _degen,
                 repeat_count=_same_outcome,
                 failing_tests_before=_failing_before if _failing_after is not None else None,
                 failing_tests_after=_failing_after,
