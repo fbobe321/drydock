@@ -49,7 +49,12 @@ from drydock.compaction import (
 )
 from drydock.loop_detect import LoopTracker
 from drydock.task_state import TaskState
-from drydock.verification import looks_like_verification, parse_evidence
+from drydock.verification import (
+    looks_like_verification,
+    parse_evidence,
+    extract_artifacts,
+    uncovered_artifacts,
+)
 from drydock.progress import ProgressTracker, assess_action, NO_PROGRESS_WINDOW
 from drydock.recovery import RecoveryController, SUPPRESSION_ITERATIONS
 from drydock.loop_detect import tool_signature
@@ -206,6 +211,8 @@ def run(
     )  # scores each action; flags a stalled run
     prev_failing = None  # failing-test count from the previous verification (delta)
     verif_fail_counts: dict[str, int] = {}  # failure-summary -> times seen (Epic J3)
+    verification_text = ""    # concatenated verification commands+results (coverage)
+    coverage_nudges = 0       # bounded "your checks never touched X" nudges
     recovery = RecoveryController(
         suppression_iterations=config.get("recovery_suppression_iterations",
                                           SUPPRESSION_ITERATIONS),
@@ -447,6 +454,25 @@ def run(
                 state.messages.append({"role": "user", "content": msg})
                 continue
             if session_has_edited and last_verification and last_verification.status == "pass":
+                # Criteria coverage (bench finding: exit-0 self-checks that never
+                # touch the files the task is judged on). If the objective names
+                # concrete artifacts and NONE of this session's verifications ever
+                # referenced some of them, nudge ONCE with exactly what's missing.
+                # Advisory + bounded: a second completion claim is accepted.
+                _artifacts = extract_artifacts(
+                    state.task.objective + "\n" + "\n".join(state.task.acceptance_criteria))
+                _missing = uncovered_artifacts(_artifacts, verification_text)
+                if _missing and coverage_nudges < 1:
+                    coverage_nudges += 1
+                    _emit(state, "verify_gate", kind="uncovered", missing=_missing[:6])
+                    state.messages.append({"role": "user", "content": (
+                        "[SYSTEM] Your check passed, but no verification this session "
+                        f"has touched: {', '.join(_missing[:6])} — and the task will be "
+                        "judged on them. Run a check that directly validates the stated "
+                        "requirement(s) against those files (diff/compare/execute as "
+                        "appropriate), then finish."
+                    )})
+                    continue
                 # A check ran and PASSED — verification evidence exists, so the
                 # controller approves completion (from VERIFY, its only legal
                 # predecessor). This is the one path to COMPLETE.
@@ -613,6 +639,10 @@ def run(
                 _vcmd = (tc.get("input") or {}).get("command", "")
                 if looks_like_verification(_vcmd):
                     last_verification = parse_evidence(_vcmd, result)
+                    # Accumulate what the checks touched (command + result text),
+                    # capped, for criteria-coverage at completion time.
+                    if len(verification_text) < 200_000:
+                        verification_text += f"\n{_vcmd}\n{result[:2000]}"
                     _emit(state, "verification", status=last_verification.status,
                           exit_code=last_verification.exit_code)
                     # Repeated-outcome detection (PRD Epic J3): the SAME failing

@@ -35,6 +35,48 @@ def looks_like_verification(cmd) -> bool:
     return bool(_VERIFY_KEYWORDS.search(cmd) or _EXEC.search(cmd))
 
 
+# ── Criteria-tied evidence (bench finding: exit-0 self-checks ≠ acceptance
+# criteria). Three separate traces showed the model "verifying" with checks that
+# passed but never touched the files the objective is actually judged on (e.g. a
+# vim macro run 23× cleanly while expected.csv was never diffed). These helpers
+# let the gate name exactly which stated artifacts the checks never covered.
+
+# File-ish tokens: a path or name with a real extension (/app/expected.csv,
+# apply_macros.vim, test.sh). Excludes bare version numbers and trailing dots.
+_ARTIFACT = re.compile(r"(?:/[\w.\-/]+/)?([\w\-]+\.[A-Za-z]{1,6})\b")
+# Extensions that are prose, not artifacts ("e.g.", "i.e.", "v1.0", "No.1").
+_NON_ARTIFACT_EXT = frozenset({"g", "e", "i", "etc", "vs", "no"})
+
+
+def extract_artifacts(text) -> list[str]:
+    """File basenames named in an objective / acceptance criteria — the concrete
+    things a verification should touch. Order-preserving, deduped, best-effort;
+    [] when the text names no files (the gate then behaves as before)."""
+    if not text or not isinstance(text, str):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for m in _ARTIFACT.finditer(text):
+        base = m.group(1)
+        ext = base.rsplit(".", 1)[-1].lower()
+        if ext in _NON_ARTIFACT_EXT or ext.isdigit():
+            continue
+        if base.lower() not in seen:
+            seen.add(base.lower())
+            out.append(base)
+    return out
+
+
+def uncovered_artifacts(artifacts, verification_text) -> list[str]:
+    """The stated artifacts that `verification_text` (the concatenated commands +
+    results of every verification run so far) never references. What comes back
+    is exactly what the completion nudge should name."""
+    if not artifacts:
+        return []
+    low = (verification_text or "").lower()
+    return [a for a in artifacts if a.lower() not in low]
+
+
 @dataclass
 class VerificationEvidence:
     """Structured outcome of a verification command — did the check PASS, not just
