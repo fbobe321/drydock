@@ -46,6 +46,7 @@ def save_snapshot(state, config: dict, path) -> Path | None:
             "base_url": config.get("base_url"),
             "cwd": config.get("cwd"),
             "turn_count": getattr(state, "turn_count", 0),
+            "events_path": str(state.events.path) if getattr(state, "events", None) else "",
             "task": state.task.to_dict() if getattr(state, "task", None) else {},
             "budget": state.budget.to_dict() if getattr(state, "budget", None) else {},
             "messages": state.messages,
@@ -131,6 +132,11 @@ def restore(snapshot_path, event_trace=None) -> ResumeInfo | None:
         task=snap.get("task") or {}, budget=snap.get("budget") or {},
         messages=snap.get("messages") or [],
     )
+    # Fall back to the event trace recorded in the snapshot itself.
+    if event_trace is None:
+        et = snap.get("events_path")
+        if et and Path(et).exists():
+            event_trace = et
     if event_trace is not None:
         from drydock.events import find_unresolved
         info.unresolved = find_unresolved(event_trace)

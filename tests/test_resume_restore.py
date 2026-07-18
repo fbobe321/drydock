@@ -54,6 +54,37 @@ def test_unresolved_external_mutation_is_unsafe(tmp_path):
     assert any("verify before retrying" in w for w in info.warnings)
 
 
+def test_restore_falls_back_to_snapshotted_events_path(tmp_path):
+    # Snapshot records the session's event-trace path; restore() without an
+    # explicit event_trace must still find the unresolved calls through it.
+    ev = EventLog(tmp_path / "t.jsonl")
+    ev.emit("tool_started", name="Bash", effect="local_mutation")
+    st = AgentState()
+    st.task = TaskState.from_objective("x")
+    st.messages = [{"role": "user", "content": "x"}]
+    st.events = ev
+    path = tmp_path / "s.json"
+    resume.save_snapshot(st, {"model": "gemma4", "cwd": "/repo", "session_id": "sess"}, path)
+    info = resume.restore(path)
+    assert len(info.unresolved) == 1
+    assert info.unresolved[0]["name"] == "Bash"
+
+
+def test_explicit_event_trace_overrides_snapshotted_path(tmp_path):
+    ev_snap = EventLog(tmp_path / "snap.jsonl")
+    ev_snap.emit("tool_started", name="Read", effect="read_only")
+    st = AgentState()
+    st.task = TaskState.from_objective("x")
+    st.messages = [{"role": "user", "content": "x"}]
+    st.events = ev_snap
+    path = tmp_path / "s.json"
+    resume.save_snapshot(st, {"model": "gemma4", "cwd": "/repo", "session_id": "sess"}, path)
+    ev_other = EventLog(tmp_path / "other.jsonl")
+    ev_other.emit("tool_started", name="Write", effect="local_mutation")
+    info = resume.restore(path, ev_other.path)
+    assert [u["name"] for u in info.unresolved] == ["Write"]
+
+
 def test_apply_to_state_restores_session(tmp_path):
     path = _snapshot(tmp_path, [{"role": "user", "content": "build a thing"},
                                 {"role": "assistant", "content": "working"}])
