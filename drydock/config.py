@@ -82,6 +82,15 @@ DEFAULTS: dict[str, object] = {
     # drydock writes the full task trajectory (system prompt + transcript) there at
     # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.
     "trajectory_file": "",
+    # Tool names dynamic tool selection must NEVER trim (tool_select.py), on top
+    # of the built-in core coding set — e.g. ["WebSearch", "WebFetch"] keeps the
+    # web tools surfaced even on tasks whose text never mentions the web. Names
+    # not in the registry are ignored.
+    "pin_tools": [],
+    # URL substrings the web tools refuse: WebSearch drops matching results,
+    # WebFetch declines matching URLs (with a plain message, never an error).
+    # Used to keep benchmark/solution sites out of harvested training runs.
+    "web_denylist": [],
     "theme": "harbor",
     # Optional SECOND model ("advisor") for a stronger second opinion — e.g. a
     # Gemini OpenAI-compatible endpoint on another box. Empty = disabled. The

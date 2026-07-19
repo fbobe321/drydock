@@ -49,10 +49,11 @@ _EXTERNAL_MUTATION = frozenset({
 _DISCOVERY_PHASES = frozenset({"understand", "discover", "plan"})
 
 
-def _priority(name: str, phase: str, task: str) -> int:
-    """Higher = keep. CORE tools sort above everything; the rest rank by phase
-    preference and task relevance so the cap drops the least-relevant first."""
-    if name in CORE_TOOLS:
+def _priority(name: str, phase: str, task: str, pinned: frozenset[str]) -> int:
+    """Higher = keep. CORE and pinned tools sort above everything; the rest rank
+    by phase preference and task relevance so the cap drops the least-relevant
+    first."""
+    if name in CORE_TOOLS or name in pinned:
         return 1000
     score = 50  # neutral default — unknown/uncategorised tools are still kept if room
     phase = (phase or "").lower()
@@ -79,19 +80,23 @@ def select_tools(
     phase: str = "",
     task_text: str = "",
     max_tools: int = DEFAULT_MAX_TOOLS,
+    pin_tools: list[str] | None = None,
 ) -> list[dict]:
     """Return the subset of `schemas` to expose this turn (PRD Epic F).
 
-    Keeps every core coding tool, prefers read/search while exploring, and
-    surfaces specialised families only when the task text mentions them —
-    trimming to `max_tools` only when the full set exceeds it. Order-preserving
-    for the kept tools so the model sees a stable list. Never raises."""
+    Keeps every core coding tool plus any `pin_tools` (config: user-chosen names
+    that must never be trimmed, e.g. the web tools for a research-heavy run),
+    prefers read/search while exploring, and surfaces specialised families only
+    when the task text mentions them — trimming to `max_tools` only when the
+    full set exceeds it. Order-preserving for the kept tools so the model sees
+    a stable list. Never raises."""
     if not schemas or max_tools <= 0 or len(schemas) <= max_tools:
         return schemas
 
+    pinned = frozenset(pin_tools or ())
     ranked = sorted(
         schemas,
-        key=lambda s: _priority(s.get("name", ""), phase, task_text),
+        key=lambda s: _priority(s.get("name", ""), phase, task_text, pinned),
         reverse=True,
     )
     keep_names = {s.get("name") for s in ranked[:max_tools]}

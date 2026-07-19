@@ -283,6 +283,7 @@ def run(
                     phase=str(state.task.phase),
                     task_text=state.task.objective,
                     max_tools=turn_config.get("max_tools", DEFAULT_MAX_TOOLS),
+                    pin_tools=turn_config.get("pin_tools") or [],
                 )
                 for event in stream(
                     model=turn_config["model"],

@@ -1863,8 +1863,16 @@ def tool_graphadd(params: dict, config: dict) -> str:
             "satisfies (`control`,`rule` — a STIG rule satisfies a NIST control).")
 
 
+def _web_denied(url: str, config: dict) -> bool:
+    deny = config.get("web_denylist") or []
+    low = (url or "").lower()
+    return any(str(pat).lower() in low for pat in deny if pat)
+
+
 def tool_websearch(params: dict, config: dict) -> str:
-    """Search the internet (DuckDuckGo). Read-only; clean message when offline."""
+    """Search the internet (DuckDuckGo). Read-only; clean message when offline.
+    Results matching config `web_denylist` are dropped before the model sees
+    them (kept out of harvested trajectories)."""
     from drydock import web
 
     query = _as_str_arg(params.get("query")).strip()
@@ -1878,7 +1886,12 @@ def tool_websearch(params: dict, config: dict) -> str:
         results = web.search(query, k=max(1, min(k, 10)))
     except web.WebError as e:
         return f"Web search unavailable: {e}. You appear to be offline — answer from your own knowledge."
-    return web.format_search(query, results)
+    kept = [r for r in results if not _web_denied(r.get("url", ""), config)]
+    dropped = len(results) - len(kept)
+    out = web.format_search(query, kept)
+    if dropped:
+        out += f"\n({dropped} result(s) withheld by site policy.)"
+    return out
 
 
 def tool_webfetch(params: dict, config: dict) -> str:
@@ -1888,6 +1901,8 @@ def tool_webfetch(params: dict, config: dict) -> str:
     url = _as_str_arg(params.get("url")).strip()
     if not url:
         return "Error: `WebFetch` needs a `url`."
+    if _web_denied(url, config):
+        return "That site is not available in this session. Solve the task from other sources."
     try:
         mc = int(params.get("max_chars") or 6000)
     except (TypeError, ValueError):

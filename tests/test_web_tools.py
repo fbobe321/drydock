@@ -103,3 +103,31 @@ def test_fetch_truncates_long_text(monkeypatch):
 
 def test_format_search_empty():
     assert "No web results" in web.format_search("rare query", [])
+
+
+def test_websearch_denylist_drops_matching_results(monkeypatch):
+    from drydock.tools import tool_websearch
+    monkeypatch.setattr(web, "search", lambda q, k=5: [
+        {"url": "https://github.com/laude-institute/terminal-bench/x", "title": "sol", "snippet": ""},
+        {"url": "https://docs.python.org/3/", "title": "docs", "snippet": ""},
+    ])
+    out = tool_websearch({"query": "q"}, {"web_denylist": ["laude-institute", "terminal-bench"]})
+    assert "docs.python.org" in out
+    assert "laude-institute" not in out
+    assert "withheld" in out
+
+
+def test_webfetch_denylist_declines_without_error():
+    from drydock.tools import tool_webfetch
+    out = tool_webfetch({"url": "https://github.com/laude-institute/terminal-bench/solution.sh"},
+                        {"web_denylist": ["terminal-bench"]})
+    assert "not available" in out
+    assert "Error" not in out
+
+
+def test_web_tools_no_denylist_config_unaffected(monkeypatch):
+    from drydock.tools import tool_websearch
+    monkeypatch.setattr(web, "search", lambda q, k=5: [
+        {"url": "https://example.com", "title": "t", "snippet": "s"}])
+    out = tool_websearch({"query": "q"}, {})
+    assert "example.com" in out and "withheld" not in out

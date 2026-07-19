@@ -84,3 +84,26 @@ def test_empty_and_degenerate_inputs():
     assert select_tools([], max_tools=12) == []
     s = _schemas(["Read", "Bash"])
     assert select_tools(s, max_tools=0) == s  # cap<=0 disables trimming
+
+
+def test_pin_tools_survive_trimming_on_unrelated_task():
+    # Web tools are normally first out on a non-web task; pinning keeps them.
+    out = select_tools(_schemas(ALL), phase="implement",
+                       task_text="fix the failing unit test in parser.py",
+                       max_tools=10, pin_tools=["WebSearch", "WebFetch"])
+    names = _names(out)
+    assert "WebSearch" in names and "WebFetch" in names
+    assert CORE_TOOLS <= names
+
+
+def test_unpinned_web_tools_still_trimmed_on_unrelated_task():
+    out = select_tools(_schemas(ALL), phase="implement",
+                       task_text="fix the failing unit test in parser.py",
+                       max_tools=10)
+    assert "WebSearch" not in _names(out)
+
+
+def test_pin_tools_unknown_names_ignored():
+    out = select_tools(_schemas(ALL), max_tools=10,
+                       pin_tools=["NoSuchTool"])
+    assert "NoSuchTool" not in _names(out)
