@@ -236,6 +236,16 @@ def run(
         run_iteration += 1
         assistant_turn: AssistantTurn | None = None
 
+        # Keep the trajectory export current EVERY turn, not just at task end:
+        # a harness that kills a long task at its cutoff still gets the full
+        # transcript, and those hard/long tasks are exactly the ones whose
+        # trajectories are worth harvesting (2026-07-20: two verifier-PASSING
+        # tbench tasks lost their trajectories to this). record() overwrites
+        # and never raises, so the repeat write is safe and idempotent.
+        if config.get("trajectory_file") and state.turn_count > 1:
+            from drydock import trajectory as _traj
+            _traj.record(system_prompt, state, config)
+
         # Compact context if approaching limit
         maybe_compact(state, config)
 

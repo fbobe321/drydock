@@ -56,3 +56,36 @@ def test_build_record_clips_huge_bodies():
     st.messages = [{"role": "tool", "name": "Bash", "content": "A" * 500_000}]
     rec = trajectory.build_record("s", st, {"model": "m"})
     assert len(rec["messages"][0]["content"]) < 250_000 and "truncated" in rec["messages"][0]["content"]
+
+
+def test_trajectory_survives_a_run_killed_before_completion():
+    """A harness that kills a long task at its cutoff must still find the
+    transcript on disk (2026-07-20: two verifier-PASSING tbench tasks lost
+    their trajectories because export only ran at clean task end)."""
+    tf = os.path.join(tempfile.mkdtemp(), "traj.json")
+    cfg = {"model": "gemma4", "context_limit": 65536, "max_tokens": 8192,
+           "trajectory_file": tf}
+
+    # Model never says "done" — the run is interrupted mid-task, as a cutoff kill does.
+    def fake(model, system, messages, tool_schemas, config):
+        yield AssistantTurn("", [{"id": "x", "name": "Bash",
+                                  "input": {"command": "echo working"}}], 5, 2)
+
+    orig = agent.stream
+    agent.stream = fake
+    try:
+        st = agent.AgentState()
+        gen = agent.run("Do the task.\n1. a criterion", st, cfg, "SYSTEM")
+        for _ in range(6):          # consume a few turns, then abandon the run
+            try:
+                next(gen)
+            except StopIteration:
+                break
+        gen.close()
+    finally:
+        agent.stream = orig
+
+    assert os.path.exists(tf), "no trajectory written for an interrupted run"
+    rec = json.load(open(tf))
+    assert rec["messages"], "interrupted trajectory has no messages"
+    assert any(m["role"] == "assistant" for m in rec["messages"])
