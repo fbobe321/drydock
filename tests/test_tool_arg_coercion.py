@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from drydock.tools import (
     _as_text, _as_str_arg, _coerce_int,
-    tool_edit, tool_read, tool_grep, tool_write,
+    tool_bash, tool_edit, tool_read, tool_grep, tool_write,
 )
 
 
@@ -47,3 +47,23 @@ def test_write_list_content(tmp_path):
     f = tmp_path / "w.txt"
     tool_write({"file_path": str(f), "content": ["a", "b"]}, _cfg(tmp_path))
     assert f.read_text() == "a\nb"
+
+
+def test_bash_list_command_newline_joined(tmp_path):
+    # A model sending a multi-line command as a JSON array of lines must not
+    # crash (was: AttributeError 'list' has no attribute 'strip'); the lines
+    # newline-join into one script.
+    out = tool_bash({"command": ["echo one", "echo two"]}, _cfg(tmp_path))
+    assert "Error" not in out and "one" in out and "two" in out
+
+
+def test_bash_int_command_coerced(tmp_path):
+    # A numeric command coerces to str and runs (fails cleanly), never raises.
+    out = tool_bash({"command": 123}, _cfg(tmp_path))
+    assert isinstance(out, str)
+
+
+def test_bash_none_and_empty_command(tmp_path):
+    assert "non-empty" in tool_bash({"command": None}, _cfg(tmp_path))
+    assert "non-empty" in tool_bash({}, _cfg(tmp_path))
+    assert "non-empty" in tool_bash({"command": []}, _cfg(tmp_path))

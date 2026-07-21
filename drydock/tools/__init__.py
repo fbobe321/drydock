@@ -1190,7 +1190,10 @@ def _looks_like_network_failure(output: str) -> bool:
 
 
 def tool_bash(params: dict, config: dict) -> str:
-    cmd = params.get("command")
+    # Coerce wrong-type command args (local models send a multi-line command as a
+    # JSON array of lines → newline-join; a number → str) so downstream .strip()/
+    # shell invocation never AttributeErrors on a list/int. None/empty → caught below.
+    cmd = _as_text(params.get("command"))
     if not cmd:
         if "_raw" in params:
             return (
