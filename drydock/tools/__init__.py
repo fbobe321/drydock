@@ -733,7 +733,7 @@ def tool_viewimage(params: dict, config: dict) -> str:
     (providers.messages_to_openai) attaches the actual image to THIS tool result
     so the vision model sees it. Returns a plain error string on any problem
     (never an attachable path) so a bad call can't try to attach nothing."""
-    raw = (params.get("path") or params.get("file_path") or "").strip()
+    raw = _as_str_arg(params.get("path") or params.get("file_path")).strip()
     if not raw:
         return "Error: ViewImage needs a `path` to an image file."
     fp = _resolve_path(raw, config)
@@ -1666,7 +1666,7 @@ def tool_gitdiff(params: dict, config: dict) -> str:
     try:
         return gittools.diff(
             _git_cwd(config),
-            path=(params.get("path") or None),
+            path=(_as_str_arg(params.get("path")) or None),
             staged=bool(params.get("staged")),
         )
     except gittools.GitError as e:

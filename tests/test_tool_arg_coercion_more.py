@@ -35,3 +35,14 @@ def test_webfetch_url_list():
 def test_websearch_query_int():
     out = _no_crash(T.tool_websearch, query=42)
     assert "42" in out
+
+
+def test_gitdiff_path_list():
+    # path as a single-element list must unwrap, not TypeError in gittools.diff.
+    _no_crash(T.tool_gitdiff, path=["some/file.py"])
+
+
+def test_viewimage_path_list():
+    # path as a list must unwrap, not AttributeError on .strip().
+    out = _no_crash(T.tool_viewimage, path=["/no/such.png"])
+    assert "such.png" in out  # names the (unwrapped) path in its error
