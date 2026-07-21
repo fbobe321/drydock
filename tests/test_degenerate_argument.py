@@ -31,6 +31,26 @@ def test_whitespace_units_ignored():
     assert degenerate_argument("echo 'a" + "    " * 20 + "b'") is None
 
 
+def test_large_nonrepetitive_arg_is_bounded():
+    """A big non-repetitive command (heredoc / base64 blob / long one-liner)
+    must not cost O(unit^2 * len) — degenerate_argument runs on EVERY tool call.
+    The prefix cap keeps it cheap; it just isn't a degenerate arg."""
+    import random
+    import time
+    rng = random.Random(1)
+    big = "".join(rng.choice("abcdefghijklmnop/ -_.") for _ in range(50_000))
+    t0 = time.perf_counter()
+    assert degenerate_argument(big) is None
+    assert time.perf_counter() - t0 < 0.2, "scan should be bounded by the prefix cap"
+
+
+def test_repeat_within_prefix_still_detected_in_long_arg():
+    # An escalating unit near the start is still caught even when the command
+    # is long — only the tail beyond max_scan is skipped.
+    cmd = "mv " + "seg/" * 8 + "x" * 40_000
+    assert degenerate_argument(cmd) is not None
+
+
 def _renaming_spiral(base):
     """Model that alternates mv (arg grows a _temp each time) with ls — the
     exact build-pmars pattern: every command unique, every mv 'productive'."""

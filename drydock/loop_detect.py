@@ -129,7 +129,8 @@ def runaway_repetition_len(
     return best
 
 
-def degenerate_argument(text, *, min_unit: int = 4, min_reps: int = 4) -> str | None:
+def degenerate_argument(text, *, min_unit: int = 4, min_reps: int = 4,
+                        max_scan: int = 4096) -> str | None:
     """The repeated unit if `text` contains a substring of >= min_unit chars
     consecutively repeated >= min_reps times — the signature of an
     ESCALATING-ARGUMENT loop (observed: a model renaming a directory
@@ -139,9 +140,16 @@ def degenerate_argument(text, *, min_unit: int = 4, min_reps: int = 4) -> str | 
     against tool COMMANDS/PATHS only — content bodies legitimately repeat."""
     if not text or not isinstance(text, str) or len(text) < min_unit * min_reps:
         return None
+    # Bound the scan to a prefix. A repetitive arg early-returns cheaply, but a
+    # large NON-repetitive command (heredoc, base64 blob, long one-liner) would
+    # otherwise cost ~O(max_unit^2 · len) — measured ~0.65s on a 50KB arg, paid
+    # on EVERY tool call. The escalating-rename signature lives in short paths,
+    # so a prefix scan catches the real case without the tail cost.
+    if len(text) > max_scan:
+        text = text[:max_scan]
     n = len(text)
     # For each candidate unit length, slide and count consecutive repeats.
-    # Linear slide is fine: commands/paths are short (O(64·n) worst case).
+    # Bounded slide: commands/paths are short and the prefix cap bounds the rest.
     for p in range(min_unit, min(64, n // min_reps) + 1):
         for i in range(0, n - p * min_reps + 1):
             unit = text[i:i + p]
