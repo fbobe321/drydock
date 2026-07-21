@@ -1594,7 +1594,7 @@ def tool_task(params: dict, config: dict) -> str:
     exploration task, returning only its final summary. Keeps big searches out
     of the main agent's context. Cannot recurse (no `task` tool) and cannot
     write (no Write/Edit), so it can never corrupt the parent's work."""
-    prompt = (params.get("prompt") or params.get("description") or "").strip()
+    prompt = _as_text(params.get("prompt") or params.get("description")).strip()
     if not prompt:
         return "Error: `task` needs a `prompt` describing what to investigate."
     return _run_subagent(prompt, config)
@@ -1607,8 +1607,12 @@ def tool_dispatch(params: dict, config: dict) -> str:
     import concurrent.futures
 
     raw = params.get("tasks") or params.get("agents") or []
+    if isinstance(raw, str):
+        raw = [raw]          # a bare string is ONE task, not an iterable of chars
     if isinstance(raw, dict):
         raw = [raw]
+    if not isinstance(raw, (list, tuple)):
+        raw = []             # a number/other non-iterable → no tasks (not a crash)
     norm: list[dict] = []
     for t in raw:
         if isinstance(t, str) and t.strip():
@@ -1641,7 +1645,7 @@ def tool_worker(params: dict, config: dict) -> str:
     """Delegate a self-contained CHUNK OF WORK to a WRITABLE sub-agent that runs in
     its own fresh context (can Read/Write/Edit/Bash), does the task end-to-end, and
     returns only a summary — so the work stays out of the main context window."""
-    prompt = (params.get("prompt") or params.get("task") or params.get("description") or "").strip()
+    prompt = _as_text(params.get("prompt") or params.get("task") or params.get("description")).strip()
     if not prompt:
         return ("Error: `Worker` needs a `prompt` — a clear, self-contained task to do "
                 "(e.g. 'implement parse_config() in config.py and make its unit test pass').")
@@ -1710,7 +1714,7 @@ def _gattrs(g, nid) -> dict:
 
 
 def _stig_path(params, config):
-    p = (params.get("path") or "").strip()
+    p = _as_str_arg(params.get("path")).strip()
     return _resolve_path(p, config) if p else None
 
 
@@ -1739,7 +1743,7 @@ def tool_stigrule(params: dict, config: dict) -> str:
     """Full detail of ONE STIG rule (check content + fix text) for assessment."""
     from drydock import stig
     path = _stig_path(params, config)
-    rid = (params.get("rule_id") or "").strip()
+    rid = _as_str_arg(params.get("rule_id")).strip()
     if not path or not rid:
         return "Error: StigRule needs `path` and `rule_id`."
     try:

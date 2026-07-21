@@ -141,3 +141,12 @@ def test_summary_lines_large_checklist_hint(tmp_path):
     cl = stig.load(tmp_path / "big.cklb")
     summ = "\n".join(stig.summary_lines(cl, "big.cklb"))
     assert "/loop 286" in summ and "286 model turns" in summ
+
+
+def test_stig_tools_coerce_list_path_args(tmp_path):
+    # path/rule_id as a single-element list must not AttributeError on .strip().
+    p = tmp_path / "c.ckl"; p.write_text(_CKL)
+    out = tool_stigrules({"path": [str(p)]}, {"cwd": str(tmp_path)})
+    assert "V-230222" in out
+    out2 = tool_stigrule({"path": [str(p)], "rule_id": ["V-230222"]}, {"cwd": str(tmp_path)})
+    assert isinstance(out2, str) and "Error" not in out2
