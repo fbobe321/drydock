@@ -51,6 +51,25 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-07-20 (overnight) — probe-driven tool hardening + eval support (v3.0.172 → 3.0.175)
+
+Operator ran the Compass first-finetune pipeline (see `/data3/compass`); the drydock
+side of the night was **adversarial tool-path probing + review** (all local, NOT yet
+on PyPI — operator's call to publish). **3 probe rounds (103 wrong-type-arg cases) →
+9 real crashes fixed**, each the "local model sends an arg as the wrong type" class:
+- **v3.0.173** `tool_bash` list/int `command` (`_as_text`).
+- **v3.0.174** `tool_gitdiff` / `tool_viewimage` list `path` (`_as_str_arg`).
+- **v3.0.175** `tool_task`/`tool_worker` list/int `prompt` (`_as_text`, joins multi-part);
+  `tool_dispatch` bare-string char-spray + non-iterable `tasks`; `tool_stigrules`/
+  `tool_stigrule` list `path`/`rule_id` (`_stig_path` central fix).
+- **v3.0.172** `degenerate_argument` O(const·n) latency cliff — 650ms→49ms on a 50KB
+  non-repetitive command (paid every tool call); prefix-capped. (Reviewing v3.0.167–171:
+  only this one had a defect; the rest were correct.)
+- Test hygiene: isolated `$HOME` in 3 non-hermetic skills/mcp tests (were reading the
+  real `~/.drydock`); fixed a stale compass `encode_chat` windowed-contract test.
+- **796 tests pass, ruff + pyright clean.** Probe scripts: `scratchpad/probe_tools{,2,3}.py`.
+- Live overnight handoff: **`/data3/drydock-v3/NIGHT_SHIFT_LOG.md`** (gitignored).
+
 ## ⭐ 2026-07-10/12 — GOVERNED-RUNTIME PRD build-out + ML task suite + NIST skills (v3.0.116 → 3.0.133)
 
 **Agent-Buildout PRD (`Agent_Buildout_PRD.docx`) — evolve drydock into a governed
