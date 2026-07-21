@@ -42,11 +42,14 @@ def test_call_unknown_server_is_graceful(tmp_path):
     assert "not connected" in mcp.call("nope", "echo", {"text": "x"})
 
 
-def test_missing_config_is_noop(tmp_path):
+def test_missing_config_is_noop(tmp_path, monkeypatch):
+    # Isolate the user config ($HOME/.drydock/mcp.json) so a real one can't leak in.
+    monkeypatch.setattr(mcp.Path, "home", lambda: tmp_path / "home")
     assert mcp.connect_all(str(tmp_path)) == []
 
 
-def test_bad_server_is_skipped(tmp_path):
+def test_bad_server_is_skipped(tmp_path, monkeypatch):
+    monkeypatch.setattr(mcp.Path, "home", lambda: tmp_path / "home")
     d = tmp_path / ".drydock"; d.mkdir(parents=True)
     (d / "mcp.json").write_text(json.dumps({
         "mcpServers": {"broken": {"command": "this_command_does_not_exist_xyz", "args": []}}

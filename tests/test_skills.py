@@ -52,8 +52,11 @@ def test_empty_body_skipped(tmp_path):
     assert "empty" not in skills.load_skills(str(tmp_path))
 
 
-def test_no_user_or_project_skills_yields_only_builtins(tmp_path):
+def test_no_user_or_project_skills_yields_only_builtins(tmp_path, monkeypatch):
     # With no user/project skills, only the bundled built-ins (RMF) are present.
+    # Isolate the user-skills dir ($HOME/.drydock/skills) so the developer's own
+    # skills can't leak in and fail this assertion.
+    monkeypatch.setattr(skills.Path, "home", lambda: tmp_path / "home")
     loaded = skills.load_skills(str(tmp_path))
     assert set(loaded) == {
         "rmf-control", "rmf-categorize", "rmf-review", "rmf-poam",
