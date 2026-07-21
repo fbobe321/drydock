@@ -21,3 +21,6 @@ _anthropic/
 Agent_Buildout_PRD.docx
 self_D_research.txt
 web/fib.py
+
+# Overnight session running log (local handoff, not tracked)
+NIGHT_SHIFT_LOG.md
