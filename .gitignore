@@ -13,3 +13,11 @@ logs/
 
 # Private integration/positioning docs (never publish)
 _anthropic/
+
+# Stray local reference artifacts (kept on disk, not part of the package/site):
+#  - Agent_Buildout_PRD.docx : the governed-runtime buildout PRD (reference)
+#  - self_D_research.txt      : Compass self-distillation research writeup
+#  - web/fib.py               : scratch script left in the site dir; NOT deployed
+Agent_Buildout_PRD.docx
+self_D_research.txt
+web/fib.py
