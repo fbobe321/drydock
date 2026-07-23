@@ -248,6 +248,105 @@ class AssistantTurn:
 
 # ── Tool-call argument parsing ────────────────────────────────────────────
 
+def _repair_json_args(raw: str) -> dict | None:
+    """Best-effort recovery of a tool-call arg object whose string VALUES contain
+    unescaped double-quotes and/or newlines — the common local-model failure on
+    quote-heavy content (HTML, code, regexes). A model that writes
+    ``{"content": "<img src="x">", "file_path": "/a"}`` breaks strict JSON on the
+    inner quotes; json.loads(strict=False) does not recover it either, so args
+    degrade to {"_raw": ...} and Write/Edit fail with missing arguments (observed
+    live: gemma-4 thrashing ~1h on an HTML file). Returns a dict on success, or
+    None if unrecoverable (caller keeps {"_raw": raw}). Never raises.
+
+    Heuristic: keys are well-formed; a string value's REAL closing quote is the
+    one followed (after optional whitespace) by ``,`` then another ``"key":``, or
+    by the final ``}``. Unescaped inner quotes fail that lookahead, so we keep
+    them (re-escaped) and re-encode each value as proper JSON.
+    """
+    try:
+        s = raw.strip()
+        if not (s.startswith("{") and s.endswith("}")):
+            return None
+        body = s[1:-1]
+        i, n = 0, len(body)
+        out: dict = {}
+
+        def skip_ws(j: int) -> int:
+            while j < n and body[j] in " \t\r\n":
+                j += 1
+            return j
+
+        while True:
+            i = skip_ws(i)
+            if i >= n:
+                break
+            if body[i] != '"':
+                return None  # key must be a quoted string
+            j = i + 1
+            while j < n and body[j] != '"':
+                if body[j] == "\\":
+                    j += 1
+                j += 1
+            if j >= n:
+                return None
+            key = body[i + 1:j]
+            i = skip_ws(j + 1)
+            if i >= n or body[i] != ":":
+                return None
+            i = skip_ws(i + 1)
+            if i >= n:
+                return None
+            if body[i] == '"':
+                k = i + 1
+                val_chars: list[str] = []
+                while k < n:
+                    c = body[k]
+                    if c == "\\" and k + 1 < n:
+                        nxt = body[k + 1]
+                        if nxt in '"\\/bfnrtu':
+                            val_chars.append(c)
+                            val_chars.append(nxt)
+                            k += 2
+                            continue
+                        val_chars.append(c)
+                        k += 1
+                        continue
+                    if c == '"':
+                        m = skip_ws(k + 1)
+                        if m >= n:  # closing quote of the final value
+                            i = k + 1
+                            break
+                        if body[m] == ",":
+                            m2 = skip_ws(m + 1)
+                            if m2 < n and body[m2] == '"':  # a new key follows
+                                i = m + 1
+                                break
+                        val_chars.append('\\"')  # inner unescaped quote → keep it
+                        k += 1
+                        continue
+                    val_chars.append(c)
+                    k += 1
+                else:
+                    i = n
+                out[key] = json.loads('"' + "".join(val_chars) + '"', strict=False)
+            else:
+                k = i
+                while k < n and body[k] != ",":
+                    k += 1
+                tok = body[i:k].strip()
+                try:
+                    out[key] = json.loads(tok)
+                except Exception:  # noqa: BLE001
+                    out[key] = tok
+                i = k
+            i = skip_ws(i)
+            if i < n and body[i] == ",":
+                i += 1
+        return out or None
+    except Exception:  # noqa: BLE001 — repair must never raise
+        return None
+
+
 def _parse_tool_args(raw: str) -> dict:
     """Parse a model's tool-call arguments tolerantly.
 
@@ -265,7 +364,8 @@ def _parse_tool_args(raw: str) -> dict:
         try:
             v = json.loads(raw, strict=False)
         except (json.JSONDecodeError, TypeError):
-            return {"_raw": raw}
+            rep = _repair_json_args(raw)
+            return rep if rep is not None else {"_raw": raw}
         if isinstance(v, dict) and set(v) == {"_raw"} and isinstance(v["_raw"], str):
             raw = v["_raw"]
             continue
