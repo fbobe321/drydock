@@ -51,7 +51,31 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## ⭐ 2026-07-22 — inline ghost-text prompt suggestions + Write-quote fix (uncommitted)
+## ⭐ 2026-07-23 — v3.1.0 released; feal variant-transfer experiment underway
+
+**v3.1.0** (tag `v3.1.0`, commit e043728) promotes the 3.0.171–178 tool-robustness +
+loop-defense line to a minor release. 812 tests, ruff + pyright clean. NOT yet on PyPI —
+publishing is the operator's call. Highlights folded in:
+- 3.0.171 trajectory export EVERY turn (survives cutoff kills) — the flush the frontier
+  harvest depends on; 3.0.172 degenerate_argument prefix-bound (650ms→49ms/call);
+  3.0.173–175 wrong-type tool-arg coercion (9 local-model crash classes);
+  3.0.176 JSON-arg repair for quote-heavy Write/Edit; 3.0.177 inline ghost-text (Tab);
+  3.0.178 **template-enumeration loop detection** (found live: a research attempt burning
+  ~30 min marching through ISO locale codes with an identical empty body every call —
+  invisible to all 4 prior detectors because each call is unique).
+
+**RSI status (see `/data3/compass/RESUME.md` + `docs/PRD.md` for the authority):** two-box
+frontier harvest running (main + romulus21, 34 tasks each, N=3). **Honest yield: 0 new
+verified traces in ~11h across both boxes on the hard slice** — the autonomous research
+scaffold is not solving hard tasks. So the **feal variant-transfer experiment** (operator's
+design) switched to a **hint-assisted seed solve** (option 1): validated 10-variant test set
+at `/data3/tbench_local/feal_variants/` (memorization trap handled, all 10 checked against
+the real compiled C cipher), and a hint-driven TUI solve of `feal-differential-cryptanalysis`
+is in progress to produce the ONE seed trace to distill. Blocker reality: it shares the busy
+single-slot :8000 server, so it's slow. ETA to a transfer-demonstrating LoRA: ~6–11h,
+gated on the seed solve landing.
+
+## ⭐ 2026-07-22 — inline ghost-text prompt suggestions + Write-quote fix (COMMITTED as 3.1.0)
 
 Two drydock improvements surfaced while driving Compass RSI collection through the real TUI:
 - **Inline ghost-text suggestions (operator ask).** The recommended next-input now renders as
