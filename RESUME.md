@@ -51,6 +51,25 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-07-22 — inline ghost-text prompt suggestions + Write-quote fix (uncommitted)
+
+Two drydock improvements surfaced while driving Compass RSI collection through the real TUI:
+- **Inline ghost-text suggestions (operator ask).** The recommended next-input now renders as
+  dimmed GHOST TEXT inside the prompt box (Textual 8.1.1 `TextArea.placeholder`) and is accepted
+  with **Tab** — replacing the old dimmed line ABOVE the box that needed Ctrl+N. And the suggestion
+  is now a bounded CONTEXTUAL model call (`suggest_reply_llm`): it reads the agent's last message and
+  proposes the user's likely reply (answer its question / "continue"), ≤32 tok, async, heuristic
+  fallback, config-gated `suggest_llm`. Files: `drydock/suggest.py`, `drydock/tui/app.py`,
+  `drydock/tui/widgets.py`; tests `tests/test_suggest.py`. 7 + 89 tui tests green. ✅ **TMUX-VERIFIED**
+  in a real TUI: ghost renders in-box, Tab accepts (typed after → appended), and the contextual reply
+  works (agent "what feature?" → ghost "Add a user authentication system."). Gemma-4 gotcha fixed
+  mid-verify: bounded call returned empty (reasoning-budget ate the token cap) → send
+  `chat_template_kwargs={enable_thinking:false}` (~1s clean reply). NOT committed.
+- **`Write` on quote-heavy content (real bug from a live session).** `_parse_tool_args` degraded
+  args with unescaped inner quotes (HTML/code) to `{"_raw"}` → Write failed. `_repair_json_args`
+  added (providers.py) + 4 tests. A/B: FAILED on published 3.0.138, PASSED in 1 attempt on the patched
+  wheel. Both changes local/uncommitted.
+
 ## ⭐ 2026-07-20 (overnight) — probe-driven tool hardening + eval support (v3.0.172 → 3.0.175)
 
 Operator ran the Compass first-finetune pipeline (see `/data3/compass`); the drydock

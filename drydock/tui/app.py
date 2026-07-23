@@ -292,6 +292,7 @@ class DrydockApp(App):
         self._turn_error = False
         self._plan_remaining = False
         self._suggestion = ""
+        self._suggest_token = 0
         import os
         self._in_git = os.path.isdir(os.path.join(config.get("cwd") or ".", ".git"))
         self._busy = False
@@ -1540,26 +1541,56 @@ class DrydockApp(App):
         self.query_one("#prompt", PromptArea).focus()
 
     def _update_suggestion(self) -> None:
-        """Compute + render the dimmed recommended-next-command hint (Claude-Code-
-        style). Empty when nothing useful to suggest."""
-        from drydock.suggest import suggest_next_command
+        """Propose a ghost-text reply INSIDE the prompt box (Tab accepts). Heuristic
+        first (instant), then refine with a bounded contextual model call in the
+        background. Empty when nothing useful to suggest."""
+        from drydock.suggest import ends_with_question, suggest_next_command
         limit = self.config.get("context_limit", 65536) or 65536
         pct = min(100, round(self._ctx_tokens / limit * 100)) if limit else 0
         wrote = bool(self._turn_tools & {"Write", "Edit"})
         ran = "Bash" in self._turn_tools
+        last = self._last_assistant_text()
         self._suggestion = suggest_next_command(
             ctx_pct=pct, wrote_files=wrote, ran_bash=ran, had_error=self._turn_error,
             in_git=self._in_git, plan_remaining=self._plan_remaining,
+            asked_question=ends_with_question(last),
         ) or ""
-        hint = self.query_one("#suggest", Static)
-        if self._suggestion:
-            from rich.markup import escape
-            hint.update(f"→ next: {escape(self._suggestion)}   [dim](ctrl+n to use)[/]")
-        else:
-            hint.update("")
+        self._set_ghost(self._suggestion)
+        # refine with a contextual model suggestion (non-blocking, cancels prior)
+        if self.config.get("suggest_llm", True) and last and pct < 78:
+            self._suggest_token += 1
+            tok = self._suggest_token
+            self.run_worker(lambda: self._llm_suggest(last, tok),
+                            thread=True, group="suggest", exclusive=True)
+
+    def _llm_suggest(self, last: str, tok: int) -> None:
+        from drydock.suggest import suggest_reply_llm
+        s = suggest_reply_llm(last, self.config)
+        if s and tok == self._suggest_token:
+            self.call_from_thread(self._maybe_set_ghost, s)
+
+    def _maybe_set_ghost(self, s: str) -> None:
+        # only apply if the user hasn't started typing (don't clobber their input)
+        if not self.query_one("#prompt", PromptArea).text:
+            self._suggestion = s
+            self._set_ghost(s)
+
+    def _set_ghost(self, s: str) -> None:
+        self.query_one("#prompt", PromptArea).placeholder = s or ""
+        try:  # ghost now lives in the box; keep the old above-box hint empty
+            self.query_one("#suggest", Static).update("")
+        except Exception:
+            pass
+
+    def _last_assistant_text(self) -> str:
+        for m in reversed(self.state.messages):
+            if (isinstance(m, dict) and m.get("role") == "assistant"
+                    and (m.get("content") or "").strip()):
+                return m["content"]
+        return ""
 
     def action_use_suggestion(self) -> None:
-        """Accept the recommended next command — drop it into the prompt to edit/send."""
+        """Accept the ghost suggestion (also bound to Tab in the prompt box)."""
         if self._suggestion and not self._busy:
             prompt = self.query_one("#prompt", PromptArea)
             prompt.text = self._suggestion

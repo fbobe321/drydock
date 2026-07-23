@@ -210,6 +210,13 @@ class PromptArea(TextArea):
             return
         if key == "tab":
             t = self.text
+            # empty box + a ghost suggestion → accept it (Claude-Code style)
+            if not t and self.placeholder:
+                event.stop()
+                event.prevent_default()
+                self.text = self.placeholder
+                self.move_cursor(self.document.end)
+                return
             if t.startswith("/") and " " not in t and "\n" not in t:
                 matches = [c for c in SLASH_COMMANDS if c.startswith(t.lower())]
                 if matches:
