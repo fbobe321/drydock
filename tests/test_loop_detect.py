@@ -1,7 +1,13 @@
 """Tests for advisory loop detection."""
 from __future__ import annotations
 
-from drydock.loop_detect import LoopTracker, loop_note, path_thrash_note, tool_signature
+from drydock.loop_detect import (
+    LoopTracker,
+    argument_template,
+    loop_note,
+    path_thrash_note,
+    tool_signature,
+)
 
 
 def test_path_thrash_note_quiet_until_third():
@@ -99,3 +105,90 @@ def test_record_outcome_counts_identical_bodies():
     assert t.record_outcome("Bash", {"command": "x"}, "same") == 2
     # different body -> its own counter
     assert t.record_outcome("Bash", {"command": "x"}, "different") == 1
+
+
+# ── Template-enumeration loops ────────────────────────────────────────────
+# A model that varies ONE token in a fixed command and re-runs it is invisible
+# to every exact-identity detector above: each call is unique, so the repeat
+# counter and the (call, result) outcome counter both stay at 1, and no single
+# argument repeats a substring so degenerate_argument stays silent. Observed
+# live: 40+ curls marching through ISO locale codes, all returning an identical
+# empty body, for 30+ minutes with the plan still at 0/6.
+
+def _sweep(t, codes, result=""):
+    fired = []
+    for c in codes:
+        out = t.annotate("Bash", {"command": f'curl -L "https://x/api?v=A&lang={c}"'}, result)
+        fired.append("same shape" in out or "same-shaped" in out)
+    return fired
+
+
+def test_enumeration_note_fires_on_locale_sweep():
+    t = LoopTracker()
+    codes = ["en-US", "en-GB", "en-AU", "en-CA", "en-IE", "en-NZ", "en-ZA"]
+    fired = _sweep(t, codes)
+    assert not any(fired[:5]), "must stay quiet below the threshold"
+    assert fired[5], "6th distinct same-shaped call with an identical body should note"
+    assert all(fired[5:])
+
+
+def test_enumeration_buckets_by_argument_shape():
+    # The template is shape-sensitive on purpose: a bare "en" and a hyphenated
+    # "en-US" are different shapes, so they count in separate buckets. Six of ONE
+    # shape is the trigger, not six loosely-related calls.
+    t = LoopTracker()
+    fired = _sweep(t, ["en", "fr", "de", "es", "it", "pt"])       # bare, 6 of them
+    assert fired[5], "six same-shaped bare codes still trip it"
+    t2 = LoopTracker()
+    mixed = _sweep(t2, ["en", "en-US", "fr", "fr-CA", "de", "de-AT"])
+    assert not any(mixed), "3 of each shape stays under the threshold"
+
+
+def test_enumeration_escalates_and_advises_abandoning():
+    t = LoopTracker()
+    out = ""
+    for c in range(14):
+        out = t.annotate("Bash", {"command": f'curl "http://x/?l=c{c}"'}, "")
+    assert "Abandon this approach" in out
+
+
+def test_enumeration_silent_when_results_differ():
+    # Same command shape but each call returns something new = real iteration.
+    t = LoopTracker()
+    for i in range(12):
+        out = t.annotate("Bash", {"command": f"cat file{i}.txt"}, f"contents {i}")
+        assert "same shape" not in out and "same-shaped" not in out
+
+
+def test_enumeration_silent_on_distinct_commands():
+    # Distinct silent mutations all return "" — different shapes, so no note.
+    t = LoopTracker()
+    cmds = ["mkdir -p /app/out", "mv a.txt b.txt", "cp x y", "rm -f tmp",
+            "chmod +x run.sh", "touch f", "ln -s a b", "cd /app && make clean"]
+    for c in cmds:
+        out = t.annotate("Bash", {"command": c}, "")
+        assert "same shape" not in out and "same-shaped" not in out
+
+
+def test_enumeration_silent_on_exact_repeats():
+    # Exact repeats are the existing counters' job; enumeration must not double-fire.
+    t = LoopTracker()
+    for _ in range(10):
+        out = t.annotate("Read", {"file_path": "/a.py"}, "body")
+        assert "same shape" not in out and "same-shaped" not in out
+
+
+def test_record_enumeration_counts_distinct_calls_only():
+    t = LoopTracker()
+    assert t.record_enumeration("Bash", {"command": "curl a1"}, "") == 1
+    assert t.record_enumeration("Bash", {"command": "curl a1"}, "") == 1  # repeat: no growth
+    assert t.record_enumeration("Bash", {"command": "curl a2"}, "") == 2
+    # a different body starts its own bucket
+    assert t.record_enumeration("Bash", {"command": "curl a3"}, "other") == 1
+
+
+def test_argument_template_collapses_varying_token():
+    a = argument_template({"command": 'curl "http://x/?lang=en-TT"'})
+    b = argument_template({"command": 'curl "http://x/?lang=en-VI"'})
+    assert a == b
+    assert argument_template({"command": "mkdir /a"}) != argument_template({"command": "mv x y"})

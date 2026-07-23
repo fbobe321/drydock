@@ -12,6 +12,7 @@ All logic original to Drydock.
 from __future__ import annotations
 
 import json
+import re
 
 
 def tool_signature(name: str, inputs: dict) -> str:
@@ -165,6 +166,60 @@ def degenerate_argument(text, *, min_unit: int = 4, min_reps: int = 4,
     return None
 
 
+_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
+
+# Distinct template-sharing calls returning one identical body before we speak up.
+ENUMERATION_MIN = 6
+# Cap the per-template signature sets so a long session can't grow them without
+# bound; once past the cap the count stays pinned (still above the threshold).
+_ENUM_SET_CAP = 64
+
+
+def argument_template(inputs: dict, *, max_len: int = 512) -> str:
+    """Shape of a call's arguments with every alphanumeric run collapsed to ``#``.
+
+    Two calls that differ only in one varying token share a template:
+    ``...&lang=en-TT`` and ``...&lang=en-VI`` both become
+    ``...&#=#-#``. Genuinely different commands (``mkdir /a`` vs ``mv x y``) do
+    not. Used to spot TEMPLATE-ENUMERATION loops without flagging unrelated
+    calls that merely happen to return the same body.
+    """
+    try:
+        payload = json.dumps(inputs, sort_keys=True, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        payload = repr(inputs)
+    return _TOKEN_RE.sub("#", payload[:max_len])
+
+
+def enumeration_note(name: str, count: int) -> str | None:
+    """Advisory for *count* distinct same-shaped calls that all returned the SAME
+    body — a model varying one token in a fixed command and re-running it.
+
+    Every other detector here keys on exact call identity, so this class of loop
+    is invisible to all of them: each call is unique (so the repeat counter stays
+    at 1), each (call, result) pair is unique (so the outcome counter stays at 1),
+    and no single argument repeats a substring (so ``degenerate_argument`` is
+    silent). Observed live: 40+ ``curl``s marching through ISO locale codes
+    (``lang=en-US``, ``en-GB``, ... ``en-VU``), every one returning an identical
+    empty body, for 30+ minutes with the plan still at 0/6.
+    """
+    if count < ENUMERATION_MIN:
+        return None
+    if count < ENUMERATION_MIN * 2:
+        return (
+            f"[NOTE: {count} different {name} calls of the same shape have all "
+            f"returned the IDENTICAL result. You are varying one value in a fixed "
+            f"command and getting no new information — enumerating more values "
+            f"will not help. Stop this sweep and try a different approach.]"
+        )
+    return (
+        f"[NOTE: {count} same-shaped {name} calls have now returned the identical "
+        f"result. This sweep is not working and more variants will not change it. "
+        f"Abandon this approach entirely — use a different tool or method, or stop "
+        f"and summarize what you have so the user can guide the next step.]"
+    )
+
+
 class LoopTracker:
     """Counts identical tool calls across a run and produces advisory notes."""
 
@@ -172,6 +227,8 @@ class LoopTracker:
         self._counts: dict[str, int] = {}
         self._path_writes: dict[str, int] = {}
         self._outcome_counts: dict[str, int] = {}  # (call, result-body) -> times seen
+        # (tool, template, result-body) -> distinct call signatures seen
+        self._template_results: dict[str, set[str]] = {}
 
     def record(self, name: str, inputs: dict) -> int:
         """Record a call; return how many times this exact call has occurred."""
@@ -204,6 +261,22 @@ class LoopTracker:
         self._outcome_counts[key] = self._outcome_counts.get(key, 0) + 1
         return self._outcome_counts[key]
 
+    def record_enumeration(self, name: str, inputs: dict, result: str) -> int:
+        """Record this call under (tool, argument-template, result-body) and return
+        how many DISTINCT calls of that shape have produced that identical body.
+
+        Distinctness is what makes this orthogonal to the exact-repeat counters: a
+        call repeated verbatim adds nothing here (its signature is already in the
+        set), so this only climbs when the model keeps CHANGING the call and keeps
+        getting the same answer back.
+        """
+        sig = tool_signature(name, inputs)
+        key = f"{name}\x00{argument_template(inputs)}\x00{hash(result or '')}"
+        seen = self._template_results.setdefault(key, set())
+        if len(seen) < _ENUM_SET_CAP:
+            seen.add(sig)
+        return len(seen)
+
     def record_path_write(self, name: str, inputs: dict) -> str | None:
         """Track Write/Edit per target path and return a thrash note if the
         same path has now been written 3+ times (regardless of content)."""
@@ -220,6 +293,7 @@ class LoopTracker:
         exact repeat and/or same-path write thrash. Never raises.
         """
         count = self.record(name, inputs)
+        _raw_body = result  # outcome identity, before any pruning below rewrites it
         failed = (result or "").lstrip().startswith(("Error", "REFUSED"))
         outcome_count = self.record_outcome(name, inputs, result)
         # Outcome-aware repeat handling: a repeated call whose RESULT is also
@@ -233,6 +307,12 @@ class LoopTracker:
         else:
             note = loop_note(name, outcome_count, failed=False)
         path_note = self.record_path_write(name, inputs)
+        # Template-enumeration: DIFFERENT calls of the same shape all returning the
+        # same body. Keyed on distinct signatures, so it stays silent for the exact
+        # repeats the counters above already cover.
+        enum_note = enumeration_note(
+            name, self.record_enumeration(name, inputs, _raw_body)
+        )
         # Prune the BODY of a repeated *successful, unchanged* outcome (3rd+ time
         # this exact call returned this exact body): the model already has this
         # content, and re-feeding it both wastes context and lets it mindlessly
@@ -257,5 +337,5 @@ class LoopTracker:
                 f"changes nothing. Stop repeating it; change the approach or take a "
                 f"different step.)"
             )
-        prefix = "\n".join(n for n in (note, path_note) if n)
+        prefix = "\n".join(n for n in (note, path_note, enum_note) if n)
         return f"{prefix}\n{result}" if prefix else result
