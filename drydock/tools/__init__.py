@@ -545,6 +545,116 @@ SCHEMAS = [
         },
     },
     {
+        "name": "FiarControls",
+        "description": (
+            "List the FIAR (audit-readiness) control objectives in an engagement "
+            "JSON, with status, cycle and assertions. Optionally filter by status "
+            "(not_tested|effective|deficient|not_applicable). Create an engagement "
+            "first with `python -m drydock.fiar new <path> <name> <cycle>` (cycles: "
+            "FBWT, P2P, PPE, INV, CIVPAY, REIM, FR, ITGC, or * for all). Pair with "
+            "FiarControl to read one and FiarAssess to record a test result."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the engagement JSON."},
+                "status": {"type": "string", "description": "Optional filter: not_tested|effective|deficient|not_applicable"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "FiarControl",
+        "description": (
+            "Read ONE FIAR control objective in full — the control activity, the "
+            "financial-statement assertions it supports, the Key Supporting "
+            "Documents (KSDs) that evidence it, and the test procedure — so you can "
+            "test it against system evidence. Test one control at a time."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "id": {"type": "string", "description": "Control id, e.g. P2P-02."},
+            },
+            "required": ["path", "id"],
+        },
+    },
+    {
+        "name": "FiarAssess",
+        "description": (
+            "Record a FIAR control test result and save the engagement: set status "
+            "(effective / deficient / not_applicable), the evidence observed (which "
+            "KSDs were examined and what they showed), and the sample size and number "
+            "of exceptions. You MUST examine real evidence (Read the KSD / run the "
+            "check) before setting a status — do not guess."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "id": {"type": "string"},
+                "status": {"type": "string", "description": "effective | deficient | not_applicable"},
+                "evidence": {"type": "string", "description": "What KSDs were examined and what they showed."},
+                "sample_size": {"type": "integer"},
+                "exceptions": {"type": "integer", "description": "Test exceptions found in the sample."},
+                "chain": {
+                    "type": "object",
+                    "description": (
+                        "Evidence-chain trace for substantive testing. Keys: population, "
+                        "sample, source_transaction, authorization, supporting_document, "
+                        "system_posting, gl_effect, assertion — each a short string of the "
+                        "evidence for that link. A control CANNOT be marked effective if a "
+                        "chain is supplied but incomplete."
+                    ),
+                },
+            },
+            "required": ["path", "id"],
+        },
+    },
+    {
+        "name": "FiarFinding",
+        "description": (
+            "Record a Notice of Findings and Recommendations (NFR) against a "
+            "deficient control, in the standard finding structure (condition, "
+            "criteria, cause, effect, recommendation) with a severity "
+            "(material_weakness | significant_deficiency | deficiency). Saves it to "
+            "the engagement so a Corrective Action Plan can be built from it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "control_id": {"type": "string", "description": "The deficient control's id."},
+                "condition": {"type": "string", "description": "What is — the deficiency observed."},
+                "criteria": {"type": "string", "description": "What should be — the policy/standard/GAAP requirement."},
+                "cause": {"type": "string", "description": "Root cause of the gap."},
+                "effect": {"type": "string", "description": "Impact on the assertion / balance."},
+                "recommendation": {"type": "string"},
+                "severity": {"type": "string", "description": "material_weakness | significant_deficiency | deficiency"},
+            },
+            "required": ["path", "condition"],
+        },
+    },
+    {
+        "name": "FiarReconcile",
+        "description": (
+            "Tie an entity balance to an authoritative source (the core FIAR "
+            "substantive procedure, e.g. Fund Balance with Treasury vs Treasury's "
+            "balance). Returns the difference and whether it clears the tolerance. "
+            "A non-zero unreconciled difference is a candidate finding."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity": {"type": "number", "description": "The entity's recorded balance."},
+                "source": {"type": "number", "description": "The authoritative source balance."},
+                "tolerance": {"type": "number", "description": "Acceptable absolute difference (default 0)."},
+            },
+            "required": ["entity", "source"],
+        },
+    },
+    {
         "name": "GraphQuery",
         "description": (
             "Query the RMF ontology GRAPH to TRACE relationships (typed: Control, "
@@ -1780,6 +1890,152 @@ def tool_stigset(params: dict, config: dict) -> str:
     return f"✓ {rid} set to {stig.canonical_status(status) if status else 'unchanged'} in {path}."
 
 
+def _fiar_path(params: dict, config: dict) -> str | None:
+    p = _as_str_arg(params.get("path")).strip()
+    return _resolve_path(p, config) if p else None
+
+
+def tool_fiarcontrols(params: dict, config: dict) -> str:
+    """List FIAR control objectives in an engagement, optionally by status."""
+    from drydock import fiar
+    path = _fiar_path(params, config)
+    if not path:
+        return "Error: FiarControls needs a `path` to an engagement JSON."
+    try:
+        eng = fiar.Engagement.load(path)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not read engagement: {e}"
+    status = params.get("status")
+    sf = fiar.canonical_status(status) if status else None
+    rows = [c for c in eng.controls if sf is None or c.status == sf]
+    head = (f"{eng.name} [{eng.cycle}] Wave {eng.wave} phase={eng.phase} — " +
+            ", ".join(f"{k}={v}" for k, v in eng.counts().items()))
+    lines = [head] + [f"  {c.summary()}" for c in rows[:200]]
+    if not rows:
+        lines.append("  (no controls match)")
+    return "\n".join(lines)
+
+
+def tool_fiarcontrol(params: dict, config: dict) -> str:
+    """Full detail of ONE FIAR control (objective, assertions, KSDs, test)."""
+    from drydock import fiar
+    path = _fiar_path(params, config)
+    cid = _as_str_arg(params.get("id")).strip()
+    if not path or not cid:
+        return "Error: FiarControl needs `path` and `id`."
+    try:
+        eng = fiar.Engagement.load(path)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not read engagement: {e}"
+    c = eng.control(cid)
+    if c is None:
+        return f"No control {cid} in {path}."
+    asrt = ", ".join(f"{a} ({fiar.ASSERTIONS.get(a, a)})" for a in c.assertions)
+    v = fiar.validate_chain(c.evidence_chain)
+    chain_line = ("complete" if v["complete"] and c.evidence_chain
+                  else f"missing: {', '.join(v['missing'])}" if c.evidence_chain
+                  else "not traced")
+    return (f"{c.id} [{eng.cycle}] — {c.objective}\n"
+            f"Assertions: {asrt}\nFRO: {c.fro or '(n/a)'}  Key task: {c.key_task or '-'}"
+            f"{'  [ITGC]' if c.itgc else ''}\n"
+            f"Control activity: {c.activity}\nKSDs: {', '.join(c.ksds)}\n"
+            f"Test procedure: {c.test_procedure}\n"
+            f"Status: {c.status}  sample={c.sample_size} exceptions={c.exceptions}\n"
+            f"Evidence chain: {chain_line}\n"
+            f"Evidence: {c.evidence or '(none recorded)'}")
+
+
+def tool_fiarassess(params: dict, config: dict) -> str:
+    """Record a FIAR control test result + evidence and save the engagement."""
+    from drydock import fiar
+    path = _fiar_path(params, config)
+    cid = _as_str_arg(params.get("id")).strip()
+    if not path or not cid:
+        return "Error: FiarAssess needs `path` and `id`."
+    status = params.get("status")
+    if status and not fiar.recognized_status(status):
+        return f"status must be one of {fiar.CONTROL_STATUSES}."
+    chain = params.get("chain") if isinstance(params.get("chain"), dict) else None
+    # Deterministic evidence-chain guard: a control cannot be marked EFFECTIVE on an
+    # INCOMPLETE audit trail. When a chain is supplied and effective is claimed, refuse
+    # and name the missing links; the model must gather them before passing the test.
+    note = ""
+    if status and fiar.canonical_status(status) == "effective":
+        v = fiar.validate_chain(chain)
+        if chain is not None and not v["complete"]:
+            eng_tmp = None
+            try:
+                eng_tmp = fiar.Engagement.load(path)
+                eng_tmp.assess(cid, evidence=params.get("evidence"),
+                               sample_size=params.get("sample_size"),
+                               exceptions=params.get("exceptions"), chain=chain)
+                eng_tmp.save(path)
+            except Exception:  # noqa: BLE001
+                pass
+            return (f"REFUSED: cannot mark {cid} effective — the evidence chain is "
+                    f"incomplete. Missing links: {', '.join(v['missing'])}. Trace each "
+                    f"missing link (population → sample → source transaction → "
+                    f"authorization → supporting document → system posting → GL effect → "
+                    f"assertion) and call FiarAssess again. (Partial chain saved.)")
+        if chain is None:
+            note = (" NOTE: no evidence chain recorded — for transaction/substantive "
+                    "testing, pass `chain` to prove the full audit trail.")
+    try:
+        eng = fiar.Engagement.load(path)
+        ok = eng.assess(cid, status=status, evidence=params.get("evidence"),
+                        sample_size=params.get("sample_size"),
+                        exceptions=params.get("exceptions"), chain=chain)
+        if not ok:
+            return f"No control {cid} in {path}."
+        eng.save(path)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not update engagement: {e}"
+    st = fiar.canonical_status(status) if status else "unchanged"
+    tail = " — record an NFR with FiarFinding" if st == "deficient" else note
+    return f"✓ {cid} set to {st} in {path}.{tail}"
+
+
+def tool_fiarfinding(params: dict, config: dict) -> str:
+    """Record a Notice of Findings and Recommendations (NFR) in the engagement."""
+    from drydock import fiar
+    path = _fiar_path(params, config)
+    if not path:
+        return "Error: FiarFinding needs a `path`."
+    if not _as_str_arg(params.get("condition")).strip():
+        return "Error: FiarFinding needs at least a `condition` (the deficiency observed)."
+    try:
+        eng = fiar.Engagement.load(path)
+        f = eng.add_finding(
+            control_id=_as_str_arg(params.get("control_id")).strip(),
+            condition=params.get("condition", ""), criteria=params.get("criteria", ""),
+            cause=params.get("cause", ""), effect=params.get("effect", ""),
+            recommendation=params.get("recommendation", ""),
+            severity=params.get("severity", "deficiency"))
+        eng.save(path)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not record finding: {e}"
+    return f"✓ recorded {f.id} [{f.severity}] against {f.control_id or 'entity'} in {path}."
+
+
+def tool_fiarreconcile(params: dict, config: dict) -> str:
+    """Tie an entity balance to an authoritative source (e.g. FBWT vs Treasury)."""
+    from drydock import fiar
+    try:
+        entity = float(params.get("entity"))
+        source = float(params.get("source"))
+    except (TypeError, ValueError):
+        return "Error: FiarReconcile needs numeric `entity` and `source` balances."
+    tol = params.get("tolerance") or 0
+    try:
+        tol = float(tol)
+    except (TypeError, ValueError):
+        tol = 0.0
+    r = fiar.reconcile(entity, source, tolerance=tol)
+    verdict = "RECONCILED" if r["reconciled"] else "OUT OF BALANCE — candidate finding"
+    return (f"{verdict}: entity {r['entity']:,.2f} vs source {r['source']:,.2f}, "
+            f"difference {r['difference']:,.2f} (tolerance {r['tolerance']:,.2f}).")
+
+
 def tool_graphquery(params: dict, config: dict) -> str:
     """Traverse the RMF typed ontology graph (read-only)."""
     rmf_graph, g, _ = _rmf_graph(config)
@@ -1996,6 +2252,11 @@ _TOOLS = [
     ("StigRules", tool_stigrules, True),
     ("StigRule", tool_stigrule, True),
     ("StigSet", tool_stigset, False),
+    ("FiarControls", tool_fiarcontrols, True),
+    ("FiarControl", tool_fiarcontrol, True),
+    ("FiarAssess", tool_fiarassess, False),
+    ("FiarFinding", tool_fiarfinding, False),
+    ("FiarReconcile", tool_fiarreconcile, True),
     ("WebSearch", tool_websearch, True),
     ("WebFetch", tool_webfetch, True),
     ("GitStatus", tool_gitstatus, True),
@@ -2018,6 +2279,9 @@ def register_all():
             "BuildKnowledge": tool_build_knowledge,
             "GraphQuery": tool_graphquery, "GraphAdd": tool_graphadd,
             "StigRules": tool_stigrules, "StigRule": tool_stigrule, "StigSet": tool_stigset,
+            "FiarControls": tool_fiarcontrols, "FiarControl": tool_fiarcontrol,
+            "FiarAssess": tool_fiarassess, "FiarFinding": tool_fiarfinding,
+            "FiarReconcile": tool_fiarreconcile,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
             "GitStatus": tool_gitstatus, "GitDiff": tool_gitdiff,
             "GitLog": tool_gitlog, "GitCommit": tool_gitcommit,
@@ -2027,6 +2291,7 @@ def register_all():
         read_only = name in (
             "Read", "ViewImage", "Screenshot", "Glob", "Grep", "task", "Dispatch", "Consult",
             "Knowledge", "GraphQuery", "StigRules", "StigRule",
+            "FiarControls", "FiarControl", "FiarReconcile",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))

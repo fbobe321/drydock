@@ -61,6 +61,7 @@ def test_no_user_or_project_skills_yields_only_builtins(tmp_path, monkeypatch):
     assert set(loaded) == {
         "rmf-control", "rmf-categorize", "rmf-review", "rmf-poam",
         "stig-assess", "stig-remediate",
+        "fiar-assess", "fiar-readiness", "fiar-cap", "fiar-evidence",
         "ml-train", "ml-metrics", "ml-finetune", "ml-debug", "ml-rl", "ml-data",
         "nist-ai-rmf", "nist-csf",
     }
