@@ -277,6 +277,18 @@ Redact every SSN and phone number in disclosure.md, then commit a release copy.
 
 Or run the bundled skill: `/document-canvas report.md redact all phone numbers`.
 
+Prefer to drive it yourself? The **`/doc`** slash command runs the canvas deterministically
+(no model), which is also the way to use it in the TUI regardless of what the model picks:
+
+```
+/doc open report.md
+/doc search report.md single-factor
+/doc replace report.md single-factor authentication :: phishing-resistant MFA
+/doc redact report.md SECRET-CODE-4471
+/doc diff report.md      # preview   ·   /doc validate report.md
+/doc commit report.md    # write (keeps report.md.orig)
+```
+
 **Formats:** `.md` / `.markdown` / `.txt` are edited in place. `.pdf` / `.docx` are
 imported read-only (text extracted; edits written to a `<file>.canvas.md` sidecar so
 the binary original is never overwritten). Every edit is **staged** in a working copy

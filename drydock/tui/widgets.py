@@ -154,7 +154,7 @@ class PromptHistory:
 SLASH_COMMANDS = [
     "/help", "/model", "/cwd", "/undo", "/back", "/stop", "/status",
     "/compact", "/context", "/shell", "/events", "/trace", "/resume", "/advisor", "/ask", "/ask!", "/graphrag", "/skills",
-    "/loop", "/mcp", "/rmf", "/stig",
+    "/loop", "/mcp", "/rmf", "/stig", "/doc",
     "/clear", "/quit",
 ]
 

@@ -523,6 +523,60 @@ class DrydockApp(App):
         # markup=False so bracketed help/paths (e.g. "/model [name]") render literally.
         self._mount(Static(text, classes="assistant-msg", markup=False))
 
+    _DOC_USAGE = (
+        "Document Canvas — drive it by hand (deterministic, no model):\n"
+        "  /doc open <path>                     open a doc (.md/.txt/.pdf/.docx)\n"
+        "  /doc outline <name>                  headings\n"
+        "  /doc search <name> <text>            find blocks\n"
+        "  /doc read <name> <block_id>          read a block + neighbours\n"
+        "  /doc replace <name> <query> :: <new> global search-and-replace\n"
+        "  /doc redact <name> <text>            verified redaction (red-boxing)\n"
+        "  /doc diff|validate|commit|rollback <name>\n"
+        "(<name> is the filename shown by /doc open.)"
+    )
+
+    def _cmd_doc(self, arg: str) -> None:
+        """Human-driven Document Canvas — runs the Doc* tools directly so you can
+        use + verify the canvas in the TUI without the model choosing the tools."""
+        from drydock import tools as T
+        parts = arg.split(maxsplit=1)
+        sub = parts[0].lower() if parts else ""
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        cfg = self.config
+        if sub == "open" and rest:
+            self._info(T.tool_docopen({"path": rest}, cfg))
+            return
+        np = rest.split(maxsplit=1)
+        name = np[0] if np else ""
+        tail = np[1].strip() if len(np) > 1 else ""
+        if not sub or not name:
+            self._info(self._DOC_USAGE)
+            return
+        if sub == "outline":
+            self._info(T.tool_docoutline({"name": name}, cfg))
+        elif sub == "search":
+            self._info(T.tool_docsearch({"name": name, "query": tail}, cfg))
+        elif sub == "read":
+            self._info(T.tool_docread({"name": name, "block_id": tail, "before": 1, "after": 1}, cfg))
+        elif sub == "replace":
+            if "::" not in tail:
+                self._info("usage: /doc replace <name> <query> :: <replacement>")
+                return
+            q, r = tail.split("::", 1)
+            self._info(T.tool_docreplace({"name": name, "query": q.strip(), "replacement": r.strip()}, cfg))
+        elif sub == "redact":
+            self._info(T.tool_docredact({"name": name, "query": tail}, cfg))
+        elif sub == "diff":
+            self._info(T.tool_docdiff({"name": name}, cfg))
+        elif sub == "validate":
+            self._info(T.tool_docvalidate({"name": name}, cfg))
+        elif sub == "commit":
+            self._info(T.tool_doccommit({"name": name}, cfg))
+        elif sub == "rollback":
+            self._info(T.tool_docrollback({"name": name}, cfg))
+        else:
+            self._info(self._DOC_USAGE)
+
     def _handle_slash(self, text: str) -> None:
         parts = text.split(maxsplit=1)
         cmd = parts[0].lower()
@@ -581,6 +635,8 @@ class DrydockApp(App):
             self._cmd_ask(arg, inject=True)
         elif cmd == "/graphrag":
             self._cmd_graphrag(arg)
+        elif cmd == "/doc":
+            self._cmd_doc(arg)
         elif cmd == "/status":
             t = self.state
             self._info(
