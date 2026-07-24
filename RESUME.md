@@ -51,6 +51,32 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## 🧭 SESSION HANDOFF — 2026-07-24 (Document Canvas shipped v3.1.3)
+
+**SHIPPED: Document Canvas (v3.1.3, PyPI + GitHub main `02caaa8` + tag `v3.1.3`).** Random-access,
+structure-aware editing of documents far larger than the context window — the model treats a doc
+like a codebase: outline/search/read a small window → hash-guarded transactional patch → validate →
+commit. `drydock/doccanvas.py` (stdlib canonical block model, stable ids + content hashes, JSON store)
++ 11 tools (DocOpen/Outline/Search/Read/Patch/Replace/Redact/Diff/Validate/Commit/Rollback) +
+`document-canvas` skill + README how-to. `.md/.txt` edited in place; `.pdf/.docx` imported read-only
+via `drydock.extract` → `<file>.canvas.md` sidecar. **DocRedact** = verified red-boxing (blocking
+non-recoverability check). Clean pip-install verified ships it all; 867 tests green, ruff+pyright clean,
+security 0 HIGH. Real-doc tested: War and Peace (~1132pg, 12k blocks) + 30MB PDF dictionary (67k blocks).
+
+**OWED (in progress this session):** live **TUI shakedown** of the canvas (drive DocOpen→…→DocCommit
+through the real tmux TUI with the model — the non-negotiable rule) and of **FIAR** (built + unit-tested
+but never TUI-driven). Follow-ups (tasks #9/#11 + backlog): FIAR **KSD package building**, PDF
+regeneration/OCR/binary redaction, the dedicated 4-pane canvas TUI screen, semantic search.
+
+**Design basis:** operator's two-part spec (paste-cache `3962…`/`9b27…`) reviewed; verdict = build the
+md/txt engine native (stdlib, ships in wheel), heavy-format adapters later (MCP server isolates deps).
+
+**tbench self-distillation is PAUSED** (both boxes) to free the servers for canvas/FIAR TUI testing —
+see the tbench section below + `/data3/compass/RESUME.md`. Resume: relaunch `frontier_collect_n3.sh`
+N=15 streams (`/data3/tbench_local/frontier/xN_s{0..3}.txt`). Verdict-so-far: 0 AMBER across ~13 tasks
+at budget 20000 → pure self-distill likely can't bust tbench; stronger-teacher (Devstral-24B, local) is
+the probable path (operator chose to exhaust N=15 first).
+
 ## 🧭 SESSION HANDOFF — 2026-07-23 ~23:00 (resume in /data3/drydock-v3)
 
 Read this block first; detail is in the dated entries below + `NIGHT_SHIFT_LOG.md`.
