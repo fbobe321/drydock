@@ -16,7 +16,7 @@ PY="${DRYDOCK_PY:-python3}"
 
 echo "==> 1/3  quality gate (ruff, pyright, pytest)"
 "$PY" -m ruff check drydock/ tests/
-"$PY" -m pyright drydock/
+"$PY" -m pyright --pythonpath "$PY" drydock/
 "$PY" -m pytest tests/ -q --timeout=60
 
 echo "==> 2/3  build wheel + sdist"

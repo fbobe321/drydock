@@ -243,6 +243,47 @@ exports the open findings to a deterministic **eMASS POA&M CSV** — Control (fr
 the CCI map), Vulnerability Description, `POA&M Status=Ongoing`, Milestone (the
 Fix Text), and Severity (CAT I/II/III → High/Moderate/Low) — no LLM, stdlib only.
 
+### Document Canvas — editing documents far larger than the context window
+
+Edit a 300-, 800-, 1000-page document the way you edit a large codebase: **search,
+open a small region, apply a hash-guarded patch, validate, commit** — the model
+never loads the whole document into context. Drydock parses the source into
+addressable **blocks** with stable ids (`sec-0004`, `para-0182`, …) and content
+hashes, and gives the model these tools:
+
+| Tool | What it does |
+|---|---|
+| `DocOpen` | Parse a document into the canvas and show its outline |
+| `DocOutline` / `DocSearch` / `DocRead` | Navigate + read small windows (never the whole file) |
+| `DocReplace` | Global search-and-replace across the whole document in one pass |
+| `DocPatch` | Hash-guarded, transactional edit of a block (replace / insert / delete) |
+| `DocRedact` | Permanently remove text and **verify** it can't be recovered ("red boxing") |
+| `DocDiff` / `DocValidate` | Preview staged changes; run structural + phrase checks |
+| `DocCommit` / `DocRollback` | Write the source (original kept as `<file>.orig`) or discard |
+
+**You don't call these tools yourself — you describe the task in plain English** and
+the model drives them (just like Read/Edit/Bash). It picks the canvas over
+`Read`/`Edit` automatically for documents too big to hold in context. For example,
+type into the TUI:
+
+```
+Open report.md and change every "single-factor authentication" to
+"phishing-resistant MFA", then validate and commit.
+
+Find the definition of "serendipity" in dictionary.pdf.
+
+Redact every SSN and phone number in disclosure.md, then commit a release copy.
+```
+
+Or run the bundled skill: `/document-canvas report.md redact all phone numbers`.
+
+**Formats:** `.md` / `.markdown` / `.txt` are edited in place. `.pdf` / `.docx` are
+imported read-only (text extracted; edits written to a `<file>.canvas.md` sidecar so
+the binary original is never overwritten). Every edit is **staged** in a working copy
+and hash-guarded, so the model can never clobber stale content; `DocCommit` writes the
+file and preserves the untouched original as `<file>.orig`. Redaction is the one
+**blocking** check — it refuses if the removed text would still be recoverable.
+
 ## Install
 
 ```bash

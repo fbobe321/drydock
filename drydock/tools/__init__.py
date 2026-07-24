@@ -785,6 +785,153 @@ SCHEMAS = [
             "required": ["path"],
         },
     },
+    {
+        "name": "DocOpen",
+        "description": (
+            "Open a large document as a DOCUMENT CANVAS so you can "
+            "edit it like a codebase WITHOUT loading the whole thing into context. Formats: "
+            ".md/.markdown/.txt (edited in place); .pdf/.docx (imported read-only — text is "
+            "extracted and edits are written to a <file>.canvas.md sidecar, the binary is never "
+            "overwritten). Parses "
+            "it into addressable blocks with stable ids (sec-/para-/table-/code-…) and "
+            "returns the outline. Then navigate with DocSearch/DocOutline, read a region "
+            "with DocRead, edit with hash-guarded DocPatch, preview with DocDiff, check "
+            "with DocValidate, and write with DocCommit. Use this instead of Read/Edit for "
+            "documents too big to hold in context."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the .md/.markdown/.txt file."},
+                "reparse": {"type": "boolean", "description": "Force a fresh parse (discards the working store)."},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "DocOutline",
+        "description": "Show the heading outline (id + title per heading) of an open document. Navigation without loading content.",
+        "input_schema": {"type": "object",
+                         "properties": {"name": {"type": "string", "description": "Document name (filename from DocOpen)."}},
+                         "required": ["name"]},
+    },
+    {
+        "name": "DocSearch",
+        "description": "Find blocks whose text matches a query (substring, or regex:true). Returns block ids + snippets — the way to locate material in a large document without reading it all.",
+        "input_schema": {"type": "object",
+                         "properties": {"name": {"type": "string", "description": "Document name."},
+                                        "query": {"type": "string", "description": "Text (or regex) to find."},
+                                        "regex": {"type": "boolean", "description": "Treat query as a regex."},
+                                        "max_hits": {"type": "integer", "description": "Cap results (default 100)."}},
+                         "required": ["name", "query"]},
+    },
+    {
+        "name": "DocRead",
+        "description": "Read one block plus optional neighbours (before/after) — a small window into the document. Returns each block's id, type, TEXT, and content HASH. Pass the target's hash to DocPatch as expected_hash.",
+        "input_schema": {"type": "object",
+                         "properties": {"name": {"type": "string", "description": "Document name."},
+                                        "block_id": {"type": "string", "description": "Block id to read (e.g. para-0182)."},
+                                        "before": {"type": "integer", "description": "Neighbour blocks before (default 0)."},
+                                        "after": {"type": "integer", "description": "Neighbour blocks after (default 0)."}},
+                         "required": ["name", "block_id"]},
+    },
+    {
+        "name": "DocPatch",
+        "description": (
+            "Apply a STRUCTURED, HASH-GUARDED edit to a block (staged in the working copy; "
+            "the source file is NOT written until DocCommit). ops: replace | insert_before | "
+            "insert_after | delete. ALWAYS pass expected_hash (from DocRead) so you never edit "
+            "stale content — the patch is rejected if the block changed. Multiple patches apply "
+            "atomically: if any fails, none are applied. Pass one patch inline, or a `patches` list."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Document name."},
+                "op": {"type": "string", "enum": ["replace", "insert_before", "insert_after", "delete"],
+                       "description": "Patch operation."},
+                "target_id": {"type": "string", "description": "Block id to target."},
+                "expected_hash": {"type": "string", "description": "The block's content hash from DocRead (stale-edit guard)."},
+                "new_text": {"type": "string", "description": "New/inserted text (not needed for delete)."},
+                "reason": {"type": "string", "description": "Why this change (recorded in the diff)."},
+                "block_type": {"type": "string", "description": "For inserts: block type (default paragraph)."},
+                "patches": {"type": "array", "description": "Optional: a list of patch objects to apply atomically.",
+                            "items": {"type": "object"}},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "DocDiff",
+        "description": "Preview all staged changes: a unified diff of the working copy against the on-disk source file. Review this before DocCommit.",
+        "input_schema": {"type": "object",
+                         "properties": {"name": {"type": "string", "description": "Document name."}},
+                         "required": ["name"]},
+    },
+    {
+        "name": "DocValidate",
+        "description": "Run deterministic structural checks (unique ids, consistent hashes, no empty blocks, heading levels, required/prohibited phrases). Run before committing and before asking for semantic review.",
+        "input_schema": {"type": "object",
+                         "properties": {"name": {"type": "string", "description": "Document name."},
+                                        "required": {"type": "array", "items": {"type": "string"}, "description": "Phrases that MUST be present."},
+                                        "prohibited": {"type": "array", "items": {"type": "string"}, "description": "Phrases that must be ABSENT."}},
+                         "required": ["name"]},
+    },
+    {
+        "name": "DocCommit",
+        "description": "Write the staged working copy back to the source file, re-rendering from blocks. On the first commit the untouched original is preserved as <source>.orig (immutable). Commit only after DocDiff + DocValidate look right.",
+        "input_schema": {"type": "object",
+                         "properties": {"name": {"type": "string", "description": "Document name."}},
+                         "required": ["name"]},
+    },
+    {
+        "name": "DocRollback",
+        "description": "Discard all staged edits and revert the working copy to the on-disk source (reparses; block ids are reassigned — re-run DocOutline/DocSearch after).",
+        "input_schema": {"type": "object",
+                         "properties": {"name": {"type": "string", "description": "Document name."}},
+                         "required": ["name"]},
+    },
+    {
+        "name": "DocReplace",
+        "description": (
+            "GLOBAL search-and-replace across the WHOLE document in a single pass — the "
+            "scalable way to make a document-wide change (e.g. a terminology update) on a "
+            "large document without one call per occurrence. Replaces every occurrence of "
+            "`query` (substring, or regex:true) with `replacement`; staged like a patch "
+            "(DocDiff to preview, DocCommit to write). Returns the count and touched blocks."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Document name."},
+                "query": {"type": "string", "description": "Text (or regex) to find everywhere."},
+                "replacement": {"type": "string", "description": "Replacement text."},
+                "regex": {"type": "boolean", "description": "Treat query as a regex."},
+            },
+            "required": ["name", "query", "replacement"],
+        },
+    },
+    {
+        "name": "DocRedact",
+        "description": (
+            "REDACT (red-box) sensitive content: permanently remove text — by `query` "
+            "(every match) or a whole `block_id` — replacing it with a marker, then VERIFY "
+            "the original text cannot be recovered from the document (a blocking check; the "
+            "redaction is refused if anything would leak). Staged; DocCommit writes the "
+            "redacted file and keeps the unredacted original as <file>.orig (store it securely)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Document name."},
+                "query": {"type": "string", "description": "Text (or regex) to redact everywhere it appears."},
+                "block_id": {"type": "string", "description": "Alternatively, redact an entire block by id."},
+                "regex": {"type": "boolean", "description": "Treat query as a regex."},
+                "marker": {"type": "string", "description": "Redaction marker (default [REDACTED])."},
+            },
+            "required": ["name"],
+        },
+    },
 ]
 
 # ── Tool implementations ──────────────────────────────────────────────────
@@ -2234,6 +2381,217 @@ def tool_build_knowledge(params: dict, config: dict) -> str:
             f"chunks, {stats['entities']} entities. Search it with the Knowledge tool.")
 
 
+# ── Document Canvas tools ──────────────────────────────────────────────────
+def _dc_get(params: dict):
+    """(doccanvas_module, doc, error_str). Loads the working store for `name`."""
+    from drydock import doccanvas as dc
+    name = _as_str_arg(params.get("name") or params.get("document") or "")
+    if not name:
+        return dc, None, "Error: give the document `name` (the filename from DocOpen)."
+    doc = dc.load(name)
+    if doc is None:
+        return dc, None, f"Error: no open document named {name!r}. Run DocOpen first."
+    return dc, doc, None
+
+
+def tool_docopen(params: dict, config: dict) -> str:
+    from drydock import doccanvas as dc
+    path = _as_str_arg(params.get("path") or params.get("file") or "")
+    if not path:
+        return "Error: DocOpen needs a `path` to a .md/.markdown/.txt file."
+    try:
+        doc = dc.open_document(path, reparse=bool(params.get("reparse")))
+    except FileNotFoundError:
+        return f"Error: file not found: {path}"
+    except Exception as e:
+        return f"Error opening {path}: {e}"
+    name = dc.store_name(doc.source_path)
+    ol = dc.outline(doc)
+    lines = [f"Opened '{name}' ({doc.fmt}, {len(doc.blocks)} blocks). "
+             f"Blocks are addressed by id; edit ids, not line numbers.", "Outline:"]
+    for o in ol[:60]:
+        lines.append(f"  {'  ' * max(0, o['level'] - 1)}{o['id']}  {o['title']}")
+    if len(ol) > 60:
+        lines.append(f"  … +{len(ol) - 60} more headings — DocOutline for all")
+    lines.append("Flow: DocSearch/DocRead a block → DocPatch (pass expected_hash from "
+                 "DocRead) → DocDiff → DocValidate → DocCommit.")
+    return "\n".join(lines)
+
+
+def tool_docoutline(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    ol = dc.outline(doc)
+    if not ol:
+        return f"'{dc.store_name(doc.source_path)}' has no headings ({len(doc.blocks)} blocks)."
+    return "\n".join(f"{'  ' * max(0, o['level'] - 1)}{o['id']}  {o['title']}" for o in ol)
+
+
+def tool_docsearch(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    query = _as_text(params.get("query") or params.get("q") or "")
+    if not query:
+        return "Error: DocSearch needs a `query`."
+    hits = dc.search(doc, query, regex=bool(params.get("regex")),
+                     max_hits=_coerce_int(params.get("max_hits"), 100))
+    if hits and hits[0].get("error"):
+        return f"Error: {hits[0]['error']}"
+    if not hits:
+        return f"No matches for {query!r}."
+    out = [f"{len(hits)} match(es) for {query!r}:"]
+    for h in hits:
+        out.append(f"  {h['id']} ({h['type']}): …{h['snippet']}…")
+    return "\n".join(out)
+
+
+def tool_docread(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    bid = _as_str_arg(params.get("block_id") or params.get("id") or "")
+    if not bid:
+        return "Error: DocRead needs a `block_id`."
+    r = dc.read(doc, bid, before=_coerce_int(params.get("before"), 0),
+                after=_coerce_int(params.get("after"), 0))
+    if r.get("error"):
+        return f"Error: {r['error']}"
+    out = []
+    for w in r["window"]:
+        mark = "► " if w["target"] else "  "
+        out.append(f"{mark}{w['id']} [{w['type']} hash={w['hash']}]")
+        out.append("\n".join("    " + ln for ln in w["text"].splitlines()))
+    out.append("(Pass the target's hash as expected_hash when you DocPatch it.)")
+    return "\n".join(out)
+
+
+def tool_docpatch(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    patches = params.get("patches")
+    if not isinstance(patches, list):
+        one = {"op": _as_str_arg(params.get("op") or "replace"),
+               "target_id": _as_str_arg(params.get("target_id") or params.get("id") or ""),
+               "new_text": _as_text(params.get("new_text", "")),
+               "expected_hash": _as_str_arg(params.get("expected_hash") or ""),
+               "reason": _as_text(params.get("reason", "")),
+               "block_type": _as_str_arg(params.get("block_type") or "paragraph")}
+        patches = [one]
+    try:
+        log = dc.apply_patches(doc, patches)
+    except dc.PatchError as e:
+        return f"Patch rejected (nothing changed): {e}"
+    except Exception as e:
+        return f"Error applying patch: {e}"
+    dc.save(doc)
+    return (f"Staged {len(log)} patch(es) (working copy updated, source file NOT yet "
+            f"written — DocCommit to write, DocRollback to discard):\n" + dc.diff_text(log))
+
+
+def tool_docdiff(params: dict, config: dict) -> str:
+    import difflib
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    try:
+        src = Path(doc.source_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        src = ""
+    new = dc.render(doc)
+    d = list(difflib.unified_diff(src.splitlines(), new.splitlines(),
+                                  fromfile="source", tofile="staged", lineterm="", n=2))
+    if not d:
+        return "No staged changes (working copy matches the source file)."
+    return "\n".join(d[:400]) + ("" if len(d) <= 400 else f"\n… (+{len(d) - 400} more diff lines)")
+
+
+def tool_docvalidate(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    req = params.get("required") or []
+    pro = params.get("prohibited") or []
+    if isinstance(req, str):
+        req = [req]
+    if isinstance(pro, str):
+        pro = [pro]
+    res = dc.validate(doc, required=list(req), prohibited=list(pro))
+    lines = [("✓ all checks passed" if res["ok"] else "⚠ validation findings:")]
+    for f in res["findings"]:
+        mark = "✓" if f["ok"] else "⚠"
+        lines.append(f"  {mark} {f['check']}" + (f" — {f['detail']}" if f["detail"] else ""))
+    return "\n".join(lines)
+
+
+def tool_doccommit(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    try:
+        info = dc.commit(doc)
+    except Exception as e:
+        return f"Error committing: {e}"
+    return (f"Committed to {info['source']} ({info['blocks']} blocks). "
+            f"Original preserved at {info['original']}.")
+
+
+def tool_docrollback(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    try:
+        fresh = dc.open_document(doc.source_path, reparse=True)
+    except Exception as e:
+        return f"Error rolling back: {e}"
+    return (f"Rolled back '{dc.store_name(fresh.source_path)}' to the on-disk source "
+            f"({len(fresh.blocks)} blocks). Staged edits discarded; block ids were "
+            f"reassigned — re-run DocOutline/DocSearch.")
+
+
+def tool_docreplace(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    query = _as_text(params.get("query") or "")
+    repl = _as_text(params.get("replacement", ""))
+    if not query:
+        return "Error: DocReplace needs a `query` to find."
+    try:
+        r = dc.replace_all(doc, query, repl, regex=bool(params.get("regex")))
+    except dc.PatchError as e:
+        return f"Replace rejected (nothing changed): {e}"
+    if r["replacements"] == 0:
+        return f"No occurrences of {query!r} found; nothing changed."
+    dc.save(doc)
+    touched = r["blocks_touched"]
+    return (f"Replaced {r['replacements']} occurrence(s) of {query!r} across "
+            f"{len(touched)} block(s) — staged (DocDiff to preview, DocCommit to write). "
+            f"Blocks: {', '.join(touched[:20])}" + (" …" if len(touched) > 20 else ""))
+
+
+def tool_docredact(params: dict, config: dict) -> str:
+    dc, doc, err = _dc_get(params)
+    if err or doc is None:
+        return err or "Error: document not loaded."
+    q = _as_text(params.get("query") or "")
+    bid = _as_str_arg(params.get("block_id") or "")
+    if not q and not bid:
+        return "Error: DocRedact needs a `query` (text to redact) or a `block_id`."
+    marker = _as_str_arg(params.get("marker") or "") or dc.REDACT_MARKER
+    try:
+        r = dc.redact(doc, query=q or None, block_id=bid or None,
+                      regex=bool(params.get("regex")), marker=marker)
+    except dc.PatchError as e:
+        return f"Redaction REFUSED (nothing changed): {e}"
+    dc.save(doc)
+    return (f"Redacted {r['redacted']} item(s) with {r['marker']!r}; VERIFIED the original "
+            f"text is not recoverable from the document. Staged — DocCommit writes the "
+            f"redacted file; the unredacted original is preserved as <file>.orig (keep it secure).")
+
+
 # ── Register all tools ────────────────────────────────────────────────────
 
 _TOOLS = [
@@ -2266,6 +2624,17 @@ _TOOLS = [
     ("GitDiff", tool_gitdiff, True),
     ("GitLog", tool_gitlog, True),
     ("GitCommit", tool_gitcommit, False),
+    ("DocOpen", tool_docopen, True),
+    ("DocOutline", tool_docoutline, True),
+    ("DocSearch", tool_docsearch, True),
+    ("DocRead", tool_docread, True),
+    ("DocPatch", tool_docpatch, False),
+    ("DocDiff", tool_docdiff, True),
+    ("DocValidate", tool_docvalidate, True),
+    ("DocCommit", tool_doccommit, False),
+    ("DocRollback", tool_docrollback, False),
+    ("DocReplace", tool_docreplace, False),
+    ("DocRedact", tool_docredact, False),
 ]
 
 def register_all():
@@ -2288,6 +2657,12 @@ def register_all():
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
             "GitStatus": tool_gitstatus, "GitDiff": tool_gitdiff,
             "GitLog": tool_gitlog, "GitCommit": tool_gitcommit,
+            "DocOpen": tool_docopen, "DocOutline": tool_docoutline,
+            "DocSearch": tool_docsearch, "DocRead": tool_docread,
+            "DocPatch": tool_docpatch, "DocDiff": tool_docdiff,
+            "DocValidate": tool_docvalidate, "DocCommit": tool_doccommit,
+            "DocRollback": tool_docrollback, "DocReplace": tool_docreplace,
+            "DocRedact": tool_docredact,
         }[name]
         # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
         # GitCommit + GraphAdd write).
@@ -2296,6 +2671,7 @@ def register_all():
             "Knowledge", "GraphQuery", "StigRules", "StigRule",
             "FiarControls", "FiarControl", "FiarReconcile",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
+            "DocOpen", "DocOutline", "DocSearch", "DocRead", "DocDiff", "DocValidate",
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
 

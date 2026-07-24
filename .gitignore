@@ -24,3 +24,4 @@ web/fib.py
 
 # Overnight session running log (local handoff, not tracked)
 NIGHT_SHIFT_LOG.md
+tests/dictionary.pdf
