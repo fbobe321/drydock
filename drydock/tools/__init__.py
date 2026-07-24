@@ -2020,9 +2020,12 @@ def tool_fiarfinding(params: dict, config: dict) -> str:
 def tool_fiarreconcile(params: dict, config: dict) -> str:
     """Tie an entity balance to an authoritative source (e.g. FBWT vs Treasury)."""
     from drydock import fiar
+    ent_raw, src_raw = params.get("entity"), params.get("source")
+    if ent_raw is None or src_raw is None:
+        return "Error: FiarReconcile needs numeric `entity` and `source` balances."
     try:
-        entity = float(params.get("entity"))
-        source = float(params.get("source"))
+        entity = float(ent_raw)
+        source = float(src_raw)
     except (TypeError, ValueError):
         return "Error: FiarReconcile needs numeric `entity` and `source` balances."
     tol = params.get("tolerance") or 0
