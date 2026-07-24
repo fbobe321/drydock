@@ -51,6 +51,44 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## 🧭 SESSION HANDOFF — 2026-07-23 ~23:00 (resume in /data3/drydock-v3)
+
+Read this block first; detail is in the dated entries below + `NIGHT_SHIFT_LOG.md`.
+
+**DONE this session**
+- **Published `drydock-cli 3.1.2` to PyPI** (https://pypi.org/project/drydock-cli/3.1.2/) and
+  pushed `main` + tags `v3.1.0`, `v3.1.2` to GitHub `fbobe321/drydock`. Security gate passed
+  (0 HIGH). Verified: a clean `pip install drydock-cli==3.1.2` ships the FIAR skills + tools.
+- **FIAR audit-readiness vertical** (`drydock/fiar.py`, 5 tools, 4 skills, evidence-chain
+  validator). See the dated entry below.
+- Feal seed solved → LoRA trained (`/data3/Models/frontier-feal-lora.gguf`).
+
+**FIRST ACTIONS next session (you'll be launched from /data3/drydock-v3)**
+1. **Archive the old fork** (operator-requested): `/data3/archive_old_drydock.sh` — guarded +
+   reversible; moves `/data3/drydock` → `/data3/_archive/drydock-v2-retired` and neuters its git
+   remote. Memory: `project_pending_archive_old_drydock`.
+2. **Read the variant-test result** (it runs detached, completes overnight):
+   ```
+   cat /data3/tbench_local/feal_variants/results_base.csv                       # base arm (main)
+   ssh bobef@192.168.50.21 'cat /data3/tbench_local/feal_variants/results_lora.csv'  # LoRA arm
+   ```
+   **Preliminary (0/4 each so far): the LoRA arm is failing even `v0_base` — its OWN trained
+   task's control variant.** If that holds across all 10, the finding is: the single-trace
+   condensed LoRA (loss 0.0000) memorized the training sequence but does NOT reproduce the
+   attack when driven fresh through the drydock TUI — a real negative, not "no transfer."
+   Before concluding, DIAGNOSE the LoRA arm: does it write `/app/attack.py` at all, and is it
+   the right code? (tmux into a `ddt_feal-*` container on romulus, or read a diag pane.) Rule
+   out a harness cause (budget-8000 over-think, TUI not converging) vs a genuine finetune miss.
+
+**OWED / open**
+- **FIAR TUI shakedown** — built + 25 unit tests + install-verified, but NOT yet driven through
+  a live TUI (servers were busy). Non-negotiable rule needs it before "tested".
+- **Rotate the GitHub token** — it's embedded in the git remote URL and was printed this session.
+- **Restore reasoning-budget to 20000** on main `:8000` before any harvest resumes (it's at 8000
+  for the variant test).
+- Version convention: **patch bumps** (next = 3.1.3), not minor-per-feature.
+
+---
 ## ⭐ 2026-07-23 (later) — FIAR audit-readiness vertical (v3.1.2); variant test two-box
 
 **FIAR vertical shipped** (tag `v3.1.2`, commit aeb0b49) — DoD/War-Dept Financial Improvement
