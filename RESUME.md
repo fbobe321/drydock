@@ -51,6 +51,28 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## ⭐ 2026-07-23 (later) — FIAR audit-readiness vertical (v3.1.2); variant test two-box
+
+**FIAR vertical shipped** (tag `v3.1.2`, commit aeb0b49) — DoD/War-Dept Financial Improvement
+and Audit Readiness, grounded in the real April 2017 FIAR Guidance
+(`/data3/drydock/tests/fiar_guidance.pdf`, extracted + built against it). New gov-compliance
+vertical beside RMF/STIG:
+- `drydock/fiar.py` — stdlib engine; an "engagement" (one JSON, like a STIG .ckl) holds a
+  seeded key-control-objective matrix (FBWT, P2P, PP&E, INV, CIVPAY, REIM, FR, ITGC), NFRs,
+  CAPs. Models the 5 distinct FS assertions, Four Waves, FROs, numbered Key Tasks, KSDs,
+  ITGCs, A-123 sustainment. CLI `python -m drydock.fiar …`.
+- 5 tools (FiarControls/Control/Assess/Finding/Reconcile). 4 skills (fiar-assess, fiar-evidence,
+  fiar-readiness, fiar-cap).
+- **Differentiator: a deterministic EVIDENCE-CHAIN VALIDATOR** — FiarAssess REFUSES to mark a
+  control effective on an incomplete chain (population→sample→source txn→authorization→
+  supporting doc→system posting→GL effect→assertion). Evidence-review harness, not a checklist.
+- 25 tests; 834 pass, ruff+pyright clean. **⚠️ NOT yet TUI-driven** (servers busy) — owes a
+  hands-on tmux shakedown per the non-negotiable rule.
+
+**🚨 Version convention:** patch increments (3.1.3, 3.1.4, …), NOT minor-per-feature. I
+over-bumped (3.1.0 hardening rollup, then FIAR→3.2.0); operator corrected FIAR to **v3.1.2**.
+See memory `feedback_version_bump_patch_increments`.
+
 ## ⭐ 2026-07-23 — v3.1.0 released; feal variant-transfer experiment underway
 
 **v3.1.0** (tag `v3.1.0`, commit e043728) promotes the 3.0.171–178 tool-robustness +
