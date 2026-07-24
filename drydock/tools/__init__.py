@@ -973,6 +973,13 @@ def _file_index(lines: list[str], fp: str) -> str:
         f"offset/limit (e.g. {{\"file_path\": ..., \"offset\": <line-1>, "
         f"\"limit\": 120}}).\n"
     )
+    if is_doc:
+        head += (
+            "To SEARCH or EDIT this document, prefer the DOCUMENT CANVAS: DocOpen, then "
+            "DocSearch/DocRead a region and DocPatch/DocReplace/DocRedact by block id → "
+            "DocValidate → DocCommit — it edits precisely without loading the whole file "
+            "(don't rewrite a large document with Write/Edit).\n"
+        )
     if not anchors:
         return head + "(no def/class/header anchors found — read ranges with offset/limit.)"
     body = "\n".join(anchors[:400])

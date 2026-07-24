@@ -494,7 +494,11 @@ def _main(argv: list[str]) -> int:
     if a.cmd == "new":
         eng = new_engagement(a.name, a.cycle, wave=a.wave); eng.save(a.path)
         print(f"created {a.path}: {eng.name} / {eng.cycle} (Wave {eng.wave}) "
-              f"— {len(eng.controls)} controls"); return 0
+              f"— {len(eng.controls)} controls")
+        if not eng.controls and a.cycle.strip().upper() not in ("*", "ALL"):
+            print(f"⚠ 0 controls seeded — '{a.cycle}' is not a known cycle. Valid cycles: "
+                  f"{', '.join(CYCLES)}, or ALL. (See: python -m drydock.fiar cycles)")
+        return 0
 
     eng = Engagement.load(a.path)
     if a.cmd == "controls":
