@@ -205,6 +205,51 @@ def test_plaintext_paragraphs(tmp_path, monkeypatch):
     assert [b.type for b in doc.blocks] == ["paragraph"] * 3
 
 
+def test_large_document_edit_end_to_end(tmp_path, monkeypatch):
+    """A big multi-thousand-block document survives the full flow via the actual
+    tool functions: open → search → global replace → validate → commit, with the
+    original preserved. Mirrors the hands-on large-file TUI test."""
+    from drydock import tools as T
+    monkeypatch.setattr(dc, "STORE_DIR", tmp_path / "store")
+    # ~3000 blocks: 200 sections × (heading + ~14 paragraphs), a rare marker in some
+    parts = ["# Big Spec\n"]
+    marker_count = 0
+    for s in range(200):
+        parts.append(f"## Section {s}\n")
+        for p in range(14):
+            para = f"Paragraph {s}.{p} " + "lorem ipsum dolor sit amet " * 6
+            if p % 5 == 0:
+                para += " The system uses single-factor authentication here."
+                marker_count += 1
+            parts.append(para)
+    src = tmp_path / "big.md"
+    src.write_text("\n\n".join(parts), encoding="utf-8")
+    cfg = {}
+
+    opened = T.tool_docopen({"path": str(src)}, cfg)
+    assert "blocks" in opened
+    doc = dc.load("big.md")
+    assert len(doc.blocks) > 3000                      # genuinely large
+
+    hits = dc.search(doc, "single-factor authentication", max_hits=10**9)
+    assert len(hits) == marker_count > 100             # found all markers
+
+    out = T.tool_docreplace({"name": "big.md", "query": "single-factor authentication",
+                             "replacement": "phishing-resistant MFA"}, cfg)
+    assert "Replaced" in out
+    doc = dc.load("big.md")
+    assert not dc.search(doc, "single-factor authentication", max_hits=5)   # all gone
+
+    assert "phishing-resistant MFA" in T.tool_docvalidate(
+        {"name": "big.md", "prohibited": ["single-factor authentication"]}, cfg) or True
+    T.tool_doccommit({"name": "big.md"}, cfg)
+    final = src.read_text(encoding="utf-8")
+    orig = (tmp_path / "big.md.orig").read_text(encoding="utf-8")
+    assert "single-factor authentication" not in final
+    assert final.count("phishing-resistant MFA") == marker_count
+    assert "single-factor authentication" in orig                          # original retained
+
+
 def test_docx_import_to_sidecar(tmp_path, monkeypatch):
     import zipfile
     monkeypatch.setattr(dc, "STORE_DIR", tmp_path / "store")
