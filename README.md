@@ -243,6 +243,22 @@ exports the open findings to a deterministic **eMASS POA&M CSV** — Control (fr
 the CCI map), Vulnerability Description, `POA&M Status=Ongoing`, Milestone (the
 Fix Text), and Severity (CAT I/II/III → High/Moderate/Low) — no LLM, stdlib only.
 
+### FIAR audit-readiness (DoD financial-statement audit)
+
+Model a Financial Improvement and Audit Readiness engagement — a seeded key-control
+matrix per business cycle (FBWT, P2P, PP&E, INV, CIVPAY, REIM, FR, ITGC), the five FS
+assertions, a deterministic **evidence-chain validator** (a control can't be called
+effective on an incomplete population→sample→…→GL→assertion trace), findings (NFRs), and
+CAPs. `python -m drydock.fiar new|controls|control|assess|reconcile|package`; skills
+`/fiar-assess /fiar-evidence /fiar-readiness /fiar-cap`.
+
+**KSD evidence packaging.** `fiar package <engagement> <out> --evidence-dir <dir>` assembles
+an audit binder — `index.md` + `index.json` mapping every control → assertions → KSDs →
+status → evidence-chain completeness → findings — and **collects the actual evidence files
+each test cited**, zipped. Add `--redact "<term>"` (repeatable) to **red-box** names/secrets
+in the evidence *and* the manifest for a releasable version (verified via the Document
+Canvas); the original engagement is never touched. Also exposed as the `FiarPackage` tool.
+
 ### Document Canvas — editing documents far larger than the context window
 
 Edit a 300-, 800-, 1000-page document the way you edit a large codebase: **search,

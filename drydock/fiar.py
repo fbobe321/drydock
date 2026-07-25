@@ -20,6 +20,9 @@ not render an audit judgement.
 from __future__ import annotations
 
 import json
+import re
+import shutil
+import zipfile
 from dataclasses import dataclass, field, asdict
 from datetime import date
 from pathlib import Path
@@ -466,6 +469,139 @@ def new_engagement(name: str, cycle: str, wave: int | None = None) -> Engagement
     })
 
 
+# ── KSD evidence package (audit binder) ────────────────────────────────────
+# Assemble the Key Supporting Documents behind an engagement into a reviewable
+# package: a manifest (control → assertion → KSDs → status → evidence chain →
+# findings) plus the actual evidence files, zipped. Optionally red-box text
+# evidence for a releasable version. Deterministic, stdlib only.
+_FILENAME_RE = re.compile(r"[\w][\w./-]*\.[A-Za-z0-9]{1,6}")
+
+
+def _referenced_files(control: dict, evidence_dir: Path | None) -> list[str]:
+    """Filenames named in the control's evidence / chain text that actually exist
+    in evidence_dir (so the binder collects the KSDs the test cited)."""
+    if not evidence_dir or not evidence_dir.is_dir():
+        return []
+    avail = {p.name: p for p in evidence_dir.iterdir() if p.is_file()}
+    text = " ".join([str(control.get("evidence", "")),
+                     *[str(v) for v in (control.get("evidence_chain") or {}).values()]])
+    found: list[str] = []
+    for m in _FILENAME_RE.findall(text):
+        name = Path(m).name
+        if name in avail and name not in found:
+            found.append(name)
+    return found
+
+
+def build_ksd_package(engagement_path: str | Path, out_dir: str | Path, *,
+                      evidence_dir: str | Path | None = None, cycle: str | None = None,
+                      status: str | None = None, redact: list[str] | None = None) -> dict:
+    """Build a KSD evidence package from an engagement. Collects the cited evidence
+    files (from evidence_dir), writes index.json + index.md, optionally red-boxes
+    text evidence, and zips the binder. Returns a summary dict."""
+    eng = Engagement.load(engagement_path)
+    out = Path(out_dir)
+    (out / "evidence").mkdir(parents=True, exist_ok=True)
+    ev_dir = Path(evidence_dir) if evidence_dir else None
+    redact_terms = [t for t in (redact or []) if t.strip()]
+
+    findings_by_control: dict[str, list] = {}
+    for f in eng._d.get("findings", []):
+        findings_by_control.setdefault(f.get("control_id", ""), []).append(f)
+
+    controls = list(eng._d.get("controls", []))
+    if cycle:
+        controls = [c for c in controls if str(c.get("cycle", "")).upper() == cycle.upper()]
+    if status:
+        controls = [c for c in controls if c.get("status") == status]
+
+    entries = []
+    collected = 0
+    redactions = []
+    for c in controls:
+        cid = c["id"]
+        copied = []
+        for name in _referenced_files(c, ev_dir):
+            dest = out / "evidence" / cid
+            dest.mkdir(parents=True, exist_ok=True)
+            dst = dest / name
+            shutil.copy(ev_dir / name, dst)  # type: ignore[arg-type]
+            if redact_terms and dst.suffix.lower() in (".txt", ".md", ".markdown"):
+                from drydock import doccanvas as dc
+                fmt = "text" if dst.suffix.lower() == ".txt" else "markdown"
+                doc = dc.parse(dst.read_text("utf-8", "replace"), fmt, str(dst))
+                n = 0
+                for term in redact_terms:
+                    try:
+                        n += dc.redact(doc, query=term)["redacted"]
+                    except dc.PatchError:
+                        pass
+                if n:
+                    dst.write_text(dc.render(doc), "utf-8")
+                    redactions.append({"file": f"{cid}/{name}", "redacted": n})
+            copied.append(name)
+            collected += 1
+        entries.append({
+            "id": cid, "cycle": c.get("cycle"), "objective": c.get("objective"),
+            "assertions": c.get("assertions"), "status": c.get("status", "not_tested"),
+            "ksds": c.get("ksds", []), "evidence": c.get("evidence", ""),
+            "evidence_chain": validate_chain(c.get("evidence_chain")),
+            "evidence_files": copied,
+            "findings": [{"id": f.get("id"), "severity": f.get("severity"),
+                          "condition": f.get("condition")} for f in findings_by_control.get(cid, [])],
+        })
+
+    # For a releasable package, scrub the redaction terms from the MANIFEST too
+    # (not just the collected files) so a name/secret can't leak via the binder.
+    if redact_terms:
+        marker = "[REDACTED]"
+        for e in entries:
+            for term in redact_terms:
+                e["evidence"] = e["evidence"].replace(term, marker)
+                for f in e["findings"]:
+                    f["condition"] = (f.get("condition") or "").replace(term, marker)
+
+    manifest = {
+        "engagement": eng.name, "assessable_unit": eng.cycle, "wave": eng.wave,
+        "generated": date.today().isoformat(), "source": Path(engagement_path).name,
+        "control_count": len(entries), "evidence_files_collected": collected,
+        "redactions": redactions, "controls": entries,
+    }
+    (out / "index.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    (out / "index.md").write_text(_ksd_index_md(manifest), encoding="utf-8")
+
+    zip_path = str(out) + ".zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        for p in sorted(out.rglob("*")):
+            if p.is_file():
+                z.write(p, p.relative_to(out.parent))
+    return {"package": str(out), "zip": zip_path, "controls": len(entries),
+            "files_collected": collected, "redactions": len(redactions),
+            "missing_evidence": [e["id"] for e in entries if not e["evidence_files"]]}
+
+
+def _ksd_index_md(m: dict) -> str:
+    lines = [f"# KSD Evidence Package — {m['engagement']}",
+             f"Assessable unit: {m['assessable_unit']} · Wave {m['wave']} · "
+             f"generated {m['generated']} from {m['source']}",
+             f"Controls: {m['control_count']} · evidence files collected: "
+             f"{m['evidence_files_collected']} · redactions: {len(m['redactions'])}", ""]
+    for e in m["controls"]:
+        lines.append(f"## {e['id']} — {e['objective']}")
+        lines.append(f"- Cycle: {e['cycle']}  ·  Assertions: {', '.join(e['assertions'] or [])}"
+                     f"  ·  Status: **{e['status']}**")
+        lines.append(f"- KSDs required: {', '.join(e['ksds']) or '(none listed)'}")
+        ch = e["evidence_chain"]
+        lines.append(f"- Evidence chain: {'COMPLETE' if ch['complete'] else 'INCOMPLETE — missing ' + ', '.join(ch['missing'])}")
+        if e["evidence"]:
+            lines.append(f"- Evidence examined: {e['evidence']}")
+        lines.append(f"- Evidence files: {', '.join('evidence/'+e['id']+'/'+f for f in e['evidence_files']) or '⚠ NONE collected'}")
+        for f in e["findings"]:
+            lines.append(f"- FINDING {f['id']} ({f['severity']}): {f['condition']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────
 def _main(argv: list[str]) -> int:
     import argparse
@@ -482,6 +618,9 @@ def _main(argv: list[str]) -> int:
     q = sub.add_parser("reconcile"); q.add_argument("entity", type=float)
     q.add_argument("source", type=float); q.add_argument("--tolerance", type=float, default=0.0)
     q = sub.add_parser("cycles")
+    q = sub.add_parser("package"); q.add_argument("path"); q.add_argument("out")
+    q.add_argument("--evidence-dir"); q.add_argument("--cycle"); q.add_argument("--status")
+    q.add_argument("--redact", action="append", default=[])
     a = p.parse_args(argv)
 
     if a.cmd == "cycles":
@@ -491,6 +630,15 @@ def _main(argv: list[str]) -> int:
     if a.cmd == "reconcile":
         r = reconcile(a.entity, a.source, tolerance=a.tolerance)
         print(json.dumps(r, indent=2)); return 0 if r["reconciled"] else 1
+    if a.cmd == "package":
+        r = build_ksd_package(a.path, a.out, evidence_dir=a.evidence_dir,
+                              cycle=a.cycle, status=a.status, redact=a.redact)
+        print(f"KSD package: {r['controls']} controls, {r['files_collected']} evidence file(s)"
+              + (f", {r['redactions']} file(s) redacted" if r["redactions"] else "")
+              + f" → {r['package']}/  (+ {Path(r['zip']).name})")
+        if r["missing_evidence"]:
+            print(f"⚠ no evidence file collected for: {', '.join(r['missing_evidence'])}")
+        return 0
     if a.cmd == "new":
         eng = new_engagement(a.name, a.cycle, wave=a.wave); eng.save(a.path)
         print(f"created {a.path}: {eng.name} / {eng.cycle} (Wave {eng.wave}) "

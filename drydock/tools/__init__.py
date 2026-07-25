@@ -655,6 +655,31 @@ SCHEMAS = [
         },
     },
     {
+        "name": "FiarPackage",
+        "description": (
+            "Assemble a KSD AUDIT EVIDENCE PACKAGE from a FIAR engagement: a binder "
+            "(index.md + index.json mapping each control → assertions → KSDs → status → "
+            "evidence-chain completeness → findings) plus the actual evidence files it "
+            "cited (collected from `evidence_dir`), zipped. Pass `redact` (one or a list "
+            "of terms) to red-box names/secrets in the text evidence AND the manifest for "
+            "a releasable version — the original engagement is untouched. Optionally filter "
+            "by `cycle` or `status`."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Engagement JSON path."},
+                "out": {"type": "string", "description": "Output package directory (a .zip is written beside it)."},
+                "evidence_dir": {"type": "string", "description": "Directory holding the KSD evidence files to collect."},
+                "cycle": {"type": "string", "description": "Only include this cycle (e.g. FBWT)."},
+                "status": {"type": "string", "description": "Only include controls with this status."},
+                "redact": {"type": "array", "items": {"type": "string"},
+                           "description": "Terms to red-box in evidence files + manifest for release."},
+            },
+            "required": ["path", "out"],
+        },
+    },
+    {
         "name": "GraphQuery",
         "description": (
             "Query the RMF ontology GRAPH to TRACE relationships (typed: Control, "
@@ -2193,6 +2218,35 @@ def tool_fiarreconcile(params: dict, config: dict) -> str:
             f"difference {r['difference']:,.2f} (tolerance {r['tolerance']:,.2f}).")
 
 
+def tool_fiarpackage(params: dict, config: dict) -> str:
+    """Assemble a KSD audit evidence package (binder + files, zipped) from an engagement."""
+    from drydock import fiar
+    path = _as_str_arg(params.get("path") or "")
+    out = _as_str_arg(params.get("out") or params.get("out_dir") or "")
+    if not path or not out:
+        return "Error: FiarPackage needs `path` (engagement JSON) and `out` (package directory)."
+    redact = params.get("redact")
+    if isinstance(redact, str):
+        redact = [redact]
+    try:
+        r = fiar.build_ksd_package(
+            path, out,
+            evidence_dir=_as_str_arg(params.get("evidence_dir") or "") or None,
+            cycle=_as_str_arg(params.get("cycle") or "") or None,
+            status=_as_str_arg(params.get("status") or "") or None,
+            redact=[str(x) for x in redact] if isinstance(redact, list) else None)
+    except FileNotFoundError:
+        return f"Error: engagement not found: {path}"
+    except Exception as e:
+        return f"Error building KSD package: {e}"
+    msg = (f"KSD package built: {r['controls']} control(s), {r['files_collected']} evidence file(s)"
+           + (f", {r['redactions']} file(s) red-boxed" if r["redactions"] else "")
+           + f" → {r['package']}/ (index.md + index.json + evidence/, zipped as {Path(r['zip']).name}).")
+    if r["missing_evidence"]:
+        msg += f" ⚠ no evidence file collected for: {', '.join(r['missing_evidence'])}."
+    return msg
+
+
 def tool_graphquery(params: dict, config: dict) -> str:
     """Traverse the RMF typed ontology graph (read-only)."""
     rmf_graph, g, _ = _rmf_graph(config)
@@ -2625,6 +2679,7 @@ _TOOLS = [
     ("FiarAssess", tool_fiarassess, False),
     ("FiarFinding", tool_fiarfinding, False),
     ("FiarReconcile", tool_fiarreconcile, True),
+    ("FiarPackage", tool_fiarpackage, False),
     ("WebSearch", tool_websearch, True),
     ("WebFetch", tool_webfetch, True),
     ("GitStatus", tool_gitstatus, True),
@@ -2660,7 +2715,7 @@ def register_all():
             "StigRules": tool_stigrules, "StigRule": tool_stigrule, "StigSet": tool_stigset,
             "FiarControls": tool_fiarcontrols, "FiarControl": tool_fiarcontrol,
             "FiarAssess": tool_fiarassess, "FiarFinding": tool_fiarfinding,
-            "FiarReconcile": tool_fiarreconcile,
+            "FiarReconcile": tool_fiarreconcile, "FiarPackage": tool_fiarpackage,
             "WebSearch": tool_websearch, "WebFetch": tool_webfetch,
             "GitStatus": tool_gitstatus, "GitDiff": tool_gitdiff,
             "GitLog": tool_gitlog, "GitCommit": tool_gitcommit,

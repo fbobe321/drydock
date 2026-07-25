@@ -209,3 +209,60 @@ def test_effective_without_chain_advises(tmp_path):
 def test_control_detail_shows_chain_state(tmp_path):
     p = _mk(tmp_path)
     assert "not traced" in tool_fiarcontrol({"path": p, "id": "FBWT-01"}, {})
+
+
+# ── KSD evidence packaging ────────────────────────────────────────────────
+def _mk_assessed(tmp_path):
+    """Engagement with FBWT-01 effective (evidence cites recon.txt + full chain)
+    and FBWT-02 deficient with a finding; plus an evidence dir holding recon.txt."""
+    p = _mk(tmp_path)
+    ev = tmp_path / "evidence"
+    ev.mkdir()
+    (ev / "recon.txt").write_text("Recon: preparer J. Smith; GL ties to Treasury 0.00.\n")
+    e = fiar.Engagement.load(p)
+    e.assess("FBWT-01", status="effective",
+             evidence="Examined recon.txt: ties out, preparer J. Smith signed.",
+             chain={k: f"ev-{k}" for k in fiar.EVIDENCE_CHAIN})
+    e.assess("FBWT-02", status="deficient", evidence="No aging report provided.")
+    e.add_finding(control_id="FBWT-02", condition="UDO aging not maintained",
+                  severity="significant_deficiency")
+    e.save(p)
+    return p, str(ev)
+
+
+def test_ksd_package_builds_binder_and_zip(tmp_path):
+    p, ev = _mk_assessed(tmp_path)
+    out = tmp_path / "pkg"
+    r = fiar.build_ksd_package(p, out, evidence_dir=ev)
+    assert (out / "index.json").exists() and (out / "index.md").exists()
+    assert (tmp_path / "pkg.zip").exists()
+    assert (out / "evidence" / "FBWT-01" / "recon.txt").exists()  # cited file collected
+    assert r["files_collected"] == 1
+    assert "FBWT-02" in r["missing_evidence"]                     # no file cited
+    man = json.loads((out / "index.json").read_text())
+    by_id = {c["id"]: c for c in man["controls"]}
+    assert by_id["FBWT-01"]["evidence_chain"]["complete"] is True
+    assert by_id["FBWT-02"]["evidence_chain"]["complete"] is False
+    assert by_id["FBWT-02"]["findings"][0]["severity"] == "significant_deficiency"
+
+
+def test_ksd_package_redaction_no_leak(tmp_path):
+    p, ev = _mk_assessed(tmp_path)
+    out = tmp_path / "rel"
+    fiar.build_ksd_package(p, out, evidence_dir=ev, redact=["J. Smith"])
+    # the name must be gone from BOTH the collected file AND the manifest
+    assert "J. Smith" not in (out / "evidence" / "FBWT-01" / "recon.txt").read_text()
+    assert "J. Smith" not in (out / "index.json").read_text()
+    assert "J. Smith" not in (out / "index.md").read_text()
+    assert "[REDACTED]" in (out / "index.md").read_text()
+    # original engagement + evidence dir are untouched
+    assert "J. Smith" in fiar.Engagement.load(p).control("FBWT-01").evidence
+
+
+def test_ksd_package_cycle_filter(tmp_path):
+    p = _mk(tmp_path, cycle="ALL")
+    out = tmp_path / "fbwt_only"
+    r = fiar.build_ksd_package(p, out, cycle="FBWT")
+    man = json.loads((out / "index.json").read_text())
+    assert r["controls"] >= 1
+    assert all(c["cycle"] == "FBWT" for c in man["controls"])
