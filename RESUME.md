@@ -51,38 +51,47 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
-## 🌙 OVERNIGHT — 2026-07-27 04:40 (frontier volume-grind, unattended)
+## 🏝️ WEEK-LONG SELF-DISTILLATION RUN — 2026-07-27 08:55 (operator on a 1-week trip)
 
-Operator went to bed; asked me to plan work through the night. Set up a self-protecting
-autonomous compute run + verified the recent ships are green. **Nothing here needs the operator.**
+Operator left for a week; asked for a **large unattended job that keeps running through SSH
+drop / crash / reboot** to *really test self-distillation* (traces + finetunes + eval, nohup +
+crons). Built a **closed-loop, gated self-distillation orchestrator**. **Nothing here needs the
+operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistill/README_RUN.md`**.
 
-**Running now (survives session/SSH drop — all `setsid nohup`):**
-- **Frontier volume-grind** — 2 collector streams on main (`-np 2` match), N=8, budget-20000,
-  DD_VER=3.1.2, against the 49 *remaining* frontier tasks (`frontier/grind_s0.txt`=25,
-  `grind_s1.txt`=24; the 10 already-done are excluded). Drives the REAL drydock TUI in docker per
-  task (gate base-plain → assist research best-of-8 → harvest verified base✗→research✓).
-  Outputs: `grind_gate_s{0,1}.csv`, `grind_harvest_s{0,1}.jsonl`, `grind_s{0,1}.log`.
-- **Watchdog** (`frontier/grind_watchdog.sh`) — polls every 10min; if ALL collectors die
-  (server crash/OOM) and work remains, it cleanly RESUMES each stream on its un-done tasks
-  (excludes tasks already in the gate CSV). Only ever launches when 0 collectors run → can never
-  over-subscribe `-np 2`. Heartbeat: `frontier/grind_watchdog_status.txt`; events:
-  `frontier/grind_watchdog.log`. Flags a wedged stream (quiet >90min) as WARN, no auto-kill.
-- **Harvest monitor** (in-session) — pings on each new AMBER trace.
+**One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
-**Morning check (one command):** `bash /data3/tbench_local/frontier/harvest_digest.sh` — prints
-unique CLEAN AMBER traces (verified, un-hinted, deduped by task) + readiness verdict. Threshold to
-train a real multi-trace LoRA = **6** clean traces. Now: **1/6** (`large-scale-text-editing`).
-Also: `cat frontier/grind_watchdog_status.txt` for stream liveness.
+**The loop (each generation):**
+- **COLLECT** — 2 streams drive the REAL drydock TUI (docker) over the full tbench-2 pool
+  (73 tasks = 89 − 10 base-solved − 6 held-out), gate base-plain → best-of-8 research assist →
+  harvest verified `base✗→assist✓`. 8h window.
+- **TRAIN** — when the trainable corpus grows ≥2 traces since last train (accumulates across
+  gens) & ≥3 total: stop server → canary-scrub → `compass harvest-tbench` → QLoRA (150 steps) →
+  `selfdistill-gen<N>-lora.gguf`.
+- **EVAL** — serve base+LoRA, run the FROZEN 6-task held-out (transfer) + 4-task regression
+  through the real TUI + real verifiers. **Not a harness** (real TUI, no `-p`).
+- **PROMOTE (gated)** — LoRA becomes the champion collecting the next gen **only if** it solves
+  ≥1 held-out task AND breaks no easy task AND beats the best prior. Base is always the fallback →
+  worst case = a week of base-model collection (strictly ≥ the old grind).
 
-**Why grind (context):** verdict is self-distill is DATA-constrained (thin AMBER band), NOT the
-fine-tune — see memory `project_compass_selfdistill_verdict`. Operator chose to grind for volume
-anyway rather than pivot to a stronger teacher (Devstral RULED OUT). Payoff path already exists
-(`compass train.py` multi-trace + `traces.py` held-out + `export-sft`); fires when digest hits 6.
+**Design decisions (operator-confirmed this session):** closed-loop w/ gated promotion; full
+89-task pool (the old grind's 49 hard-residue yielded ~0). GPU is single (2×4060Ti tensor-split)
+so server(collect/eval) and training are **mutually exclusive** — one sequential loop enforces it.
 
-**Nightly-green gate (verified tonight):** full drydock-v3 suite **856 passed, 1 skipped** in
-`.venv` (Canvas/FIAR 3.1.3–3.1.6 solid). Run with `.venv/bin/python`, not system python (no textual).
+**Survival:** loop = `setsid nohup` + `flock` single-instance; server = docker `--restart
+unless-stopped`; **crons** = `@reboot` relaunch + `*/15` watchdog (relaunch if `loop.lock` free);
+`collect()` purges orphans each gen so a relaunch can't over-subscribe `-np 2`.
+
+**Live at handoff:** gen0 COLLECT, champion=base, corpus=2 (seeded from prior verified traces),
+2 `ddt_*` TUI containers gating, both GPUs ~57%. Files under `frontier/selfdistill/`
+(`selfdistill.sh` + launcher/watchdog/digest, `gens/gen<N>/`, `eval_results.csv`, `state.env`,
+`champion.txt`). Old overnight grind (grind_watchdog + streams) cleanly RETIRED to free `-np 2`.
+
+**Why (context):** verdict = self-distill is DATA-constrained (thin AMBER band, 2 traces in ~2wk)
+— see memory `project_compass_selfdistill_verdict`. This run maximizes the band (full pool,
+best-of-8, a week) and closes the loop honestly; if transfer never appears, that IS the finding.
 
 **Still owed:** rotate the GitHub token embedded in the remote URL (needs operator; deferred).
+Nightly-green gate (earlier today): drydock-v3 suite **856 passed, 1 skipped** in `.venv`.
 
 ---
 
