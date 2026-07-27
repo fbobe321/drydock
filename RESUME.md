@@ -51,6 +51,41 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## 🌙 OVERNIGHT — 2026-07-27 04:40 (frontier volume-grind, unattended)
+
+Operator went to bed; asked me to plan work through the night. Set up a self-protecting
+autonomous compute run + verified the recent ships are green. **Nothing here needs the operator.**
+
+**Running now (survives session/SSH drop — all `setsid nohup`):**
+- **Frontier volume-grind** — 2 collector streams on main (`-np 2` match), N=8, budget-20000,
+  DD_VER=3.1.2, against the 49 *remaining* frontier tasks (`frontier/grind_s0.txt`=25,
+  `grind_s1.txt`=24; the 10 already-done are excluded). Drives the REAL drydock TUI in docker per
+  task (gate base-plain → assist research best-of-8 → harvest verified base✗→research✓).
+  Outputs: `grind_gate_s{0,1}.csv`, `grind_harvest_s{0,1}.jsonl`, `grind_s{0,1}.log`.
+- **Watchdog** (`frontier/grind_watchdog.sh`) — polls every 10min; if ALL collectors die
+  (server crash/OOM) and work remains, it cleanly RESUMES each stream on its un-done tasks
+  (excludes tasks already in the gate CSV). Only ever launches when 0 collectors run → can never
+  over-subscribe `-np 2`. Heartbeat: `frontier/grind_watchdog_status.txt`; events:
+  `frontier/grind_watchdog.log`. Flags a wedged stream (quiet >90min) as WARN, no auto-kill.
+- **Harvest monitor** (in-session) — pings on each new AMBER trace.
+
+**Morning check (one command):** `bash /data3/tbench_local/frontier/harvest_digest.sh` — prints
+unique CLEAN AMBER traces (verified, un-hinted, deduped by task) + readiness verdict. Threshold to
+train a real multi-trace LoRA = **6** clean traces. Now: **1/6** (`large-scale-text-editing`).
+Also: `cat frontier/grind_watchdog_status.txt` for stream liveness.
+
+**Why grind (context):** verdict is self-distill is DATA-constrained (thin AMBER band), NOT the
+fine-tune — see memory `project_compass_selfdistill_verdict`. Operator chose to grind for volume
+anyway rather than pivot to a stronger teacher (Devstral RULED OUT). Payoff path already exists
+(`compass train.py` multi-trace + `traces.py` held-out + `export-sft`); fires when digest hits 6.
+
+**Nightly-green gate (verified tonight):** full drydock-v3 suite **856 passed, 1 skipped** in
+`.venv` (Canvas/FIAR 3.1.3–3.1.6 solid). Run with `.venv/bin/python`, not system python (no textual).
+
+**Still owed:** rotate the GitHub token embedded in the remote URL (needs operator; deferred).
+
+---
+
 ## 🧭 SESSION HANDOFF — 2026-07-24 (Document Canvas shipped v3.1.3)
 
 **SHIPPED: Document Canvas (v3.1.3, PyPI + GitHub main `02caaa8` + tag `v3.1.3`).** Random-access,
