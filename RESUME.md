@@ -60,6 +60,19 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **📌 UPDATE 2026-07-30 08:40 — two silent-failure bugs found & fixed; first HONEST result pending.**
+> Collection worked (corpus 2→7 traces, loop self-healed 7 gens/60h) but TWO bugs silently neutered
+> the point of the run: (1) **07-29 TRAIN OOM'd 14×** — `stop_server` didn't wait for VRAM release so
+> `device_map=auto` crammed the 4-bit model onto one GPU; fixed (wait-for-free + seq 512 +
+> expandable_segments), confirmed training splits across both cards. (2) **07-30 PATH bug** — the
+> cron/watchdog-relaunched loop lacked `tmux` (in `~/miniforge3/bin`), so collection AND eval silently
+> no-op'd for ~a day; gen7's eval (0/6, 0/4) was spurious (no task ran). Fixed: script now exports a
+> full PATH (survives cron/@reboot); model verified driving the TUI again. Also hardened: measured
+> **base baseline** for a fair regression gate, promotion requires REAL transfer, **TRAIN_STEPS 150→60**
+> (gen7 memorized to loss 0.004). Reset trigger → **gen8 = first honest train→baseline→eval on the 7
+> traces, ~17:40 today** (`eval_results.csv`). Expectation still: transfer likely 0 (7 memorization-prone
+> traces), but now MEASURED honestly. A background watcher will report gen8's row when it lands.
+
 **The loop (each generation):**
 - **COLLECT** — 2 streams drive the REAL drydock TUI (docker) over the full tbench-2 pool
   (73 tasks = 89 − 10 base-solved − 6 held-out), gate base-plain → best-of-8 research assist →
