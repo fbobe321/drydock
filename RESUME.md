@@ -60,6 +60,64 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🚀 MISSION PHASE 2 — 2026-07-31: SCALE THE FORMULA TO SOLVE TBENCH.** The recipe is PROVEN
+> (raw✗→condensed✓, break-filter 3/3). Operator: *"we have the formula — build traces in phases into a
+> dataset + LoRA to complete tbench, hopefully generalizing."*
+> **FORMULA (teacher-free):** verified `base✗→assist✓` TUI solve → **CONDENSE** to `task→winning file
+> edits→verify` (`general_condense.py`) → QLoRA on the **MATCHED** base → reliably reproduces. Raw traces
+> don't transfer; condensed do. Generalization = the volume bet.
+> **PHASES:** **P1** extend `general_condense.py` to KEEP the artifact-producing run step (today drops
+> `Bash`, so run-based tasks — ~½ the pool — can't condense; highest-leverage unlock). **P2** volume-collect
+> condensed traces over the full 73-pool in batches (7→30→50+; yield is the master lever). **P3** retrain +
+> eval frozen 6-task HELD-OUT per batch, plot held-out-solves vs corpus size (compounding curve); serve
+> LoRAs on the **MATCHED HF-Q5** base (see `serve()` TODO — QAT washes the adapter out). **P4** corpus-RAG
+> assist (GraphRAG over solved traces) to raise yield. **P5** publish dataset+LoRA milestones to the HF
+> repos. **WIN:** held-out tbench tasks flip 0→1 as the corpus grows. **In flight now:** held-out
+> generalization test at n=7 (`sd_train_oneshot_condensed_multi.sh` → `condensed_multi_results.csv`,
+> Telegram armed) — feeds P3. See [[reference_hf_published_artifacts]], PRD Implementation Status top.
+
+> **📌 UPDATE 2026-07-30 ~21:00 — gen8 first HONEST result; base-mismatch found+FALSIFIED; hard-overfit
+> test RUNNING (operator engaged: "make it work, don't give up").**
+> - **gen8** (first gen where every phase actually ran): `ho=0/6(base=0) reg=1/4(base=2) promoted=no` in
+>   `eval_results.csv`. Loop works end-to-end; gate correctly refused a non-transferring + mildly-regressed
+>   LoRA (champion stays base). BUT the 4h COLLECT folded **0 new traces** → the run is **collection-starved**
+>   (absent new data, every gen retrains the same 7 traces to the same null).
+> - **Base-mismatch bug found:** loop TRAINS/converts LoRAs vs `gemma-4-31B-it-hf` but SERVES on
+>   `gemma-4-31B-it-qat-UD-Q4_K_XL.gguf` (different checkpoint → delta from wrong origin). Built a matched
+>   base `gemma-4-31B-it-hf-Q5_K_M.gguf` (built host `llama-quantize`; f16→Q5).
+> - **Reproduction test (3×3, real TUI, `sd_train_oneshot_reprotest.sh` → `reprotest_results.csv`):**
+>   HFbase+LoRA ≡ HFbase-plain (0,1,0 both) → **the gen8 adapter is INERT even on the matched base** → the
+>   mismatch is a real latent bug but NOT why self-distill fails. The one solve (bn-fit-modify) is a
+>   base-CAPABILITY effect (HF-Q5 solves it plain; QAT can't). Adapter load verified in server logs.
+>   Leading blocker now: **adapter too weak** (gen8 = 60 steps, loss 0.18, r=16 — steps were cut 150→60 to
+>   AVOID memorization, the opposite of what "if it can solve it we can train it" needs).
+> - **hard-overfit (raw) VERDICT 22:43: INERT 0/3** (`hardmemo_results.csv`). Overfit raw
+>   distribution-search to loss→0.0005 (r=32), matched base, adapter load verified → 0,0,0. Even full
+>   memorization on the matched base does NOT reproduce the agentic task ⇒ weight-space memorization ≠
+>   agentic execution. Confirms PRD "memorized ≠ re-executes" — the RAW trajectory format doesn't transfer.
+> - **CONDENSED test — VERDICT 01:40: 🎉 WIN, 3/3.** `sd_train_oneshot_condensed.sh` overfit the CONDENSED
+>   solve of break-filter-js-from-html (task→`Write /app/out.html`→verify), matched base → 3/3 solves
+>   (`condensed_results.csv`), fast. Same-task A/B: raw+LoRA=0 AND plain=0 in reprotest → **raw✗ →
+>   condensed✓**. **THE FIX: the loop must CONDENSE traces before training, not train raw trajectories** —
+>   explains 8 gens of null transfer. Operator hypothesis HOLDS in condensed form. Caveat: `general_condense`
+>   drops Bash/run steps → fully captures FILE-WRITE solutions, not RUN-based ones.
+> - **✅ (a) DONE + PUBLISHED 2026-07-31.** (a) Condensing wired into `selfdistill.sh` train() (condense
+>   scrubbed raw via `general_condense.py` before harvest → SFT). Serve base kept on the proven **QAT**
+>   65536/np2 for collection (a switch to the matched HF-Q5 is UNVALIDATED for VRAM and only matters when a
+>   LoRA is served, which is days away given starvation) — left a TODO in `serve()`: when applying a LoRA
+>   at eval/champion, use the matched `gemma-4-31B-it-hf-Q5_K_M.gguf` (conditional on `$lora_arg`); QAT
+>   otherwise. baseline.env invalidated (re-measures). **PUBLISHED to HF
+>   fbobe3:** adapter https://huggingface.co/fbobe3/gemma-4-31b-condensed-selfdistill-lora + dataset
+>   https://huggingface.co/datasets/fbobe3/tbench-condensed-selfdistill-traces (canary-scrubbed; base
+>   referenced as google/gemma-4-31b-it — verify id). See [[reference_hf_published_artifacts]]. **(c) held-out
+>   generalization test = STILL OWED** (task #6; deferred per "just publish"). HF token: env only, never git.
+> - **NEXT (operator: "a then c then publish"):** (a) wire condensing into the loop's TRAIN (`selfdistill.sh`
+>   train() → condense before harvest); (c) `sd_train_oneshot_condensed_multi.sh` — condensed MULTI-task LoRA
+>   on all 7 traces + eval the 6 HELD-OUT tasks (generalization = the real RSI test); then PUBLISH the
+>   condensed LoRA to HF `fbobe3/` with a full model-card write-up. Tracked tasks #5–7. **On resume read
+>   `condensed_multi_results.csv` (if present) then `condensed_results.csv`.** All experiment scripts are
+>   `sd_train_oneshot*` (watchdog defers; relaunch loop on exit). Telegram: `tg_notify_*.sh`.
+
 > **📌 UPDATE 2026-07-30 08:40 — two silent-failure bugs found & fixed; first HONEST result pending.**
 > Collection worked (corpus 2→7 traces, loop self-healed 7 gens/60h) but TWO bugs silently neutered
 > the point of the run: (1) **07-29 TRAIN OOM'd 14×** — `stop_server` didn't wait for VRAM release so
