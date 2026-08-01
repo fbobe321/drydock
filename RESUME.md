@@ -79,7 +79,13 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 > `research/collector/` (frontier_collect_n3.sh, tui_task_lib.sh, general_condense.py) + `research/README.md`.
 > CODE ONLY — data/logs/models/runtime-state and the canary-bearing raw corpus excluded (scrubbed condensed
 > dataset is on HF). The OPERATIONAL copies still run from `/data3/tbench_local/…`; `research/` is the backup.
-> **On resume read `multirun_results.csv` FIRST.** See PRD top, [[project_selfdistill_week_run]].
+> **🎯 DECISION 2026-08-01: GRIND VOLUME FOR WEEKS + TEST GENERALIZATION (operator).** Memorization path is
+> dead; the bet is now that GENERALIZATION emerges as a large diverse condensed corpus accrues. Loop is
+> unattended + self-healing and trains+evals held-out (matched base) automatically each +2 traces (next at
+> corpus 9); generalization signal = `heldout_solves>0` in `eval_results.csv`. NEW cron `selfdistill_signal.sh`
+> (every 6h) Telegrams ONLY on a held-out hit / promotion / corpus milestone + a daily heartbeat — no watching
+> needed. Yield ~0–1/window so it's a multi-week accrual; early eval rows null until volume is large.
+> **On resume read `eval_results.csv` (held-out column) FIRST.** See PRD top, [[project_selfdistill_week_run]].
 
 > **⚠️ 2026-07-31 19:20 — MULTI-TASK COMPOSITION WALL; P1 shipped; diagnostic running.** **P1 DONE
 > (committed/pushed):** `general_condense.py` keeps the artifact-producing RUN step → run-based tasks

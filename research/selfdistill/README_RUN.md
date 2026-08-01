@@ -88,11 +88,26 @@ Tunables are env vars at the top of `selfdistill.sh` (`COLLECT_WINDOW`, `MIN_NEW
 
 ## Running log (newest first)
 
+- **2026-08-01 08:15 — 🎯 DECISION: GRIND VOLUME FOR WEEKS + TEST GENERALIZATION (operator).** Memorization
+  path is dead (composition 0/21); committing to the long bet: accumulate a large diverse condensed corpus
+  and watch whether GENERALIZATION emerges. Infra is ready and unattended: loop collects (best-of-8 +
+  **P4 corpus-RAG** yield-boost) → condenses (P1+prune) → **trains when corpus grows +2 traces** (currently
+  7; next train at 9) → evals frozen 6 held-out on the **matched HF-Q5 base** (honest baseline) → gated
+  promote. Self-heals via `@reboot` + `*/15` watchdog. **Generalization signal = `heldout_solves>0` in
+  eval_results.csv.** NEW: `selfdistill_signal.sh` (cron every 6h) Telegrams ONLY on meaningful events — a
+  held-out hit, a promotion, a corpus milestone (15/25/40/60) — plus a daily still-alive heartbeat, so a
+  multi-week run needs no watching. Reality: yield ~0–1 trace/window (gen12 folded 0), so this is a
+  multi-week accrual; early eval rows will be null until volume is large. Watch: /data3/Models LoRA gguf +
+  gens/ logs accumulate over weeks (4.2TB free — fine, but a cleanup could be added later).
+
+
 - **2026-08-01 00:45 — overnight autonomous (operator asleep, "process all the todo"): P4 shipped +
   loop eval made valid; fork-1 rate-pinning running.**
-  - **FORK 1 (running):** `sd_train_oneshot_multirun.sh` — multi-run (3×) eval of the unpruned r=128
-    adapter on the 7 trained tasks to pin the TRUE reproduction rate (single-runs gave 2/7 vs 0/7 =
-    suspected noise). Early: break-filter run2/3 = 0 → its single-run "1" was likely noise. `multirun_results.csv`.
+  - **FORK 1 DONE — 🏁 composition wall DEFINITIVE: 0/21** (0/3 on every one of the 7 trained tasks, 3× each;
+    `multirun_results.csv`). The earlier composition 2/7 was NOISE (break-filter 0/3 here). Multi-task
+    condensed reproduction is ~0 regardless of rank(32/128) or pruning; single-task is robust (break-filter
+    3/3 as its own LoRA). **The memorize-many-solutions path to a tbench-solving LoRA is DEAD; only remaining
+    bet = GENERALIZATION via corpus VOLUME (P2).** Loop resumed collecting (gen13) after, data-starved.
   - **P4 DONE + ENABLED:** `corpus_rag.py` (stdlib TF-IDF retrieval) returns the most-similar PAST verified
     solve as an analogical hint for the research assist (RSI compounding). Wired into `frontier_collect_n3.sh`
     (`CORPUS_RAG`, graceful — errors→no injection) and turned ON in the loop (`selfdistill.sh` collect passes
