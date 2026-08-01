@@ -60,6 +60,20 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🌙 OVERNIGHT AUTONOMOUS 2026-08-01 00:45 (operator asleep, "process all the todo"):** **FORK 1 running**
+> — `sd_train_oneshot_multirun.sh` multi-runs (3×) the r=128 adapter on 7 trained tasks to pin the TRUE
+> reproduction rate (2/7 vs 0/7 single-runs = suspected noise; early break-filter run2/3=0 → likely noise);
+> `multirun_results.csv`, Telegram armed. **P4 DONE + ENABLED:** `corpus_rag.py` (stdlib retrieval) injects
+> the most-similar PAST solve as an analogical hint into the research assist (RSI compounding) — wired in
+> `frontier_collect_n3.sh` (`CORPUS_RAG`, graceful) and ON in the loop (`CORPUS_RAG=1`); never retrieves the
+> current/held-out task; harvest still keyed to the plain instruction (no contamination). **Loop eval MADE
+> VALID:** `serve()` now conditional — QAT 65536/np2 for base-only COLLECT, MATCHED HF-Q5 32768/np1 when a
+> LoRA is applied (a HF-trained LoRA is inert on QAT); `serve hfq5` + `measure_baseline` now measure
+> held-out+regression on HF-Q5 (no `BASE_HELDOUT=0` assumption); baseline.env invalidated. After fork 1 the
+> loop resumes P2 collection with all of it live. **P2/P3 now proceed automatically as the corpus grows.**
+> Non-git `tbench_local` code (corpus_rag.py, frontier_collect_n3.sh, selfdistill.sh) is on disk only — NOT
+> on GitHub. **On resume read `multirun_results.csv` FIRST.** See PRD top, [[project_selfdistill_week_run]].
+
 > **⚠️ 2026-07-31 19:20 — MULTI-TASK COMPOSITION WALL; P1 shipped; diagnostic running.** **P1 DONE
 > (committed/pushed):** `general_condense.py` keeps the artifact-producing RUN step → run-based tasks
 > (distribution-search, build-pmars) now condense to COMPLETE targets. compass `3bbb19d`; drydock-v3 pushed
