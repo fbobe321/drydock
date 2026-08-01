@@ -60,6 +60,30 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **⚠️ 2026-07-31 19:20 — MULTI-TASK COMPOSITION WALL; P1 shipped; diagnostic running.** **P1 DONE
+> (committed/pushed):** `general_condense.py` keeps the artifact-producing RUN step → run-based tasks
+> (distribution-search, build-pmars) now condense to COMPLETE targets. compass `3bbb19d`; drydock-v3 pushed
+> `863e34f..940e511`. **Held-out test (multi-task, 7 traces, r=32): 0/6 held-out AND 0/7 TRAINED** — the
+> surprise: the multi-task LoRA reproduced NOTHING incl. break-filter (single-task=3/3), despite full
+> memorization (**loss→3e-5**). Packing 7 `task→solution` maps into one r=32 adapter memorizes under
+> teacher-forcing but **fails to RETRIEVE at free-generation inference** → composition/over-overfit wall.
+> **⇒ P2 volume is premature until composition is cracked.** **RUNNING (verdict ~21–22:30, Telegram armed):**
+> `sd_train_oneshot_composition.sh` → **VERDICT: 2/7 at r=128** (up from 0/7 at r=32): break-filter ✓,
+> custom-memory-heap-crash ✓; other 5 ✗. **Rank IS a lever (0→2) but not the whole story — the split is by
+> SOLUTION COMPLEXITY:** short single-file fixes reproduce; multi-file/run-heavy/computational don't (even
+> with P1 run-steps + full memorization). **NEXT (operator "2 then 1"):** (2) prune noisy condensed targets
+> (drop dead file-versions, keep-all when none run-referenced) → retrain r=128 → retest; (1) then orient P2
+> collection to the tractable simple-fix subset + measure held-out generalization within it.
+> **(2) target-pruning DONE + retest: 0/7** (`composition2_results.csv`). `general_condense` now prunes dead
+> file-versions (distribution-search 9→2; break-filter keeps out.html). Retrained r=128 on pruned 7
+> (loss→0.005, serve verified) → 0/7 incl. break-filter/custom (were 1 unpruned; pruned targets IDENTICAL)
+> ⇒ **2/7 vs 0/7 is within-noise on a low base rate, NOT "pruning hurt".** **HONEST VERDICT: multi-task
+> composition reproduces poorly (~0–2/7) regardless of rank(32→128) or pruning — NOT cracked** (single-run
+> evals; single-task tests used 3 runs). ⇒ the memorize-many-solutions path is blocked; remaining bet is
+> **GENERALIZATION via volume** (untested, needs P2). Next-decision options: multi-run eval to pin the true
+> rate / commit P2 volume + watch for generalization / per-cluster adapters. **On resume read
+> `composition2_results.csv` + `composition_results.csv` FIRST.** See PRD top, [[project_selfdistill_week_run]].
+
 > **🚀 MISSION PHASE 2 — 2026-07-31: SCALE THE FORMULA TO SOLVE TBENCH.** The recipe is PROVEN
 > (raw✗→condensed✓, break-filter 3/3). Operator: *"we have the formula — build traces in phases into a
 > dataset + LoRA to complete tbench, hopefully generalizing."*
