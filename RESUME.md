@@ -71,8 +71,13 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 > LoRA is applied (a HF-trained LoRA is inert on QAT); `serve hfq5` + `measure_baseline` now measure
 > held-out+regression on HF-Q5 (no `BASE_HELDOUT=0` assumption); baseline.env invalidated. After fork 1 the
 > loop resumes P2 collection with all of it live. **P2/P3 now proceed automatically as the corpus grows.**
-> Non-git `tbench_local` code (corpus_rag.py, frontier_collect_n3.sh, selfdistill.sh) is on disk only — NOT
-> on GitHub. **On resume read `multirun_results.csv` FIRST.** See PRD top, [[project_selfdistill_week_run]].
+> **VENDORED to GitHub 2026-08-01:** the self-distill research harness (was non-git `tbench_local`) is now
+> backed up under `research/` in this repo — `research/selfdistill/` (orchestrator, corpus_rag.py, the
+> sd_train_oneshot_* experiments, tg_notify_* with token SCRUBBED→`TG_TOKEN` env, frozen task splits) +
+> `research/collector/` (frontier_collect_n3.sh, tui_task_lib.sh, general_condense.py) + `research/README.md`.
+> CODE ONLY — data/logs/models/runtime-state and the canary-bearing raw corpus excluded (scrubbed condensed
+> dataset is on HF). The OPERATIONAL copies still run from `/data3/tbench_local/…`; `research/` is the backup.
+> **On resume read `multirun_results.csv` FIRST.** See PRD top, [[project_selfdistill_week_run]].
 
 > **⚠️ 2026-07-31 19:20 — MULTI-TASK COMPOSITION WALL; P1 shipped; diagnostic running.** **P1 DONE
 > (committed/pushed):** `general_condense.py` keeps the artifact-producing RUN step → run-based tasks

@@ -1,0 +1,6 @@
+adaptive-rejection-sampler
+circuit-fibsqrt
+dna-assembly
+fix-ocaml-gc
+mteb-leaderboard
+regex-chess

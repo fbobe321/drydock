@@ -1,0 +1,4 @@
+build-cython-ext
+build-pov-ray
+cancel-async-tasks
+configure-git-webserver
