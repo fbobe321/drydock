@@ -60,10 +60,12 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
-> **🌙 OVERNIGHT AUTONOMOUS 2026-08-01 00:45 (operator asleep, "process all the todo"):** **FORK 1 running**
-> — `sd_train_oneshot_multirun.sh` multi-runs (3×) the r=128 adapter on 7 trained tasks to pin the TRUE
-> reproduction rate (2/7 vs 0/7 single-runs = suspected noise; early break-filter run2/3=0 → likely noise);
-> `multirun_results.csv`, Telegram armed. **P4 DONE + ENABLED:** `corpus_rag.py` (stdlib retrieval) injects
+> **🌙 OVERNIGHT AUTONOMOUS 2026-08-01 (operator asleep, "process all the todo"):** **🏁 FORK 1 DONE —
+> composition wall DEFINITIVE: multi-task reproduction = 0/21** (0/3 on every one of the 7 trained tasks;
+> the earlier 2/7 was NOISE — break-filter 0/3 here). `multirun_results.csv`. Single-task reproduction is
+> robust; packing many solutions into one adapter memorizes (loss→0) yet retrieves NOTHING — rank/pruning
+> don't help. **The memorize-many-solutions path is DEAD; only bet left = GENERALIZATION via corpus VOLUME
+> (P2).** **P4 DONE + ENABLED:** `corpus_rag.py` (stdlib retrieval) injects
 > the most-similar PAST solve as an analogical hint into the research assist (RSI compounding) — wired in
 > `frontier_collect_n3.sh` (`CORPUS_RAG`, graceful) and ON in the loop (`CORPUS_RAG=1`); never retrieves the
 > current/held-out task; harvest still keyed to the plain instruction (no contamination). **Loop eval MADE
