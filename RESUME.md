@@ -60,6 +60,32 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **⚙️ 2026-08-05 — RATCHET (Dawkins cumulative selection) built + under test; normal loop STOPPED
+> at operator request.** The volume ceiling (stuck at 7 condensed traces) is a COLLECTION limit: best-of-N
+> gives the base a FRESH container per attempt → full backslip every try → tasks needing more than one
+> attempt's work are uncrackable no matter the N. **`ratchet_solve.sh`** applies a pawl:
+> fitness = the REAL checker's pass-count (CTRF `passed/total`, graded — not binary); on an IMPROVEMENT it
+> `docker commit`s the container (PAWL, locks in forward progress); on no-gain it discards and `restore_snapshot`
+> rolls back to best next round; continuation prompt tells the model its work is preserved + current pass-count.
+> **Anti-cheat:** the checker is copied in only to score, then `/tests`+`/logs` are `rm -rf`'d BEFORE the
+> snapshot, so persisted state never contains the tests (a legitimate RL-style reward). Same base model, NO
+> stronger teacher — mechanism, not model. **First sweep** (`sd_train_oneshot_ratchet_run.sh`,
+> kv-store-grpc + nginx-request-logging): both SOLVED at round 1 (7/7, 8/8) — POSITIVE but INCONCLUSIVE, since
+> a round-1 solve never exercises the across-rounds pawl/rollback. **Operator (2026-08-05): "stop the normal
+> run, progress further with the ratchet."** Loop stopped by specific PID (never a broad `drydock` pkill);
+> base HF-Q5 server left up; running **`sd_train_oneshot_ratchet_hard.sh`** (a NO-RELAUNCH variant — named
+> `sd_train_oneshot*` so the `*/15` watchdog defers) on 3 genuinely hard, richly-graded, non-held-out/non-
+> regression tasks: **db-wal-recovery, llm-inference-batching-scheduler, compile-compcert** (6 rounds each,
+> 1200s/round). db-wal-recovery round 1 = **0/7** — the first genuinely-hard round-1 MISS, so the across-rounds
+> path is finally exercising; real signal = `best` climbing ABOVE 0 in `ratchet/ratchet_hard_results.csv`.
+> **Known wrinkle:** `best` starts at the `-1` sentinel, so a 0/N round-1 gets snapshotted as an "improvement"
+> (harmless — the model just continues from a 0-progress container; only best>0 is real forward motion).
+> Completion notice armed BOTH ways: durable Telegram (`tg_notify_ratchet_hard.sh`, detached, fires on
+> process-exit) + in-app push. **Normal self-distill loop is intentionally left DOWN** (the watchdog would
+> resume it ~15min after the sweep unless the cron is paused). Vendored token-scrubbed to
+> `research/selfdistill/` (ratchet_solve.sh, sd_train_oneshot_ratchet_{run,hard}.sh, tg_notify_ratchet*.sh).
+> **On resume read `ratchet/ratchet_hard_results.csv` + `ratchet/*.log` FIRST.** [[project_selfdistill_week_run]]
+
 > **🌙 OVERNIGHT AUTONOMOUS 2026-08-01 (operator asleep, "process all the todo"):** **🏁 FORK 1 DONE —
 > composition wall DEFINITIVE: multi-task reproduction = 0/21** (0/3 on every one of the 7 trained tasks;
 > the earlier 2/7 was NOISE — break-filter 0/3 here). `multirun_results.csv`. Single-task reproduction is

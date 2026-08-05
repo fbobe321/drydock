@@ -88,6 +88,26 @@ Tunables are env vars at the top of `selfdistill.sh` (`COLLECT_WINDOW`, `MIN_NEW
 
 ## Running log (newest first)
 
+- **2026-08-05 — ⚙️ RATCHET (Dawkins cumulative selection) built + under test; normal loop STOPPED (operator).**
+  The stuck-at-7 volume ceiling is a COLLECTION limit: best-of-N gives the base a fresh container per attempt
+  (full backslip every try), so any task needing more than one attempt's work is uncrackable at any N.
+  **`ratchet_solve.sh`** adds a pawl — fitness = the real checker's pass-count (CTRF `passed/total`, graded);
+  on improvement `docker commit` locks in progress, on no-gain it rolls back to the best snapshot next round;
+  a continuation prompt tells the model its work is preserved + the current pass-count. Anti-cheat: the checker
+  is stripped (`rm -rf /tests /logs`) BEFORE the snapshot, so persisted state never contains the tests. Same
+  base model, no stronger teacher.
+  - **First sweep** (`sd_train_oneshot_ratchet_run.sh`: kv-store-grpc, nginx-request-logging): both SOLVED at
+    round 1 (7/7, 8/8) → positive but INCONCLUSIVE — a round-1 solve never exercises the across-rounds pawl.
+  - **Operator: "stop the normal run, progress further with the ratchet."** Loop stopped by specific PID (no
+    broad `drydock` pkill); base HF-Q5 server kept up. Running **`sd_train_oneshot_ratchet_hard.sh`** (NO-relaunch
+    variant, named `sd_train_oneshot*` so the watchdog defers) on 3 hard, richly-graded, non-held-out/non-regression
+    tasks — **db-wal-recovery, llm-inference-batching-scheduler, compile-compcert** (6 rounds, 1200s each).
+    db-wal-recovery round 1 = **0/7** (first genuinely-hard round-1 miss → the across-rounds path now actually
+    fires). Real signal = `best` climbing above 0 in `ratchet/ratchet_hard_results.csv`.
+  - **Wrinkle:** `best` starts at `-1`, so a 0/N round-1 snapshots as an "improvement" (harmless; only best>0 is
+    real progress). **Completion notice armed:** Telegram (`tg_notify_ratchet_hard.sh`, detached) + in-app push.
+    Normal loop intentionally left DOWN (watchdog would resume it ~15min post-sweep unless the cron is paused).
+
 - **2026-08-01 08:15 — 🎯 DECISION: GRIND VOLUME FOR WEEKS + TEST GENERALIZATION (operator).** Memorization
   path is dead (composition 0/21); committing to the long bet: accumulate a large diverse condensed corpus
   and watch whether GENERALIZATION emerges. Infra is ready and unattended: loop collects (best-of-8 +
