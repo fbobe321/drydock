@@ -84,6 +84,7 @@ instr="$(cat "$TASKS/$task/instruction.md")"
 RESEARCH="
 Approach: investigate the actual files/errors first, research the technique empirically, verify with the task's own checker. Do not guess."
 op="exploit"; params='{"variants":1}'; best_ref=""; solved=0; bp=-1; bt=0
+XBASE=""; XDONOR=""; XWANTS=""   # crossover state (set by the bridge on the crossover rung)
 
 for r in $(seq 1 "$MAX_ROUNDS"); do
   variants=$("$PY" -c "import json,sys;print(json.loads(sys.argv[1]).get('variants',1))" "$params" 2>/dev/null || echo 1)
