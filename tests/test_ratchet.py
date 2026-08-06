@@ -201,3 +201,124 @@ def test_detect_verifier_make_test_target(tmp_path):
 
 def test_detect_verifier_none(tmp_path):
     assert detect_verifier(str(tmp_path)) is None
+
+
+# ═══════════════════════ evolutionary core ═══════════════════════
+
+from drydock.ratchet import (  # noqa: E402
+    Archive,
+    Candidate,
+    VariationPolicy,
+    diversify_prompt,
+    dominates,
+    parse_descriptor,
+    pareto_front,
+    plan_crossover,
+)
+
+
+def _c(id, f, t, desc=None, **kw):
+    return Candidate(id=id, fitness=f, total=t,
+                     descriptor=frozenset(desc) if desc is not None else None, **kw)
+
+
+# ── descriptor parsing ──
+
+def test_parse_descriptor_pytest_verbose():
+    out = "tests/test_a.py::test_x PASSED\ntests/test_a.py::test_y FAILED\ntest_a.py::test_z PASSED"
+    assert parse_descriptor(out) == frozenset({"tests/test_a.py::test_x", "test_a.py::test_z"})
+
+
+def test_parse_descriptor_none_when_unparseable():
+    assert parse_descriptor("Build OK") is None
+
+
+# ── QD archive (rec 1) ──
+
+def test_archive_niches_by_behaviour_not_count():
+    a = Archive()
+    assert a.consider(_c("A", 2, 4, ["1", "2"])) == "new-niche"
+    assert a.consider(_c("B", 2, 4, ["3", "4"])) == "new-niche"   # same count, different checks → kept
+    assert len(a.all()) == 2                                       # diversity preserved
+
+
+def test_archive_improves_within_niche_only():
+    a = Archive()
+    a.consider(_c("A", 2, 4, ["1", "2"]))
+    assert a.consider(_c("A2", 2, 4, ["1", "2"], generalizes=0.5)) == "improved"  # better on 2nd obj
+    assert a.consider(_c("A3", 1, 4, ["1", "2"])) == "rejected"
+    assert a.best().id == "A2"
+
+
+def test_archive_count_bucket_fallback_when_no_descriptor():
+    a = Archive()
+    a.consider(_c("A", 3, 6))
+    assert a.consider(_c("B", 3, 6)) == "rejected"     # same count bucket, not better
+    assert a.consider(_c("C", 4, 6)) == "new-niche"    # different count bucket
+
+
+def test_archive_reports_solved():
+    a = Archive()
+    a.consider(_c("A", 5, 6, ["1", "2", "3", "4", "5"]))
+    assert a.solved() is None
+    a.consider(_c("B", 6, 6, ["1", "2", "3", "4", "5", "6"]))
+    assert a.solved().id == "B"
+
+
+# ── multi-objective / Pareto (rec 6) ──
+
+def test_dominates_and_pareto_front():
+    hi = _c("hi", 6, 6, cost=5.0)
+    cheap = _c("cheap", 5, 6, cost=1.0)
+    dud = _c("dud", 4, 6, cost=9.0)
+    assert dominates(hi, dud)
+    assert not dominates(hi, cheap)   # hi wins fitness but loses cost → non-dominated pair
+    front = pareto_front([hi, cheap, dud])
+    ids = {c.id for c in front}
+    assert ids == {"hi", "cheap"} and "dud" not in ids
+
+
+# ── crossover (rec 2) ──
+
+def test_complementary_pairs_and_plan():
+    a = Archive()
+    a.consider(_c("A", 3, 6, ["1", "2", "3"]))
+    a.consider(_c("B", 3, 6, ["1", "4", "5"]))
+    pairs = a.complementary_pairs()
+    assert len(pairs) == 1
+    plan = plan_crossover(pairs[0][0], pairs[0][1], gen=2)
+    assert set(plan["target"]) == {"1", "2", "3", "4", "5"}
+    assert set(plan["wants"]) in ({"4", "5"}, {"2", "3"})       # missing checks to graft
+    assert plan["generation"] == 2 and len(plan["parents"]) == 2
+
+
+def test_no_crossover_when_subsumed():
+    a = _c("A", 3, 6, ["1", "2", "3"])
+    b = _c("B", 2, 6, ["1", "2"])         # b ⊂ a → no new union
+    assert plan_crossover(a, b, 1) is None
+
+
+# ── variation policy (rec 3) ──
+
+def test_variation_policy_escalates_then_resets():
+    p = VariationPolicy(patience=1)
+    assert p.next_operator(improved=True) == "exploit"
+    assert p.next_operator(improved=False) == "diversify"
+    assert p.next_operator(improved=False) == "fanout"
+    # crossover rung falls back to restart when nothing to recombine
+    assert p.next_operator(improved=False, have_crossover=False) == "restart"
+    # a win collapses the ladder back to exploit
+    assert p.next_operator(improved=True) == "exploit"
+
+
+def test_variation_policy_uses_crossover_when_available():
+    p = VariationPolicy(patience=1)
+    p.next_operator(False)  # diversify
+    p.next_operator(False)  # fanout
+    assert p.next_operator(improved=False, have_crossover=True) == "crossover"
+    assert p.params_for("fanout")["variants"] == p.fanout
+
+
+def test_diversify_prompt_tells_model_not_to_repeat():
+    d = diversify_prompt("solve it", 5, 6, "diversify")
+    assert "DIFFERENT" in d and "5/6" in d and "PRESERVED" in d

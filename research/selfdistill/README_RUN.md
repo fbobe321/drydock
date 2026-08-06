@@ -88,6 +88,20 @@ Tunables are env vars at the top of `selfdistill.sh` (`COLLECT_WINDOW`, `MIN_NEW
 
 ## Running log (newest first)
 
+- **2026-08-06 — 🧬 EVOLUTIONARY UPGRADE (all 6 framework gaps) + 2-stream POOL SWEEP running.** Applied the
+  Information→Replication→Variation→Selection lens: the ratchet was a degenerate (1+1) hill-climber; self-distill's
+  train-on-packed-corpus is a lethal variation operator (composition wall). Built: **QD `Archive`** (elite per
+  behaviour niche), **`plan_crossover`** (splice complementary partial solutions — the composition-wall cure in
+  environment-space), **`VariationPolicy`** (stall escalation exploit→diversify→fanout→crossover→restart),
+  **`Candidate` lineage**, **`pareto_front`** (multi-objective: checks/generalization/−cost) — in
+  `drydock/ratchet.py`, 42 unit tests. **`speciate.py`** (rec 5): cluster traces → per-cluster adapters.
+  **`evolve_bridge.py`** (tested offline: replays the 5/6→6/6 stall-escalate + a crossover plan) drives
+  **`ratchet_evolve.sh`** (docker/TUI glue — LIVE-UNVALIDATED, one GPU smoke run pending post-sweep).
+  Meanwhile the **POOL SWEEP** (`sd_train_oneshot_ratchet_pool2.sh`, 2 parallel streams over 68 ranked
+  candidates, early-abort on no-gradient, resumable) measures the base ratchet's reach — tally in
+  `ratchet/ratchet_pool_results.csv`, Telegram + done-file notifier armed. Early: openssl-selfsigned-cert 6/6,
+  bn-fit-modify 9/9, hf-model-inference 4/4.
+
 - **2026-08-05 — ⚙️ RATCHET (Dawkins cumulative selection) built + under test; normal loop STOPPED (operator).**
   The stuck-at-7 volume ceiling is a COLLECTION limit: best-of-N gives the base a fresh container per attempt
   (full backslip every try), so any task needing more than one attempt's work is uncrackable at any N.

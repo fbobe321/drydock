@@ -19,7 +19,7 @@ import os
 import re
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 # ───────────────────────── fitness (verifier → score) ─────────────────────────
@@ -316,3 +316,207 @@ def parse_ratchet_args(arg: str) -> tuple[str, str, int, str]:
     if not goal:
         raise ValueError("no goal given")
     return " ".join(goal), verify, rounds, fitness
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Evolutionary core — lift the (1+1) hill-climber into a population-based search:
+#   Information  → Candidate (genotype ref + lineage + fitness history)
+#   Replication  → Archive keeps diverse elites (not one incumbent)
+#   Variation    → VariationPolicy escalates the operator on stall; crossover splices
+#   Selection    → Pareto (multi-objective) + Quality-Diversity niching
+# Pure/stdlib and unit-tested; the ratchet driver wires genotypes (git/docker refs).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── per-check behaviour descriptor (which checks pass, not just how many) ──
+
+def parse_descriptor(output: str) -> frozenset[str] | None:
+    """Extract the SET of passing check names from verbose test output — the
+    'behaviour descriptor' that lets the archive niche by *what* passes, not just
+    the count. Handles pytest -v ("path::test PASSED") and unittest -v
+    ("test_x (mod) ... ok"). Returns None if it can't identify individual checks."""
+    names = set(re.findall(r"([\w./]+::[\w\[\].-]+)\s+PASSED", output))
+    if not names:
+        names = {m.group(1) for m in re.finditer(r"^(test\w+)\b.*\bok\s*$", output, re.M)}
+    return frozenset(names) if names else None
+
+
+# ── Information: a candidate with lineage (rec 4) ──
+
+@dataclass
+class Candidate:
+    """One solution in the population. `descriptor` is the behaviour niche (set of
+    passing checks); when unknown it falls back to a pass-count bucket so the
+    archive still functions. `snapshot` is the opaque genotype handle (a git or
+    docker ref the driver can restore)."""
+
+    id: str
+    fitness: int                              # primary objective: passing checks
+    total: int
+    snapshot: str | None = None               # genotype handle
+    descriptor: frozenset[str] | None = None  # which checks pass (behaviour)
+    parents: tuple[str, ...] = ()
+    generation: int = 0
+    cost: float = 0.0                          # rounds/tokens spent (minimize)
+    generalizes: float = 0.0                   # held-out proxy in [0,1] (maximize)
+    history: tuple[int, ...] = ()              # fitness trajectory
+
+    @property
+    def solved(self) -> bool:
+        return self.total > 0 and self.fitness >= self.total
+
+    @property
+    def niche(self):
+        """Key for Quality-Diversity binning: the behaviour descriptor, or a
+        pass-count bucket when per-check info isn't available."""
+        return self.descriptor if self.descriptor is not None else ("count", self.fitness)
+
+    def objectives(self) -> tuple[float, float, float]:
+        """Maximize all three: (checks passed, generalization, -cost)."""
+        return (float(self.fitness), float(self.generalizes), -float(self.cost))
+
+
+# ── Selection: multi-objective / Pareto (rec 6) ──
+
+def dominates(a: Candidate, b: Candidate) -> bool:
+    """Pareto dominance: a is ≥ b on every objective and strictly > on at least one."""
+    ao, bo = a.objectives(), b.objectives()
+    return all(x >= y for x, y in zip(ao, bo)) and any(x > y for x, y in zip(ao, bo))
+
+
+def pareto_front(cands: list[Candidate]) -> list[Candidate]:
+    """The non-dominated set — solutions no other solution beats on all objectives."""
+    return [c for c in cands if not any(dominates(o, c) for o in cands if o is not c)]
+
+
+# ── Replication + Quality-Diversity archive (rec 1) ──
+
+@dataclass
+class Archive:
+    """Quality-Diversity population: one elite per behaviour niche, so diversity a
+    single incumbent would crush is preserved. Replaces the ratchet's single best
+    snapshot; the global best is still available via best()."""
+
+    elites: dict = field(default_factory=dict)   # niche -> Candidate
+
+    def consider(self, c: Candidate) -> str:
+        """Offer a candidate. Returns 'new-niche' | 'improved' | 'rejected'.
+        Within a niche the higher fitness (tie-broken by fewer parents/cost) wins."""
+        cur = self.elites.get(c.niche)
+        if cur is None:
+            self.elites[c.niche] = c
+            return "new-niche"
+        if (c.fitness, c.generalizes, -c.cost) > (cur.fitness, cur.generalizes, -cur.cost):
+            self.elites[c.niche] = c
+            return "improved"
+        return "rejected"
+
+    def best(self) -> Candidate | None:
+        if not self.elites:
+            return None
+        return max(self.elites.values(), key=lambda c: (c.fitness, c.generalizes, -c.cost))
+
+    def all(self) -> list[Candidate]:
+        return list(self.elites.values())
+
+    def solved(self) -> Candidate | None:
+        return next((c for c in self.elites.values() if c.solved), None)
+
+    def complementary_pairs(self) -> list[tuple[Candidate, Candidate]]:
+        """Pairs whose passing-checks UNION strictly exceeds either alone — the
+        raw material for crossover. Only meaningful with per-check descriptors."""
+        pool = [c for c in self.elites.values() if c.descriptor]
+        pairs = []
+        for i in range(len(pool)):
+            for j in range(i + 1, len(pool)):
+                a, b = pool[i], pool[j]
+                union = a.descriptor | b.descriptor
+                if len(union) > max(len(a.descriptor), len(b.descriptor)):
+                    pairs.append((a, b))
+        # most promising first: largest reachable union
+        pairs.sort(key=lambda p: len(p[0].descriptor | p[1].descriptor), reverse=True)
+        return pairs
+
+
+# ── Variation: crossover of partial solutions (rec 2) ──
+
+def plan_crossover(a: Candidate, b: Candidate, gen: int) -> dict | None:
+    """Given two candidates passing complementary checks, describe an offspring that
+    should pass their union. Returns a plan the driver executes (splice b's edits
+    for the checks a lacks onto a's genotype, then verify). None if not complementary."""
+    if not (a.descriptor and b.descriptor):
+        return None
+    union = a.descriptor | b.descriptor
+    if len(union) <= max(len(a.descriptor), len(b.descriptor)):
+        return None
+    base, donor = (a, b) if len(a.descriptor) >= len(b.descriptor) else (b, a)
+    return {
+        "base": base.snapshot,                       # start from the stronger parent
+        "donor": donor.snapshot,                     # graft the missing capabilities
+        "wants": sorted(donor.descriptor - base.descriptor),   # checks to import
+        "target": sorted(union),
+        "parents": (a.id, b.id),
+        "generation": gen,
+    }
+
+
+# ── Variation: escalate the operator on stall (rec 3) ──
+
+class VariationPolicy:
+    """Turns the (1+1) climber into (1+λ) with diversification. Each round returns
+    the operator to use; on repeated no-improvement it escalates:
+      exploit → diversify → fan-out(λ) → crossover → restart-elite → (loop)."""
+
+    LADDER = ("exploit", "diversify", "fanout", "crossover", "restart")
+
+    def __init__(self, patience: int = 1, fanout: int = 3):
+        self.patience = max(1, patience)   # stalls tolerated before escalating
+        self.fanout = fanout
+        self.stall = 0
+        self.rung = 0
+
+    def next_operator(self, improved: bool, have_crossover: bool = False) -> str:
+        """Advance the policy given last round's outcome; return the next operator."""
+        if improved:
+            self.stall = 0
+            self.rung = 0
+            return "exploit"
+        self.stall += 1
+        if self.stall >= self.patience:
+            self.stall = 0
+            self.rung = min(self.rung + 1, len(self.LADDER) - 1)
+        op = self.LADDER[self.rung]
+        if op == "crossover" and not have_crossover:
+            op = "restart"    # nothing to recombine → jump to restarting from an elite
+        return op
+
+    def params_for(self, op: str) -> dict:
+        """Concrete knobs the driver applies for an operator (temperature, λ, prompt)."""
+        return {
+            "exploit":   {"temperature": 0.2, "variants": 1,           "mode": "continue"},
+            "diversify": {"temperature": 0.9, "variants": 1,           "mode": "rethink"},
+            "fanout":    {"temperature": 0.8, "variants": self.fanout, "mode": "continue"},
+            "crossover": {"temperature": 0.4, "variants": 1,           "mode": "crossover"},
+            "restart":   {"temperature": 1.0, "variants": 1,           "mode": "restart"},
+        }[op]
+
+
+def diversify_prompt(goal: str, passed: int, total: int, op: str) -> str:
+    """Operator-specific continuation prompt so a stalled round actually varies its
+    approach instead of repeating the same failing move."""
+    base = (
+        f"{goal}\n\n[CONTINUATION — your previous work is PRESERVED.] A verifier passes "
+        f"{passed}/{total}. "
+    )
+    if op == "diversify":
+        return base + (
+            "Your last approach STALLED. Do NOT repeat it — step back and try a "
+            "DIFFERENT strategy for the still-failing checks: re-read the failing "
+            "area, question an assumption you made, and take another route. Keep "
+            "everything that already passes."
+        )
+    if op == "restart":
+        return base + (
+            "Progress is stuck. Reconsider the problem from first principles for the "
+            "remaining checks while preserving what passes — a fresh decomposition."
+        )
+    return continuation_prompt(goal, passed, total)

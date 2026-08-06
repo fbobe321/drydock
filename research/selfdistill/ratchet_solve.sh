@@ -101,6 +101,11 @@ $RESEARCH
     say "round $r: no gain ($ps ≤ $best) — discard, rollback to best next round"
   fi
   ddt_down "$task" >/dev/null 2>&1
+  # early-abort: no gradient for the pawl to grab (best still 0 after N rounds) → stop wasting rounds.
+  if [ "${ABORT_FLAT_ROUNDS:-0}" -gt 0 ] && [ "$best" -le 0 ] && [ "$r" -ge "$ABORT_FLAT_ROUNDS" ]; then
+    say "round $r: still 0/$total after $r rounds — no gradient, aborting early (ABORT_FLAT_ROUNDS=$ABORT_FLAT_ROUNDS)"
+    break
+  fi
 done
 say "===== RATCHET $task DONE: solved=$solved best=$best/$total ====="
 echo "$task,$solved,$best,$total" >> "$OUT/ratchet_results.csv"

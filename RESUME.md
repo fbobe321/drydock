@@ -60,6 +60,32 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🧬 2026-08-06 — EVOLUTIONARY UPGRADE: all 6 gaps vs the Evolutionary Software Framework implemented.**
+> Diagnosis (operator applied Information→Replication→Variation→Selection): our ratchet was a degenerate
+> **(1+1) hill-climber** (population 1, asexual, single-objective) and self-distill's variation operator is
+> **lethal** (packs many solutions → memorizes, transfer→0 = composition wall). Built the fixes:
+> - **`drydock/ratchet.py` evolutionary core (stdlib, 42 unit tests green)** — recs 1-4,6:
+>   `Candidate` (lineage: id/parents/generation/fitness-history/cost/generalizes) · `Archive`
+>   (**Quality-Diversity**: one elite per behaviour niche keyed by *which* checks pass via
+>   `parse_descriptor`, falls back to a count bucket) · `dominates`/`pareto_front` (**multi-objective**:
+>   checks, generalization, −cost) · `VariationPolicy` (escalates on stall
+>   exploit→diversify→fan-out(λ)→crossover→restart) · `plan_crossover` + `Archive.complementary_pairs`
+>   (**splice two partial solutions** whose passing-checks union exceeds either — the evolutionary cure for
+>   the composition wall, in environment-space where it already works) · `diversify_prompt`.
+> - **Rec 5 speciation** — `research/selfdistill/speciate.py` (stdlib TF-IDF cosine + greedy agglomerative):
+>   cluster solved traces into skill "species" → train ONE adapter PER cluster (not one lethal packed adapter).
+>   Verified: nginx tasks co-cluster, pytorch tasks co-cluster, git separate.
+> - **Live wiring** — `research/selfdistill/evolve_bridge.py` (stateful decision seam; imports the tested core;
+>   persists archive+lineage+policy across rounds) + `ratchet_evolve.sh` (docker/TUI glue: QD snapshot archive,
+>   fan-out best-of-λ, crossover by grafting a donor's `/app` into the base container at `/app_donor`).
+>   **Bridge verified OFFLINE end-to-end** (replayed the 5/6→6/6 stall-then-escalate, and a complementary-pair
+>   crossover plan) — no GPU needed. **⚠️ `ratchet_evolve.sh`'s docker/TUI path is LIVE-UNVALIDATED** — one
+>   GPU smoke run pending (deferred so the pool sweep keeps the GPU); algorithms are unit-tested, glue isn't.
+> - **What's protected (doing right):** objective hidden anti-cheat verifier + anti-backslip pawl.
+> **Vendored** token-scrubbed to `research/selfdistill/`. **NEXT:** after the pool sweep frees the GPU,
+> smoke-test `ratchet_evolve.sh` on a known staller (llm-inference 5/6) + a crossover case; then wire the
+> QD/crossover mode into the live pool. See [[project_compass_selfdistill_verdict]].
+
 > **🛠️ 2026-08-05 — RATCHET IS NOW A NATIVE DRYDOCK FEATURE: `/ratchet` (spike shipped).** The research
 > ratchet proved out (llm-inference-batching-scheduler solved 6/6 across rounds; see below), so per operator
 > we productized the mechanism into drydock itself. **Reframing that drove the design:** the ratchet is the
