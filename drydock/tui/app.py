@@ -180,8 +180,11 @@ class DrydockApp(App):
         self._queue.clear()
         looping = self._repeat is not None
         self._repeat = None  # Esc/stop also ends an active /loop
+        ratcheting = self._ratchet is not None
+        self._ratchet = None  # Esc/stop also ends an active /ratchet
         note = "⏹ stopped." + (f" (discarded {dropped} queued)" if dropped else "")
         note += " loop ended." if looping else ""
+        note += " ratchet ended." if ratcheting else ""
         self._info(note)
         self._refresh_status()
 
@@ -307,6 +310,7 @@ class DrydockApp(App):
         self.config["_abort"] = {}
         self._queue: list[str] = []  # prompts submitted while a turn is running
         self._repeat: dict | None = None  # active /loop: {prompt, remaining, total}
+        self._ratchet: dict | None = None  # active /ratchet: {state, verifier, checkpoint}
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
         # Live "working" line state.
@@ -666,6 +670,8 @@ class DrydockApp(App):
                 "                   build <path> · add <path> · query <q> · status · clear\n"
                 "  /skills          list skills · /skills new <name> <prompt> to create one\n"
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
+                "  /ratchet         persist verified progress across rounds until a verifier passes\n"
+                "                   /ratchet <goal> --verify \"<cmd>\" [--rounds N] [--fitness auto|exitcode|<regex>]\n"
                 "  /mcp             list connected MCP servers and their tools\n"
                 "  /rmf             RMF automation — /rmf bootstrap, then /rmf-control etc.\n"
                 "  /stig            /stig new <xccdf> → blank .ckl; summarize; /stig-assess\n"
@@ -681,6 +687,8 @@ class DrydockApp(App):
             self._cmd_stig(arg)
         elif cmd == "/loop":
             self._cmd_loop(arg)
+        elif cmd == "/ratchet":
+            self._cmd_ratchet(arg)
         elif cmd == "/skills":
             self._cmd_skills(arg)
         elif cmd[1:] in self._skills:
@@ -890,6 +898,110 @@ class DrydockApp(App):
         self._info(f"↻ looping {count}× (Esc to stop):  {prompt}")
         self._mount(UserMessage(prompt))
         self._begin(prompt)
+
+    def _cmd_ratchet(self, arg: str) -> None:
+        """/ratchet <goal> --verify "<cmd>" [--rounds N] [--fitness auto|exitcode|<regex>]
+
+        Cumulative-selection solve: drive the goal, run the verifier, snapshot the
+        workspace whenever more checks pass (the pawl), roll back a regressed round,
+        and continue until the verifier fully passes or the round budget is spent.
+        Same model — the verifier is the only signal. Esc (or /stop) ends it."""
+        from drydock import ratchet as rmod
+
+        try:
+            goal, verify, rounds, fitness = rmod.parse_ratchet_args(arg)
+        except ValueError as e:
+            self._info(
+                f"{e}\n"
+                'usage: /ratchet <goal> --verify "<cmd>" [--rounds N] [--fitness auto|exitcode|<regex>]\n'
+                '  e.g.  /ratchet make the failing suite pass --verify "pytest -q" --rounds 6\n'
+                "  fitness: auto (parse test output) · exitcode · a custom regex with (passed[,total]) groups"
+            )
+            return
+        if self._busy:
+            self._info("A turn is already running — stop it (Esc) before starting a ratchet.")
+            return
+        cwd = self.config.get("cwd") or "."
+        cp = rmod.GitCheckpoint(cwd)
+        if not cp.available():
+            self._info(
+                "/ratchet needs a git working tree for its snapshots (the pawl). "
+                "Run `git init` here first, then retry."
+            )
+            return
+        self._ratchet = {
+            "state": rmod.RatchetState(goal=goal, max_rounds=rounds),
+            "verifier": rmod.Verifier(verify, mode=fitness, cwd=cwd),
+            "checkpoint": cp,
+        }
+        self._info(
+            f"⚙ ratchet: up to {rounds} rounds, verify `{verify}` (fitness={fitness}). "
+            "Snapshots on improvement, rolls back regressions. Esc to stop."
+        )
+        self._mount(UserMessage(goal))
+        self._begin(goal)
+
+    def _ratchet_step(self) -> None:
+        """Worker (off the UI thread): after a turn ends, verify → snapshot →
+        pawl/rollback → continue or finish. Mirrors ratchet_solve.sh's round loop."""
+        r = self._ratchet
+        if not r:
+            return
+        st, verifier, cp = r["state"], r["verifier"], r["checkpoint"]
+        rnd = st.round + 1
+        self.call_from_thread(
+            self.query_one("#working", Static).update, f"  ⚓ ratchet r{rnd}: verifying…")
+        try:
+            res = verifier.run()
+        except Exception as e:  # noqa: BLE001 — surface, never crash the TUI
+            self.call_from_thread(self.query_one("#working", Static).update, "")
+            self.call_from_thread(self._info, f"ratchet: verifier failed to run: {e}")
+            self._ratchet = None
+            self.call_from_thread(self._finish_ratchet_idle)
+            return
+        snap = cp.snapshot(f"ratchet r{rnd} {res.passed}/{res.total}")
+        action = st.record(res.passed, res.total, snap)
+        self.call_from_thread(self.query_one("#working", Static).update, "")
+
+        if action == "solved":
+            self.call_from_thread(
+                self._info,
+                f"🎉 ratchet SOLVED at round {st.round} ({res.passed}/{res.total}) — "
+                "cumulative selection cracked it. Workspace holds the passing solution.")
+            self._ratchet = None
+            self.call_from_thread(self._finish_ratchet_idle)
+            return
+
+        if action == "pawl":
+            self.call_from_thread(
+                self._info, f"↑ ratchet round {st.round}: {res.passed}/{res.total} — locked in (pawl).")
+        else:  # rollback
+            cp.restore(st.best_ref)
+            self.call_from_thread(
+                self._info,
+                f"↩ ratchet round {st.round}: {res.passed}/{res.total} ≤ best "
+                f"{st.best_passed}/{st.best_total} — rolled back to best.")
+
+        if st.exhausted():
+            cp.restore(st.best_ref)  # leave the best result on disk
+            solved = st.best_total > 0 and st.best_passed >= st.best_total
+            self.call_from_thread(
+                self._info,
+                f"⚙ ratchet done after {st.round} rounds — best {st.best_passed}/{st.best_total}"
+                + ("." if solved else " (not fully solved; workspace holds the best round)."))
+            self._ratchet = None
+            self.call_from_thread(self._finish_ratchet_idle)
+            return
+
+        from drydock.ratchet import continuation_prompt
+        self.call_from_thread(
+            self._begin, continuation_prompt(st.goal, st.best_passed, st.best_total))
+
+    def _finish_ratchet_idle(self) -> None:
+        """Return the UI to an idle, focused state after a ratchet ends."""
+        self._refresh_status()
+        self._update_suggestion()
+        self.query_one("#prompt", PromptArea).focus()
 
     def _cmd_skills(self, arg: str = "") -> None:
         """List skills, or create one: /skills new <name> <prompt…> (use $ARGS in
@@ -1582,6 +1694,11 @@ class DrydockApp(App):
         self._current_assistant = None
         if self._queue:
             self._begin(self._queue.pop(0))
+            return
+        # /ratchet: verify → snapshot/rollback → continue, off the UI thread.
+        # Runs before /loop so the two never fight; Esc clears self._ratchet.
+        if self._ratchet and not self._cancel.is_set():
+            self.run_worker(self._ratchet_step, thread=True)
             return
         # /loop: re-run the prompt until the iteration count is exhausted (Esc/
         # stop clears self._repeat). Queued user prompts take priority (above).

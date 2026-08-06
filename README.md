@@ -88,6 +88,9 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
 - **Cross-platform** — runs natively on Linux, macOS, and **Windows via PowerShell/cmd**
   (no WSL or Git-Bash required); `/shell` shows which shell your commands run in.
 - **Loops** — `/loop <count> <prompt>` runs a prompt iteratively (Esc stops).
+- **Ratchet** — `/ratchet <goal> --verify "<cmd>"` keeps solving across rounds,
+  snapshotting the workspace whenever more of your verifier passes and rolling
+  back regressions, until it goes green. Progress can't slip backward.
 
 ## Slash commands
 
@@ -105,6 +108,7 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/skills new <name> <prompt>` | Create a reusable `/<name>` skill (use `$ARGS` for input) |
 | `/<name>` | Run a skill |
 | `/loop <count> <prompt>` | Repeat a prompt N times (Esc stops) |
+| `/ratchet <goal> --verify "<cmd>"` | Solve across rounds, snapshotting on verifier gains, rolling back regressions (`--rounds N`, `--fitness auto\|exitcode\|<regex>`) |
 | `/mcp` | List connected MCP servers + their tools |
 | `/rmf bootstrap [families]` | Ingest the NIST SP 800-53 catalog (RMF automation) |
 | `/rmf-control` · `/rmf-categorize` · `/rmf-review` · `/rmf-poam` | Bundled RMF skills |

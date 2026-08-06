@@ -60,6 +60,30 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🛠️ 2026-08-05 — RATCHET IS NOW A NATIVE DRYDOCK FEATURE: `/ratchet` (spike shipped).** The research
+> ratchet proved out (llm-inference-batching-scheduler solved 6/6 across rounds; see below), so per operator
+> we productized the mechanism into drydock itself. **Reframing that drove the design:** the ratchet is the
+> ATOMIC primitive; self-distillation is just the ratchet at scale + a training tail — so build the primitive
+> first and let a future `/selfd` compose it. **New stdlib module `drydock/ratchet.py`** (pure, no TUI imports,
+> 22 unit tests green) with three primitives generalized off the tbench crutches:
+> - **`Verifier`** — replaces the hidden tbench checker with the USER'S command; `score_output()` maps output→
+>   `(passed,total)`: `auto` parses pytest/cargo/jest summaries, `exitcode` is all-or-nothing, or a custom regex.
+> - **`GitCheckpoint`** — replaces `docker commit` with git plumbing: `snapshot()` writes a dangling commit
+>   capturing tracked+untracked via a TEMP index (never touches the user's HEAD/staging/branch); `restore()`
+>   rewrites the worktree and prunes files added since. Round-trip tested (modify+add+delete → restore).
+> - **`RatchetState`** — the pawl: `best_passed` starts at `-1` so round 1 always locks in; `record()` returns
+>   `solved|pawl|rollback`; monotonic best. `continuation_prompt()` = "work PRESERVED, N/M pass, advance w/o breaking".
+> **TUI wiring** (`drydock/tui/app.py`): `/ratchet <goal> --verify "<cmd>" [--rounds N] [--fitness M]` →
+> `_cmd_ratchet` sets `self._ratchet`, `_begin(goal)`; `on_agent_finished` runs `_ratchet_step` in a worker
+> thread (verify→snapshot→pawl/rollback→continue or finish) mirroring `ratchet_solve.sh`; Esc/stop clears it;
+> requires a git work tree (messages "git init" if absent). Added to `/help` + README (feature bullet + command
+> table). **⚠️ TUI path needs the operator's HANDS-ON test** (per the TUI-testing rule — the pure module is
+> unit-verified, but the in-session drive/verify/rollback loop hasn't been run through the live TUI yet). Spike
+> limitation: a user prompt submitted DURING the verify window (brief, `_busy` False) could start a concurrent
+> turn — fine for a spike, tighten before GA. **NEXT:** operator TUI-test `/ratchet`; then `/selfd`
+> collect+condense reusing these primitives (training stays an optional extra — crosses the stdlib line).
+> Files: `drydock/ratchet.py`, `tests/test_ratchet.py`, `drydock/tui/app.py`, `README.md`.
+
 > **⚙️ 2026-08-05 — RATCHET (Dawkins cumulative selection) built + under test; normal loop STOPPED
 > at operator request.** The volume ceiling (stuck at 7 condensed traces) is a COLLECTION limit: best-of-N
 > gives the base a FRESH container per attempt → full backslip every try → tasks needing more than one
@@ -84,6 +108,14 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 > process-exit) + in-app push. **Normal self-distill loop is intentionally left DOWN** (the watchdog would
 > resume it ~15min after the sweep unless the cron is paused). Vendored token-scrubbed to
 > `research/selfdistill/` (ratchet_solve.sh, sd_train_oneshot_ratchet_{run,hard}.sh, tg_notify_ratchet*.sh).
+> **🏁 HARD SWEEP RESULT (final):** db-wal-recovery **0/7 flat** all 6 rounds (no partial-credit gradient →
+> nothing for the pawl to grab); **llm-inference-batching-scheduler 🎉 SOLVED 6/6 at round 6** — sat at 5/6
+> for rounds 1–5 (base can't one-shot the last check), the pawl HELD 5/6 across five failed rounds without
+> backslip, round 6 closed it → **first genuine across-rounds crack best-of-N structurally can't do**;
+> compile-compcert **0/3 flat**. **Lesson: the ratchet lifts tasks WITH a gradient, not tasks the base is
+> totally stuck on.** Solved traj saved (`ratchet/llm-inference-batching-scheduler_solved_traj.json`).
+> Watchdog + `@reboot` cron PAUSED (`[RATCHET-PAUSE]`, backup `crontab-preratchet-2026-08-05.bak`) to keep the
+> loop down for the productization work → see the `/ratchet` native-feature block above.
 > **On resume read `ratchet/ratchet_hard_results.csv` + `ratchet/*.log` FIRST.** [[project_selfdistill_week_run]]
 
 > **🌙 OVERNIGHT AUTONOMOUS 2026-08-01 (operator asleep, "process all the todo"):** **🏁 FORK 1 DONE —
