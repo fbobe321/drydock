@@ -236,9 +236,45 @@ def continuation_prompt(goal: str, passed: int, total: int) -> str:
     )
 
 
+def detect_verifier(cwd: str) -> tuple[str, str] | None:
+    """Guess a verify command + fitness mode from project markers so bare
+    `/ratchet <goal>` just works. Returns (command, mode) or None if nothing
+    obvious is found. Most-parseable ecosystems first."""
+    import json
+
+    def here(*names: str) -> bool:
+        return any(os.path.exists(os.path.join(cwd, n)) for n in names)
+
+    if here("Cargo.toml"):
+        return "cargo test", "auto"                 # "N passed; M failed"
+    if here("go.mod"):
+        return "go test ./...", "exitcode"          # go output isn't counted → all-or-nothing
+    if here("pytest.ini", "pyproject.toml", "setup.cfg", "tox.ini", "setup.py", "tests", "test"):
+        return "pytest -q", "auto"
+    pkg = os.path.join(cwd, "package.json")
+    if os.path.exists(pkg):
+        try:
+            scripts = (json.load(open(pkg)).get("scripts") or {})
+            t = scripts.get("test", "")
+            if t and "no test specified" not in t:    # skip npm's placeholder
+                return "npm test --silent", "auto"
+        except Exception:  # noqa: BLE001 — malformed package.json → just skip
+            pass
+    if here("Makefile", "makefile"):
+        for mk in ("Makefile", "makefile"):
+            p = os.path.join(cwd, mk)
+            try:
+                if os.path.exists(p) and re.search(r"^test:", open(p).read(), re.M):
+                    return "make test", "exitcode"
+            except OSError:
+                pass
+    return None
+
+
 def parse_ratchet_args(arg: str) -> tuple[str, str, int, str]:
-    """Parse `/ratchet <goal…> --verify <cmd> [--rounds N] [--fitness M]`.
-    Returns (goal, verify_cmd, rounds, fitness_mode). Raises ValueError on misuse.
+    """Parse `/ratchet <goal…> [--verify <cmd>] [--rounds N] [--fitness M]`.
+    Returns (goal, verify_cmd, rounds, fitness_mode); verify_cmd and fitness_mode
+    are "" when unspecified (the caller auto-detects). Raises ValueError on misuse.
     The --verify value must be a single (quoted) shell token."""
     import shlex
 
@@ -249,32 +285,34 @@ def parse_ratchet_args(arg: str) -> tuple[str, str, int, str]:
     goal: list[str] = []
     verify = ""
     rounds = 6
-    fitness = "auto"
+    fitness = ""
+    seen_flag = False
     i = 0
     while i < len(toks):
         t = toks[i]
         if t == "--verify":
+            seen_flag = True
             i += 1
             if i >= len(toks):
                 raise ValueError("--verify needs a command, e.g. --verify \"pytest -q\"")
             verify = toks[i]
         elif t == "--rounds":
+            seen_flag = True
             i += 1
             if i >= len(toks) or not toks[i].isdigit():
                 raise ValueError("--rounds needs a number, e.g. --rounds 6")
             rounds = max(1, min(int(toks[i]), 20))
         elif t == "--fitness":
+            seen_flag = True
             i += 1
             if i >= len(toks):
                 raise ValueError("--fitness needs a mode (auto|exitcode|<regex>)")
             fitness = toks[i]
         else:
-            if verify:
+            if seen_flag:
                 raise ValueError(f"unexpected argument after flags: {t!r}")
             goal.append(t)
         i += 1
     if not goal:
         raise ValueError("no goal given")
-    if not verify:
-        raise ValueError("no --verify command given")
     return " ".join(goal), verify, rounds, fitness

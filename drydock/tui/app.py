@@ -670,8 +670,8 @@ class DrydockApp(App):
                 "                   build <path> · add <path> · query <q> · status · clear\n"
                 "  /skills          list skills · /skills new <name> <prompt> to create one\n"
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
-                "  /ratchet         persist verified progress across rounds until a verifier passes\n"
-                "                   /ratchet <goal> --verify \"<cmd>\" [--rounds N] [--fitness auto|exitcode|<regex>]\n"
+                "  /ratchet         persist verified progress across rounds until tests pass\n"
+                "                   /ratchet <goal>  (verifier auto-detected; --verify \"<cmd>\" to override)\n"
                 "  /mcp             list connected MCP servers and their tools\n"
                 "  /rmf             RMF automation — /rmf bootstrap, then /rmf-control etc.\n"
                 "  /stig            /stig new <xccdf> → blank .ckl; summarize; /stig-assess\n"
@@ -900,12 +900,14 @@ class DrydockApp(App):
         self._begin(prompt)
 
     def _cmd_ratchet(self, arg: str) -> None:
-        """/ratchet <goal> --verify "<cmd>" [--rounds N] [--fitness auto|exitcode|<regex>]
+        """/ratchet <goal> [--verify "<cmd>"] [--rounds N] [--fitness auto|exitcode|<regex>]
 
         Cumulative-selection solve: drive the goal, run the verifier, snapshot the
         workspace whenever more checks pass (the pawl), roll back a regressed round,
         and continue until the verifier fully passes or the round budget is spent.
-        Same model — the verifier is the only signal. Esc (or /stop) ends it."""
+        The verifier auto-detects from the project (pytest/cargo/go/npm/make) — you
+        usually just type `/ratchet <goal>`. Same model; the verifier is the only
+        signal. Esc (or /stop) ends it."""
         from drydock import ratchet as rmod
 
         try:
@@ -913,15 +915,31 @@ class DrydockApp(App):
         except ValueError as e:
             self._info(
                 f"{e}\n"
-                'usage: /ratchet <goal> --verify "<cmd>" [--rounds N] [--fitness auto|exitcode|<regex>]\n'
-                '  e.g.  /ratchet make the failing suite pass --verify "pytest -q" --rounds 6\n'
-                "  fitness: auto (parse test output) · exitcode · a custom regex with (passed[,total]) groups"
+                "usage: /ratchet <goal> [--verify \"<cmd>\"] [--rounds N] [--fitness auto|exitcode|<regex>]\n"
+                "  e.g.  /ratchet make the failing suite pass          (verifier auto-detected)\n"
+                '        /ratchet fix the parser --verify "npm test"   (explicit override)'
             )
             return
         if self._busy:
             self._info("A turn is already running — stop it (Esc) before starting a ratchet.")
             return
         cwd = self.config.get("cwd") or "."
+        detected = ""
+        if not verify:
+            found = rmod.detect_verifier(cwd)
+            if not found:
+                self._info(
+                    "Couldn't auto-detect how to verify this project. Tell me how to check it:\n"
+                    '  /ratchet ' + (goal or "<goal>") + ' --verify "<your test/build cmd>"\n'
+                    "  (e.g. --verify \"pytest -q\" · \"go test ./...\" · \"make check\")"
+                )
+                return
+            verify, det_mode = found
+            detected = " (auto-detected — override with --verify)"
+            if not fitness:
+                fitness = det_mode
+        if not fitness:
+            fitness = "auto"
         cp = rmod.GitCheckpoint(cwd)
         if not cp.available():
             self._info(
@@ -935,7 +953,7 @@ class DrydockApp(App):
             "checkpoint": cp,
         }
         self._info(
-            f"⚙ ratchet: up to {rounds} rounds, verify `{verify}` (fitness={fitness}). "
+            f"⚙ ratchet: up to {rounds} rounds, verify `{verify}`{detected} (fitness={fitness}). "
             "Snapshots on improvement, rolls back regressions. Esc to stop."
         )
         self._mount(UserMessage(goal))

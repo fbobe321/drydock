@@ -9,6 +9,7 @@ from drydock.ratchet import (
     RatchetState,
     Verifier,
     continuation_prompt,
+    detect_verifier,
     parse_ratchet_args,
     score_output,
 )
@@ -141,13 +142,20 @@ def test_parse_basic():
 def test_parse_defaults():
     goal, verify, rounds, fitness = parse_ratchet_args('fix it --verify "go test ./..."')
     assert goal == "fix it" and verify == "go test ./..."
-    assert rounds == 6 and fitness == "auto"
+    assert rounds == 6 and fitness == ""  # unspecified → caller resolves
+
+
+def test_parse_bare_goal_leaves_verify_empty_for_autodetect():
+    goal, verify, rounds, fitness = parse_ratchet_args("make the failing test pass")
+    assert goal == "make the failing test pass"
+    assert verify == "" and fitness == "" and rounds == 6
 
 
 @pytest.mark.parametrize("bad", [
-    "no verify flag here",
-    "--verify",
-    'goal --verify "x" --rounds notanumber',
+    "",                                       # no goal
+    "--verify",                               # flag needs a value
+    'goal --verify "x" --rounds notanumber',  # bad number
+    'goal --verify "x" trailing',             # positional after a flag
 ])
 def test_parse_errors(bad):
     with pytest.raises(ValueError):
@@ -157,3 +165,39 @@ def test_parse_errors(bad):
 def test_parse_rounds_clamped():
     _, _, rounds, _ = parse_ratchet_args('g --verify "x" --rounds 999')
     assert rounds == 20
+
+
+# ───────────────────────── verifier auto-detection ─────────────────────────
+
+def test_detect_verifier_python(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    assert detect_verifier(str(tmp_path)) == ("pytest -q", "auto")
+
+
+def test_detect_verifier_rust_beats_python(tmp_path):
+    (tmp_path / "Cargo.toml").write_text("[package]\n")
+    (tmp_path / "tests").mkdir()
+    assert detect_verifier(str(tmp_path)) == ("cargo test", "auto")
+
+
+def test_detect_verifier_go(tmp_path):
+    (tmp_path / "go.mod").write_text("module x\n")
+    assert detect_verifier(str(tmp_path)) == ("go test ./...", "exitcode")
+
+
+def test_detect_verifier_npm_skips_placeholder(tmp_path):
+    import json
+    (tmp_path / "package.json").write_text(json.dumps(
+        {"scripts": {"test": "echo \"Error: no test specified\" && exit 1"}}))
+    assert detect_verifier(str(tmp_path)) is None
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": {"test": "jest"}}))
+    assert detect_verifier(str(tmp_path)) == ("npm test --silent", "auto")
+
+
+def test_detect_verifier_make_test_target(tmp_path):
+    (tmp_path / "Makefile").write_text("build:\n\tgcc x.c\ntest:\n\t./a.out\n")
+    assert detect_verifier(str(tmp_path)) == ("make test", "exitcode")
+
+
+def test_detect_verifier_none(tmp_path):
+    assert detect_verifier(str(tmp_path)) is None

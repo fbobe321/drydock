@@ -80,7 +80,13 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 > table). **⚠️ TUI path needs the operator's HANDS-ON test** (per the TUI-testing rule — the pure module is
 > unit-verified, but the in-session drive/verify/rollback loop hasn't been run through the live TUI yet). Spike
 > limitation: a user prompt submitted DURING the verify window (brief, `_busy` False) could start a concurrent
-> turn — fine for a spike, tighten before GA. **NEXT:** operator TUI-test `/ratchet`; then `/selfd`
+> turn — fine for a spike, tighten before GA.
+> **UX follow-up (operator: "too hard to use"):** `--verify` is now OPTIONAL — `detect_verifier(cwd)` auto-picks
+> the command from project markers (Cargo.toml→`cargo test`; go.mod→`go test ./...`; pytest/pyproject/tests→
+> `pytest -q`; package.json test script→`npm test --silent`, skipping npm's placeholder; Makefile `test:`→
+> `make test`). Common case is just **`/ratchet <goal>`**; startup line shows the detected command + "(auto-
+> detected — override with --verify)"; if detection fails it asks for `--verify`. 30 pure tests green (incl. 6
+> detection cases). **NEXT:** operator TUI-test `/ratchet`; then `/selfd`
 > collect+condense reusing these primitives (training stays an optional extra — crosses the stdlib line).
 > Files: `drydock/ratchet.py`, `tests/test_ratchet.py`, `drydock/tui/app.py`, `README.md`.
 
