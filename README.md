@@ -91,7 +91,9 @@ A full agentic CLI harness — every tool below is clean-room and dependency-fre
 - **Ratchet** — `/ratchet <goal>` keeps solving across rounds, snapshotting the
   workspace whenever more tests pass and rolling back regressions, until it goes
   green. The verifier auto-detects (pytest/cargo/go/npm/make); `--verify "<cmd>"`
-  overrides. Progress can't slip backward.
+  overrides. Progress can't slip backward. **`--effort low|medium|high|xhigh|max`**
+  is one dial from a cheap plain pawl (low) to full evolutionary search — fan-out
+  and crossover of partial solutions — for the hardest tasks (high+).
 
 ## Slash commands
 
@@ -109,7 +111,7 @@ Typed into the prompt. The agent also knows these, so you can just **ask it**
 | `/skills new <name> <prompt>` | Create a reusable `/<name>` skill (use `$ARGS` for input) |
 | `/<name>` | Run a skill |
 | `/loop <count> <prompt>` | Repeat a prompt N times (Esc stops) |
-| `/ratchet <goal>` | Solve across rounds, snapshotting on verifier gains, rolling back regressions. Verifier auto-detects; override with `--verify "<cmd>"` (`--rounds N`, `--fitness auto\|exitcode\|<regex>`) |
+| `/ratchet <goal>` | Solve across rounds, snapshotting on verifier gains, rolling back regressions. `--effort low..max` scales plain-pawl→evolutionary; verifier auto-detects (`--verify "<cmd>"` to override; `--rounds N`, `--fitness auto\|exitcode\|<regex>`) |
 | `/mcp` | List connected MCP servers + their tools |
 | `/rmf bootstrap [families]` | Ingest the NIST SP 800-53 catalog (RMF automation) |
 | `/rmf-control` · `/rmf-categorize` · `/rmf-review` · `/rmf-poam` | Bundled RMF skills |

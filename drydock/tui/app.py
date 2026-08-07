@@ -911,15 +911,21 @@ class DrydockApp(App):
         from drydock import ratchet as rmod
 
         try:
-            goal, verify, rounds, fitness = rmod.parse_ratchet_args(arg)
+            goal, verify, rounds, fitness, effort = rmod.parse_ratchet_args(arg)
         except ValueError as e:
             self._info(
                 f"{e}\n"
-                "usage: /ratchet <goal> [--verify \"<cmd>\"] [--rounds N] [--fitness auto|exitcode|<regex>]\n"
-                "  e.g.  /ratchet make the failing suite pass          (verifier auto-detected)\n"
-                '        /ratchet fix the parser --verify "npm test"   (explicit override)'
+                "usage: /ratchet <goal> [--effort low|medium|high|xhigh|max] [--verify \"<cmd>\"] "
+                "[--rounds N] [--fitness auto|exitcode|<regex>]\n"
+                "  effort scales it from a plain pawl (low) to full evolutionary search (high+)\n"
+                "  e.g.  /ratchet make the failing suite pass                 (verifier auto-detected)\n"
+                '        /ratchet crack this hard bug --effort high           (more rounds + exploration)'
             )
             return
+        # effort sets the round budget unless --rounds was given explicitly
+        prof = rmod.effort_profile(effort or "medium")
+        if not rounds:
+            rounds = prof["max_rounds"]
         if self._busy:
             self._info("A turn is already running — stop it (Esc) before starting a ratchet.")
             return

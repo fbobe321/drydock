@@ -271,11 +271,12 @@ def detect_verifier(cwd: str) -> tuple[str, str] | None:
     return None
 
 
-def parse_ratchet_args(arg: str) -> tuple[str, str, int, str]:
-    """Parse `/ratchet <goal…> [--verify <cmd>] [--rounds N] [--fitness M]`.
-    Returns (goal, verify_cmd, rounds, fitness_mode); verify_cmd and fitness_mode
-    are "" when unspecified (the caller auto-detects). Raises ValueError on misuse.
-    The --verify value must be a single (quoted) shell token."""
+def parse_ratchet_args(arg: str) -> tuple[str, str, int, str, str]:
+    """Parse `/ratchet <goal…> [--verify <cmd>] [--effort L] [--rounds N] [--fitness M]`.
+    Returns (goal, verify_cmd, rounds, fitness_mode, effort). rounds is 0 when
+    unspecified (the caller derives it from effort); verify_cmd/fitness_mode/effort
+    are "" when unspecified. --effort ∈ low|medium|high|xhigh|max scales the whole
+    thing from a plain pawl (low) to full evolutionary search (high+)."""
     import shlex
 
     try:
@@ -284,8 +285,9 @@ def parse_ratchet_args(arg: str) -> tuple[str, str, int, str]:
         raise ValueError(f"could not parse arguments: {e}") from e
     goal: list[str] = []
     verify = ""
-    rounds = 6
+    rounds = 0
     fitness = ""
+    effort = ""
     seen_flag = False
     i = 0
     while i < len(toks):
@@ -301,7 +303,13 @@ def parse_ratchet_args(arg: str) -> tuple[str, str, int, str]:
             i += 1
             if i >= len(toks) or not toks[i].isdigit():
                 raise ValueError("--rounds needs a number, e.g. --rounds 6")
-            rounds = max(1, min(int(toks[i]), 20))
+            rounds = max(1, min(int(toks[i]), 30))
+        elif t == "--effort":
+            seen_flag = True
+            i += 1
+            if i >= len(toks) or toks[i] not in EFFORT_LEVELS:
+                raise ValueError(f"--effort must be one of {'|'.join(EFFORT_LEVELS)}")
+            effort = toks[i]
         elif t == "--fitness":
             seen_flag = True
             i += 1
@@ -315,7 +323,7 @@ def parse_ratchet_args(arg: str) -> tuple[str, str, int, str]:
         i += 1
     if not goal:
         raise ValueError("no goal given")
-    return " ".join(goal), verify, rounds, fitness
+    return " ".join(goal), verify, rounds, fitness, effort
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -468,11 +476,14 @@ class VariationPolicy:
 
     LADDER = ("exploit", "diversify", "fanout", "crossover", "restart")
 
-    def __init__(self, patience: int = 2, fanout: int = 3):
+    def __init__(self, patience: int = 2, fanout: int = 3, ladder: tuple | None = None):
         # patience default 2: give the steady pawl a couple of rounds to grind
         # before spending compute on exploration (patience=1 escalated too fast).
+        # `ladder` sets how FAR the policy may escalate — the effort dial truncates
+        # it (low = ("exploit",) → a pure hill-climber == the plain ratchet).
         self.patience = max(1, patience)   # stalls tolerated before escalating
-        self.fanout = fanout
+        self.fanout = max(1, fanout)
+        self.ladder = tuple(ladder) if ladder else self.LADDER
         self.stall = 0
         self.rung = 0
 
@@ -485,10 +496,10 @@ class VariationPolicy:
         self.stall += 1
         if self.stall >= self.patience:
             self.stall = 0
-            self.rung = min(self.rung + 1, len(self.LADDER) - 1)
-        op = self.LADDER[self.rung]
+            self.rung = min(self.rung + 1, len(self.ladder) - 1)
+        op = self.ladder[self.rung]
         if op == "crossover" and not have_crossover:
-            op = "restart"    # nothing to recombine → jump to restarting from an elite
+            op = "restart" if "restart" in self.ladder else "exploit"
         return op
 
     def variant_specs(self, op: str) -> list[dict]:
@@ -498,13 +509,19 @@ class VariationPolicy:
         The driver runs them from the same best snapshot and keeps the best — which
         makes the eratchet a strict superset of the plain ratchet."""
         exploit = {"mode": "continue", "temperature": 0.2}
+        # fan-out width scales with self.fanout (the effort dial): fanout total
+        # attempts = 1 exploit + (fanout-1) explorers.
+        pool = [{"mode": "continue", "temperature": 0.5},
+                {"mode": "rethink", "temperature": 0.7},
+                {"mode": "continue", "temperature": 0.6},
+                {"mode": "rethink", "temperature": 0.85}]
+        fan = [(pool * 4)[i] for i in range(max(0, self.fanout - 1))]
         extra = {
             "exploit":   [],
-            "diversify": [{"mode": "rethink",   "temperature": 0.6}],
-            "fanout":    [{"mode": "continue",  "temperature": 0.5},
-                          {"mode": "rethink",   "temperature": 0.7}],
+            "diversify": [{"mode": "rethink", "temperature": 0.6}],
+            "fanout":    fan,
             "crossover": [{"mode": "crossover", "temperature": 0.4}],
-            "restart":   [{"mode": "restart",   "temperature": 0.8}],
+            "restart":   [{"mode": "restart", "temperature": 0.8}],
         }.get(op, [])
         return [exploit, *extra]
 
@@ -513,6 +530,35 @@ class VariationPolicy:
         count, and the primary mode (the exploit move)."""
         specs = self.variant_specs(op)
         return {"variants": len(specs), "specs": specs, "mode": specs[0]["mode"]}
+
+
+# ── the effort spectrum (one dial: plain pawl → full evolutionary) ──
+
+_FULL_LADDER = ("exploit", "diversify", "fanout", "crossover", "restart")
+
+# low = a pure hill-climber (the plain ratchet); each step up spends more compute
+# and unlocks more of the evolutionary ladder. `abort_flat` = rounds to tolerate a
+# 0/N no-gradient task before bailing (0 = never bail).
+_EFFORT = {
+    "low":    {"max_rounds": 3,  "patience": 2, "fanout": 1, "ladder": ("exploit",),                 "abort_flat": 1},
+    "medium": {"max_rounds": 5,  "patience": 2, "fanout": 2, "ladder": ("exploit", "diversify"),      "abort_flat": 2},
+    "high":   {"max_rounds": 8,  "patience": 2, "fanout": 3, "ladder": _FULL_LADDER,                   "abort_flat": 3},
+    "xhigh":  {"max_rounds": 12, "patience": 3, "fanout": 4, "ladder": _FULL_LADDER,                   "abort_flat": 4},
+    "max":    {"max_rounds": 16, "patience": 3, "fanout": 5, "ladder": _FULL_LADDER,                   "abort_flat": 0},
+}
+EFFORT_LEVELS = tuple(_EFFORT)
+
+
+def effort_profile(level: str) -> dict:
+    """Map an effort level (low|medium|high|xhigh|max) to ratchet knobs. Unknown →
+    'high'. `low` is exactly the plain pawl (exploit-only, no exploration)."""
+    return dict(_EFFORT.get(level, _EFFORT["high"]))
+
+
+def policy_for(level: str) -> VariationPolicy:
+    """A VariationPolicy pre-configured for an effort level."""
+    p = effort_profile(level)
+    return VariationPolicy(patience=p["patience"], fanout=p["fanout"], ladder=p["ladder"])
 
 
 def diversify_prompt(goal: str, passed: int, total: int, op: str) -> str:

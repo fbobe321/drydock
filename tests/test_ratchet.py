@@ -132,23 +132,23 @@ def test_git_checkpoint_unavailable_outside_repo(tmp_path):
 # ───────────────────────── arg parsing ─────────────────────────
 
 def test_parse_basic():
-    goal, verify, rounds, fitness = parse_ratchet_args(
-        'make the suite pass --verify "pytest -q" --rounds 8 --fitness auto')
+    goal, verify, rounds, fitness, effort = parse_ratchet_args(
+        'make the suite pass --verify "pytest -q" --rounds 8 --fitness auto --effort high')
     assert goal == "make the suite pass"
     assert verify == "pytest -q"
-    assert rounds == 8 and fitness == "auto"
+    assert rounds == 8 and fitness == "auto" and effort == "high"
 
 
 def test_parse_defaults():
-    goal, verify, rounds, fitness = parse_ratchet_args('fix it --verify "go test ./..."')
+    goal, verify, rounds, fitness, effort = parse_ratchet_args('fix it --verify "go test ./..."')
     assert goal == "fix it" and verify == "go test ./..."
-    assert rounds == 6 and fitness == ""  # unspecified → caller resolves
+    assert rounds == 0 and fitness == "" and effort == ""  # unspecified → caller resolves
 
 
 def test_parse_bare_goal_leaves_verify_empty_for_autodetect():
-    goal, verify, rounds, fitness = parse_ratchet_args("make the failing test pass")
+    goal, verify, rounds, fitness, effort = parse_ratchet_args("make the failing test pass")
     assert goal == "make the failing test pass"
-    assert verify == "" and fitness == "" and rounds == 6
+    assert verify == "" and fitness == "" and rounds == 0 and effort == ""
 
 
 @pytest.mark.parametrize("bad", [
@@ -156,6 +156,7 @@ def test_parse_bare_goal_leaves_verify_empty_for_autodetect():
     "--verify",                               # flag needs a value
     'goal --verify "x" --rounds notanumber',  # bad number
     'goal --verify "x" trailing',             # positional after a flag
+    'goal --effort ludicrous',                # invalid effort level
 ])
 def test_parse_errors(bad):
     with pytest.raises(ValueError):
@@ -163,8 +164,40 @@ def test_parse_errors(bad):
 
 
 def test_parse_rounds_clamped():
-    _, _, rounds, _ = parse_ratchet_args('g --verify "x" --rounds 999')
-    assert rounds == 20
+    _, _, rounds, _, _ = parse_ratchet_args('g --verify "x" --rounds 999')
+    assert rounds == 30
+
+
+# ── effort spectrum ──
+
+def test_effort_low_is_plain_pawl():
+    from drydock.ratchet import effort_profile, policy_for
+    p = effort_profile("low")
+    assert p["ladder"] == ("exploit",)            # never escalates → pure hill-climber
+    pol = policy_for("low")
+    for _ in range(6):
+        assert pol.next_operator(improved=False) == "exploit"   # stuck on exploit forever
+
+
+def test_effort_medium_caps_at_diversify():
+    from drydock.ratchet import policy_for
+    pol = policy_for("medium")   # ladder = (exploit, diversify), patience 2
+    ops = {pol.next_operator(improved=False) for _ in range(10)}
+    assert ops <= {"exploit", "diversify"} and "fanout" not in ops and "crossover" not in ops
+
+
+def test_effort_high_unlocks_full_ladder_and_scales_fanout():
+    from drydock.ratchet import effort_profile, policy_for
+    assert effort_profile("high")["ladder"][-1] == "restart"
+    assert effort_profile("max")["fanout"] == 5
+    pol = policy_for("max")   # fanout 5 → a fan-out round runs 5 variants (exploit + 4)
+    assert len(pol.variant_specs("fanout")) == 5
+    assert pol.variant_specs("fanout")[0]["mode"] == "continue"   # still exploit-first
+
+
+def test_effort_unknown_defaults_high():
+    from drydock.ratchet import effort_profile
+    assert effort_profile("bogus") == effort_profile("high")
 
 
 # ───────────────────────── verifier auto-detection ─────────────────────────

@@ -27,7 +27,11 @@ from drydock.ratchet import (  # noqa: E402
 def _load(state_path: str) -> dict:
     if os.path.exists(state_path):
         return json.load(open(state_path))
-    return {"elites": [], "policy": {"stall": 0, "rung": 0, "patience": 2, "fanout": 3},
+    from drydock.ratchet import effort_profile
+    prof = effort_profile(os.environ.get("EFFORT", "high"))
+    return {"elites": [],
+            "policy": {"stall": 0, "rung": 0, "patience": prof["patience"],
+                       "fanout": prof["fanout"], "ladder": list(prof["ladder"])},
             "lineage": [], "gen": 0}
 
 
@@ -54,7 +58,8 @@ def _rebuild(state: dict) -> tuple[Archive, VariationPolicy]:
     for d in state["elites"]:
         arch.consider(_cand_from(d))
     p = state["policy"]
-    pol = VariationPolicy(patience=p.get("patience", 1), fanout=p.get("fanout", 3))
+    pol = VariationPolicy(patience=p.get("patience", 2), fanout=p.get("fanout", 3),
+                          ladder=tuple(p["ladder"]) if p.get("ladder") else None)
     pol.stall, pol.rung = p.get("stall", 0), p.get("rung", 0)
     return arch, pol
 
@@ -89,7 +94,8 @@ def record(state_path: str, payload: dict) -> dict:
     # persist
     state["elites"] = [_cand_to(e) for e in arch.all()]
     state["policy"] = {"stall": pol.stall, "rung": pol.rung,
-                       "patience": pol.patience, "fanout": pol.fanout}
+                       "patience": pol.patience, "fanout": pol.fanout,
+                       "ladder": list(pol.ladder)}
     json.dump(state, open(state_path, "w"), indent=0)
 
     solved = arch.solved()

@@ -19,7 +19,12 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/
 source "$ROOT/tui_task_lib.sh"
 PY=/home/bobef/miniconda3/bin/python3
 SD=/data3/tbench_local/frontier/selfdistill
-task="${1:?task}"; MAX_ROUNDS="${2:-8}"; ROUND_BUDGET="${3:-1200}"
+task="${1:?task}"; ROUND_BUDGET="${3:-1200}"
+# EFFORT (low|medium|high|xhigh|max) is the single dial: low = plain pawl, high+ = full
+# evolutionary. It sets rounds + patience + fan-out + ladder (via evolve_bridge). $2 overrides rounds.
+export EFFORT="${EFFORT:-high}"
+MAX_ROUNDS="${2:-$("$PY" -c "import os,sys;sys.path.insert(0,os.environ['DRYDOCK_SRC'])
+from drydock.ratchet import effort_profile;print(effort_profile('$EFFORT')['max_rounds'])" 2>/dev/null || echo 8)}"
 OUT="$SD/ratchet"; mkdir -p "$OUT"
 LOG="$OUT/${task}.evolve.log"; STATE="$OUT/${task}.evolve.state.json"; rm -f "$STATE"
 say(){ echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
