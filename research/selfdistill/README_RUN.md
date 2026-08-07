@@ -88,6 +88,16 @@ Tunables are env vars at the top of `selfdistill.sh` (`COLLECT_WINDOW`, `MIN_NEW
 
 ## Running log (newest first)
 
+- **2026-08-07 — 🧪 ESCALATION PIPELINE + CONTROL; tbench 29/89 (32.6%).** Effort spectrum run as a pipeline:
+  `.22`/llama.cpp = LOW plain-pawl triage (DONE 68/68, **15 solved**); `.21`/vLLM = HIGH eratchet on the residue.
+  **Two bugs fixed:** (1) `commit_ref` set -u → eratchet had only ever run ROUND 1 (earlier "evolutionary"
+  results incl. merge-diff were bogus round-1 base one-shots); (2) vLLM EngineCore CUDA-OOM crash on drydock's
+  full request — operator fixed it (stopped .21's llama.cpp → vLLM owns both GPUs; OOM 74→0). Post-fix the
+  eratchet finally runs the full ladder for real (diversify→fanout×3→crossover fired, overfull 2→3/4) but so far
+  only MATCHES plain-ratchet bests — no crack the plain ratchet couldn't get. Cost: fanout rounds ~3× slower.
+  **CONTROL RUNNING:** all 29 solved tasks re-run at SINGLE attempt on .22 (`control_noratchet.sh`, no ratchet)
+  → ratchet marginal value = 29 − control_solves. `control/control_results.csv`. The real verdict on ratchet worth.
+
 - **2026-08-06 (pm) — 📊 POOL SWEEP + eratchet-LIVE + 2nd SERVER; tbench ≈ 25/89 (28%).** THREE parallel
   ratchet workloads. Honest attribution: most solves are ROUND-1 base one-shots (`base_solved.txt`=10
   undercounts the base's real one-shot ability via the real TUI + research nudge); genuine ratchet-EARNED

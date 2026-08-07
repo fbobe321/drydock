@@ -60,6 +60,28 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🧪 2026-08-07 — ESCALATION PIPELINE (low→high across 2 boxes) + a CONTROL to measure ratchet value.**
+> **Effort spectrum operationalized as a cheap-triage→expensive-escalation pipeline:** `.22` (llama.cpp) runs
+> LOW-effort plain-pawl ratchet triage; `.21` (vLLM, 2 GPUs after its own llama.cpp was stopped to end CUDA
+> OOM) runs HIGH-effort eratchet on the residue. **tbench = 29/89 (32.6%).**
+> **Two critical bugs found + fixed this session** (both had been silently corrupting results):
+> 1. `commit_ref` `set -u` bug → eratchet only EVER ran round 1 (earlier "evolutionary" results were bogus
+>    round-1 base one-shots). Fixed (split the `local`); smoke-test strengthened to require a round-2+ line.
+> 2. **vLLM EngineCore CUDA-OOM crash** on drydock's full request (system+~12 tools) — a 500 that took the whole
+>    server DOWN. Root cause was OOM (vLLM contending with llama.cpp on the .21 box). **Operator fixed it**
+>    (stopped .21's llama.cpp → vLLM owns both GPUs; OOM 74→0, 500s 19→0, 17× headroom). Verified: drydock agent
+>    now ENGAGES on vLLM (ctx grows, real ~20min drives) and vLLM held stable across a full overnight session.
+> **RESULTS SO FAR (honest):** `.22` low triage DONE (68/68, **15 solved** — plain pawl harvested the easy
+> wins). `.21` high eratchet now runs the FULL ladder for real (diversify→fan-out×3→**crossover fired**, e.g.
+> overfull-hbox 2/4→3/4) — BUT so far only MATCHES plain-ratchet bests (video-processing 3/5, overfull 3/4);
+> **no crack the plain ratchet couldn't get yet.** Cost flag: high-effort fan-out rounds are ~3× slower
+> (3 variants × 20min ≈ 1hr/round). Genuine plain-ratchet across-rounds cracks remain the only proven value:
+> llm-inference(r6), bn-fit(r2), sam-cell(r3), fix-code-vuln(r4), prove-plus-comm(r4).
+> **🔬 CONTROL RUNNING (operator's key question):** all 29 solved tasks re-run through `.22` at SINGLE-attempt
+> (`control_noratchet.sh`, NO rounds/snapshot/rollback) to measure how many the model+harness solve on their
+> own → **ratchet's marginal value = 29 − control_solves.** Master: `control/control_results.csv`. 2 streams,
+> ~4-5h. This number is the real verdict on whether the ratchet is worth it. [[project_two_box_ratchet_infra]]
+
 > **🔴 2026-08-06 (late) — CORRECTION: the eratchet (evolutionary ratchet) was BROKEN the whole time; its
 > "results" were round-1-only.** Bug: `commit_ref(){ local g="$1" ref="...${g}..."; }` in `ratchet_evolve.sh`
 > — under `set -u`, `g` is unbound when `ref` is expanded (same `local` statement), so commit_ref returned
