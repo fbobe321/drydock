@@ -60,6 +60,21 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🖥️ 2026-08-06 — 2ND BACKEND: vLLM Gemma-4-31B at `192.168.50.21:8000` (faster, but quirks).** Operator
+> offered a faster vLLM box. Validated from `.22`: `gemma4` present, `/props` 404s (llama.cpp-only; drydock
+> already falls back `/props`→`/models` for ctx, harmless). **Landed the load-bearing provider fix**
+> (`drydock/providers.py`): for `provider==vllm`, send `extra_body={"skip_special_tokens": false}` (+ floor an
+> already-tiny max_tokens to 2000). WHY: without it a turn truncated at max_tokens (tool-call/reasoning tails =
+> special tokens) returns EMPTY content, which a checker-scored ratchet reads as a **failure** → silent data
+> corruption. (Operator's own correction: skip_special_tokens is the real fix, not the reasoning-parser change;
+> the tool parser triggers the same empty independently.) Compiles/lint/imports clean; running llama.cpp work
+> UNTOUCHED (ddt containers pin published `DD_VER=3.0.138`, so source edits don't reach them). **Constraints:**
+> only **2 concurrent** (`max_num_seqs=2`, a regression vs llama.cpp's 8 slots) → vLLM adds throughput as
+> SEPARATE hardware, not more parallelism. `/props` poller at `.23` is a DIFFERENT host — can't remove from `.22`.
+> **BLOCKER to actually use it:** containers `uv tool install drydock-cli==$DD_VER` from PyPI, so the patch must
+> be DELIVERED (publish a new PyPI ver + bump DD_VER, OR install a local wheel in a stream variant) + point
+> `LLM_URL=http://192.168.50.21:8000/v1`. Delivery method = open decision. See [[project_pypi_publishing_live]].
+
 > **🧬 2026-08-06 — EVOLUTIONARY UPGRADE: all 6 gaps vs the Evolutionary Software Framework implemented.**
 > Diagnosis (operator applied Information→Replication→Variation→Selection): our ratchet was a degenerate
 > **(1+1) hill-climber** (population 1, asexual, single-objective) and self-distill's variation operator is

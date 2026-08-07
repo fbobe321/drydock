@@ -584,6 +584,17 @@ def stream(
     if config.get("temperature") is not None:
         kwargs["temperature"] = config["temperature"]
 
+    # vLLM-Gemma quirk: a turn truncated at max_tokens (esp. tool-call / reasoning
+    # turns, whose tail is special tokens) comes back with EMPTY content unless we
+    # send skip_special_tokens=false — and a checker-scored harness reads an empty
+    # turn as a FAILURE. Always send it for vLLM (harmless / ignored on llama.cpp),
+    # and floor an already-configured-but-tiny budget so reasoning turns don't
+    # truncate to nothing. We never impose a cap where none was set.
+    if provider == "vllm":
+        kwargs.setdefault("extra_body", {})["skip_special_tokens"] = False
+        if kwargs.get("max_tokens") and kwargs["max_tokens"] < 2000:
+            kwargs["max_tokens"] = 2000
+
     # Adaptive reasoning budget (harmony/gpt-oss style models accept this;
     # endpoints without the knob ignore the extra field). Set per turn by the
     # agent loop: high for planning, low for routine continuation.
