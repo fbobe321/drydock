@@ -47,7 +47,7 @@ except Exception: print(0,0,'null')
   docker exec "$ctr" rm -rf /tests /logs >/dev/null 2>&1
 }
 
-commit_ref(){ local g="$1" ref="ratchet_${task}_g${g}:e"; docker commit "$(_ctr "$task")" "$ref" >/dev/null 2>&1 && echo "$ref"; }
+commit_ref(){ local g="$1"; local ref="ratchet_${task}_g${g}:e"; docker commit "$(_ctr "$task")" "$ref" >/dev/null 2>&1 && echo "$ref"; }
 restore_ref(){   # bring ddt_<task> up from a snapshot ref
   local ref="$1" ctr wd; ctr=$(_ctr "$task"); docker rm -f "$ctr" >/dev/null 2>&1
   wd=$(docker image inspect "$ref" --format '{{.Config.WorkingDir}}' 2>/dev/null); [ -n "$wd" ] || wd=/app

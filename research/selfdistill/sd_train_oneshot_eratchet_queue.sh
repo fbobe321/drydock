@@ -48,12 +48,21 @@ first=$(echo "$TASKS" | awk 'NR==1')
 say "=== SMOKE: eratchet on $first (validating the evolutionary docker/TUI glue) ==="
 ensure_server
 bash "$SD/eratchet.sh" "$first" "$MAX_ROUNDS" "$ROUND_BUDGET" 2>&1 | tail -3
-if ! grep -q "EVOLVE $first DONE" "$SD/ratchet/${first}.evolve.log" 2>/dev/null; then
-  say "⚠️ SMOKE FAILED — no clean DONE for $first; the evolutionary glue needs a fix. Aborting queue."
-  tg "⚠️ eratchet SMOKE FAILED on $first — evolutionary driver glue is broken (see ${first}.evolve.log). Queue aborted; old-ratchet results stand."
+elog="$SD/ratchet/${first}.evolve.log"
+# STRONG smoke: a real run either SOLVED at round 1, or actually EXECUTED round 2+
+# (a round-2 variant line). A DONE alone is NOT enough — the restore bug produced a
+# DONE after a fake 1-round run. Also reject if every round after 1 was "restore FAILED".
+if grep -q "restore FAILED" "$elog" 2>/dev/null && ! grep -qE "round [2-9]+ op=" "$elog" 2>/dev/null; then
+  say "⚠️ SMOKE FAILED — restore FAILED / no round 2+ executed on $first. Evolutionary glue broken. Aborting."
+  tg "⚠️ eratchet SMOKE FAILED on $first — rounds not executing (restore bug). Queue aborted."
   touch "$DONE"; exit 1
 fi
-say "smoke OK — evolutionary driver works; continuing on the rest"
+if ! grep -qE "round [2-9]+ op=|SOLVED $first" "$elog" 2>/dev/null; then
+  say "⚠️ SMOKE INCONCLUSIVE — no round 2+ and no solve on $first. Aborting to be safe."
+  tg "⚠️ eratchet SMOKE inconclusive on $first — no evolutionary rounds ran. Queue aborted."
+  touch "$DONE"; exit 1
+fi
+say "smoke OK — evolutionary rounds actually executed; continuing on the rest"
 
 for t in $(echo "$TASKS" | tail -n +2); do
   ensure_server

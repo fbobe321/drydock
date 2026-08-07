@@ -60,6 +60,25 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🔴 2026-08-06 (late) — CORRECTION: the eratchet (evolutionary ratchet) was BROKEN the whole time; its
+> "results" were round-1-only.** Bug: `commit_ref(){ local g="$1" ref="...${g}..."; }` in `ratchet_evolve.sh`
+> — under `set -u`, `g` is unbound when `ref` is expanded (same `local` statement), so commit_ref returned
+> empty → `restore_ref` got "none" → **every round after round 1 silently `restore FAILED`**. So the eratchet
+> NEVER ran its evolutionary rounds (fan-out/crossover/diversify never executed). **⇒ the earlier "eratchet's
+> FIRST solve merge-diff-arc-agi-task 5/5 (crossover cracked it)" was WRONG — it was a round-1 base one-shot.**
+> Same for the other eratchet "results" (video 4/5, overfull 2/4, caffe 1/6): all round-1-only. FIXED (split
+> the `local`); strengthened the queue smoke-test to require a round-2+ line, not just a "DONE".
+> **What still stands (REAL):** the PLAIN ratchet (`ratchet_solve.sh`, no such bug — uses a simple `$SNAP`)
+> genuinely cracks tasks across rounds. **tbench solved = 24/89 (27%)** = base 10 + plain-ratchet, with **5
+> genuine across-rounds cracks**: llm-inference(r6), bn-fit-modify(r2), sam-cell-seg(r3), fix-code-vulnerability(r4),
+> prove-plus-comm(r4). The evolutionary ratchet has contributed **0** verified cracks (it never ran).
+> **2ND OPEN BUG (unfixed): on the vLLM box (.21) the agent NO-OPS** — with restore fixed, rounds now run but
+> the drydock-3.1.7-on-vLLM agent completes each round in ~35s with `ctx 0/65k` (does nothing), vs a real ~20min
+> drive on .22/llama.cpp. So the `.21` high lane is parked until that's diagnosed (empty-response path despite the
+> skip_special_tokens fix? a 3.1.7 regression? the drive prompt not landing?). **CURRENT PIPELINE:** `.22` low
+> ratchet (plain pawl, 3 rounds) over unattempted candidates = WORKING; `.21` high = STOPPED pending the vLLM fix.
+> [[project_two_box_ratchet_infra]]
+
 > **📊 2026-08-06 — POOL SWEEP + eratchet-LIVE + 2ND SERVER; tbench ≈ 25/89 (28%).** Measuring the ratchet's
 > reach across the pool with THREE parallel ratchet workloads (see live status via heartbeats).
 > **THE HONEST HEADLINE:** ~28% solved, but attribution matters — MOST new solves are ROUND-1 base one-shots,
