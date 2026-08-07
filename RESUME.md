@@ -60,6 +60,33 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **📊 2026-08-06 — POOL SWEEP + eratchet-LIVE + 2ND SERVER; tbench ≈ 25/89 (28%).** Measuring the ratchet's
+> reach across the pool with THREE parallel ratchet workloads (see live status via heartbeats).
+> **THE HONEST HEADLINE:** ~28% solved, but attribution matters — MOST new solves are ROUND-1 base one-shots,
+> i.e. `base_solved.txt` (10) badly undercounts the base's real one-shot ability when driven through the REAL
+> TUI + research nudge. **Genuine ratchet-EARNED (needed >1 round of cumulative selection): 6** —
+> old ratchet: llm-inference-batching-scheduler(r6), bn-fit-modify(r2), sam-cell-seg(r3), fix-code-vulnerability(r4),
+> prove-plus-comm(r4); **eratchet (evolutionary, FIRST solve): merge-diff-arc-agi-task 5/5** (old ratchet stalled
+> at 3/5 — crossover/fan-out cracked it). So ~28% is "base + a good agent harness"; the ratchet mechanism itself
+> has earned 6. Pool sweep master: `ratchet/ratchet_pool_results.csv`.
+> **INFRA built this session:**
+> - **2-stream parallel pool sweep** (`sd_train_oneshot_ratchet_pool2.sh`): per-task results read from each
+>   task's own log (race-free), master appended under `flock`; candidates interleaved A/B so slow gradient-rich
+>   tasks split evenly; resumable (skips recorded). `ratchet_solve.sh` gained `ABORT_FLAT_ROUNDS` (bail no-gradient
+>   tasks early).
+> - **eratchet running LIVE** (`sd_train_oneshot_eratchet_queue.sh` with `SKIP_WAIT=1`) on the gradient-stuck
+>   tasks the old ratchet couldn't close. Mixed so far: merge-diff SOLVED, video-processing 3/5→4/5 (improved),
+>   overfull-hbox 3/4→2/4 (WORSE) — evolutionary ≠ strictly better; it's earning select hard cracks.
+> - **2ND SERVER: vLLM Gemma-4-31B @ `192.168.50.21:8000`** as an ADDITIVE 3rd stream (operator: "a second
+>   server already doubles our work"). ~2× faster/request but ROUND-BUDGET-BOUND (each round runs to the fixed
+>   1200s), so the win is the parallel lane, not lower wall-clock. Delivered the patched drydock into its
+>   containers via **`DD_WHEEL`** (new env in `tui_task_lib.sh` — install a local wheel instead of the PyPI pin;
+>   backward-compatible). `.22`=llama.cpp (stream A + eratchet), `.21`=vLLM (resumes stream B's 22 candidates).
+> - **`drydock/providers.py` fix + SHIPPED**: send `skip_special_tokens: false` for vLLM (empty-content-on-
+>   truncation would score as a checker FAILURE). **Published PyPI 3.1.7** (fix + serving docs) and **deployed
+>   the website** (drydock.pages.dev) with llama.cpp + vLLM serving recipes; README "Serving Gemma-4-31B" section.
+> Naming: operator calls the evolutionary ratchet **"eratchet"**. [[project_selfdistill_week_run]]
+
 > **🖥️ 2026-08-06 — 2ND BACKEND: vLLM Gemma-4-31B at `192.168.50.21:8000` (faster, but quirks).** Operator
 > offered a faster vLLM box. Validated from `.22`: `gemma4` present, `/props` 404s (llama.cpp-only; drydock
 > already falls back `/props`→`/models` for ctx, harmless). **Landed the load-bearing provider fix**

@@ -38,7 +38,15 @@ ddt_up() {
   docker run -d --name "$ctr" \
     --add-host=host.docker.internal:host-gateway \
     -w "$workdir" "$img" sleep infinity >/dev/null || return 1
-  echo "[ddt] container $ctr up. installing drydock-cli==$DD_VER via uv ..."
+  # DD_WHEEL (optional): install a LOCAL patched wheel instead of the PyPI pin —
+  # used by the vLLM stream to pick up provider fixes. Unset → unchanged PyPI path.
+  local _wb=""
+  if [ -n "${DD_WHEEL:-}" ] && [ -f "${DD_WHEEL:-}" ]; then
+    _wb=$(basename "$DD_WHEEL"); docker cp "$DD_WHEEL" "$ctr:/tmp/$_wb" >/dev/null 2>&1
+    echo "[ddt] container $ctr up. installing PATCHED drydock from local wheel $_wb via uv ..."
+  else
+    echo "[ddt] container $ctr up. installing drydock-cli==$DD_VER via uv ..."
+  fi
   docker exec "$ctr" bash -lc '
     set -e
     command -v curl >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq curl) >/dev/null 2>&1 || true
@@ -46,7 +54,11 @@ ddt_up() {
       curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
     fi
     export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-    timeout 600 uv tool install --refresh --quiet "drydock-cli=='"$DD_VER"'" >/dev/null 2>&1
+    if [ -n "'"$_wb"'" ]; then
+      timeout 600 uv tool install --refresh --quiet "/tmp/'"$_wb"'" >/dev/null 2>&1
+    else
+      timeout 600 uv tool install --refresh --quiet "drydock-cli=='"$DD_VER"'" >/dev/null 2>&1
+    fi
     drydock --version
   ' || { echo "[ddt] drydock install FAILED in $ctr"; return 1; }
   echo "[ddt] ready. instruction.md:"; sed -n '1,40p' "$TASKS/$task/instruction.md"

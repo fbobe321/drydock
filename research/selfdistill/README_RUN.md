@@ -88,6 +88,17 @@ Tunables are env vars at the top of `selfdistill.sh` (`COLLECT_WINDOW`, `MIN_NEW
 
 ## Running log (newest first)
 
+- **2026-08-06 (pm) — 📊 POOL SWEEP + eratchet-LIVE + 2nd SERVER; tbench ≈ 25/89 (28%).** THREE parallel
+  ratchet workloads. Honest attribution: most solves are ROUND-1 base one-shots (`base_solved.txt`=10
+  undercounts the base's real one-shot ability via the real TUI + research nudge); genuine ratchet-EARNED
+  (>1 round) = **6**: llm-inference(r6), bn-fit-modify(r2), sam-cell-seg(r3), fix-code-vulnerability(r4),
+  prove-plus-comm(r4), and **eratchet's FIRST solve merge-diff-arc-agi-task 5/5** (old ratchet stalled 3/5).
+  eratchet mixed elsewhere (video-processing 3→4/5 improved; overfull-hbox 3→2/4 worse). **2nd server: vLLM
+  Gemma-4 @ 192.168.50.21** added as an additive 3rd stream (2× faster/request but round-budget-bound, so the
+  win is the parallel lane). Delivered patched drydock into containers via new `DD_WHEEL` env in tui_task_lib.
+  Shipped **PyPI 3.1.7** (`providers.py` skip_special_tokens fix for vLLM + serving docs) and **deployed the
+  website** with llama.cpp + vLLM serving recipes. Master: `ratchet/ratchet_pool_results.csv`.
+
 - **2026-08-06 — 🧬 EVOLUTIONARY UPGRADE (all 6 framework gaps) + 2-stream POOL SWEEP running.** Applied the
   Information→Replication→Variation→Selection lens: the ratchet was a degenerate (1+1) hill-climber; self-distill's
   train-on-packed-corpus is a lethal variation operator (composition wall). Built: **QD `Archive`** (elite per

@@ -24,9 +24,13 @@ server_up(){ curl -sf http://localhost:8000/health >/dev/null 2>&1; }
 ensure_server(){ server_up || { say "server down — starting base"; bash "$SD/selfdistill.sh" serve base >/dev/null 2>&1 || true; sleep 8; }; }
 
 rm -f "$DONE"
-say "eratchet queue armed — waiting for the pool sweep to finish (frees the GPU)…"
-for i in $(seq 1 30000); do [ -f "$POOL_DONE" ] && break; sleep 60; done
-say "pool sweep complete — computing gradient-stuck target list"
+if [ "${SKIP_WAIT:-0}" != 1 ]; then
+  say "eratchet queue armed — waiting for the pool sweep to finish (frees the GPU)…"
+  for i in $(seq 1 30000); do [ -f "$POOL_DONE" ] && break; sleep 60; done
+  say "pool sweep complete — computing gradient-stuck target list"
+else
+  say "SKIP_WAIT=1 — starting eratchet NOW in parallel with the remaining sweep stream"
+fi
 ensure_server
 
 # gradient-but-stuck = old ratchet made partial progress but couldn't close; best-first
