@@ -348,6 +348,54 @@ docker run -it --add-host=host.docker.internal:host-gateway \
 `-v "$PWD:/work"` mounts your project so the agent can read/edit it. Tags:
 `fbobe3/drydock:latest` and `fbobe3/drydock:<version>` (e.g. `:3.0.135`).
 
+### Serving Gemma-4-31B
+
+Drydock is provider-agnostic, but its primary target is dense **Gemma-4-31B**.
+Two proven ways to serve it on a 2×GPU box, both exposing an OpenAI-compatible
+API on `:8000` as model `gemma4`:
+
+**llama.cpp** — QAT GGUF, flexible concurrency (more slots if you need them):
+
+```
+llama-server -m gemma-4-31B-it-qat-UD-Q4_K_XL.gguf \
+  -c 65536 -np 2 --host 0.0.0.0 --port 8000 --alias gemma4
+```
+
+**vLLM** — w4a16 QAT, ~2× faster per request, 128K context:
+
+```
+docker run -d --name vllm-prod --gpus all --ipc=host --restart unless-stopped \
+  -v /data3/Models:/models -p 8000:8000 \
+  -e NCCL_P2P_DISABLE=1 \
+  vllm/vllm-openai:v0.26.0 \
+  --model /models/gemma-4-31B-it-qat-w4a16-ct \
+  --served-model-name gemma4 \
+  --tensor-parallel-size 2 \
+  --max-model-len 131072 \
+  --max-num-seqs 2 \
+  --gpu-memory-utilization 0.97 \
+  --kv-cache-dtype fp8 \
+  --tool-call-parser gemma4 \
+  --enable-auto-tool-choice
+```
+
+Point drydock at either with
+`--provider vllm --base-url http://<host>:8000/v1 --model gemma4`.
+
+**vLLM-on-Gemma-4 notes** (drydock handles these for you as of **3.1.7**):
+
+- **`skip_special_tokens: false`** is sent on every request — without it, a turn
+  truncated at `max_tokens` (tool-call / reasoning tails) comes back with *empty*
+  content, which looks like a refusal. If `finish_reason == "length"`, retry with
+  a larger `max_tokens` (≥ 2000 for reasoning-heavy calls).
+- **Reasoning is off by default.** Enable per-request via
+  `chat_template_kwargs.enable_thinking`; the vLLM reasoning parser is disabled,
+  so `<|channel>thought …` markers arrive inside `content` (stripped client-side).
+- **`--max-num-seqs 2`** caps concurrency at 2 — the cost of fitting 128K context
+  into the VRAM. Use llama.cpp if you need more concurrent sessions than context.
+- Tool-calling is the standard OpenAI format; `/props` is llama.cpp-only (vLLM
+  404s it — drydock falls back to `/v1/models` for the context length).
+
 ## Using it
 
 Type a task and press **Enter**. Drydock reads/writes/edits files and runs

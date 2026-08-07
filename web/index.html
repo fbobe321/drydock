@@ -287,6 +287,18 @@
           Tuned against dense <b>Gemma-4-31B</b> (QAT, 64K) on a single workstation; first launch autodetects
           a local model server with no account or API-key prompt.</p>
       </div>
+      <div class="reveal" style="max-width:820px;margin:22px auto 0">
+        <p class="lead" style="margin-bottom:8px">Serve <b>Gemma-4-31B</b> on a 2×GPU box — either runtime exposes an OpenAI API on <span class="mono">:8000</span> as <span class="mono">gemma4</span>:</p>
+        <pre class="mono" style="overflow-x:auto;background:#0b0f14;border:1px solid #1c2733;border-radius:10px;padding:14px;font-size:13px;line-height:1.5"><span style="color:var(--dim)"># llama.cpp — flexible concurrency</span>
+llama-server -m gemma-4-31B-it-qat-UD-Q4_K_XL.gguf -c 65536 -np 2 --port 8000 --alias gemma4
+
+<span style="color:var(--dim)"># vLLM — ~2× faster/request, 128K context (max-num-seqs 2)</span>
+docker run -d --gpus all --ipc=host -v /data3/Models:/models -p 8000:8000 -e NCCL_P2P_DISABLE=1 \
+  vllm/vllm-openai:v0.26.0 --model /models/gemma-4-31B-it-qat-w4a16-ct --served-model-name gemma4 \
+  --tensor-parallel-size 2 --max-model-len 131072 --max-num-seqs 2 --gpu-memory-utilization 0.97 \
+  --kv-cache-dtype fp8 --tool-call-parser gemma4 --enable-auto-tool-choice</pre>
+        <p class="lead" style="margin-top:10px">Then point drydock at it: <span class="mono" style="color:var(--cyan)">drydock --provider vllm --base-url http://&lt;host&gt;:8000/v1 --model gemma4</span>. Drydock handles the vLLM-Gemma quirks (empty-content-on-truncation, <span class="mono">/props</span> fallback) as of <b>3.1.7</b>.</p>
+      </div>
       <p class="tools reveal">
         <b>Tools</b> &nbsp;<span class="mono">Read · Write · Edit · Bash · Glob · Grep · ViewImage · Screenshot · todo · task · Dispatch · Worker · GitStatus · GitDiff · GitLog · GitCommit · WebSearch · WebFetch · Knowledge · BuildKnowledge · mcp__&lt;server&gt;__&lt;tool&gt;</span><br><br>
         <b>Commands</b> &nbsp;<span class="mono">/help · /model · /cwd · /undo · /back · /resume · /compact · /context · /graphrag · /events · /trace · /shell · /skills · /loop · /mcp · /advisor · /ask · /status · /clear · /quit</span><br><br>
