@@ -468,7 +468,9 @@ class VariationPolicy:
 
     LADDER = ("exploit", "diversify", "fanout", "crossover", "restart")
 
-    def __init__(self, patience: int = 1, fanout: int = 3):
+    def __init__(self, patience: int = 2, fanout: int = 3):
+        # patience default 2: give the steady pawl a couple of rounds to grind
+        # before spending compute on exploration (patience=1 escalated too fast).
         self.patience = max(1, patience)   # stalls tolerated before escalating
         self.fanout = fanout
         self.stall = 0
@@ -489,15 +491,28 @@ class VariationPolicy:
             op = "restart"    # nothing to recombine → jump to restarting from an elite
         return op
 
+    def variant_specs(self, op: str) -> list[dict]:
+        """Per-variant (mode, temperature) attempts for one round. ELITISM: the
+        FIRST variant is ALWAYS the steady low-temp exploit move, so a round can
+        never score below the plain pawl; any extra variants only EXPLORE on top.
+        The driver runs them from the same best snapshot and keeps the best — which
+        makes the eratchet a strict superset of the plain ratchet."""
+        exploit = {"mode": "continue", "temperature": 0.2}
+        extra = {
+            "exploit":   [],
+            "diversify": [{"mode": "rethink",   "temperature": 0.6}],
+            "fanout":    [{"mode": "continue",  "temperature": 0.5},
+                          {"mode": "rethink",   "temperature": 0.7}],
+            "crossover": [{"mode": "crossover", "temperature": 0.4}],
+            "restart":   [{"mode": "restart",   "temperature": 0.8}],
+        }.get(op, [])
+        return [exploit, *extra]
+
     def params_for(self, op: str) -> dict:
-        """Concrete knobs the driver applies for an operator (temperature, λ, prompt)."""
-        return {
-            "exploit":   {"temperature": 0.2, "variants": 1,           "mode": "continue"},
-            "diversify": {"temperature": 0.9, "variants": 1,           "mode": "rethink"},
-            "fanout":    {"temperature": 0.8, "variants": self.fanout, "mode": "continue"},
-            "crossover": {"temperature": 0.4, "variants": 1,           "mode": "crossover"},
-            "restart":   {"temperature": 1.0, "variants": 1,           "mode": "restart"},
-        }[op]
+        """Knobs the driver applies: per-variant specs (exploit-first), variant
+        count, and the primary mode (the exploit move)."""
+        specs = self.variant_specs(op)
+        return {"variants": len(specs), "specs": specs, "mode": specs[0]["mode"]}
 
 
 def diversify_prompt(goal: str, passed: int, total: int, op: str) -> str:

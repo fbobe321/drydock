@@ -322,3 +322,25 @@ def test_variation_policy_uses_crossover_when_available():
 def test_diversify_prompt_tells_model_not_to_repeat():
     d = diversify_prompt("solve it", 5, 6, "diversify")
     assert "DIFFERENT" in d and "5/6" in d and "PRESERVED" in d
+
+
+def test_variation_policy_elitism_exploit_always_first():
+    # every operator's variants START with the steady low-temp exploit move, so a
+    # round can never underperform the plain pawl (the fix for eratchet regressing)
+    p = VariationPolicy()
+    for op in VariationPolicy.LADDER:
+        specs = p.variant_specs(op)
+        assert specs[0] == {"mode": "continue", "temperature": 0.2}, op
+        assert len(specs) >= 1
+    # exploration adds EXTRA variants, never replaces exploit
+    assert len(p.variant_specs("diversify")) == 2
+    assert len(p.variant_specs("exploit")) == 1
+    params = p.params_for("fanout")
+    assert params["specs"][0]["mode"] == "continue" and params["variants"] == len(params["specs"])
+
+
+def test_variation_policy_default_patience_grinds_before_escalating():
+    # default patience=2: two stalls on exploit before diversifying (was 1)
+    p = VariationPolicy()
+    assert p.next_operator(improved=False) == "exploit"   # stall 1 → still grind
+    assert p.next_operator(improved=False) == "diversify"  # stall 2 → escalate

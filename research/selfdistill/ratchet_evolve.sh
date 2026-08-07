@@ -54,12 +54,13 @@ graft_donor(){   # crossover: make the donor's solution visible under /app_donor
   docker cp "$tmp:/app" "/tmp/$tmp" >/dev/null 2>&1 && docker cp "/tmp/$tmp" "$ctr:/app_donor" >/dev/null 2>&1
   docker rm -f "$tmp" >/dev/null 2>&1; rm -rf "/tmp/$tmp" >/dev/null 2>&1
 }
-render_prompt(){   # op-aware continuation prompt from the tested core
-  local op="$1" passed="$2" total="$3"
+render_prompt(){   # per-variant prompt from the tested core; maps spec mode -> diversify_prompt op
+  local mode="$1" passed="$2" total="$3" dpop
+  case "$mode" in rethink) dpop=diversify;; restart) dpop=restart;; *) dpop=continue;; esac
   "$PY" -c "
 import os,sys; sys.path.insert(0,os.environ['DRYDOCK_SRC'])
 from drydock.ratchet import diversify_prompt
-print(diversify_prompt(open('$TASKS/$task/instruction.md').read(), int('$passed'), int('$total'), '$op'))"
+print(diversify_prompt(open('$TASKS/$task/instruction.md').read(), int('$passed'), int('$total'), '$dpop'))"
 }
 
 drive(){   # one turn through the real TUI with a given prompt
@@ -87,34 +88,38 @@ op="exploit"; params='{"variants":1}'; best_ref=""; solved=0; bp=-1; bt=0
 XBASE=""; XDONOR=""; XWANTS=""   # crossover state (set by the bridge on the crossover rung)
 
 for r in $(seq 1 "$MAX_ROUNDS"); do
-  variants=$("$PY" -c "import json,sys;print(json.loads(sys.argv[1]).get('variants',1))" "$params" 2>/dev/null || echo 1)
-  # ---- set up this round's starting state per operator ----
-  case "$op" in
-    exploit|diversify|restart)
-      if [ "$r" = 1 ]; then ddt_up "$task" >/dev/null 2>&1 || { say "round 1 up FAILED"; break; }
-      else restore_ref "$best_ref" || { say "restore FAILED"; break; }; fi ;;
-    fanout)   restore_ref "$best_ref" ;;
-    crossover)
-      xb=$("$PY" -c "import json;d=json.load(open('$STATE'));print('')" 2>/dev/null)
-      restore_ref "$XBASE"; graft_donor "$XDONOR"
-      say "round $r: crossover — base=$XBASE donor=$XDONOR wants=$XWANTS (donor at /app_donor)" ;;
-  esac
-  # ---- prompt for this operator ----
-  if [ "$r" = 1 ]; then prompt="$instr
-$RESEARCH"
-  elif [ "$op" = "crossover" ]; then prompt="$instr
+  # ---- per-variant modes (ELITISM: variant 1 is ALWAYS the steady exploit move,
+  #      so a round can never score below the plain pawl; extras only explore) ----
+  if [ "$r" = 1 ]; then
+    modes="research"                          # round 1: one research attempt, fresh container
+    ddt_up "$task" >/dev/null 2>&1 || { say "round 1 up FAILED"; break; }
+  else
+    modes=$("$PY" -c "import json,sys; s=json.loads(sys.argv[1]).get('specs',[{'mode':'continue'}]); print(' '.join(x['mode'] for x in s))" "$params" 2>/dev/null || echo continue)
+  fi
+  nvar=$(echo $modes | wc -w)
+
+  # ---- run the round; keep the best variant (exploit-first guarantees ≥ plain ratchet) ----
+  best_line=""; best_p=-1; v=0
+  for mode in $modes; do
+    v=$((v+1))
+    if [ "$mode" = "crossover" ]; then
+      restore_ref "$XBASE" && graft_donor "$XDONOR"
+      say "round $r: crossover variant — base=$XBASE donor=$XDONOR wants=$XWANTS"
+    elif [ "$r" != 1 ]; then
+      restore_ref "$best_ref" || { say "restore FAILED"; break; }
+    fi
+    case "$mode" in
+      research) vp="$instr
+$RESEARCH" ;;
+      crossover) vp="$instr
 $RESEARCH
 
-[CROSSOVER] A verifier passes $bp/$bt. A DIFFERENT working solution is mounted read-only at /app_donor — it already passes checks yours misses ($XWANTS). Inspect /app_donor, fold ITS approach for those checks into /app WITHOUT breaking what already passes."
-  else prompt="$(render_prompt "$op" "$bp" "$bt")"; fi
-
-  # ---- run the round (fan-out keeps the best of λ variants) ----
-  best_line=""; best_p=-1
-  for v in $(seq 1 "${variants:-1}"); do
-    [ "$v" -gt 1 ] && restore_ref "$best_ref"
-    drive "$prompt"
+[CROSSOVER] A verifier passes $bp/$bt. A DIFFERENT working solution is mounted read-only at /app_donor — it already passes checks yours misses ($XWANTS). Inspect /app_donor, fold ITS approach for those checks into /app WITHOUT breaking what already passes." ;;
+      *) vp="$(render_prompt "$mode" "$bp" "$bt")" ;;
+    esac
+    drive "$vp"
     read -r ps pt desc < <(score "$(_ctr "$task")")
-    say "round $r op=$op variant=$v/$variants: $ps/$pt"
+    say "round $r op=$op variant=$v/$nvar mode=$mode: $ps/$pt"
     if [ "${ps:-0}" -gt "$best_p" ]; then best_p="$ps"; best_line="$ps $pt $desc"; fi
   done
   read -r ps pt desc <<< "$best_line"

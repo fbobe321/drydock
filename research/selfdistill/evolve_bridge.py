@@ -27,7 +27,7 @@ from drydock.ratchet import (  # noqa: E402
 def _load(state_path: str) -> dict:
     if os.path.exists(state_path):
         return json.load(open(state_path))
-    return {"elites": [], "policy": {"stall": 0, "rung": 0, "patience": 1, "fanout": 3},
+    return {"elites": [], "policy": {"stall": 0, "rung": 0, "patience": 2, "fanout": 3},
             "lineage": [], "gen": 0}
 
 
