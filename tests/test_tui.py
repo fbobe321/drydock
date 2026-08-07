@@ -6,13 +6,60 @@ import asyncio
 from drydock.tui.app import DrydockApp
 from drydock.tui.messages import AgentFinished
 from drydock.tui.widgets import (
+    SLASH_COMMANDS,
+    SLASH_SPECS,
     PromptHistory,
     ToolCard,
     flatten_pasted_text,
     format_tool_body,
     result_is_ok,
+    slash_menu,
     summarize_inputs,
 )
+
+
+def test_slash_commands_derived_from_specs():
+    # the flat completion list is generated from the spec table (single source)
+    assert SLASH_COMMANDS == [s.name for s in SLASH_SPECS]
+    assert "/model" in SLASH_COMMANDS and "/ratchet" in SLASH_COMMANDS
+
+
+def test_slash_menu_lists_all_on_bare_slash():
+    out = slash_menu("/")
+    assert "/help" in out and "/model" in out
+    # discovery = user sees WHAT each does, not just the name
+    assert "list or switch models" in out
+    assert "Tab completes" in out
+
+
+def test_slash_menu_filters_by_prefix():
+    out = slash_menu("/gr")
+    assert "/graphrag" in out
+    assert "/model" not in out  # non-matching commands are filtered out
+
+
+def test_slash_menu_shows_switches_once_command_is_settled():
+    # fully typed name → detail view revealing the switches
+    detail = slash_menu("/graphrag")
+    assert "build <path>" in detail and "query <q>" in detail
+    # and once args are being typed, still the detail for that command
+    assert "build <path>" in slash_menu("/graphrag add ")
+    # a command WITH multiple forms shows them too
+    assert "default <name>" in slash_menu("/model x")
+
+
+def test_slash_menu_hidden_for_non_commands():
+    assert slash_menu("") == ""
+    assert slash_menu("write a function") == ""
+    # a leading path is a normal message, not a command → no menu
+    assert slash_menu("/app/env.py defines X") == ""
+    assert slash_menu("/tmp/notes.md") == ""
+
+
+def test_slash_menu_includes_user_skills():
+    # skills are appended after the built-ins; a filtering prefix surfaces them
+    out = slash_menu("/re", skills=("review", "refactor"))
+    assert "/review" in out and "/refactor" in out
 
 
 def test_format_tool_body_expands_tabs():
@@ -169,6 +216,38 @@ def test_app_mounts_and_handles_slash():
             inp.text = ""
             await pilot.press("enter")
             await pilot.pause()
+
+    asyncio.run(main())
+
+
+def test_slashmenu_updates_live_and_leaves_ghost_untouched():
+    async def main():
+        from textual.widgets import Static
+
+        app = DrydockApp({"model": "gemma4", "provider": "vllm", "cwd": "/tmp"})
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            inp = app.query_one("#prompt")
+            menu = app.query_one("#slashmenu", Static)
+            # a stashed ghost suggestion (lives in the prompt placeholder)
+            inp.placeholder = "continue"
+
+            # typing a slash surfaces the discovery menu
+            inp.text = "/"
+            await pilot.pause()
+            assert "/model" in str(menu.render())
+            # ...and does NOT clobber the ghost suggestion pipeline
+            assert inp.placeholder == "continue"
+
+            # settling on a command reveals its switches
+            inp.text = "/graphrag"
+            await pilot.pause()
+            assert "build <path>" in str(menu.render())
+
+            # a normal message hides the menu again
+            inp.text = "write a test"
+            await pilot.pause()
+            assert str(menu.render()) == ""
 
     asyncio.run(main())
 

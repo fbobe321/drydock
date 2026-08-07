@@ -51,8 +51,10 @@ def score_output(output: str, mode: str, returncode: int) -> tuple[int, int]:
             if mt:
                 total = int(mt.group(1))
             else:
-                failed = int(_FAILED.search(output).group(1)) if _FAILED.search(output) else 0
-                errors = int(_ERRORS.search(output).group(1)) if _ERRORS.search(output) else 0
+                mf = _FAILED.search(output)
+                me = _ERRORS.search(output)
+                failed = int(mf.group(1)) if mf else 0
+                errors = int(me.group(1)) if me else 0
                 total = passed + failed + errors
             return passed, max(total, passed)
         # nothing recognizable → treat as all-or-nothing on the exit code
@@ -460,7 +462,9 @@ def plan_crossover(a: Candidate, b: Candidate, gen: int) -> dict | None:
     return {
         "base": base.snapshot,                       # start from the stronger parent
         "donor": donor.snapshot,                     # graft the missing capabilities
-        "wants": sorted(donor.descriptor - base.descriptor),   # checks to import
+        # descriptors are guaranteed non-empty by the guard above; the `or`
+        # keeps the type checker happy across the base/donor reassignment.
+        "wants": sorted((donor.descriptor or frozenset()) - (base.descriptor or frozenset())),  # checks to import
         "target": sorted(union),
         "parents": (a.id, b.id),
         "generation": gen,

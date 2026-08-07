@@ -50,7 +50,7 @@ def test_gate_fires_after_edit_without_verification():
 def test_no_gate_when_verification_ran():
     write = AssistantTurn("", [{"id": "1", "name": "Write",
                                 "input": {"file_path": "/tmp/dd_vg2.txt", "content": "x"}}], 5, 5)
-    check = AssistantTurn("", [{"id": "2", "name": "Bash", "input": {"command": "python -c 'print(1)'"}}], 5, 5)
+    check = AssistantTurn("", [{"id": "2", "name": "Bash", "input": {"command": "python3 -c 'print(1)'"}}], 5, 5)
     done = AssistantTurn("Done, verified.", [], 5, 5)
     st, _ = _drive(CFG, [write, check, done])
     assert not any("VERIFIED" in m.get("content", "") for m in st.messages if m.get("role") == "user")
@@ -85,7 +85,7 @@ def test_failed_check_triggers_repair_not_complete():
     write = AssistantTurn("", [{"id": "1", "name": "Write",
                                 "input": {"file_path": "/tmp/dd_vg_f.txt", "content": "x"}}], 5, 5)
     fail = AssistantTurn("", [{"id": "2", "name": "Bash",
-                              "input": {"command": "python -c 'import sys; sys.exit(1)'"}}], 5, 5)
+                              "input": {"command": "python3 -c 'import sys; sys.exit(1)'"}}], 5, 5)
     done = AssistantTurn("all done", [], 5, 5)
     st, n = _drive(CFG, [write, fail, done, done])
     assert st.task.phase == "repair"
@@ -96,7 +96,7 @@ def test_passing_check_accepts_completion():
     write = AssistantTurn("", [{"id": "1", "name": "Write",
                                 "input": {"file_path": "/tmp/dd_vg_p.txt", "content": "x"}}], 5, 5)
     ok = AssistantTurn("", [{"id": "2", "name": "Bash",
-                            "input": {"command": "python -c 'print(1)'"}}], 5, 5)
+                            "input": {"command": "python3 -c 'print(1)'"}}], 5, 5)
     done = AssistantTurn("done, verified", [], 5, 5)
     st, _ = _drive(CFG, [write, ok, done])
     assert st.task.phase == "complete"

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from textual.message import Message
@@ -148,15 +149,106 @@ class PromptHistory:
         return self._draft
 
 
-# The slash commands offered for completion (typing "/m" → /model). Keep in
-# sync with app._handle_slash. Shown as a hint as the user types, and Tab
-# completes the prefix.
-SLASH_COMMANDS = [
-    "/help", "/model", "/cwd", "/undo", "/back", "/stop", "/status",
-    "/compact", "/context", "/shell", "/events", "/trace", "/resume", "/advisor", "/ask", "/ask!", "/graphrag", "/skills",
-    "/loop", "/mcp", "/rmf", "/stig", "/doc",
-    "/clear", "/quit",
+# Single source of truth for the built-in slash commands. Keep in sync with
+# app._handle_slash. Drives three things: Tab completion (SLASH_COMMANDS, below),
+# the as-you-type discovery menu (slash_menu, below), and — by convention — /help.
+# `args` is the short inline hint shown next to the name; `switches` is the
+# optional second line detailing sub-commands/flags, revealed once a command is
+# chosen so the user can see what it takes.
+@dataclass(frozen=True)
+class SlashSpec:
+    name: str
+    args: str = ""
+    help: str = ""
+    switches: str = ""
+
+
+SLASH_SPECS: list[SlashSpec] = [
+    SlashSpec("/help", "", "list every command"),
+    SlashSpec("/model", "[name]", "list or switch models; each routes to its endpoint",
+              "/model <name> · add <name> <url> [prov] · default <name> · url <url>"),
+    SlashSpec("/cwd", "[path]", "show or change the working directory"),
+    SlashSpec("/undo", "", "revert the last file write/edit"),
+    SlashSpec("/back", "", "rewind the last turn from the model's context"),
+    SlashSpec("/stop", "", "stop the running turn (or press Esc)"),
+    SlashSpec("/status", "", "session model, cwd, turns, tokens"),
+    SlashSpec("/compact", "", "shrink old context to free up the window"),
+    SlashSpec("/context", "[tokens]", "view/set the context-window budget", "/context 65536"),
+    SlashSpec("/shell", "", "show which shell the Bash tool runs commands through"),
+    SlashSpec("/events", "", "digest of this session's execution trace + governor activity"),
+    SlashSpec("/trace", "[N]", "ordered event timeline (last N)"),
+    SlashSpec("/resume", "[session_id]", "continue an interrupted session"),
+    SlashSpec("/advisor", "", "set up a 2nd 'advisor' model (Gemini etc.)"),
+    SlashSpec("/ask", "<q>", "ask the advisor a question (answer shown to you)"),
+    SlashSpec("/ask!", "<q>", "ask the advisor and feed the answer to the agent"),
+    SlashSpec("/graphrag", "<sub>", "ingest docs into a knowledge base the agent can search",
+              "build <path> · add <path> · query <q> · status · clear"),
+    SlashSpec("/doc", "<sub>", "drive the Document Canvas tools by hand",
+              "open <path> · new <name> ..."),
+    SlashSpec("/skills", "[new <name> <prompt>]", "list skills, or create a reusable one"),
+    SlashSpec("/loop", "<count> <prompt>", "repeat a prompt N times (Esc stops)"),
+    SlashSpec("/ratchet", "<goal>", "persist verified progress across rounds until tests pass",
+              '--verify "<cmd>" to override the auto-detected verifier'),
+    SlashSpec("/mcp", "", "list connected MCP servers and their tools"),
+    SlashSpec("/rmf", "<sub>", "RMF automation", "bootstrap · control · ..."),
+    SlashSpec("/stig", "<sub>", "STIG checklist tooling", "new <xccdf> · summarize · assess"),
+    SlashSpec("/clear", "", "reset the conversation"),
+    SlashSpec("/quit", "", "exit drydock"),
 ]
+
+# Flat name list kept for Tab completion (typing "/m" → /model), derived so the
+# spec table above stays the one place commands are declared.
+SLASH_COMMANDS = [s.name for s in SLASH_SPECS]
+
+_MENU_MAX_ROWS = 14  # cap the list view so a bare "/" doesn't fill the footer
+
+
+def slash_menu(text: str, skills: tuple[str, ...] = ()) -> str:
+    """As-you-type discovery menu for a slash command in progress.
+
+    Returns a formatted, multi-line block for the footer, or "" when the input
+    isn't a bare slash command (so a normal message or a "/path/like/this" leaves
+    the menu hidden). Two views:
+
+      • list  — while typing the NAME ("/", "/mo"): every matching command with
+        its args + one-line help, so the user can see what's available.
+      • detail — once a command is chosen (fully typed, or a space started its
+        args): that command's usage + switches, so the flags are discoverable too.
+
+    Pure logic (no Textual) so it's unit-testable; the TUI renders the string into
+    the #slashmenu Static. `skills` are the user's custom commands, appended live.
+    """
+    if not text.startswith("/") or "\n" in text:
+        return ""
+    first, _, _rest = text.partition(" ")
+    head = first.lower()
+    has_args = " " in text
+    specs = list(SLASH_SPECS) + [
+        SlashSpec(f"/{n}", "", "custom skill") for n in sorted(skills)
+        if f"/{n}" not in {s.name for s in SLASH_SPECS}
+    ]
+    exact = next((s for s in specs if s.name == head), None)
+    matches = [s for s in specs if s.name.startswith(head)]
+
+    # detail view: the command is settled (space-started args, or the sole full match)
+    if exact and (has_args or matches == [exact]):
+        usage = exact.name + (f" {exact.args}" if exact.args else "")
+        lines = [f"  {usage}  —  {exact.help}" if exact.help else f"  {usage}"]
+        if exact.switches:
+            lines.append(f"    {exact.switches}")
+        return "\n".join(lines)
+
+    if not matches:
+        return ""
+    rows = []
+    for s in matches[:_MENU_MAX_ROWS]:
+        label = s.name + (f" {s.args}" if s.args else "")
+        rows.append(f"  {label:<24}{s.help}" if s.help else f"  {label}")
+    extra = len(matches) - _MENU_MAX_ROWS
+    if extra > 0:
+        rows.append(f"  … +{extra} more — keep typing to filter")
+    rows.append("  Tab completes · Enter runs")
+    return "\n".join(rows)
 
 
 def _common_prefix(strings: list[str]) -> str:

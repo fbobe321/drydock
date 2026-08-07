@@ -37,7 +37,6 @@ from drydock.tui.messages import (
     AgentTurnDone,
 )
 from drydock.tui.widgets import (
-    SLASH_COMMANDS,
     AssistantMessage,
     ErrorMessage,
     PromptArea,
@@ -45,6 +44,7 @@ from drydock.tui.widgets import (
     ToolCard,
     UserMessage,
     result_is_ok,
+    slash_menu,
     summarize_inputs,
 )
 from drydock.tuning import system_prompt_for_model
@@ -128,6 +128,11 @@ class DrydockApp(App):
     }
     /* Dimmed recommended-next-command hint (empty → 0 lines). */
     #suggest { height: auto; margin: 0 3; color: #4a6b78; text-style: italic; }
+    /* As-you-type slash-command discovery menu (height auto → 0 lines when empty). */
+    #slashmenu {
+        height: auto; max-height: 16; overflow-y: auto; margin: 0 2;
+        padding: 0 1; color: #8fb2c0; background: #0e2731; border-left: thick #2e5a6b;
+    }
     /* One bottom-docked footer holds, top→bottom: working-line, prompt, status. */
     #footer { dock: bottom; height: auto; background: #0b1f2a; }
     #prompt {
@@ -350,6 +355,7 @@ class DrydockApp(App):
             yield Static("", id="todo")     # pinned task checklist (empty = hidden)
             yield Static("", id="working")  # in-line activity (empty when idle)
             yield Static("", id="suggest")  # dimmed recommended-next-command hint
+            yield Static("", id="slashmenu")  # as-you-type slash-command menu (empty = hidden)
             yield PromptArea(id="prompt")
             yield Static(self._status_text(), id="status")
 
@@ -457,21 +463,23 @@ class DrydockApp(App):
     # ── input ─────────────────────────────────────────────────────────────
 
     def on_text_area_changed(self, event) -> None:
-        """As the user types a bare slash command, surface the matching commands
-        in the (idle) activity line — '/m' shows '/model'. Tab completes them."""
-        if self._busy:
-            return  # #working shows live activity while a turn is running
+        """As the user types a slash command, surface a discovery menu in the
+        #slashmenu line: the matching commands with their args + one-line help
+        while typing the name ('/' lists everything), then the chosen command's
+        switches once it's settled. Tab completes, Enter runs. Rendered in a
+        dedicated widget so the ghost next-command suggestion is never touched."""
         try:
-            text = self.query_one("#prompt", PromptArea).text
+            menu = self.query_one("#slashmenu", Static)
         except Exception:  # noqa: BLE001 — widget not mounted yet
             return
-        hint = ""
-        if text.startswith("/") and " " not in text and "\n" not in text:
-            commands = SLASH_COMMANDS + ["/skills"] + [f"/{n}" for n in sorted(self._skills)]
-            matches = [c for c in commands if c.startswith(text.lower())]
-            if matches:
-                hint = "  " + "   ".join(matches) + "   ·  Tab to complete"
-        self.query_one("#working", Static).update(hint)
+        if self._busy:
+            menu.update("")  # a turn is running; nothing to discover
+            return
+        try:
+            text = self.query_one("#prompt", PromptArea).text
+        except Exception:  # noqa: BLE001
+            return
+        menu.update(slash_menu(text, skills=tuple(self._skills)))
 
     def on_prompt_area_submitted(self, event: PromptArea.Submitted) -> None:
         text = event.text.strip()

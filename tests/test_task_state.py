@@ -75,7 +75,7 @@ def test_phase_transitions_understand_implement_complete():
     turns = [
         AssistantTurn("", [{"id": "1", "name": "Write",
                             "input": {"file_path": "/tmp/dd_ph.txt", "content": "x"}}], 5, 5),
-        AssistantTurn("", [{"id": "2", "name": "Bash", "input": {"command": "python -c 'print(1)'"}}], 5, 5),
+        AssistantTurn("", [{"id": "2", "name": "Bash", "input": {"command": "python3 -c 'print(1)'"}}], 5, 5),
         AssistantTurn("done, verified", [], 5, 5),
     ]
     i = {"n": 0}

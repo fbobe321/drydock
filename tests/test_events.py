@@ -35,7 +35,7 @@ def test_run_writes_full_trace():
     turns = [
         AssistantTurn("", [{"id": "1", "name": "Write",
                             "input": {"file_path": "/tmp/dd_e.txt", "content": "x"}}], 10, 5),
-        AssistantTurn("", [{"id": "2", "name": "Bash", "input": {"command": "python -c '1'"}}], 8, 4),
+        AssistantTurn("", [{"id": "2", "name": "Bash", "input": {"command": "python3 -c '1'"}}], 8, 4),
         AssistantTurn("done, verified", [], 6, 3),
     ]
     i = {"n": 0}
