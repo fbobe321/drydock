@@ -60,6 +60,28 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🧬 2026-08-07 — REFRAME: the ratchet is evolution with the HEREDITY WIRE CUT. Pivot to the write-back loop.**
+> Operator insight ("this process created all of life, we're missing something"): evolution = variation +
+> selection + **HEREDITY**, iterated at scale. Our ratchet has variation (LLM attempts) + selection (checker)
+> but **severs heredity** — every task restarts from the identical, unchanging base; the solves the ratchet
+> earns NEVER improve the model, so nothing compounds. That's why the eratchet stopped improving: we built an
+> evolution that can't reproduce. Secondary misses too: fitness is a **plateau-and-cliff** (coarse binary
+> checks, no gradient through intermediates), **homeopathic scale** (~3 tasks/8 rounds), **broken recombination**
+> (filesystem-diff crossover yields dead offspring), **greedy rollback kills stepping-stones** (no neutral
+> drift), and an **intelligent operator collapses diversity** (correlated attempts vs blind mutation).
+> **⇒ DECISION: drop the evolutionary escalation, restore HEREDITY = the self-distillation write-back.** The
+> "substrate that reproduces" is the MODEL WEIGHTS; the ratchet's verified solves are the beneficial mutations;
+> self-distillation training is the inheritance that compounds. **DONE THIS TURN (no GPU — control owns .22):**
+> assembled the **heredity corpus** = 16 verified ratchet solve trajectories → all 16 CONDENSED cleanly (raw✗→
+> condensed✓ recipe) → `heredity/heredity_sft.jsonl` (16 records, **2× the 7-trace corpus that stalled the
+> original run**). Speciation gave 1 cluster (condensed text too homogeneous — cluster on the INSTRUCTION next).
+> **NEXT (needs GPU, after control frees .22):** train a LoRA on the heredity corpus (matched HF-Q5) → eval the
+> FROZEN held-out set → does inheriting the solves make the model GENERALIZE (heldout_solves>0)? That is the real
+> mission experiment; the ratchet was always just the collector. **2nd lever (design):** finer-grained fitness
+> (sub-goal / partial-credit rewards) so within-task selection has a gradient to climb.
+> **Preliminary from the CONTROL:** ~5/9 of solved tasks re-solve single-attempt (~55% base one-shot) — early.
+> See [[project_compass_selfdistill_verdict]], [[project_two_box_ratchet_infra]].
+
 > **🧪 2026-08-07 — ESCALATION PIPELINE (low→high across 2 boxes) + a CONTROL to measure ratchet value.**
 > **Effort spectrum operationalized as a cheap-triage→expensive-escalation pipeline:** `.22` (llama.cpp) runs
 > LOW-effort plain-pawl ratchet triage; `.21` (vLLM, 2 GPUs after its own llama.cpp was stopped to end CUDA

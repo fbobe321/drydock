@@ -88,6 +88,16 @@ Tunables are env vars at the top of `selfdistill.sh` (`COLLECT_WINDOW`, `MIN_NEW
 
 ## Running log (newest first)
 
+- **2026-08-07 (2) — 🧬 REFRAME: ratchet = evolution with HEREDITY CUT → pivot to the self-distill write-back.**
+  The eratchet stopped improving because we built variation+selection with NO heredity — every task restarts
+  from the unchanging base, so solves never compound. (Also: coarse plateau-cliff fitness, homeopathic scale,
+  broken filesystem-crossover, greedy rollback killing stepping-stones, correlated LLM variation.) DECISION:
+  drop evolutionary escalation, restore heredity = train the ratchet's verified solves back into the model.
+  DONE (CPU): heredity corpus = 16 verified ratchet solves → all condensed → `heredity/heredity_sft.jsonl`
+  (2× the stalled 7-trace corpus). Speciation gave 1 cluster (cluster on instruction next). NEXT (GPU, post-
+  control): train LoRA on heredity corpus → eval FROZEN held-out → does inheritance make it GENERALIZE. 2nd
+  lever: finer-grained (sub-goal) fitness for a within-task gradient. Control prelim: ~55% base one-shot.
+
 - **2026-08-07 — 🧪 ESCALATION PIPELINE + CONTROL; tbench 29/89 (32.6%).** Effort spectrum run as a pipeline:
   `.22`/llama.cpp = LOW plain-pawl triage (DONE 68/68, **15 solved**); `.21`/vLLM = HIGH eratchet on the residue.
   **Two bugs fixed:** (1) `commit_ref` set -u → eratchet had only ever run ROUND 1 (earlier "evolutionary"
