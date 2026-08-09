@@ -60,6 +60,91 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🖥️🧬 2026-08-09 — THIRD BOX (.20 RTX 8000) STOOD UP AS TRAINER+COLLECTOR; HEREDITY v2 = STILL NULL at 2× corpus.**
+> **New machine `192.168.50.20` (hostname `Zeus20`), Quadro RTX 8000, 48GB, single card, 8 CPUs, 93GB RAM.**
+> Operator-provisioned bare; brought fully online this session (keyless SSH `bobef@remus` key; sudo=`lis4351`).
+> Its `/data3` is a SEPARATE local disk (~246GB free), not shared with `.22`. Installed docker 29.7.2 +
+> nvidia-container-toolkit 1.19.1 (GPU-in-docker verified); copied the QAT gguf + mmproj + the 59GB HF base +
+> the `drydock` conda env + compass `.venv-train` (to identical paths so the venv symlinks resolve).
+> - **COLLECTOR (LIVE):** `ratchet_20_sweep.sh` runs on the `.22` harness host (ddt containers there) driving
+>   `.20`'s llama.cpp server (`LLM_URL=http://192.168.50.20:8000/v1`, single card **no --tensor-split**,
+>   `-c 65536 -np 2`, `DD_VER=3.0.138`). The 73-task pool is FULLY attempted by `.21`+`.22`, so `.20` does
+>   **ESCALATION** instead: the 35 closest never-solved near-miss partials (video-processing 4/5, path-tracing
+>   4/5, overfull-hbox 3/4 …), ranked by closeness, at **MAX_ROUNDS=10** (vs `.21`/`.22`'s 5) — betting they
+>   were round-capped, not flatlined. Own results `ratchet20/ratchet20_results.csv`; excludes solved-anywhere;
+>   `ddt_<task>`-exists guard prevents cross-stream collisions. Any crack = a NEW corpus trace.
+> - **TRAINER (CERTIFIED):** RTX 8000 = Turing sm_75 — NO bf16 (train fp16), no FA2 (SDPA); torch 2.11+cu128 +
+>   bnb 0.49.2 4-bit DO run on it (verified: fp16 matmul + a real QLoRA smoke on the 31B, **loss 6.84→5.74**,
+>   adapter saved). The 48GB card holds the whole 4-bit 31B on ONE GPU → **no `device_map=auto` naive-pipeline
+>   waste** (on `.22` that split idles GPU0 at 0% while GPU1 does 100% — seen live), and enables seq-1024/bigger
+>   batch. Steady-state = time-share: `.20` TRAINS when a job is queued (server stopped), else SERVES/collects.
+>   This breaks the serve-vs-train mutual-exclusion → `.21`+`.22` can collect continuously while `.20` trains.
+> - **SPEED (measured, all boxes under sweep load, 200-tok generation-bound):** RTX 8000 single **19.2 tok/s** vs
+>   `.22` 2×4060Ti tensor-split **14.3** vs `.21` vLLM **13.5** → **~1.34×** the tensor-split under load, **~1.9×**
+>   idle (`.20` hit ~28 tok/s idle vs the ~15 tensor-split baseline). Modest for single-stream; the real value is
+>   TRAINING (no pipeline waste) + a 3rd independent lane.
+> - **🧪 HEREDITY v2 VERDICT: STILL NULL.** Rebuilt the corpus from 31 fresh ratchet solves (31 DISTINCT tasks —
+>   COBOL/ELF/stan/arc-agi/git/…, vs v1's 16), condensed 31/31 → 31-row SFT (53 windows). QLoRA on matched HF base,
+>   120 steps, loss 5.24→**0.009** (fully memorized). Frozen eval: **ho=0/6 (base 0), reg 0/4 (base 1) → transfer=0,
+>   identical to v1**, same mild regression. Growing the corpus 2× AND diversifying to 31 distinct tasks did NOT
+>   crack the wall. Key tell: `speciate.py` clusters all 31 into **1 species** — semantically diverse tasks, uniform
+>   condensed FORMAT → the model memorizes format→solution, not skill. **⇒ next lever is NOT more data:** (a) speciate
+>   on the raw INSTRUCTION → one adapter PER species; (b) change the training TARGET toward reasoning/skill; or
+>   (c) accept self-distill-on-solves doesn't generalize and pivot. Now that `.20` is a certified independent trainer,
+>   (a)/(b) can run as parallel training experiments WITHOUT stalling collection. Files: `heredity/heredity_sft.jsonl`
+>   (v2 31 rows; v1 backed up `heredity_sft.v1-16.jsonl.bak`), `heredity/heredity_eval.csv` (both rows),
+>   `Models/heredity-lora.gguf` (v2, 234M), `ratchet_20_sweep.sh`. See [[project_two_box_ratchet_infra]],
+>   [[project_ratchet_heredity_reframe]].
+
+> **🧪 2026-08-07 — HEREDITY VERDICT: NO GENERALIZATION (the mission experiment answered, negative & clean).**
+> Trained a LoRA on the 16-trace heredity corpus (matched HF base, 60 steps, loss 4.68→**0.016** = fully
+> memorized) → converted → served MATCHED HF-Q5 base+LoRA → eval on the FROZEN held-out + regression.
+> **Result: held-out 0/6 (base 0/6) → ZERO transfer; regression 0/4 (base 1/4) → LOST configure-git-webserver
+> (1→0).** Gate correctly refuses to promote → champion stays base. So at **2× the corpus** that stalled the
+> original run (16 vs 7 traces), self-distillation-on-solves STILL doesn't generalize and mildly regresses —
+> this is the standing generalization wall, now confirmed at the mission's own experiment. Caveat: n=1, EVAL_N=1
+> (the reg 1→0 could be TUI-drive noise), corpus speciated to 1 cluster (too homogeneous — the diversity lever
+> matters). Artifacts: `heredity/heredity_eval.csv`, `Models/heredity-lora.gguf`. **Next candidates:** (a) grow a
+> MORE DIVERSE corpus (the 2-stream ratchet below is now collecting it) before retrying at larger scale;
+> (b) the finer-fitness lever to convert more flat-aborts into solves → more/varied traces.
+> **Both boxes now BUSY on the finer-fitness ratchet (2 streams, separate GPUs):** `.21`/vLLM =
+> `ratchet_21_sweep.sh` (top-down, DD_VER=3.1.8), `.22`/llama.cpp = `ratchet_22_sweep.sh` (reverse order,
+> DD_VER=3.0.138), 52-55 candidates each, converging from opposite ends with collision guards; own result files
+> (`ratchet21/`, `ratchet22/`).
+> **RESULTS through 2026-08-08 ~10:50 (30 tasks attempted, 8 SOLVED, both streams still running):**
+> - `.21` (18 done, 6 solved): build-pmars 4/4 · cobol-modernization 3/3 · constraints-scheduling 3/3 ·
+>   distribution-search 4/4 · extract-elf 2/2 · git-multibranch 1/1.
+> - `.22` (12 done, 2 solved): sqlite-with-gcov 3/3 · rstan-to-pystan 6/6.
+> - **13 partial=660 stepping-stones the OLD coarse fitness would have discarded/flat-aborted** — several
+>   very close: video-processing 4/5 · winning-avg-corewars 2/3 · sanitize-git-repo 2/3 · caffe-cifar-10 3/6 ·
+>   extract-moves-from-video 1/2 · gcode-to-text 1/2 · train-fasttext 1/2. This is the finer-fitness lever
+>   earning its keep: it preserves "ran-but-wrong" states instead of restarting from a crash.
+> - **Corpus payoff:** 22 harvestable `*_solved_traj.json`, now spanning many DISTINCT domains (COBOL, SQL/gcov,
+>   R↔Python, constraint-scheduling, ELF, git, corewars) — directly attacks the heredity failure's root cause
+>   (16 traces → 1 cluster, too homogeneous). Sets up a **heredity retry v2** on the enlarged/diversified corpus.
+> See [[project_two_box_ratchet_infra]].
+
+> **📈 2026-08-07 — 2ND LEVER SHIPPED: finer-grained ratchet fitness (sub-goal gradient, no more plateau-cliff).**
+> The plain ratchet's fitness was `passed/tests` from the CTRF summary — but most tbench tasks ship a SINGLE
+> monolithic test, so `passed` is binary (0/1) and the pawl had no intermediate gradient (and `ps>best` strict-
+> greater discarded every stepping-stone). Fix: extract a sub-goal signal already latent in the CTRF per-test
+> `trace`/`raw_status` — did the solution RUN TO AN ASSERTION (computed a wrong answer — close) or CRASH EARLY
+> (ImportError / missing artifact — far)? Three ordinal levels per failing test: soft assertion 0.66 · called-but-
+> crashed 0.33 · never-ran 0.0. Fitness is now lexicographic **(passed, partial)**; the pawl locks in a strict
+> pass increase OR a within-plateau partial gain (crash→runs-but-wrong), and early-abort is stall-based (no lex
+> gain for N rounds) so a task still climbing partial isn't killed. **Files:** `ctrf_fitness.py` (reusable parser,
+> stdin CTRF → `passed tests partial_milli`), `ratchet_solve.sh` (lex pawl, gated by `FINE_FITNESS=1` default —
+> set 0 to restore the strict pass-count pawl for a controlled A/B), `test_ctrf_fitness.py` (validation: synthetic
+> levels + real feal/overfull samples, ALL PASS). CSV gains a `partial` column (3 plain-ratchet runner headers
+> updated; eratchet left 4-col). **LIVE on .21:** `ratchet_21_sweep.sh` now runs the finer-fitness ratchet
+> (`FINE_FITNESS=1`, `DD_VER=3.1.8` for the vLLM skip_special_tokens fix, `LLM_URL=.21`) over 55 unsolved
+> non-held-out pool tasks — keeps the otherwise-idle .21 box busy while .22 runs heredity (separate GPUs, no
+> contention). Non-disruptive: own results file `ratchet21/ratchet21_results.csv`, kills nothing, excludes
+> heredity's held-out/regression tasks. Verified .21 taking load (`num_requests_running=1`). Many of the 55 are
+> prior flat-aborts (break-filter-js, overfull-hbox, video-processing, feal-*, caffe) — a natural test of whether
+> the partial gradient converts them into cracks. A clean `FINE_FITNESS=1` vs `0` A/B still worth running once a
+> box frees. See [[project_two_box_ratchet_infra]].
+
 > **🧬 2026-08-07 — REFRAME: the ratchet is evolution with the HEREDITY WIRE CUT. Pivot to the write-back loop.**
 > Operator insight ("this process created all of life, we're missing something"): evolution = variation +
 > selection + **HEREDITY**, iterated at scale. Our ratchet has variation (LLM attempts) + selection (checker)

@@ -1,7 +1,36 @@
 # Drydock v3 — Product Requirements
 
-Status: SHIPPING (v3.0.133, on PyPI + GitHub). Supersedes the v2 line.
+Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
+
+> **Progress (2026-08-09) — SELF-DISTILLATION RESEARCH ARC + 3-BOX FLEET; heredity
+> generalization wall CONFIRMED at 2× corpus.** (Full blow-by-blow: `RESUME.md` + the
+> `project_*` memories; this is the product-level summary.) Since v3.1.x the research
+> effort has driven drydock through the real TUI to test whether a local Gemma-4-31B can
+> self-improve. Key results:
+> - **Ratchet (Dawkins cumulative selection)** shipped as native `/ratchet` + a research
+>   collector. Plain pawl earns real across-rounds cracks (llm-inference r6, etc.); the
+>   "evolutionary" eratchet (QD/fan-out/crossover) fires but only MATCHES the plain pawl —
+>   no unique cracks. **Finer-grained fitness** (2nd lever): lexicographic (passed, partial)
+>   from CTRF sub-goal signal, so within-task selection has a gradient (no plateau-cliff).
+> - **REFRAME:** the ratchet is evolution with HEREDITY cut — solves never compound into the
+>   weights. The real lever = **self-distillation write-back** (train verified solves back in).
+> - **HEREDITY EXPERIMENT — the mission's core question, answered NEGATIVE (clean):** train a
+>   LoRA on condensed verified solves (matched HF base) → eval FROZEN held-out. v1 (16 traces,
+>   loss→0.016) = **0/6 transfer**. v2 (31 traces, 2× size + 2× distinct-task diversity,
+>   loss→0.009) = **STILL 0/6**, same mild regression. Doubling+diversifying the corpus did NOT
+>   generalize. Tell: 31 diverse tasks speciate into 1 cluster because the *condensed format* is
+>   uniform → the model memorizes format→solution, not skill. **⇒ next lever is NOT more data:**
+>   (a) speciate on the raw INSTRUCTION → per-species adapters; (b) change the training TARGET
+>   toward reasoning/skill; or (c) pivot.
+> - **INFRA — 3-box ratchet fleet.** `.22` 2×4060Ti (llama.cpp, train + ddt client host),
+>   `.21` vLLM, and NEW **`.20` Quadro RTX 8000 48GB**. The single 48GB card holds the whole
+>   4-bit 31B on ONE GPU → **certified as a dedicated trainer** (QLoRA loss-decreasing smoke;
+>   no `device_map` naive-pipeline waste that idles a 4060Ti), and serves/collects when not
+>   training (escalation sweep of near-miss partials at 10 rounds). **RTX 8000 inference speed:
+>   ~1.3× the 2×4060Ti tensor-split under matched load (19.2 vs 14.3 tok/s), ~1.9× idle (~28 vs
+>   ~15 tok/s)** — modest for single-stream; the real win is training + a 3rd independent lane.
+
 
 > **Progress (2026-07-10/12) — GOVERNED-RUNTIME backbone shipped (v3.0.116-133):** The
 > Agent-Buildout PRD core landed incrementally (no rewrite): structured task state (survives
