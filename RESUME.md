@@ -95,6 +95,25 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   (v2 31 rows; v1 backed up `heredity_sft.v1-16.jsonl.bak`), `heredity/heredity_eval.csv` (both rows),
 >   `Models/heredity-lora.gguf` (v2, 234M), `ratchet_20_sweep.sh`. See [[project_two_box_ratchet_infra]],
 >   [[project_ratchet_heredity_reframe]].
+>
+> **🕸️ CLUSTER SCHEDULER built (operator: "3 boxes as a cluster").** MEASURED the interconnect first:
+> all 3 boxes are on **WiFi** (`.22`=wlp2s0, `.20`=wlp4s0, `.21`=USB wlx dongle), **~112 Mbps**
+> (`.22`↔`.20` 14 MB/s) with SEPARATE local `/data3`. ⇒ tightly-coupled distributed training
+> (DDP/FSDP, GB of gradient sync/step) is OUT; the right model is a **task-parallel cluster**: one
+> shared queue on `.22`, workers drain it, only tiny job/result rows cross the network. Built in
+> `frontier/selfdistill/cluster/`: `lib.sh` (flock-atomic `q_enqueue`/`q_claim`/`q_complete` over
+> `queue.tsv`), `worker.sh <id> <server_url> [dd_ver]` (claim→run `ratchet_solve` locally→result;
+> `ddt_<task>`-exists collision guard; STOP-flag), `enqueue.sh` (`escalation` seeds unsolved
+> near-miss partials closest-first), `status.sh`, `README.md`. **`.20` CUT OVER to the scheduler**
+> (worker `20a` in tmux, 34-job escalation queue) replacing the manual `ratchet_20_sweep`; verified
+> claiming + driving `.20`. `.21`/`.22` still on their manual sweep/training (migrate when free).
+> **TWO LAND-MINES for the next session:** (1) launch workers in **tmux** — `ratchet_solve` drives
+> `tmux send-keys`, so a bare `setsid`/`nohup` worker dies (signal 16); (2) NEVER `pkill -f <pat>`
+> where `<pat>` appears in your OWN command — pkill matches the launching shell's cmdline and kills
+> it (exit 144, silent). Kill by tmux session / PID. **WIRING to GbE = SLATED FUTURE WORK** (operator
+> decision) — only needed for multi-node training, not task-parallel. **Phase 2:** deploy the harness
+> to `.20`/`.21` so their ddt containers run LOCALLY (today all containers run on `.22`'s 4 CPUs = the
+> concurrency cap).
 
 > **🧪 2026-08-07 — HEREDITY VERDICT: NO GENERALIZATION (the mission experiment answered, negative & clean).**
 > Trained a LoRA on the 16-trace heredity corpus (matched HF base, 60 steps, loss 4.68→**0.016** = fully
