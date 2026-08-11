@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from drydock import __version__
+from drydock.config import load_user_system_prompt
 from drydock.agent import AgentState, run, TextChunk, ToolStart, ToolEnd, TurnDone
 
 
@@ -71,7 +72,7 @@ def print_colored(text: str, color: str = "") -> None:
 
 def run_interactive(config: dict) -> None:
     """Interactive REPL mode."""
-    system = SYSTEM_PROMPT + load_project_instructions()
+    system = SYSTEM_PROMPT + load_user_system_prompt(config) + load_project_instructions()
     state = AgentState()
 
     print_colored(f"⚓ DryDock v{__version__} · {config['model']}", "cyan")
@@ -118,7 +119,7 @@ def run_oneshot(prompt: str, config: dict) -> None:
     """One-shot mode: run a single prompt and exit."""
     from drydock.providers import LLMUnreachable
 
-    system = SYSTEM_PROMPT + load_project_instructions()
+    system = SYSTEM_PROMPT + load_user_system_prompt(config) + load_project_instructions()
     state = AgentState()
 
     try:
@@ -435,6 +436,9 @@ def main():
     # greeting into a runaway build. The TUI reads this from config; CLI modes
     # call load_project_instructions directly (see run_interactive/run_oneshot).
     config["project_instructions"] = load_project_instructions()
+    # The user's custom system prompt (~/.drydock/system_prompt.md or the
+    # `system_prompt` config key) — standing instructions the TUI injects every turn.
+    config["user_system_prompt"] = load_user_system_prompt(config)
 
     # Connect any configured MCP servers and register their tools so the model
     # can call them like native tools. Failures are skipped (never block start);

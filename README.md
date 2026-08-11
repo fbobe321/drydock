@@ -423,6 +423,19 @@ commands to do the work, showing each as a collapsible tool card.
 It honors `AGENTS.md` / `DRYDOCK.md` in the working directory for project
 conventions.
 
+### Custom system prompt
+
+For standing instructions applied on **every** turn (stronger than the
+per-project `AGENTS.md`, which is framed as optional background), set a custom
+system prompt via either:
+
+- a file: `~/.drydock/system_prompt.md` — write your instructions there, or
+- a config key in `~/.drydock/config.toml`: `system_prompt = "..."`.
+
+The file wins if both are set; contents are capped at 8000 chars. It's injected
+after drydock's base prompt and before any project `AGENTS.md`, and applies in
+both the TUI and CLI.
+
 ## Safety
 
 Two tiers, plus advisory guards — all designed so legitimate work is never

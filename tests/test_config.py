@@ -89,3 +89,39 @@ def test_save_drops_runtime_only_keys(tmp_path):
     assert "cwd" not in written
     assert written["context_limit"] == 999
     assert written["model"] == "g"
+
+
+# ── custom system prompt (~/.drydock/system_prompt.md or the `system_prompt` key) ──
+
+def test_user_system_prompt_empty_by_default(monkeypatch, tmp_path):
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
+    assert cfg.load_user_system_prompt({}) == ""
+    assert cfg.load_user_system_prompt({"system_prompt": ""}) == ""
+
+
+def test_user_system_prompt_inline_key(monkeypatch, tmp_path):
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
+    out = cfg.load_user_system_prompt({"system_prompt": "Always answer in French."})
+    assert "Always answer in French." in out
+    assert "Custom instructions" in out
+
+
+def test_user_system_prompt_file_wins_over_inline(monkeypatch, tmp_path):
+    d = tmp_path / ".drydock"
+    d.mkdir()
+    (d / "system_prompt.md").write_text("FILE WINS")
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
+    out = cfg.load_user_system_prompt({"system_prompt": "inline loses"})
+    assert "FILE WINS" in out
+    assert "inline loses" not in out
+
+
+def test_user_system_prompt_capped_at_8000(monkeypatch, tmp_path):
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
+    out = cfg.load_user_system_prompt({"system_prompt": "x" * 20000})
+    assert out.count("x") == 8000
+
+
+def test_system_prompt_key_in_defaults():
+    assert "system_prompt" in cfg.DEFAULTS
+    assert cfg.DEFAULTS["system_prompt"] == ""

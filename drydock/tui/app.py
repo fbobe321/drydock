@@ -341,10 +341,15 @@ class DrydockApp(App):
             return "deny"
 
     def _build_system(self, model: str | None) -> str:
-        # The TUI honors a user's OWN AGENTS.md/DRYDOCK.md like the CLI does —
-        # cli.main() loads it into config["project_instructions"] as background
-        # context (drydock never auto-creates one).
-        return system_prompt_for_model(model) + self.config.get("project_instructions", "")
+        # base (model-specific) + the user's custom system prompt (standing orders
+        # from ~/.drydock/system_prompt.md or the `system_prompt` config key) + a
+        # per-project AGENTS.md/DRYDOCK.md as background context. cli.main() loads
+        # both into config; drydock never auto-creates either file.
+        return (
+            system_prompt_for_model(model)
+            + self.config.get("user_system_prompt", "")
+            + self.config.get("project_instructions", "")
+        )
 
     # ── layout ────────────────────────────────────────────────────────────
 

@@ -106,11 +106,48 @@ DEFAULTS: dict[str, object] = {
     # (falls back to `model`). Manage with `/model add|default|remove`.
     "models": [],
     "default_model": "",
+    # A custom system prompt injected into EVERY turn as the user's standing
+    # instructions (unlike a per-project AGENTS.md, which is framed as optional
+    # background). Two sources, file wins: the file ~/.drydock/system_prompt.md,
+    # or this inline key. Empty = nothing added. Capped at 8000 chars.
+    "system_prompt": "",
 }
 
 
 def default_config_path() -> Path:
     return Path.home() / ".drydock" / "config.toml"
+
+
+def system_prompt_path() -> Path:
+    """User's global custom system-prompt file."""
+    return Path.home() / ".drydock" / "system_prompt.md"
+
+
+def load_user_system_prompt(config: dict | None = None) -> str:
+    """The user's custom system prompt, injected every turn as standing orders.
+
+    Source (first non-empty wins): the file ~/.drydock/system_prompt.md, then the
+    inline `system_prompt` config key. Wrapped with a clear header and capped at
+    8000 chars. Returns '' when neither is set. Never raises.
+    """
+    text = ""
+    try:
+        p = system_prompt_path()
+        if p.exists():
+            text = p.read_text()
+    except OSError:
+        text = ""
+    if not text and config:
+        text = str(config.get("system_prompt", "") or "")
+    text = text.strip()
+    if not text:
+        return ""
+    return (
+        "\n\n## Custom instructions (from the user's configuration)\n\n"
+        "The user has set these standing instructions; follow them throughout "
+        "the session in addition to the guidance above.\n\n"
+        f"{text[:8000]}"
+    )
 
 
 # ── Model registry ────────────────────────────────────────────────────────
