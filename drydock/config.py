@@ -189,15 +189,16 @@ def ensure_system_prompt_file(config_dir: Path | None = None) -> None:
 
 
 def ensure_project_system_prompt(cwd: Path | None = None) -> None:
-    """Create system_prompt.md in the folder drydock was started from if absent —
-    but ONLY inside a git repo, so drydock never drops a system_prompt.md into
-    arbitrary directories (e.g. $HOME, /tmp). A real project you `git init`'d gets
-    a discoverable per-project prompt at its root; a throwaway cwd gets nothing.
-    Never raises."""
+    """Create system_prompt.md in the folder drydock was started from if absent, so
+    it's right there in your project after the first launch — no git repo required.
+    The ONE exception is the home directory itself: we don't drop a stray
+    ~/system_prompt.md there (the global prompt already lives in ~/.drydock/).
+    Never overwrites an existing file; never raises."""
     cwd = cwd or Path.cwd()
     try:
-        if (cwd / ".git").exists():   # file OR dir — covers worktrees too
-            _write_template(project_system_prompt_path(cwd))
+        if cwd.resolve() == Path.home().resolve():
+            return
+        _write_template(project_system_prompt_path(cwd))
     except OSError:
         pass
 

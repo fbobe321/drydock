@@ -183,15 +183,18 @@ def test_global_used_when_no_project_file(monkeypatch, tmp_path):
     assert "GLOBAL RULES" in out
 
 
-def test_ensure_project_prompt_only_in_git_repo(tmp_path):
-    # git repo → template created at the project root
-    repo = tmp_path / "repo"; (repo / ".git").mkdir(parents=True)
-    cfg.ensure_project_system_prompt(repo)
-    assert (repo / "system_prompt.md").exists()
-    # non-git dir → nothing created (no litter)
-    plain = tmp_path / "plain"; plain.mkdir()
+def test_ensure_project_prompt_creates_in_any_dir(tmp_path):
+    # any launch folder (git or not) gets the template at its root
+    plain = tmp_path / "proj"; plain.mkdir()
     cfg.ensure_project_system_prompt(plain)
-    assert not (plain / "system_prompt.md").exists()
+    assert (plain / "system_prompt.md").exists()
+
+
+def test_ensure_project_prompt_skips_home(monkeypatch, tmp_path):
+    # never drop a stray ~/system_prompt.md in the home root
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
+    cfg.ensure_project_system_prompt(tmp_path)
+    assert not (tmp_path / "system_prompt.md").exists()
 
 
 def test_ensure_project_prompt_never_overwrites(tmp_path):
