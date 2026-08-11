@@ -159,3 +159,44 @@ def test_load_ignores_comment_only_file(monkeypatch, tmp_path):
     (d / "system_prompt.md").write_text(cfg._SYSTEM_PROMPT_TEMPLATE)
     monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
     assert cfg.load_user_system_prompt({}) == ""
+
+
+# ── per-project system prompt (<project>/.drydock/system_prompt.md) ──
+
+def test_project_prompt_overrides_global(monkeypatch, tmp_path):
+    home = tmp_path / "home"; (home / ".drydock").mkdir(parents=True)
+    (home / ".drydock" / "system_prompt.md").write_text("GLOBAL RULES")
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: home))
+    proj = tmp_path / "proj"; (proj / ".drydock").mkdir(parents=True)
+    (proj / ".drydock" / "system_prompt.md").write_text("PROJECT RULES")
+    out = cfg.load_user_system_prompt({}, cwd=proj)
+    assert "PROJECT RULES" in out
+    assert "GLOBAL RULES" not in out
+
+
+def test_global_used_when_no_project_file(monkeypatch, tmp_path):
+    home = tmp_path / "home"; (home / ".drydock").mkdir(parents=True)
+    (home / ".drydock" / "system_prompt.md").write_text("GLOBAL RULES")
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: home))
+    proj = tmp_path / "proj"; proj.mkdir()  # no .drydock
+    out = cfg.load_user_system_prompt({}, cwd=proj)
+    assert "GLOBAL RULES" in out
+
+
+def test_ensure_project_prompt_only_in_git_repo(tmp_path):
+    # git repo → template created
+    repo = tmp_path / "repo"; (repo / ".git").mkdir(parents=True)
+    cfg.ensure_project_system_prompt(repo)
+    assert (repo / ".drydock" / "system_prompt.md").exists()
+    # non-git dir → nothing created (no litter)
+    plain = tmp_path / "plain"; plain.mkdir()
+    cfg.ensure_project_system_prompt(plain)
+    assert not (plain / ".drydock").exists()
+
+
+def test_ensure_project_prompt_never_overwrites(tmp_path):
+    repo = tmp_path / "repo"; (repo / ".git").mkdir(parents=True)
+    (repo / ".drydock").mkdir()
+    (repo / ".drydock" / "system_prompt.md").write_text("MINE")
+    cfg.ensure_project_system_prompt(repo)
+    assert (repo / ".drydock" / "system_prompt.md").read_text() == "MINE"

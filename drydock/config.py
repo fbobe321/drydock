@@ -120,14 +120,20 @@ def default_config_path() -> Path:
 
 
 def system_prompt_path() -> Path:
-    """User's global custom system-prompt file."""
+    """User's GLOBAL custom system-prompt file (applies to every project)."""
     return Path.home() / ".drydock" / "system_prompt.md"
 
 
-# The template drydock drops at ~/.drydock/system_prompt.md so the file is always
-# THERE and discoverable — the user never has to know the path or filename. It's
-# ALL comments, so it has ZERO effect until the user writes real text below them
-# (load_user_system_prompt strips <!-- --> blocks before use).
+def project_system_prompt_path(cwd: Path | None = None) -> Path:
+    """A PER-PROJECT custom system-prompt file: <project>/.drydock/system_prompt.md.
+    Overrides the global one when present — different projects, different orders."""
+    return (cwd or Path.cwd()) / ".drydock" / "system_prompt.md"
+
+
+# The template drydock drops so the file is always THERE and discoverable — the
+# user never has to know the path or filename. It's ALL comments, so it has ZERO
+# effect until the user writes real text below them (load_user_system_prompt
+# strips <!-- --> blocks before use).
 _SYSTEM_PROMPT_TEMPLATE = """\
 <!--
   Drydock custom system prompt.
@@ -138,6 +144,10 @@ _SYSTEM_PROMPT_TEMPLATE = """\
     - Always run the test suite after editing code.
     - Prefer the standard library; avoid adding new dependencies.
     - State your plan in one sentence before making changes.
+
+  SCOPE: this file is THIS PROJECT'S prompt if it lives at <project>/.drydock/
+  system_prompt.md; the copy at ~/.drydock/system_prompt.md applies to every
+  project. A project file OVERRIDES the global one.
 
   This template has NO effect until you add your own text below this comment.
   Comment blocks like this one are ignored. Capped at 8000 characters.
@@ -151,13 +161,19 @@ def _strip_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
 
-def ensure_system_prompt_file(config_dir: Path | None = None) -> None:
-    """Create <config_dir>/system_prompt.md (the commented template) if it's absent,
-    so users discover the feature without knowing the path/name. `config_dir`
-    defaults to ~/.drydock. NEVER overwrites an existing file (can't clobber a real
-    prompt) and never raises."""
+def _read_prompt_file(p: Path) -> str:
+    """Comment-stripped, whitespace-trimmed contents of a prompt file, or ''."""
     try:
-        p = (config_dir / "system_prompt.md") if config_dir is not None else system_prompt_path()
+        if p.exists():
+            return _strip_comments(p.read_text()).strip()
+    except OSError:
+        pass
+    return ""
+
+
+def _write_template(p: Path) -> None:
+    """Write the commented template to p if absent. Never overwrites; never raises."""
+    try:
         if not p.exists():
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(_SYSTEM_PROMPT_TEMPLATE, encoding="utf-8")
@@ -165,21 +181,35 @@ def ensure_system_prompt_file(config_dir: Path | None = None) -> None:
         pass
 
 
-def load_user_system_prompt(config: dict | None = None) -> str:
+def ensure_system_prompt_file(config_dir: Path | None = None) -> None:
+    """Create the GLOBAL <config_dir>/system_prompt.md template if absent (config_dir
+    defaults to ~/.drydock), so the feature is discoverable. Never overwrites."""
+    _write_template((config_dir / "system_prompt.md") if config_dir is not None else system_prompt_path())
+
+
+def ensure_project_system_prompt(cwd: Path | None = None) -> None:
+    """Create <project>/.drydock/system_prompt.md if absent — but ONLY inside a git
+    repo, so drydock never litters `.drydock/` folders in arbitrary directories
+    (e.g. $HOME, /tmp). A real project you `git init`'d gets a discoverable,
+    gitignorable per-project prompt; a throwaway cwd gets nothing. Never raises."""
+    cwd = cwd or Path.cwd()
+    try:
+        if (cwd / ".git").exists():   # file OR dir — covers worktrees too
+            _write_template(project_system_prompt_path(cwd))
+    except OSError:
+        pass
+
+
+def load_user_system_prompt(config: dict | None = None, cwd: Path | None = None) -> str:
     """The user's custom system prompt, injected every turn as standing orders.
 
-    Source (first non-empty wins): the file ~/.drydock/system_prompt.md (comment
-    blocks stripped, so the shipped template is inert), then the inline
-    `system_prompt` config key. Wrapped with a clear header and capped at 8000
-    chars. Returns '' when neither has real content. Never raises.
+    Precedence (first with real content wins): the PER-PROJECT file
+    <project>/.drydock/system_prompt.md, then the GLOBAL ~/.drydock/system_prompt.md,
+    then the inline `system_prompt` config key. Comment blocks are stripped (so the
+    shipped template is inert). Capped at 8000 chars. Returns '' when none has real
+    content. Never raises.
     """
-    text = ""
-    try:
-        p = system_prompt_path()
-        if p.exists():
-            text = _strip_comments(p.read_text()).strip()
-    except OSError:
-        text = ""
+    text = _read_prompt_file(project_system_prompt_path(cwd)) or _read_prompt_file(system_prompt_path())
     if not text and config:
         text = str(config.get("system_prompt", "") or "").strip()
     if not text:

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from drydock import __version__
-from drydock.config import load_user_system_prompt
+from drydock.config import load_user_system_prompt, ensure_project_system_prompt
 from drydock.agent import AgentState, run, TextChunk, ToolStart, ToolEnd, TurnDone
 
 
@@ -436,8 +436,11 @@ def main():
     # greeting into a runaway build. The TUI reads this from config; CLI modes
     # call load_project_instructions directly (see run_interactive/run_oneshot).
     config["project_instructions"] = load_project_instructions()
-    # The user's custom system prompt (~/.drydock/system_prompt.md or the
-    # `system_prompt` config key) — standing instructions the TUI injects every turn.
+    # In a git project, drop a discoverable per-project prompt template at
+    # <project>/.drydock/system_prompt.md (inert until edited). Then load the
+    # effective custom prompt — project file OVERRIDES the global ~/.drydock one —
+    # as standing instructions the TUI/CLI inject every turn.
+    ensure_project_system_prompt()
     config["user_system_prompt"] = load_user_system_prompt(config)
 
     # Connect any configured MCP servers and register their tools so the model

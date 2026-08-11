@@ -426,16 +426,24 @@ conventions.
 ### Custom system prompt
 
 For standing instructions applied on **every** turn (stronger than the
-per-project `AGENTS.md`, which is framed as optional background), edit
-**`~/.drydock/system_prompt.md`**. Drydock creates this file for you (a
-commented template) on first run, so you never have to know where it lives —
-just open it and write your instructions. It has no effect until you add text
-(the template is all comments, which are ignored).
+per-project `AGENTS.md`, which is framed as optional background), edit a
+`system_prompt.md` file. Drydock creates a commented template for you, so you
+never have to know where it lives — just open it and write your instructions.
+It has no effect until you add text (the template is all comments, ignored).
 
-Prefer keeping it in the config file instead? Set `system_prompt = "..."` in
-`~/.drydock/config.toml`. The `system_prompt.md` file wins if both are set;
-contents are capped at 8000 chars, injected after drydock's base prompt and
-before any project `AGENTS.md`, and apply in both the TUI and CLI.
+Two scopes, most-specific wins:
+
+- **Per-project** — `<project>/.drydock/system_prompt.md`. Auto-created inside
+  any **git repo** (so different projects get different standing orders, and
+  drydock never litters `.drydock/` folders in non-project directories).
+- **Global** — `~/.drydock/system_prompt.md`. Auto-created on first run; applies
+  to every project. A per-project file **overrides** it.
+- **Or the config key** — `system_prompt = "..."` in `~/.drydock/config.toml`
+  (lowest precedence).
+
+Contents are capped at 8000 chars, injected after drydock's base prompt and
+before any project `AGENTS.md`, and apply in both the TUI and CLI. Restart
+drydock after editing.
 
 ## Safety
 
