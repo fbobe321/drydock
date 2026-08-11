@@ -433,9 +433,9 @@ It has no effect until you add text (the template is all comments, ignored).
 
 Two scopes, most-specific wins:
 
-- **Per-project** — `<project>/.drydock/system_prompt.md`. Auto-created inside
-  any **git repo** (so different projects get different standing orders, and
-  drydock never litters `.drydock/` folders in non-project directories).
+- **Per-project** — `system_prompt.md` in the folder you launch drydock from.
+  Auto-created inside any **git repo** (so different projects get different
+  standing orders, and drydock never drops the file into non-project dirs).
 - **Global** — `~/.drydock/system_prompt.md`. Auto-created on first run; applies
   to every project. A per-project file **overrides** it.
 - **Or the config key** — `system_prompt = "..."` in `~/.drydock/config.toml`

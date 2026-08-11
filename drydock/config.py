@@ -125,9 +125,10 @@ def system_prompt_path() -> Path:
 
 
 def project_system_prompt_path(cwd: Path | None = None) -> Path:
-    """A PER-PROJECT custom system-prompt file: <project>/.drydock/system_prompt.md.
-    Overrides the global one when present — different projects, different orders."""
-    return (cwd or Path.cwd()) / ".drydock" / "system_prompt.md"
+    """A PER-PROJECT custom system-prompt file: system_prompt.md in the folder
+    drydock was started from. Overrides the global one when present — different
+    projects, different orders."""
+    return (cwd or Path.cwd()) / "system_prompt.md"
 
 
 # The template drydock drops so the file is always THERE and discoverable — the
@@ -145,9 +146,9 @@ _SYSTEM_PROMPT_TEMPLATE = """\
     - Prefer the standard library; avoid adding new dependencies.
     - State your plan in one sentence before making changes.
 
-  SCOPE: this file is THIS PROJECT'S prompt if it lives at <project>/.drydock/
-  system_prompt.md; the copy at ~/.drydock/system_prompt.md applies to every
-  project. A project file OVERRIDES the global one.
+  SCOPE: a system_prompt.md in a project's root folder is THAT PROJECT'S prompt;
+  the copy at ~/.drydock/system_prompt.md applies to every project. A project
+  file OVERRIDES the global one.
 
   This template has NO effect until you add your own text below this comment.
   Comment blocks like this one are ignored. Capped at 8000 characters.
@@ -188,10 +189,11 @@ def ensure_system_prompt_file(config_dir: Path | None = None) -> None:
 
 
 def ensure_project_system_prompt(cwd: Path | None = None) -> None:
-    """Create <project>/.drydock/system_prompt.md if absent — but ONLY inside a git
-    repo, so drydock never litters `.drydock/` folders in arbitrary directories
-    (e.g. $HOME, /tmp). A real project you `git init`'d gets a discoverable,
-    gitignorable per-project prompt; a throwaway cwd gets nothing. Never raises."""
+    """Create system_prompt.md in the folder drydock was started from if absent —
+    but ONLY inside a git repo, so drydock never drops a system_prompt.md into
+    arbitrary directories (e.g. $HOME, /tmp). A real project you `git init`'d gets
+    a discoverable per-project prompt at its root; a throwaway cwd gets nothing.
+    Never raises."""
     cwd = cwd or Path.cwd()
     try:
         if (cwd / ".git").exists():   # file OR dir — covers worktrees too
