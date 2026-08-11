@@ -125,3 +125,37 @@ def test_user_system_prompt_capped_at_8000(monkeypatch, tmp_path):
 def test_system_prompt_key_in_defaults():
     assert "system_prompt" in cfg.DEFAULTS
     assert cfg.DEFAULTS["system_prompt"] == ""
+
+
+def test_resolve_creates_inert_system_prompt_template(tmp_path):
+    # resolve() drops the template next to config.toml, and it has NO effect until edited
+    cfgpath = tmp_path / "config.toml"
+    cfg.resolve({}, cfgpath)
+    tmpl = tmp_path / "system_prompt.md"
+    assert tmpl.exists(), "template should be auto-created"
+    assert "<!--" in tmpl.read_text()
+    # inert: all-comments template contributes nothing to the prompt
+    assert cfg._strip_comments(tmpl.read_text()).strip() == ""
+
+
+def test_ensure_system_prompt_never_overwrites(tmp_path):
+    f = tmp_path / "system_prompt.md"
+    f.write_text("MY REAL PROMPT")
+    cfg.ensure_system_prompt_file(tmp_path)
+    assert f.read_text() == "MY REAL PROMPT"
+
+
+def test_load_strips_comments_keeps_real_text(monkeypatch, tmp_path):
+    d = tmp_path / ".drydock"; d.mkdir()
+    (d / "system_prompt.md").write_text("<!-- ignore me -->\nReal instruction here.")
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
+    out = cfg.load_user_system_prompt({})
+    assert "Real instruction here." in out
+    assert "ignore me" not in out
+
+
+def test_load_ignores_comment_only_file(monkeypatch, tmp_path):
+    d = tmp_path / ".drydock"; d.mkdir()
+    (d / "system_prompt.md").write_text(cfg._SYSTEM_PROMPT_TEMPLATE)
+    monkeypatch.setattr(cfg.Path, "home", staticmethod(lambda: tmp_path))
+    assert cfg.load_user_system_prompt({}) == ""

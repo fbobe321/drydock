@@ -426,15 +426,16 @@ conventions.
 ### Custom system prompt
 
 For standing instructions applied on **every** turn (stronger than the
-per-project `AGENTS.md`, which is framed as optional background), set a custom
-system prompt via either:
+per-project `AGENTS.md`, which is framed as optional background), edit
+**`~/.drydock/system_prompt.md`**. Drydock creates this file for you (a
+commented template) on first run, so you never have to know where it lives —
+just open it and write your instructions. It has no effect until you add text
+(the template is all comments, which are ignored).
 
-- a file: `~/.drydock/system_prompt.md` — write your instructions there, or
-- a config key in `~/.drydock/config.toml`: `system_prompt = "..."`.
-
-The file wins if both are set; contents are capped at 8000 chars. It's injected
-after drydock's base prompt and before any project `AGENTS.md`, and applies in
-both the TUI and CLI.
+Prefer keeping it in the config file instead? Set `system_prompt = "..."` in
+`~/.drydock/config.toml`. The `system_prompt.md` file wins if both are set;
+contents are capped at 8000 chars, injected after drydock's base prompt and
+before any project `AGENTS.md`, and apply in both the TUI and CLI.
 
 ## Safety
 

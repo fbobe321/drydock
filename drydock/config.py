@@ -13,6 +13,7 @@ All logic original to Drydock.
 """
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -123,23 +124,64 @@ def system_prompt_path() -> Path:
     return Path.home() / ".drydock" / "system_prompt.md"
 
 
+# The template drydock drops at ~/.drydock/system_prompt.md so the file is always
+# THERE and discoverable — the user never has to know the path or filename. It's
+# ALL comments, so it has ZERO effect until the user writes real text below them
+# (load_user_system_prompt strips <!-- --> blocks before use).
+_SYSTEM_PROMPT_TEMPLATE = """\
+<!--
+  Drydock custom system prompt.
+
+  Whatever you write in this file (OUTSIDE these comment blocks) is added to the
+  system prompt on EVERY turn, in both the TUI and CLI — your standing instructions.
+  Examples you might add below:
+    - Always run the test suite after editing code.
+    - Prefer the standard library; avoid adding new dependencies.
+    - State your plan in one sentence before making changes.
+
+  This template has NO effect until you add your own text below this comment.
+  Comment blocks like this one are ignored. Capped at 8000 characters.
+  Restart drydock after editing for changes to take effect.
+-->
+"""
+
+
+def _strip_comments(text: str) -> str:
+    """Drop HTML comment blocks so the shipped template is inert until edited."""
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
+def ensure_system_prompt_file(config_dir: Path | None = None) -> None:
+    """Create <config_dir>/system_prompt.md (the commented template) if it's absent,
+    so users discover the feature without knowing the path/name. `config_dir`
+    defaults to ~/.drydock. NEVER overwrites an existing file (can't clobber a real
+    prompt) and never raises."""
+    try:
+        p = (config_dir / "system_prompt.md") if config_dir is not None else system_prompt_path()
+        if not p.exists():
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(_SYSTEM_PROMPT_TEMPLATE, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def load_user_system_prompt(config: dict | None = None) -> str:
     """The user's custom system prompt, injected every turn as standing orders.
 
-    Source (first non-empty wins): the file ~/.drydock/system_prompt.md, then the
-    inline `system_prompt` config key. Wrapped with a clear header and capped at
-    8000 chars. Returns '' when neither is set. Never raises.
+    Source (first non-empty wins): the file ~/.drydock/system_prompt.md (comment
+    blocks stripped, so the shipped template is inert), then the inline
+    `system_prompt` config key. Wrapped with a clear header and capped at 8000
+    chars. Returns '' when neither has real content. Never raises.
     """
     text = ""
     try:
         p = system_prompt_path()
         if p.exists():
-            text = p.read_text()
+            text = _strip_comments(p.read_text()).strip()
     except OSError:
         text = ""
     if not text and config:
-        text = str(config.get("system_prompt", "") or "")
-    text = text.strip()
+        text = str(config.get("system_prompt", "") or "").strip()
     if not text:
         return ""
     return (
@@ -289,6 +331,10 @@ def resolve(cli_overrides: dict, path: Path | None = None) -> dict:
     has an editable v3 config with a visible endpoint.
     """
     path = path or default_config_path()
+    # Drop the discoverable custom-system-prompt template alongside config.toml so
+    # the user never has to know its path/name. Inert (all comments) until edited;
+    # never overwrites an existing file.
+    ensure_system_prompt_file(path.parent)
     if not path.exists():
         save_file(dict(DEFAULTS), path)
         file_cfg = {}
