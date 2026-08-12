@@ -110,15 +110,24 @@ def _truncate_tool_call_args(messages: list, max_len: int) -> None:
                         inp[k] = v[: max_len // 2] + "\n[... arg truncated ...]"
 
 
-def compact(messages: list, context_limit: int = 131072) -> list:
+def compact(messages: list, context_limit: int = 131072,
+            target_frac: float = 0.45) -> list:
     """Compact messages to fit within context limit.
 
     Strategy:
     1. First pass: truncate long tool results to 800 chars
     2. Second pass: drop oldest tool results if still over limit
     3. Always keep: first user message, last 8 messages
+
+    target_frac is the fraction of the window to compact DOWN to. It must be
+    meaningfully below maybe_compact's TRIGGER (0.60): compacting to the same
+    0.60 we trigger at frees almost nothing, so context stays pinned just over
+    the line and re-compacts every turn while never gaining real headroom — the
+    "it doesn't compact when it needs to" symptom. Targeting 0.45 leaves durable
+    headroom so a long /loop (history accumulating across iterations) doesn't
+    creep back over the wall on the very next turn.
     """
-    target = int(context_limit * 0.60)  # Leave 40% headroom
+    target = int(context_limit * target_frac)  # durable headroom below the 0.60 trigger
 
     # Pass 1: Truncate long tool results
     for m in messages:

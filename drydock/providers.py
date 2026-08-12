@@ -562,9 +562,11 @@ def stream(
     oai_messages = messages_to_openai(messages, system)
 
     has_tools = bool(tool_schemas)
-    # Gemma corrupts tool-call JSON when streamed; force non-streaming on tool
-    # turns. config["force_stream"] overrides for debugging.
-    do_stream = config.get("force_stream") or use_streaming(model, has_tools)
+    # Gemma (and any local server whose model name we can't trust) corrupts
+    # tool-call JSON when streamed; force non-streaming on tool turns. Passing
+    # provider closes the gap where a Gemma behind vLLM is served under a name
+    # lacking 'gemma'. config["force_stream"] overrides for debugging.
+    do_stream = config.get("force_stream") or use_streaming(model, has_tools, provider)
 
     kwargs = {
         "model": model,

@@ -438,11 +438,13 @@ def test_loop_command_iterates_and_stops():
             begins = []
             app._begin = lambda text: begins.append(text)  # stub out the real agent
 
-            # bad usage → no loop
-            app._handle_slash("/loop notanumber")
+            # empty prompt → usage error, no loop
+            app._handle_slash("/loop")
+            assert app._repeat is None and not begins
+            app._handle_slash("/loop *")   # count but no prompt
             assert app._repeat is None and not begins
 
-            # /loop 3 <prompt> → starts, first iteration begun
+            # /loop 3 <prompt> → starts, first iteration begun with the bare prompt
             app._handle_slash("/loop 3 do the thing")
             assert app._repeat and app._repeat["total"] == 3
             assert begins == ["do the thing"]
@@ -456,7 +458,38 @@ def test_loop_command_iterates_and_stops():
             assert app._repeat is None
             assert len(begins) == 3  # no 4th run
 
+            # unbounded: `*` runs past any count until stopped
+            begins.clear()
+            app._handle_slash("/loop * keep going")
+            assert app._repeat and app._repeat["total"] is None
+            for _ in range(6):
+                app.on_agent_finished(AgentFinished())
+            assert app._repeat is not None  # never self-exhausts
+            assert len(begins) == 7  # initial + 6 continuations
+
+            # no count given → also unbounded, whole arg is the prompt
+            app._handle_slash("/stop")
+            begins.clear()
+            app._handle_slash("/loop just do it")
+            assert app._repeat and app._repeat["total"] is None
+            assert begins == ["just do it"]
+
+            # count is capped at 1000
+            app._handle_slash("/stop")
+            app._handle_slash("/loop 999999 huge")
+            assert app._repeat and app._repeat["total"] == 1000
+
+            # LOOP_DONE reply stops the loop early
+            app._handle_slash("/stop")
+            begins.clear()
+            app._handle_slash("/loop 10 finish up")
+            app.state.messages = [{"role": "assistant", "content": "all set. LOOP_DONE"}]
+            app.on_agent_finished(AgentFinished())
+            assert app._repeat is None
+            assert len(begins) == 1  # stopped before a 2nd iteration
+
             # Esc/stop ends an active loop
+            app.state.messages = []
             app._begin = lambda text: begins.append(text)
             app._handle_slash("/loop 5 again")
             app._busy = True

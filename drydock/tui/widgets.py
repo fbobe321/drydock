@@ -186,7 +186,7 @@ SLASH_SPECS: list[SlashSpec] = [
     SlashSpec("/doc", "<sub>", "drive the Document Canvas tools by hand",
               "open <path> · new <name> ..."),
     SlashSpec("/skills", "[new <name> <prompt>]", "list skills, or create a reusable one"),
-    SlashSpec("/loop", "<count> <prompt>", "repeat a prompt N times (Esc stops)"),
+    SlashSpec("/loop", "[count|*] <prompt>", "repeat a prompt (1–1000, or * = until Esc)"),
     SlashSpec("/ratchet", "<goal>", "persist verified progress across rounds until tests pass",
               '--verify "<cmd>" to override the auto-detected verifier'),
     SlashSpec("/mcp", "", "list connected MCP servers and their tools"),

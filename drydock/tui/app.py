@@ -890,27 +890,51 @@ class DrydockApp(App):
         self._info("\n".join(lines))
 
     def _cmd_loop(self, arg: str) -> None:
-        """/loop <count> <prompt> — run <prompt> up to <count> times (1–50),
-        re-submitting after each turn finishes. Esc (or /stop) ends the loop."""
+        """/loop [count|*] <prompt> — re-submit <prompt> after each turn finishes.
+
+        <count> 1–1000 runs that many iterations; `*` (or omitting the count
+        entirely) runs UNBOUNDED until Esc/`/stop`. The loop also stops early on
+        its own when the model reports the task done (replies LOOP_DONE) or when
+        an iteration makes no progress (identical actions + reply as the prior)."""
         parts = arg.split(maxsplit=1)
-        if len(parts) < 2 or not parts[0].isdigit():
-            self._info(
-                "usage: /loop <count> <prompt>   e.g.  /loop 5 fix the next "
-                "failing test and run pytest\n(count 1–50; Esc stops the loop)"
-            )
-            return
-        count = max(1, min(int(parts[0]), 50))
-        prompt = parts[1].strip()
+        first = parts[0] if parts else ""
+        if first == "*":
+            total = None  # unbounded
+            prompt = (parts[1] if len(parts) > 1 else "").strip()
+        elif first.isdigit():
+            total = max(1, min(int(first), 1000))
+            prompt = (parts[1] if len(parts) > 1 else "").strip()
+        else:
+            total = None  # no count given → run until stopped
+            prompt = arg.strip()
         if not prompt:
-            self._info("usage: /loop <count> <prompt>")
+            self._info(
+                "usage: /loop [count|*] <prompt>   e.g.  /loop 5 fix the next "
+                "failing test and run pytest\n"
+                "(count 1–1000, or `*`/no count = until Esc/stop)"
+            )
             return
         if self._busy:
             self._info("A turn is already running — stop it (Esc) before starting a loop.")
             return
-        self._repeat = {"prompt": prompt, "remaining": count, "total": count}
-        self._info(f"↻ looping {count}× (Esc to stop):  {prompt}")
+        self._repeat = {"prompt": prompt, "total": total, "done": 1, "fingerprint": None}
+        label = f"{total}×" if total else "until Esc"
+        self._info(f"↻ looping {label} (Esc to stop):  {prompt}")
         self._mount(UserMessage(prompt))
         self._begin(prompt)
+
+    def _loop_prompt(self, rep: dict) -> str:
+        """The prompt for a continuation iteration — the base task plus a small
+        iteration-awareness header so the model knows it is iterating and can end
+        the loop honestly instead of re-doing finished work."""
+        n = rep["done"]
+        of = f"/{rep['total']}" if rep["total"] else ""
+        return (
+            f"{rep['prompt']}\n\n"
+            f"[loop iteration {n}{of} — continue the task from the CURRENT state. "
+            f"If everything the task asks for is already complete, reply exactly "
+            f"LOOP_DONE and take no tool actions.]"
+        )
 
     def _cmd_ratchet(self, arg: str) -> None:
         """/ratchet <goal> [--verify "<cmd>"] [--rounds N] [--fitness auto|exitcode|<regex>]
@@ -1737,14 +1761,41 @@ class DrydockApp(App):
         if self._ratchet and not self._cancel.is_set():
             self.run_worker(self._ratchet_step, thread=True)
             return
-        # /loop: re-run the prompt until the iteration count is exhausted (Esc/
-        # stop clears self._repeat). Queued user prompts take priority (above).
-        if self._repeat and self._repeat["remaining"] > 1 and not self._cancel.is_set():
-            self._repeat["remaining"] -= 1
-            done = self._repeat["total"] - self._repeat["remaining"] + 1
-            self._info(f"↻ loop iteration {done}/{self._repeat['total']}")
-            self._begin(self._repeat["prompt"])
-            return
+        # /loop: re-run the prompt until the count is exhausted OR the loop stops
+        # itself (Esc/stop clears self._repeat). Queued user prompts take priority.
+        if self._repeat and not self._cancel.is_set():
+            rep = self._repeat
+            unbounded = rep["total"] is None
+            more = unbounded or rep["done"] < rep["total"]
+            if more:
+                # Early stop 1: the model reported the task complete.
+                if "LOOP_DONE" in self._last_assistant_text():
+                    self._info("✓ loop stopped — model reported the task complete (LOOP_DONE).")
+                    self._repeat = None
+                else:
+                    # Early stop 2: no progress — this iteration produced the same
+                    # actions AND the same reply as the previous one, so repeating
+                    # will only reproduce it (the "repeats the same actions over and
+                    # over" case). Fingerprint = (tool names used, final reply).
+                    fp = (tuple(sorted(self._turn_tools)), self._last_assistant_text())
+                    if fp == rep.get("fingerprint") and (fp[0] or fp[1]):
+                        self._info("✓ loop stopped — no progress (identical actions "
+                                   "and reply as the previous iteration).")
+                        self._repeat = None
+                    else:
+                        rep["fingerprint"] = fp
+                        rep["done"] += 1
+                        of = f"/{rep['total']}" if rep["total"] else ""
+                        self._info(f"↻ loop iteration {rep['done']}{of}")
+                        # Compact BEFORE the next iteration so accumulated history
+                        # from prior iterations can't creep over the window.
+                        try:
+                            from drydock.compaction import maybe_compact
+                            maybe_compact(self.state, self.config)
+                        except Exception:  # noqa: BLE001 — compaction must never break the loop
+                            pass
+                        self._begin(self._loop_prompt(rep))
+                        return
         self._repeat = None
         self._refresh_status()
         self._update_suggestion()

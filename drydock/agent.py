@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import time as _time
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Generator
 
@@ -124,6 +125,24 @@ def drop_last_turn(messages: list) -> bool:
     return False
 
 
+def _numbered_snapshot(path: str, max_lines: int = 200, max_chars: int = 8000) -> str:
+    """Line-numbered current content of *path* for the failed-edit thrash breaker,
+    so the model can copy an exact span instead of re-guessing. Bounded and
+    never raises — an unreadable path returns an explanatory line."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except Exception as e:  # noqa: BLE001
+        return f"(could not read {path}: {e}. Use Read to inspect it.)"
+    lines = text.splitlines()
+    body = lines[:max_lines]
+    out = "\n".join(f"{i + 1:>5}\t{ln}" for i, ln in enumerate(body))
+    if len(lines) > max_lines:
+        out += f"\n[... {len(lines) - max_lines} more lines — use Read for the rest ...]"
+    if len(out) > max_chars:
+        out = out[:max_chars] + "\n[... truncated — use Read for the rest ...]"
+    return out
+
+
 # ── Agent loop ────────────────────────────────────────────────────────────
 
 def run(
@@ -212,6 +231,7 @@ def run(
     )  # scores each action; flags a stalled run
     prev_failing = None  # failing-test count from the previous verification (delta)
     verif_fail_counts: dict[str, int] = {}  # failure-summary -> times seen (Epic J3)
+    edit_fail_counts: dict[str, int] = {}    # file_path -> consecutive "old_string not found" misses
     verification_text = ""    # concatenated verification commands+results (coverage)
     coverage_nudges = 0       # bounded "your checks never touched X" nudges
     # Time-aware effort governor (bench taxonomy: think-bound runs burn a 30-min
@@ -691,9 +711,36 @@ def run(
                     f"path and take a different approach.]\n" + result
                 )
 
+            # Failed-edit thrash breaker: a weak model that guesses a WRONG
+            # old_string gets "old_string not found", then re-guesses a DIFFERENT
+            # wrong old_string — so exact-repeat detection (keyed on identical
+            # input) never fires and it loops "over and over" (seen live on
+            # gemma/vLLM). Track "not found" misses per FILE regardless of the
+            # old_string; after a few, stop hinting and HARD-inject the file's
+            # current content (line-numbered) so the next edit can only copy an
+            # exact span. Also feed the stall machinery so recovery escalates.
+            _edit_thrash = False
+            if tc["name"] in ("Edit", "edit") and isinstance(tc.get("input"), dict):
+                _efp = str(tc["input"].get("file_path") or "")
+                if "old_string not found" in (result or ""):
+                    edit_fail_counts[_efp] = edit_fail_counts.get(_efp, 0) + 1
+                    if edit_fail_counts[_efp] >= 3:
+                        _edit_thrash = True
+                        _snap = _numbered_snapshot(_efp)
+                        result = (
+                            f"[STOP: {edit_fail_counts[_efp]} edits to {_efp} have failed "
+                            f"with 'old_string not found' — you keep guessing text that is "
+                            f"not in the file. Do NOT guess again. The file's CURRENT "
+                            f"content is below, line-numbered. Copy an EXACT span (WITHOUT "
+                            f"the line-number prefixes) as old_string, or take a different "
+                            f"approach.]\n{_snap}\n\n" + (result or "")
+                        )
+                else:
+                    edit_fail_counts.pop(_efp, None)  # a clean edit resets that file
+
             # Verification evidence: if this Bash call was a test/check/exec, parse
             # its result so the completion gate knows whether it PASSED, not just ran.
-            _repeated_outcome = bool(_degen)
+            _repeated_outcome = bool(_degen) or _edit_thrash
             if tc["name"] == "Bash":
                 _vcmd = (tc.get("input") or {}).get("command", "")
                 if looks_like_verification(_vcmd):

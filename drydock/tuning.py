@@ -224,13 +224,25 @@ def hallucinated_tool_message(name: str) -> str | None:
     return _HALLUCINATED_TOOLS.get(name)
 
 
-def use_streaming(model: str | None, has_tools: bool) -> bool:
+# Local OpenAI-compatible servers whose streamed tool-call JSON we don't trust:
+# the model family can't be inferred from the served name (vLLM/Ollama/LM Studio
+# routinely report a checkpoint path, a custom --served-model-name, or 'default'),
+# and streamed tool-call deltas from local models are the corruption we avoid.
+_LOCAL_TOOL_STREAM_UNSAFE = {"vllm", "ollama", "lmstudio"}
+
+
+def use_streaming(model: str | None, has_tools: bool, provider: str | None = None) -> bool:
     """Whether to stream tokens for this turn.
 
-    Gemma corrupts tool-call JSON when streamed, so any turn that offers
-    tools to Gemma must be non-streaming. Text-only turns may stream.
+    Gemma corrupts tool-call JSON when streamed, so any tool turn to Gemma must be
+    non-streaming. Crucially, the decision must NOT rely on the model NAME alone: a
+    local server often reports a name with no 'gemma' in it (a served alias / path),
+    so a Gemma behind vLLM would slip through name-matching, stream its tool turns,
+    and emit the mangled `old_string` that makes Edit loop. So force non-streaming
+    on ANY tool turn to a local OpenAI-compatible provider, regardless of the
+    reported name. Text-only turns still stream everywhere (incremental UX kept).
     """
-    if has_tools and is_gemma(model):
+    if has_tools and (is_gemma(model) or (provider or "") in _LOCAL_TOOL_STREAM_UNSAFE):
         return False
     return True
 
