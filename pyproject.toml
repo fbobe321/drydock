@@ -7,14 +7,24 @@ build-backend = "setuptools.build_meta"
 # PyPI distribution name is drydock-cli (the established install name, continued
 # from the retired v2 fork); the import package + CLI command stay `drydock`.
 name = "drydock-cli"
-version = "3.1.14"
+version = "3.1.15"
 description = "Drydock — a local, provider-agnostic terminal coding agent for local LLMs"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Frank Bobe III" }]
-dependencies = ["openai>=1.0", "textual>=0.80"]
+# Every package imported directly by drydock/ must be declared here — do NOT rely
+# on transitive deps (httpx via openai, rich via textual): a clean/partial install
+# then fails at runtime with ModuleNotFoundError (httpx bug, v3.1.15). pypdf is not
+# transitive at all, so PDF extraction silently broke on fresh installs.
+dependencies = [
+    "openai>=1.0",
+    "textual>=0.80",
+    "httpx>=0.23",
+    "rich>=13.0",
+    "pypdf>=3.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/fbobe321/drydock"
