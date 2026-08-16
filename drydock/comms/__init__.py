@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from .events import Decision, Event, Presence, Severity, NON_SUPPRESSIBLE
 from .attention import AttentionPolicy, AttentionConfig
-from .channels import Delivery, TelegramProvider, LogChannel
+from .channels import Delivery, LogChannel, MessageProvider
 
 _policy = AttentionPolicy()
 _delivery = Delivery()
@@ -53,6 +53,6 @@ def emit_event(type: str, severity: Severity = Severity.INFORMATIONAL,
 
 __all__ = [
     "Decision", "Event", "Presence", "Severity", "NON_SUPPRESSIBLE",
-    "AttentionPolicy", "AttentionConfig", "Delivery", "TelegramProvider",
+    "AttentionPolicy", "AttentionConfig", "Delivery", "MessageProvider",
     "LogChannel", "emit_event", "configure", "set_presence",
 ]

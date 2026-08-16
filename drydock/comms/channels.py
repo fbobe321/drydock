@@ -1,46 +1,24 @@
 """Drydock Comms — channel delivery (PRD §15/§17). Routes a Decision to a place:
 LOG→file, DISPLAY→stdout/TUI, MESSAGE→messaging provider, SPEAK→TTS (stub).
 
-Providers are pluggable (MessageProvider.send). The Telegram provider is
-config-driven (token+chat via env or explicit args) so it works headless on the
-fleet and can't accidentally hard-depend on a cloud service.
+PROVENANCE: the published core ships NO outbound network sender — drydock's
+identity is clean, no-phone-home code. Messaging is a PLUGGABLE ADAPTER: core
+defines the `MessageProvider` interface only; the application (or the fleet)
+injects a concrete sender via `comms.configure(...)`. A MESSAGE decision with no
+injected provider falls back to display+log, so nothing is silently lost.
 """
 from __future__ import annotations
 
-import os
 import json
-import urllib.request
-import urllib.parse
 
 from .events import Decision, Event
 
 
 class MessageProvider:
+    """Interface for a messaging channel. Concrete network senders live OUTSIDE
+    the published core (injected by the app) — the core stays phone-home-free."""
     def send(self, text: str) -> bool:  # pragma: no cover - interface
         raise NotImplementedError
-
-
-class TelegramProvider(MessageProvider):
-    """Minimal, dependency-free Telegram sender (stdlib urllib). Reads token/chat
-    from args or env (DRYDOCK_TG_TOKEN / DRYDOCK_TG_CHAT)."""
-
-    def __init__(self, token: str | None = None, chat_id: str | None = None):
-        self.token = token or os.environ.get("DRYDOCK_TG_TOKEN", "")
-        self.chat_id = chat_id or os.environ.get("DRYDOCK_TG_CHAT", "")
-
-    def configured(self) -> bool:
-        return bool(self.token and self.chat_id)
-
-    def send(self, text: str) -> bool:
-        if not self.configured():
-            return False
-        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-        data = urllib.parse.urlencode({"chat_id": self.chat_id, "text": text}).encode()
-        try:
-            with urllib.request.urlopen(url, data=data, timeout=10) as r:
-                return r.status == 200
-        except Exception:  # noqa: BLE001 — comms failure must never crash the task
-            return False
 
 
 class LogChannel:
@@ -70,13 +48,23 @@ def format_for_human(event: Event) -> str:
 
 
 class Delivery:
-    """Executes a Decision. Returns True if it reached the intended channel."""
+    """Executes a Decision. Returns True if it reached the intended channel.
+
+    message_provider is None by default (the clean core has no network sender);
+    apps inject one via comms.configure(). With no provider, MESSAGE/SPEAK fall
+    back to display+log so a non-suppressible event is never silently dropped."""
     def __init__(self, message_provider: MessageProvider | None = None,
                  log: LogChannel | None = None, display=print, speak=None):
-        self.message_provider = message_provider or TelegramProvider()
+        self.message_provider = message_provider
         self.log = log or LogChannel()
         self.display = display
         self.speak = speak
+
+    def _send_message(self, text: str) -> bool:
+        if self.message_provider is not None:
+            return self.message_provider.send(text)
+        self.display(f"drydock [no messaging provider]: {text}")   # never lose it
+        return False
 
     def deliver(self, event: Event, decision: Decision) -> bool:
         self.log.write(event, decision)          # everything is always logged
@@ -87,11 +75,10 @@ class Delivery:
             self.display(f"drydock: {text}")
             return True
         if decision == Decision.MESSAGE:
-            return self.message_provider.send(f"Drydock: {text}")
+            return self._send_message(f"Drydock: {text}")
         if decision == Decision.SPEAK:
             if self.speak:
                 self.speak(text)
                 return True
-            # no TTS wired yet → fall back to message so it isn't lost
-            return self.message_provider.send(f"Drydock: {text}")
+            return self._send_message(f"Drydock: {text}")   # no TTS yet → message
         return False
