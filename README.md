@@ -326,6 +326,12 @@ pip install drydock-cli
 drydock
 ```
 
+> ⚠️ **The PyPI package is `drydock-cli`, not `drydock`.** `pip install drydock`
+> fetches an unrelated project (a Docker-cluster tool) that ships its own
+> `drydock/` package with no `cli.py`, so the `drydock` command then fails with
+> `No module named 'drydock.cli'`. If that happened, run
+> `pip uninstall -y drydock drydock-cli && pip install drydock-cli`.
+
 Requires Python 3.11+. From source instead:
 `git clone https://github.com/fbobe321/drydock.git && cd drydock && pip install -e .`
 

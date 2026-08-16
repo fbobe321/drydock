@@ -60,6 +60,35 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🎯 2026-08-14 — NORTH-STAR: SOLVE terminal-bench-2 COMPLETELY (ratchet+eratchet+self-distill), then next benchmark.**
+> Operator: "solve tbench, don't care how long, with self-distillation; ratchet and eratchet get us there." Fleet
+> switched from MEASUREMENT to an unattended **completion campaign**. Progress **37–38/89** (`tbench_progress.sh`).
+> - **Escalating effort per task** (`fleet_supervisor.sh:seed_tbench_escalation`): each cycle an unsolved task
+>   survives it climbs tier0 ratchet×8 → tier1 ratchet×12 → tier2 eratchet×12 → tier3+ eratchet×16 (state in
+>   `heredity/tbench_effort.tsv`). Added an **eratchet job type** to `cluster/worker.sh`. All 52 unsolved queued.
+> - **Never-idle supervisor** now drives the campaign: keeps workers alive, re-seeds+escalates the residue, reaps
+>   zombies, drains an **experiment_queue**, and when tbench-2 = 89/89 auto-advances to the next benchmark (unified
+>   `tasks/pool` + `gen_pool.sh` continuous generator). Cron */10 + @reboot; halt via `cluster/STOP_FLEET`.
+> - **Self-distillation write-back** layers on: solves feed training; promote a champion only if it COLLECTS MORE
+>   (compounding), else base grinds. **LAND-MINE hit + logged:** `pkill -f <pat>` where `<pat>` is in your own
+>   cmdline self-kills (exit 144) — kill by PID/PGID. Also fixed `_queued` (was matching old done/failed rows →
+>   previously-attempted tasks never re-tried). Full spec: README_RUN.md NORTH-STAR block.
+>
+> **🔬📉 2026-08-14 — REFRAME: held-out transfer → WITHIN-LOOP COMPOUNDING (operator: "199 is tiny").**
+> **Totals:** 38 distinct tasks solved · **199 traces** (37 canonical + 162 variants) · 141 SFT rows; champion=base.
+> **Held-out verdict = NULL but INSTRUMENT-LIMITED:** EVAL_N=5 re-measure → base **0/30 = adapter 0/30** (CIs
+> overlap; the curve's +1/+2 was noise). Multi-round probe on the frozen held-out set → base **0/30 EVEN
+> multi-round** ⇒ the set is beyond base's frontier, so the instrument floors everyone and measures nothing.
+> **⇒ Two levers now** (vs waiting for a generalization-scale corpus we can't collect at ~1–2 solves/day, pool drained):
+> (1) **within-loop compounding** — `compound_measure.sh` on **.22** (HF-Q5): base vs base+adapter over 10 UNSOLVED
+> frontier near-misses, metric = graded checks-passing **FITNESS** (dynamic range), leakage-clean. *Does inheriting
+> the 199 solves make more frontier progress than base?* (2) **pool expansion** — `ml_suite_sweep.sh` on **.20/.21**:
+> collect the FRESH **ml-suite (13 ML tasks)** → grows + DIVERSIFIES the 1-species corpus. **Infra:** drydock **3.1.15**
+> deployed + fleet DD_VER unified (edit-thrash breaker, compaction, /loop fixes). `heredity_loop` stays PAUSED
+> (STOP_HEREDITY) until the instrument is fixed. New: compound_measure.sh, ml_suite_sweep.sh, probe_mr.sh,
+> probe_band.sh, heredity/frontier_pool.txt, heredity/leaveout_candidates.txt. Full spec: README_RUN.md STATUS block.
+> See [[project_two_box_ratchet_infra]], [[project_ratchet_heredity_reframe]].
+>
 > **🖥️🧬 2026-08-09 — THIRD BOX (.20 RTX 8000) STOOD UP AS TRAINER+COLLECTOR; HEREDITY v2 = STILL NULL at 2× corpus.**
 > **New machine `192.168.50.20` (hostname `Zeus20`), Quadro RTX 8000, 48GB, single card, 8 CPUs, 93GB RAM.**
 > Operator-provisioned bare; brought fully online this session (keyless SSH `bobef@remus` key; sudo=`lis4351`).
