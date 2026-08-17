@@ -130,3 +130,42 @@ def test_pdf_tools_registered_and_surface_without_flags():
     off = {s["name"] for s in select_tools(schemas(),
            task_text="refactor the auth module", max_tools=12)}
     assert "PdfRedbox" not in off        # not surfaced for unrelated work
+
+
+# ── verbatim-snap + vision verification ─────────────────────────────────────
+
+def _stub_vision(verdict):
+    import json
+    def vlm(prompt, image_path):
+        assert prompt and image_path            # got a real rendered crop path
+        return json.dumps(verdict)
+    return vlm
+
+
+def test_snap_expands_box_to_full_token(sample_pdf):
+    # searching a substring (no leading '#') should still box the whole token
+    raw = rb.search(sample_pdf, "N00024-26-C-1234", snap=False)[0]
+    snapped = rb.search(sample_pdf, "N00024-26-C-1234", snap=True)[0]
+    assert snapped.bbox[0] <= raw.bbox[0]       # extended LEFT to include the '#'
+
+
+def test_vision_verify_sets_verified_status(sample_pdf, tmp_path):
+    pytest.importorskip("pypdfium2")
+    llm = _stub_llm([{"field": "total contract value", "value": "$1,247,392.00",
+                      "page": 1, "context": "Total Amount", "found": True}])
+    vlm = _stub_vision({"verified": True, "confidence": 0.96, "note": "tight box"})
+    audit = rb.redbox_semantic(sample_pdf, ["total contract value"],
+                               str(tmp_path / "v.pdf"), llm=llm, vision_llm=vlm)
+    f = audit["fields"][0]
+    assert f["status"] == "boxed_verified" and f["vision_confidence"] == 0.96
+    assert audit["annotations"][0]["verified"] is True
+
+
+def test_vision_verify_flags_unverified(sample_pdf, tmp_path):
+    pytest.importorskip("pypdfium2")
+    llm = _stub_llm([{"field": "total", "value": "$1,247,392.00", "page": 1,
+                      "context": "Total Amount", "found": True}])
+    vlm = _stub_vision({"verified": False, "confidence": 0.2, "note": "box misses it"})
+    audit = rb.redbox_semantic(sample_pdf, ["total"], str(tmp_path / "v.pdf"),
+                               llm=llm, vision_llm=vlm)
+    assert audit["fields"][0]["status"] == "boxed_UNVERIFIED"

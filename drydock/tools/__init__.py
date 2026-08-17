@@ -995,6 +995,7 @@ SCHEMAS = [
                              "text": {"type": "string", "description": "Exact literal text to box (alternative to find)."},
                              "output": {"type": "string", "description": "Output path (default <name>_redboxed.pdf)."},
                              "context": {"type": "string", "description": "For `text`: a nearby label to disambiguate repeats."},
+                             "verify": {"type": "boolean", "description": "With `find`: visually confirm each drawn box with the vision model (renders the boxed region and checks it surrounds the right value). Slower; a box the vision model can't confirm is flagged 'boxed_UNVERIFIED'."},
                          },
                          "required": ["file"]},
     },
@@ -2753,7 +2754,9 @@ def tool_pdfredbox(params: dict, config: dict) -> str:
                                 "count": len(ms)}]
         elif params.get("find"):
             fields = params["find"] if isinstance(params["find"], list) else [params["find"]]
-            audit = rb.redbox_semantic(f, [str(x) for x in fields], out, llm=rb.make_llm(config))
+            vlm = rb.make_vision_llm(config) if params.get("verify") else None
+            audit = rb.redbox_semantic(f, [str(x) for x in fields], out,
+                                       llm=rb.make_llm(config), vision_llm=vlm)
         else:
             return "PdfRedbox needs either 'find' (fields to locate by meaning) or 'text' (exact string)."
     except Exception as e:  # noqa: BLE001
