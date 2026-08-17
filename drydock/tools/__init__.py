@@ -957,6 +957,46 @@ SCHEMAS = [
             "required": ["name"],
         },
     },
+    {
+        "name": "PdfSearch",
+        "description": (
+            "Find exact text in a PDF and return each match's page, bounding box, and "
+            "nearby context. The deterministic 'where is it' primitive — use to locate a "
+            "value in a PDF before boxing, or to answer where something appears."
+        ),
+        "input_schema": {"type": "object",
+                         "properties": {
+                             "file": {"type": "string", "description": "Path to the PDF."},
+                             "query": {"type": "string", "description": "Text to find (or a regex if regex:true)."},
+                             "regex": {"type": "boolean", "description": "Treat query as a regex."},
+                             "context": {"type": "string", "description": "Nearby label to disambiguate a repeated value (e.g. 'Total')."},
+                         },
+                         "required": ["file", "query"]},
+    },
+    {
+        "name": "PdfRedbox",
+        "description": (
+            "Draw RED boxes around information in a PDF for review — highlight, NEVER "
+            "redact/remove. Give the fields to locate by MEANING via `find` (e.g. "
+            "find=['total contract value','contract number','award date']) and Drydock "
+            "identifies each value, finds its exact on-page location, and draws a tight, "
+            "non-destructive rectangle, writing <name>_redboxed.pdf (source untouched). "
+            "Or box an exact string via `text`. Use whenever the user asks to box, "
+            "highlight, mark, circle, or flag specific information in a PDF. Returns a "
+            "per-field result; a value it cannot verify on the page is flagged, never "
+            "silently boxed. No setup needed — Drydock provisions the PDF backend itself."
+        ),
+        "input_schema": {"type": "object",
+                         "properties": {
+                             "file": {"type": "string", "description": "Path to the PDF."},
+                             "find": {"type": "array", "items": {"type": "string"},
+                                      "description": "Fields to locate and box, by meaning. e.g. ['invoice total','due date']."},
+                             "text": {"type": "string", "description": "Exact literal text to box (alternative to find)."},
+                             "output": {"type": "string", "description": "Output path (default <name>_redboxed.pdf)."},
+                             "context": {"type": "string", "description": "For `text`: a nearby label to disambiguate repeats."},
+                         },
+                         "required": ["file"]},
+    },
 ]
 
 # ── Tool implementations ──────────────────────────────────────────────────
@@ -2653,6 +2693,84 @@ def tool_docredact(params: dict, config: dict) -> str:
             f"redacted file; the unredacted original is preserved as <file>.orig (keep it secure).")
 
 
+# ── PDF redboxing (semantic redbox engine — see drydock/pdfredbox.py) ─────────
+
+def _ensure_pdf_redbox() -> tuple[bool, str]:
+    """Zero-step: make the redbox backend available. Import it; if the optional
+    `[pdf-redbox]` extra isn't present, best-effort auto-install it (fails
+    gracefully offline) — so the agent can just use PdfRedbox with no user steps."""
+    try:
+        import pdfplumber, pypdf  # noqa: F401  # pyright: ignore[reportMissingImports]
+        return True, ""
+    except Exception:  # noqa: BLE001
+        pass
+    import subprocess
+    import sys
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                        "pdfplumber>=0.11", "pypdf>=4", "pypdfium2>=4"],
+                       check=True, timeout=300,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        import pdfplumber, pypdf  # noqa: F401  # pyright: ignore[reportMissingImports]
+        return True, ""
+    except Exception:  # noqa: BLE001
+        return False, ("PDF redboxing needs extra libraries and the auto-install failed "
+                       "(offline / restricted network?). Run:  pip install 'drydock-cli[pdf-redbox]'")
+
+
+def tool_pdfsearch(params: dict, config: dict) -> str:
+    ok, msg = _ensure_pdf_redbox()
+    if not ok:
+        return msg
+    import json
+    from drydock import pdfredbox as rb
+    f = _as_text(params.get("file")); q = _as_text(params.get("query"))
+    if not f or not q:
+        return "PdfSearch needs 'file' and 'query'."
+    try:
+        ms = rb.search(f, q, regex=bool(params.get("regex")), context=params.get("context"))
+    except Exception as e:  # noqa: BLE001
+        return f"PdfSearch failed: {e}"
+    if not ms:
+        return f"No matches for {q!r} in {f}."
+    return json.dumps([{"page": m.page + 1, "bbox": [round(v, 1) for v in m.bbox],
+                        "text": m.text, "context": m.context,
+                        "confidence": m.confidence} for m in ms], indent=2)
+
+
+def tool_pdfredbox(params: dict, config: dict) -> str:
+    ok, msg = _ensure_pdf_redbox()
+    if not ok:
+        return msg
+    import json
+    import os
+    from drydock import pdfredbox as rb
+    f = _as_text(params.get("file"))
+    if not f or not os.path.exists(f):
+        return f"No such PDF: {f!r}"
+    out = _as_text(params.get("output")) or (os.path.splitext(f)[0] + "_redboxed.pdf")
+    try:
+        if params.get("text"):
+            ms = rb.search(f, _as_text(params["text"]), context=params.get("context"))
+            if not ms:
+                return f"Text not found in {f}: {params['text']!r}"
+            audit = rb.redbox_file(f, ms, out)
+            audit["fields"] = [{"value": _as_text(params["text"]), "status": "boxed",
+                                "count": len(ms)}]
+        elif params.get("find"):
+            fields = params["find"] if isinstance(params["find"], list) else [params["find"]]
+            audit = rb.redbox_semantic(f, [str(x) for x in fields], out, llm=rb.make_llm(config))
+        else:
+            return "PdfRedbox needs either 'find' (fields to locate by meaning) or 'text' (exact string)."
+    except Exception as e:  # noqa: BLE001
+        return f"PdfRedbox failed: {e}"
+    n = len(audit["annotations"])
+    lines = [f"Wrote {audit.get('output')} — drew {n} box(es); source PDF unchanged."]
+    for fr in audit.get("fields", []):
+        lines.append("  " + json.dumps(fr))
+    return "\n".join(lines)
+
+
 # ── Register all tools ────────────────────────────────────────────────────
 
 _TOOLS = [
@@ -2725,6 +2843,7 @@ def register_all():
             "DocValidate": tool_docvalidate, "DocCommit": tool_doccommit,
             "DocRollback": tool_docrollback, "DocReplace": tool_docreplace,
             "DocRedact": tool_docredact,
+            "PdfSearch": tool_pdfsearch, "PdfRedbox": tool_pdfredbox,
         }[name]
         # Read-only w.r.t. the parent's files (GitStatus/Diff/Log inspect only;
         # GitCommit + GraphAdd write).
@@ -2734,6 +2853,7 @@ def register_all():
             "FiarControls", "FiarControl", "FiarReconcile",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",
             "DocOpen", "DocOutline", "DocSearch", "DocRead", "DocDiff", "DocValidate",
+            "PdfSearch",   # PdfRedbox writes a new file → not read-only
         )
         register(ToolDef(name=name, schema=schema, func=func, read_only=read_only))
 

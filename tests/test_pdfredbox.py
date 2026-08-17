@@ -114,3 +114,19 @@ def test_parse_fields_tolerates_code_fence():
     raw = '```json\n[{"field":"x","value":"1","page":1,"context":"","found":true}]\n```'
     got = rb.parse_fields(raw)
     assert got and got[0]["value"] == "1"
+
+
+def test_pdf_tools_registered_and_surface_without_flags():
+    """The harness knows it can redbox: the tools are registered and surface for a
+    natural-language PDF request — no switches/steps for the user."""
+    import drydock.tools  # noqa: F401  — triggers register_all()
+    from drydock.tool_registry import schemas
+    from drydock.tool_select import select_tools
+    names = {s["name"] for s in schemas()}
+    assert {"PdfRedbox", "PdfSearch"} <= names
+    surf = {s["name"] for s in select_tools(schemas(),
+            task_text="redbox the total and contract number in contract.pdf", max_tools=12)}
+    assert "PdfRedbox" in surf and "PdfSearch" in surf
+    off = {s["name"] for s in select_tools(schemas(),
+           task_text="refactor the auth module", max_tools=12)}
+    assert "PdfRedbox" not in off        # not surfaced for unrelated work

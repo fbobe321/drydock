@@ -38,6 +38,9 @@ _FAMILIES: list[tuple[frozenset[str], tuple[str, ...]]] = [
      ("knowledge", "graph", "entity", "graphrag", "ingest")),
     (frozenset({"ViewImage", "Screenshot"}),
      ("image", "screenshot", "photo", "picture", "diagram", "png", "jpg", "visual")),
+    (frozenset({"PdfSearch", "PdfRedbox"}),
+     ("pdf", "redbox", "red box", "red-box", "box the", "box around", "highlight",
+      "annotate", "circle", "mark the", "flag the", "invoice", "contract")),
 ]
 
 # External/mutating tools deprioritised while merely exploring (PRD F1.4: read &
