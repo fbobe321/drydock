@@ -22,7 +22,13 @@ IMPORT_TO_DIST = {"PIL": "pillow", "yaml": "pyyaml", "bs4": "beautifulsoup4"}
 def _declared_dists() -> set[str]:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text())
     out = set()
-    for spec in data["project"]["dependencies"]:
+    # core deps AND every optional-dependency extra count as "declared": a package
+    # imported LAZILY and declared in an extra (e.g. [pdf-redbox]) doesn't break a
+    # clean base install — the feature is just unavailable until you install it.
+    specs = list(data["project"].get("dependencies", []))
+    for extra in data["project"].get("optional-dependencies", {}).values():
+        specs.extend(extra)
+    for spec in specs:
         # strip version/extras/markers → bare distribution name, normalized
         name = spec.split(";")[0].split("[")[0]
         for sep in ("==", ">=", "<=", "~=", ">", "<", "!=", " "):

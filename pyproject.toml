@@ -42,10 +42,14 @@ include = ["drydock*"]
 drydock = "drydock.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-timeout", "ruff", "pyright"]
+dev = ["pytest", "pytest-timeout", "ruff", "pyright", "reportlab"]
 # PDF ingestion fallback when the `pdftotext` binary (poppler) isn't installed.
 # .docx needs nothing extra (stdlib zip/xml). `pip install drydock-cli[pdf]`.
 pdf = ["pypdf>=4"]
+# Semantic PDF redboxing (word bboxes + non-destructive annotations + render for
+# vision-verify). All PERMISSIVE licences — pdfplumber (MIT), pypdf (BSD),
+# pypdfium2 (Apache/BSD). Deliberately NOT PyMuPDF/fitz (AGPL). `[pdf-redbox]`.
+pdf-redbox = ["pdfplumber>=0.11", "pypdf>=4", "pypdfium2>=4"]
 
 [tool.ruff]
 target-version = "py312"
