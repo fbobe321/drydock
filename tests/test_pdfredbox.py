@@ -59,3 +59,58 @@ def test_coordinate_flip_lands_on_the_value(sample_pdf, tmp_path):
     x0, y0, x1, y1 = rec["annotations"][0]["bbox_pdf"]
     assert y0 < 625 < y1 or y0 < 620 < y1      # brackets the row we drew at y≈620
     assert x1 > x0
+
+
+# ── semantic layer (LLM injected as a stub → testable without a live model) ──
+
+def _stub_llm(payload):
+    import json
+    def llm(prompt):
+        assert "CHARACTER-FOR-CHARACTER" in prompt and "JSON array" in prompt
+        return json.dumps(payload)
+    return llm
+
+
+def test_find_fields_returns_verbatim_values(sample_pdf):
+    llm = _stub_llm([
+        {"field": "total contract value", "value": "$1,247,392.00", "page": 1,
+         "context": "Total Amount", "found": True},
+        {"field": "missing", "value": "", "page": 0, "context": "", "found": False},
+    ])
+    fields = rb.find_fields(sample_pdf, ["total contract value", "missing"], llm=llm)
+    assert len(fields) == 2 and fields[0]["value"] == "$1,247,392.00"
+
+
+def test_redbox_semantic_end_to_end(sample_pdf, tmp_path):
+    llm = _stub_llm([
+        {"field": "total contract value", "value": "$1,247,392.00", "page": 1,
+         "context": "Total Amount", "found": True},
+        {"field": "contract number", "value": "#N00024-26-C-1234", "page": 1,
+         "context": "Invoice", "found": True},
+        {"field": "signature", "value": "", "page": 0, "context": "", "found": False},
+    ])
+    out = str(tmp_path / "sem.pdf")
+    audit = rb.redbox_semantic(sample_pdf, ["total contract value", "contract number",
+                                            "signature"], out, llm=llm)
+    byfield = {f["field"]: f for f in audit["fields"]}
+    assert byfield["total contract value"]["status"].startswith("boxed")
+    assert byfield["contract number"]["status"].startswith("boxed")
+    assert byfield["signature"]["status"] == "not_found"     # LLM said absent
+    assert len(audit["annotations"]) == 2                    # two boxes drawn
+    from pypdf import PdfReader
+    assert len(PdfReader(out).pages[0]["/Annots"]) == 2
+
+
+def test_semantic_flags_value_not_on_page(sample_pdf, tmp_path):
+    # LLM hallucinates a value that isn't in the document → flagged, not boxed
+    llm = _stub_llm([{"field": "total", "value": "$9,999,999.99", "page": 1,
+                      "context": "Total", "found": True}])
+    audit = rb.redbox_semantic(sample_pdf, ["total"], str(tmp_path / "o.pdf"), llm=llm)
+    assert audit["fields"][0]["status"] == "value_not_on_page"
+    assert audit["annotations"] == []
+
+
+def test_parse_fields_tolerates_code_fence():
+    raw = '```json\n[{"field":"x","value":"1","page":1,"context":"","found":true}]\n```'
+    got = rb.parse_fields(raw)
+    assert got and got[0]["value"] == "1"

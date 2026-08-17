@@ -36,6 +36,7 @@ class Match:
     context: str = ""               # words to the left / above (for disambiguation)
     method: str = "exact"
     confidence: float = 0.0
+    field: str = ""                 # the semantic field this box answers (for audit)
 
 
 def _row_context(page, m, gap: float = 8.0) -> str:
@@ -115,7 +116,8 @@ def redbox_file(pdf_path: str, matches: list[Match], out_path: str,
         # not a redaction). /C is the annotation's colour array.
         annot[NameObject("/C")] = ArrayObject([FloatObject(c) for c in color])
         writer.add_annotation(page_number=m.page, annotation=annot)
-        drawn.append({"page": m.page, "value": m.text, "bbox_pdf": [round(v, 2) for v in rect],
+        drawn.append({"field": m.field, "page": m.page, "value": m.text,
+                      "bbox_pdf": [round(v, 2) for v in rect],
                       "method": m.method, "confidence": m.confidence})
 
     with open(out_path, "wb") as f:
@@ -134,3 +136,113 @@ def _assert_text_unchanged(src: str, out: str) -> None:
     if alltext(src) != alltext(out):
         raise RuntimeError("redbox altered document text — refusing (redbox must be "
                            "additive; this is not redaction)")
+
+
+# ── Semantic layer (PRD §8/§9): field name → VERBATIM on-page value → search ──
+
+_FIND_SYSTEM = (
+    "You locate specific fields in a document so they can be boxed for review. "
+    "For EACH requested field, find the value AS IT LITERALLY APPEARS in the "
+    "document and copy it CHARACTER-FOR-CHARACTER — same digits, punctuation, "
+    "spacing, and casing — so it can be found on the page. Do NOT reformat, "
+    "normalize, compute, or summarize; copy the exact on-page substring. Also give "
+    "the 1-based page number and a short nearby label ('context') that "
+    "distinguishes it from similar values. If a field is absent, set found=false."
+)
+
+
+def extract_pages_text(pdf_path: str) -> str:
+    """Document text with [PAGE n] markers (1-based) so the LLM can cite pages."""
+    import pdfplumber  # pyright: ignore[reportMissingImports]
+    parts = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for i, page in enumerate(pdf.pages, 1):
+            parts.append(f"[PAGE {i}]\n{page.extract_text() or ''}")
+    return "\n\n".join(parts)
+
+
+def build_find_prompt(fields: list[str], doc_text: str) -> str:
+    flist = "\n".join(f"- {f}" for f in fields)
+    return (
+        f"{_FIND_SYSTEM}\n\nRequested fields:\n{flist}\n\nDocument:\n{doc_text}\n\n"
+        'Return ONLY a JSON array, one object per requested field:\n'
+        '[{"field": "<the requested field>", "value": "<verbatim on-page text>", '
+        '"page": <int>, "context": "<short nearby label>", "found": <true|false>}]'
+    )
+
+
+def parse_fields(raw: str) -> list[dict]:
+    """Parse the LLM's JSON array, tolerating code fences / prose around it."""
+    import json
+    s = raw.strip()
+    if "```" in s:
+        s = re.sub(r"^```[a-zA-Z]*\n?|\n?```$", "", s.strip())
+    a, b = s.find("["), s.rfind("]")
+    if a != -1 and b != -1:
+        s = s[a:b + 1]
+    try:
+        data = json.loads(s)
+    except Exception:  # noqa: BLE001
+        return []
+    return [d for d in data if isinstance(d, dict)] if isinstance(data, list) else []
+
+
+def find_fields(pdf_path: str, fields: list[str], *, llm) -> list[dict]:
+    """LLM identifies each field's verbatim on-page value in ONE pass (PRD §9).
+    `llm` is a callable(prompt:str) -> str (injected → testable without a model)."""
+    return parse_fields(llm(build_find_prompt(fields, extract_pages_text(pdf_path))))
+
+
+def redbox_semantic(pdf_path: str, fields: list[str], out_path: str, *, llm,
+                    pad: float = 3.0) -> dict:
+    """Full semantic pipeline: LLM finds each field's verbatim value → deterministic
+    search locates it → non-destructive box. Returns the audit record + a per-field
+    resolution map (boxed / flagged / not-found) for review (PRD §15/§26)."""
+    matches: list[Match] = []
+    resolved = []
+    for f in find_fields(pdf_path, fields, llm=llm):
+        name = str(f.get("field", ""))
+        if not f.get("found") or not f.get("value"):
+            resolved.append({"field": name, "status": "not_found"})
+            continue
+        ms = search(pdf_path, str(f["value"]), context=f.get("context"))
+        page = f.get("page")
+        if page and len(ms) > 1:                       # narrow to the stated page
+            on_page = [m for m in ms if m.page == int(page) - 1]
+            if on_page:
+                ms = on_page
+        if not ms:
+            resolved.append({"field": name, "value": f.get("value"),
+                             "status": "value_not_on_page"})
+            continue
+        m = ms[0]
+        m.field = name
+        if len(ms) > 1 and "context" not in m.method:
+            status = "ambiguous_flagged"
+        else:
+            status = "boxed" if m.confidence >= 0.9 else "boxed_flagged"
+        matches.append(m)
+        resolved.append({"field": name, "value": m.text, "page": m.page + 1,
+                         "confidence": m.confidence, "status": status})
+    audit = (redbox_file(pdf_path, matches, out_path, pad=pad) if matches
+             else {"source": pdf_path, "output": None, "annotations": []})
+    audit["fields"] = resolved
+    return audit
+
+
+def make_llm(config: dict):
+    """Adapter: drydock's configured provider → a one-shot llm(prompt)->str for the
+    semantic layer. Any chat model works; the heavy coding model isn't required."""
+    from openai import OpenAI  # pyright: ignore[reportMissingImports]
+    from drydock.providers import PROVIDERS
+    provider = config.get("provider", "vllm")
+    base = config.get("base_url") or PROVIDERS.get(provider, {}).get("base_url")
+    client = OpenAI(base_url=base, api_key=config.get("api_key") or "dummy")
+    model = config.get("model", "gemma4")
+
+    def llm(prompt: str) -> str:
+        r = client.chat.completions.create(
+            model=model, temperature=0,
+            messages=[{"role": "user", "content": prompt}])
+        return r.choices[0].message.content or ""
+    return llm
