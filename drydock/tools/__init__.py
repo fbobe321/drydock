@@ -984,7 +984,8 @@ SCHEMAS = [
             "Or box an exact string via `text`. Use whenever the user asks to box, "
             "highlight, mark, circle, or flag specific information in a PDF. Returns a "
             "per-field result; a value it cannot verify on the page is flagged, never "
-            "silently boxed. No setup needed — Drydock provisions the PDF backend itself."
+            "silently boxed. If the tool reports its backend is missing, install it once "
+            "with `pip install 'drydock-cli[pdf-redbox]'` (e.g. via Bash), then retry."
         ),
         "input_schema": {"type": "object",
                          "properties": {
@@ -2696,26 +2697,19 @@ def tool_docredact(params: dict, config: dict) -> str:
 # ── PDF redboxing (semantic redbox engine — see drydock/pdfredbox.py) ─────────
 
 def _ensure_pdf_redbox() -> tuple[bool, str]:
-    """Zero-step: make the redbox backend available. Import it; if the optional
-    `[pdf-redbox]` extra isn't present, best-effort auto-install it (fails
-    gracefully offline) — so the agent can just use PdfRedbox with no user steps."""
+    """Check the redbox backend is present. We deliberately do NOT silently
+    pip-install at runtime (no surprise network / package install — matters on
+    locked-down and work machines, and keeps drydock auditable). If the optional
+    extra is missing we return an actionable message; the agent can install it in
+    the open via its Bash tool (still no user steps), or the user runs it once."""
     try:
         import pdfplumber, pypdf  # noqa: F401  # pyright: ignore[reportMissingImports]
         return True, ""
     except Exception:  # noqa: BLE001
-        pass
-    import subprocess
-    import sys
-    try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-                        "pdfplumber>=0.11", "pypdf>=4", "pypdfium2>=4"],
-                       check=True, timeout=300,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        import pdfplumber, pypdf  # noqa: F401  # pyright: ignore[reportMissingImports]
-        return True, ""
-    except Exception:  # noqa: BLE001
-        return False, ("PDF redboxing needs extra libraries and the auto-install failed "
-                       "(offline / restricted network?). Run:  pip install 'drydock-cli[pdf-redbox]'")
+        return False, (
+            "PDF redboxing needs its backend. Install it once with:\n"
+            "  pip install 'drydock-cli[pdf-redbox]'\n"
+            "(permissive libs: pdfplumber, pypdf, pypdfium2). Then retry.")
 
 
 def tool_pdfsearch(params: dict, config: dict) -> str:
