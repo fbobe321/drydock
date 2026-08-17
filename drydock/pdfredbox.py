@@ -287,7 +287,9 @@ def render_region(pdf_path: str, page: int, bbox, out_png: str, *,
     points; the render is top-left-origin scaled pixels."""
     import pypdfium2 as pdfium  # pyright: ignore[reportMissingImports]
     doc = pdfium.PdfDocument(pdf_path)
-    pil = doc[page].render(scale=scale).to_pil()
+    # pypdfium2 render() takes a float scale multiplier at runtime; its stub types
+    # it int — ignore the false positive rather than lose sub-integer scaling.
+    pil = doc[page].render(scale=scale).to_pil()  # pyright: ignore[reportArgumentType]
     x0, top, x1, bottom = bbox
     crop = (max(0, (x0 - margin) * scale), max(0, (top - margin) * scale),
             min(pil.width, (x1 + margin) * scale), min(pil.height, (bottom + margin) * scale))

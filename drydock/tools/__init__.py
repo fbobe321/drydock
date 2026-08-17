@@ -2401,7 +2401,8 @@ def tool_websearch(params: dict, config: dict) -> str:
     try:
         results = web.search(query, k=max(1, min(k, 10)))
     except web.WebError as e:
-        return f"Web search unavailable: {e}. You appear to be offline — answer from your own knowledge."
+        return (f"Web search for {query!r} unavailable: {e}. You appear to be "
+                "offline — answer from your own knowledge.")
     kept = [r for r in results if not _web_denied(r.get("url", ""), config)]
     dropped = len(results) - len(kept)
     out = web.format_search(query, kept)
