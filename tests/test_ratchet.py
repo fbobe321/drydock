@@ -377,3 +377,24 @@ def test_variation_policy_default_patience_grinds_before_escalating():
     p = VariationPolicy()
     assert p.next_operator(improved=False) == "exploit"   # stall 1 → still grind
     assert p.next_operator(improved=False) == "diversify"  # stall 2 → escalate
+
+
+def test_every_effort_profile_exposes_abort_flat():
+    # the /ratchet driver reads prof["abort_flat"] to bail a no-gradient task
+    from drydock.ratchet import EFFORT_LEVELS, effort_profile
+    for lvl in EFFORT_LEVELS:
+        p = effort_profile(lvl)
+        assert "abort_flat" in p and isinstance(p["abort_flat"], int)
+    assert effort_profile("max")["abort_flat"] == 0        # 'max' never bails
+
+
+def test_diversify_prompt_varies_by_operator():
+    # the driver uses the operator to make a stalled round change strategy
+    from drydock.ratchet import diversify_prompt
+    exploit = diversify_prompt("goal", 2, 5, "exploit")     # falls back to continuation
+    div = diversify_prompt("goal", 2, 5, "diversify")
+    restart = diversify_prompt("goal", 2, 5, "restart")
+    assert "2/5" in div and "2/5" in restart
+    assert "DIFFERENT strategy" in div and "STALLED" in div
+    assert "first principles" in restart
+    assert div != exploit and restart != exploit and div != restart

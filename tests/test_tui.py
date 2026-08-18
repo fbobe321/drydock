@@ -595,3 +595,18 @@ def test_stall_watchdog_hint_appears_after_silence():
             assert "stalled" not in app._working_text()
 
     asyncio.run(main())
+
+
+def test_loop_prompt_escalates_on_stall():
+    """After a no-progress iteration, /loop re-runs with a CHANGE-APPROACH prompt
+    before giving up (the ratchet's diversify borrowed into /loop). _loop_prompt is
+    a pure function of `rep`, so we can drive it without a running app."""
+    from drydock.tui.app import DrydockApp
+    base = {"prompt": "fix the failing suite", "total": 5, "done": 3}
+    plain = DrydockApp._loop_prompt(object(), {**base, "escalate": False})
+    esc = DrydockApp._loop_prompt(object(), {**base, "escalate": True})
+    # normal continuation just carries on; escalated one demands a different approach
+    assert "continue the task" in plain and "DIFFERENT approach" not in plain
+    assert "DIFFERENT approach" in esc and "made no progress" in esc
+    # honest early-exit is preserved in BOTH forms
+    assert "LOOP_DONE" in plain and "LOOP_DONE" in esc

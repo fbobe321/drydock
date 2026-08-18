@@ -917,7 +917,8 @@ class DrydockApp(App):
         if self._busy:
             self._info("A turn is already running — stop it (Esc) before starting a loop.")
             return
-        self._repeat = {"prompt": prompt, "total": total, "done": 1, "fingerprint": None}
+        self._repeat = {"prompt": prompt, "total": total, "done": 1, "fingerprint": None,
+                        "stalls": 0, "escalate": False}
         label = f"{total}×" if total else "until Esc"
         self._info(f"↻ looping {label} (Esc to stop):  {prompt}")
         self._mount(UserMessage(prompt))
@@ -929,6 +930,17 @@ class DrydockApp(App):
         the loop honestly instead of re-doing finished work."""
         n = rep["done"]
         of = f"/{rep['total']}" if rep["total"] else ""
+        if rep.get("escalate"):
+            # Borrowed from the ratchet: the prior iteration repeated itself, so a
+            # plain "continue" would only reproduce it — tell the model to CHANGE
+            # approach before we conclude the loop is stuck.
+            return (
+                f"{rep['prompt']}\n\n"
+                f"[loop iteration {n}{of} — your PREVIOUS iteration made no progress "
+                f"(same actions and result). Do NOT repeat it. Step back, question an "
+                f"assumption, and try a DIFFERENT approach. If the task is genuinely "
+                f"already complete, reply exactly LOOP_DONE and take no tool actions.]"
+            )
         return (
             f"{rep['prompt']}\n\n"
             f"[loop iteration {n}{of} — continue the task from the CURRENT state. "
@@ -994,10 +1006,18 @@ class DrydockApp(App):
             "state": rmod.RatchetState(goal=goal, max_rounds=rounds),
             "verifier": rmod.Verifier(verify, mode=fitness, cwd=cwd),
             "checkpoint": cp,
+            # eratchet: a stalled round escalates its strategy (exploit → diversify →
+            # … → restart) instead of repeating the flat continuation. `flat` counts
+            # consecutive no-gradient (0/N) rounds; abort_flat bails on a dead signal.
+            "policy": rmod.policy_for(effort or "medium"),
+            "abort_flat": prof["abort_flat"],
+            "flat": 0,
         }
+        lvl = effort or "medium"
         self._info(
-            f"⚙ ratchet: up to {rounds} rounds, verify `{verify}`{detected} (fitness={fitness}). "
-            "Snapshots on improvement, rolls back regressions. Esc to stop."
+            f"⚙ ratchet ({lvl}): up to {rounds} rounds, verify `{verify}`{detected} "
+            f"(fitness={fitness}). Snapshots on improvement, rolls back regressions; "
+            "a stalled round changes strategy. Esc to stop."
         )
         self._mount(UserMessage(goal))
         self._begin(goal)
@@ -1033,7 +1053,8 @@ class DrydockApp(App):
             self.call_from_thread(self._finish_ratchet_idle)
             return
 
-        if action == "pawl":
+        improved = action == "pawl"
+        if improved:
             self.call_from_thread(
                 self._info, f"↑ ratchet round {st.round}: {res.passed}/{res.total} — locked in (pawl).")
         else:  # rollback
@@ -1042,6 +1063,25 @@ class DrydockApp(App):
                 self._info,
                 f"↩ ratchet round {st.round}: {res.passed}/{res.total} ≤ best "
                 f"{st.best_passed}/{st.best_total} — rolled back to best.")
+
+        # eratchet: advance the variation policy. On repeated stalls it climbs the
+        # ladder (exploit → diversify → fanout → crossover → restart); the operator
+        # picks how the NEXT round's continuation prompt varies its approach.
+        policy = r["policy"]
+        op = policy.next_operator(improved, have_crossover=False)
+
+        # abort a truly flat (0/N — no gradient) task rather than burn the budget.
+        r["flat"] = 0 if st.best_passed > 0 else r["flat"] + 1
+        if r["abort_flat"] and r["flat"] >= r["abort_flat"]:
+            cp.restore(st.best_ref)
+            self.call_from_thread(
+                self._info,
+                f"⚙ ratchet stopped after {st.round} rounds — verifier gives no gradient "
+                f"(still 0/{res.total}). The signal can't guide selection; refine the goal "
+                "or the --verify command.")
+            self._ratchet = None
+            self.call_from_thread(self._finish_ratchet_idle)
+            return
 
         if st.exhausted():
             cp.restore(st.best_ref)  # leave the best result on disk
@@ -1054,9 +1094,12 @@ class DrydockApp(App):
             self.call_from_thread(self._finish_ratchet_idle)
             return
 
-        from drydock.ratchet import continuation_prompt
+        from drydock.ratchet import diversify_prompt
+        if not improved and op != "exploit":
+            self.call_from_thread(
+                self._info, f"⤴ ratchet stalled — escalating strategy ({op}).")
         self.call_from_thread(
-            self._begin, continuation_prompt(st.goal, st.best_passed, st.best_total))
+            self._begin, diversify_prompt(st.goal, st.best_passed, st.best_total, op))
 
     def _finish_ratchet_idle(self) -> None:
         """Return the UI to an idle, focused state after a ratchet ends."""
@@ -1778,11 +1821,30 @@ class DrydockApp(App):
                     # will only reproduce it (the "repeats the same actions over and
                     # over" case). Fingerprint = (tool names used, final reply).
                     fp = (tuple(sorted(self._turn_tools)), self._last_assistant_text())
-                    if fp == rep.get("fingerprint") and (fp[0] or fp[1]):
-                        self._info("✓ loop stopped — no progress (identical actions "
-                                   "and reply as the previous iteration).")
+                    stalled = fp == rep.get("fingerprint") and (fp[0] or fp[1])
+                    if stalled and rep.get("escalate"):
+                        # already nudged to change approach last round and it STILL
+                        # repeated → genuinely stuck; stop (the ratchet's give-up).
+                        self._info("✓ loop stopped — no progress even after a "
+                                   "change-approach nudge.")
                         self._repeat = None
+                    elif stalled:
+                        # first stall: escalate once before giving up — re-run with a
+                        # prompt that demands a different approach (ratchet's diversify).
+                        rep["escalate"] = True
+                        rep["fingerprint"] = fp
+                        rep["done"] += 1
+                        self._info(f"⤴ loop stalled — nudging a different approach "
+                                   f"(iteration {rep['done']}).")
+                        try:
+                            from drydock.compaction import maybe_compact
+                            maybe_compact(self.state, self.config)
+                        except Exception:  # noqa: BLE001
+                            pass
+                        self._begin(self._loop_prompt(rep))
+                        return
                     else:
+                        rep["escalate"] = False
                         rep["fingerprint"] = fp
                         rep["done"] += 1
                         of = f"/{rep['total']}" if rep["total"] else ""
