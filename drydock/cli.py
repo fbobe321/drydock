@@ -363,6 +363,16 @@ def _connect_mcp(config: dict) -> None:
 
 
 def main():
+    # `drydock eratchet <goal> …` — the parallel evolutionary ratchet subcommand.
+    # Intercepted before the main parser so its own flags don't collide.
+    if len(sys.argv) > 1 and sys.argv[1] == "eratchet":
+        from drydock import config as cfgmod
+        from drydock.eratchet import run_cli
+        cfg = cfgmod.resolve({}, cfgmod.default_config_path())
+        cfgmod.resolve_active_model(cfg)
+        cfg["cwd"] = os.getcwd()
+        sys.exit(run_cli(sys.argv[2:], config=cfg))
+
     parser = argparse.ArgumentParser(description="DryDock — local coding agent")
     parser.add_argument(
         "--version", "-V", action="version", version=f"drydock {__version__}"

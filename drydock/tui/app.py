@@ -177,7 +177,13 @@ class DrydockApp(App):
         signal the loop AND forcibly abort the in-flight LLM call and any
         running command so it stops immediately rather than after the current
         step. Session (history, files) is preserved — this is not a quit."""
+        erx_active = self._erx is not None
+        if self._erx is not None:
+            self._erx["cancel"].set()
+            self._erx = None
         if not self._busy:
+            if erx_active:
+                self._info("⏹ eratchet stopping…")
             return
         self._cancel.set()
         self._abort_inflight()
@@ -316,6 +322,7 @@ class DrydockApp(App):
         self._queue: list[str] = []  # prompts submitted while a turn is running
         self._repeat: dict | None = None  # active /loop: {prompt, remaining, total}
         self._ratchet: dict | None = None  # active /ratchet: {state, verifier, checkpoint}
+        self._erx: dict | None = None  # active /eratchet: {cancel}
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
         # Live "working" line state.
@@ -684,6 +691,7 @@ class DrydockApp(App):
                 "  /skills          list skills · /skills new <name> <prompt> to create one\n"
                 "  /loop            /loop <count> <prompt> — repeat a prompt (Esc stops)\n"
                 "  /ratchet         persist verified progress across rounds until tests pass\n"
+                "  /eratchet        parallel evolutionary ratchet — fan \u03bb variants across servers\n"
                 "                   /ratchet <goal>  (verifier auto-detected; --verify \"<cmd>\" to override)\n"
                 "  /mcp             list connected MCP servers and their tools\n"
                 "  /rmf             RMF automation — /rmf bootstrap, then /rmf-control etc.\n"
@@ -702,6 +710,8 @@ class DrydockApp(App):
             self._cmd_loop(arg)
         elif cmd == "/ratchet":
             self._cmd_ratchet(arg)
+        elif cmd == "/eratchet":
+            self._cmd_eratchet(arg)
         elif cmd == "/skills":
             self._cmd_skills(arg)
         elif cmd[1:] in self._skills:
@@ -1106,6 +1116,52 @@ class DrydockApp(App):
         self._refresh_status()
         self._update_suggestion()
         self.query_one("#prompt", PromptArea).focus()
+
+    def _cmd_eratchet(self, arg: str) -> None:
+        """/eratchet <goal> [flags] — parallel evolutionary ratchet: fan λ variant
+        attempts out ACROSS your servers each generation, keep a QD archive, cross
+        over complementary partials. Runs in the background; Esc stops it."""
+        import threading
+
+        from drydock import eratchet as erx
+        if self._busy or self._ratchet or self._repeat or self._erx:
+            self._info("Something is already running — stop it (Esc) before /eratchet.")
+            return
+        try:
+            opts = erx.parse_eratchet(arg.split())
+        except ValueError as e:
+            self._info(f"{e}\nusage: /eratchet <goal> [--effort low|medium|high|xhigh|max] "
+                       "[--verify \"<cmd>\"] [--servers url,url] [--fanout N] [--generations N]")
+            return
+        cfg = erx.resolve_config(opts, self.config)
+        if isinstance(cfg, str):
+            self._info(cfg)
+            return
+        servers = erx.resolve_servers(opts, self.config)
+        cancel = threading.Event()
+        self._erx = {"cancel": cancel}
+        self._info(f"⇶ /eratchet launching: {opts['goal']!r} "
+                   f"(effort={opts['effort']}, {len(servers)} server(s)). Esc to stop.")
+        self.run_worker(lambda: self._erx_worker(cfg, servers, opts, cancel), thread=True)
+
+    def _erx_worker(self, cfg, servers, opts, cancel) -> None:
+        """Off-thread: drive run_eratchet, streaming each event into the UI."""
+        from drydock import eratchet as erx
+
+        def on_event(kind, d):
+            if kind == "generation_done":
+                cfg.progress["passed"], cfg.progress["total"] = d["passed"], d["total"]
+            self.call_from_thread(self._info, erx.format_event(kind, d))
+        try:
+            erx.run_eratchet(cfg.goal, servers=servers, runner=erx.make_variant_runner(cfg),
+                             effort=opts["effort"], max_generations=opts["generations"],
+                             fanout=opts["fanout"], on_event=on_event,
+                             should_stop=cancel.is_set)
+        except Exception as e:  # noqa: BLE001 — surface, never crash the TUI
+            self.call_from_thread(self._info, f"eratchet: crashed: {e}")
+        finally:
+            self._erx = None
+            self.call_from_thread(self._finish_ratchet_idle)
 
     def _cmd_skills(self, arg: str = "") -> None:
         """List skills, or create one: /skills new <name> <prompt…> (use $ARGS in

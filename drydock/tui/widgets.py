@@ -189,6 +189,7 @@ SLASH_SPECS: list[SlashSpec] = [
     SlashSpec("/loop", "[count|*] <prompt>", "repeat a prompt (1–1000, or * = until Esc)"),
     SlashSpec("/ratchet", "<goal>", "persist verified progress across rounds until tests pass",
               '--verify "<cmd>" to override the auto-detected verifier'),
+    SlashSpec("/eratchet", "<goal>", "parallel evolutionary ratchet: fan \u03bb variants across servers"),
     SlashSpec("/mcp", "", "list connected MCP servers and their tools"),
     SlashSpec("/rmf", "<sub>", "RMF automation", "bootstrap · control · ..."),
     SlashSpec("/stig", "<sub>", "STIG checklist tooling", "new <xccdf> · summarize · assess"),

@@ -610,3 +610,11 @@ def test_loop_prompt_escalates_on_stall():
     assert "DIFFERENT approach" in esc and "made no progress" in esc
     # honest early-exit is preserved in BOTH forms
     assert "LOOP_DONE" in plain and "LOOP_DONE" in esc
+
+
+def test_eratchet_command_registered():
+    """/eratchet is a real, dispatchable command (spec + handler wired)."""
+    from drydock.tui.app import DrydockApp
+    from drydock.tui.widgets import SLASH_COMMANDS
+    assert "/eratchet" in SLASH_COMMANDS
+    assert hasattr(DrydockApp, "_cmd_eratchet") and hasattr(DrydockApp, "_erx_worker")
