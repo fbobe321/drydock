@@ -25,6 +25,10 @@ _MAX_BASH_OUTPUT_BYTES = 256 * 1024  # 256 KB — plenty of context, safe for RA
 _PARTIAL_TAIL = 4000  # chars of pre-timeout output to keep (tail) in the timeout msg
 _DEFAULT_TIMEOUT = 120
 _MAX_TIMEOUT = 1800  # 30 min hard ceiling — a single command shouldn't hang longer
+# When a command that was ALREADY given a long budget (≥ this) still overruns, it's
+# genuinely long work — adopt it as a background job instead of killing it. Short/
+# default-timeout overruns keep the kill+retry flow (fleet runs tests synchronously).
+_AUTO_BG_TIMEOUT = 900
 
 
 def _as_text(v, default: str = "") -> str:
@@ -290,14 +294,40 @@ SCHEMAS = [
     },
     {
         "name": "Bash",
-        "description": "Execute a shell command. Returns stdout+stderr.",
+        "description": (
+            "Execute a shell command. Returns stdout+stderr. For a command that runs for "
+            "HOURS or DAYS (ML training, a long build, a big crack), pass background=true: it "
+            "runs detached, the prompt is freed immediately, and you check on it later with the "
+            "Jobs tool. (Even without the flag, a foreground command that overruns its timeout "
+            "is auto-moved to the background instead of being killed.)"
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "command": {"type": "string"},
                 "timeout": {"type": "integer", "description": "Seconds (default 120; bump to 1800 for builds/training/cracking)"},
+                "background": {"type": "boolean", "description": "Run detached as a tracked job and return immediately — use for hours/days-long work (training, long builds). Check it with the Jobs tool."},
             },
             "required": ["command"],
+        },
+    },
+    {
+        "name": "Jobs",
+        "description": (
+            "Check on background jobs — long commands started with Bash background=true, or "
+            "auto-backgrounded after overrunning their timeout. action=list shows every job "
+            "(state + elapsed + recent output); action=status id=<id> gives one job's full recent "
+            "output + exit code; action=stop id=<id> terminates one. Use this when the user asks "
+            "how a training run / long job is doing."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["list", "status", "stop"],
+                           "description": "list all jobs, status of one, or stop one."},
+                "id": {"type": "string", "description": "Job id (required for status/stop)."},
+            },
+            "required": ["action"],
         },
     },
     {
@@ -1557,6 +1587,21 @@ def tool_bash(params: dict, config: dict) -> str:
                     f"REFUSED: you declined to approve this command "
                     f"({approval_reason}).\nCommand: {cmd.strip()}"
                 )
+    # Explicit background: the model knows this is a long job (training, a big
+    # build). Launch it DETACHED and return immediately — the prompt is freed and
+    # the job is tracked; the agent reports on it later via the Jobs tool.
+    if params.get("background"):
+        from drydock import jobs
+        meta = jobs.launch_background(cmd, config.get("cwd"),
+                                      shell_path=_SHELL_PATH, shell_kind=_SHELL_KIND)
+        return (
+            f"Started background job {meta['id']} (running detached — prompt is free).\n"
+            f"  $ {cmd.strip()[:200]}\n"
+            f"It keeps running across turns. Check it anytime with the Jobs tool "
+            f"(action=list, or action=status id={meta['id']}, or action=stop id={meta['id']}). "
+            f"Tell the user it's running and that they can ask you for its status."
+        )
+
     # Run via Popen (not subprocess.run) so STOP can kill it mid-execution:
     # the handle is stashed in config["_abort"]["proc"] for action_stop to kill.
     # start_new_session=True puts the shell in its OWN process group so we can
@@ -1615,6 +1660,11 @@ def tool_bash(params: dict, config: dict) -> str:
         chunks: list[str] = []
         total = [0]
         capped = threading.Event()
+        # When a foreground command is auto-promoted to a background job on
+        # timeout, we point this sink at the job's log file; the daemon then keeps
+        # draining the pipe INTO the log (uncapped) so the adopted process can't
+        # block on a full pipe. None → normal in-memory capture with the byte cap.
+        sink: dict = {"file": None}
 
         def _drain():
             assert proc.stdout is not None
@@ -1622,6 +1672,14 @@ def tool_bash(params: dict, config: dict) -> str:
                 block = proc.stdout.read(8192)
                 if not block:
                     break
+                f = sink["file"]
+                if f is not None:
+                    try:
+                        f.write(block)
+                        f.flush()
+                    except Exception:  # noqa: BLE001
+                        break
+                    continue
                 chunks.append(block)
                 total[0] += len(block)
                 if total[0] >= _MAX_BASH_OUTPUT_BYTES:
@@ -1666,6 +1724,44 @@ def tool_bash(params: dict, config: dict) -> str:
                     backgrounded = True
                     break
             if time.monotonic() - start > timeout:
+                # AUTO-PROMOTE (only for already-long budgets): the command was
+                # given ≥ _AUTO_BG_TIMEOUT and STILL overran → it's genuinely long
+                # work, so adopt it as a background job instead of killing it (don't
+                # lose hours of a training run). The reader daemon keeps draining the
+                # pipe into the job log via `sink`, so the process can't block. STOP
+                # no longer owns it — the user manages it through the Jobs tool.
+                if timeout >= _AUTO_BG_TIMEOUT and proc.poll() is None:
+                    from drydock import jobs
+                    partial = _sanitize_bash_output(
+                        _collapse_repeated_lines("".join(list(chunks)))
+                    )
+                    try:
+                        pgid = os.getpgid(proc.pid)
+                    except OSError:
+                        pgid = None
+                    # `start` is monotonic; jobs measures elapsed with wall-clock
+                    # time.time(), so convert to a wall-clock start or elapsed goes wild.
+                    wall_start = time.time() - (time.monotonic() - start)
+                    meta = jobs.adopt(proc.pid, pgid, cmd, config.get("cwd"), wall_start,
+                                      initial_output=partial)
+                    try:
+                        sink["file"] = open(meta["log"], "a")   # daemon appends here now
+                    except OSError:
+                        sink["file"] = None
+                    config.get("_abort", {}).pop("proc", None)  # it's a job now
+                    note = (
+                        f"Still running after {timeout}s — this is long-running work, so "
+                        f"I've left it in the BACKGROUND as job {meta['id']} and freed the "
+                        f"prompt (rather than killing it).\n  $ {cmd.strip()[:200]}\n"
+                        f"Check it with the Jobs tool (action=status id={meta['id']}). "
+                        f"Tell the user it's running in the background.")
+                    tail = partial.rstrip()[-_PARTIAL_TAIL:]
+                    if tail:
+                        note += f"\n\n--- output so far ---\n{tail}"
+                    return note
+                # Otherwise it overran a short/default budget → kill + guide the model:
+                # bump the timeout for merely-slow work, or background=true for a real
+                # long job (training / long build).
                 kill_process_group(proc)
                 proc.wait()
                 reader.join(1.0)  # flush buffered output before building partial
@@ -1674,14 +1770,18 @@ def tool_bash(params: dict, config: dict) -> str:
                     f"Error: command timed out after {timeout}s. If it is "
                     f"legitimately slow (a big query, build, download, or "
                     f"test run), retry with a larger timeout — pass "
-                    f"timeout: {bigger}. Otherwise it may be hung."
+                    f"timeout: {bigger}. If it is a long-running job (ML training, a "
+                    f"long build/crack that runs for many minutes or hours), re-run it "
+                    f"with background=true so it keeps running and the prompt is freed. "
+                    f"Otherwise it may be hung."
                 )
                 if _is_network_command(cmd):
                     msg += _OFFLINE_HINT
                 # Preserve any output produced BEFORE the hang — a test run or
                 # build that prints results/diagnostics then stalls would
                 # otherwise lose exactly what the agent needs. Tail-bounded so a
-                # big partial can't bloat context.
+                # big partial can't bloat context. Computed AFTER the kill so the
+                # kill's EOF flushes the pipe's buffered output into `chunks`.
                 partial = _sanitize_bash_output(
                     _collapse_repeated_lines("".join(list(chunks)))
                 ).rstrip()
@@ -1719,6 +1819,38 @@ def tool_bash(params: dict, config: dict) -> str:
         return f"Error: {e}"
     finally:
         config.get("_abort", {}).pop("proc", None)
+
+
+def _fmt_job_line(s: dict) -> str:
+    el = int(s["elapsed_s"])
+    h, rem = divmod(el, 3600)
+    m, sec = divmod(rem, 60)
+    dur = f"{h}h{m:02d}m" if h else (f"{m}m{sec:02d}s" if m else f"{sec}s")
+    code = f" (exit {s['exit_code']})" if s.get("exit_code") is not None else ""
+    return f"  [{s['id']}] {s['state']}{code} · {dur} · {s['command'][:70]}"
+
+
+def tool_jobs(params: dict, config: dict) -> str:
+    from drydock import jobs
+    action = (_as_text(params.get("action")) or "list").strip().lower()
+    if action == "list":
+        js = jobs.list_jobs()
+        if not js:
+            return "No background jobs."
+        return f"{len(js)} background job(s):\n" + "\n".join(_fmt_job_line(s) for s in js)
+    jid = _as_text(params.get("id")).strip()
+    if not jid:
+        return "Jobs: 'status' and 'stop' need an id (get it from action=list)."
+    if action == "status":
+        s = jobs.status(jid)
+        if not s:
+            return f"No such job {jid}."
+        tail = (s.get("tail") or "").rstrip()
+        return _fmt_job_line(s).lstrip() + (
+            f"\n--- recent output ---\n{tail}" if tail else "\n(no output captured yet)")
+    if action == "stop":
+        return jobs.stop(jid)
+    return f"Jobs: unknown action {action!r} — use list, status, or stop."
 
 
 def tool_glob(params: dict, config: dict) -> str:
@@ -2822,7 +2954,7 @@ def register_all():
             "Read": tool_read, "ViewImage": tool_viewimage,
             "Screenshot": tool_screenshot,
             "Write": tool_write, "Edit": tool_edit,
-            "Bash": tool_bash, "Glob": tool_glob, "Grep": tool_grep,
+            "Bash": tool_bash, "Jobs": tool_jobs, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
             "Worker": tool_worker,
             "Consult": tool_consult, "Knowledge": tool_knowledge,
@@ -2847,6 +2979,8 @@ def register_all():
         # GitCommit + GraphAdd write).
         read_only = name in (
             "Read", "ViewImage", "Screenshot", "Glob", "Grep", "task", "Dispatch", "Consult",
+            "Jobs",   # list/status are read-only; stop mutates but is user-directed
+
             "Knowledge", "GraphQuery", "StigRules", "StigRule",
             "FiarControls", "FiarControl", "FiarReconcile",
             "WebSearch", "WebFetch", "GitStatus", "GitDiff", "GitLog",

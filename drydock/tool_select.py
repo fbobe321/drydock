@@ -41,6 +41,9 @@ _FAMILIES: list[tuple[frozenset[str], tuple[str, ...]]] = [
     (frozenset({"PdfSearch", "PdfRedbox"}),
      ("pdf", "redbox", "red box", "red-box", "box the", "box around", "highlight",
       "annotate", "circle", "mark the", "flag the", "invoice", "contract")),
+    (frozenset({"Jobs"}),
+     ("job", "background", "training", "still running", "long-running", "long running",
+      "status of", "check on", "how is the", "how's the", "in the background")),
 ]
 
 # External/mutating tools deprioritised while merely exploring (PRD F1.4: read &
