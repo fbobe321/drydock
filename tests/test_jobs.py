@@ -128,3 +128,46 @@ def test_jobs_tool_registered_and_surfaces_for_status_question():
     surfaced = {s["name"] for s in select_tools(
         schemas(), task_text="how's the training job doing in the background?", max_tools=12)}
     assert "Jobs" in surfaced
+
+
+# ── proactive completion notify (operator hook, fires from the job's shell) ──
+
+def _notify_script(tmp_path, marker):
+    s = tmp_path / "notify.sh"
+    s.write_text('#!/bin/sh\nprintf "%s %s %s" "$DRYDOCK_JOB_ID" "$DRYDOCK_JOB_RC" '
+                 '"$DRYDOCK_JOB_CMD" > ' + str(marker) + '\n')
+    s.chmod(0o755)
+    return f"sh {s}"
+
+
+def _wait_file(path, timeout=4.0):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end and not os.path.exists(path):
+        time.sleep(0.05)
+    return os.path.exists(path)
+
+
+def test_notify_hook_fires_on_completion_with_env(tmp_path):
+    marker = tmp_path / "notified.txt"
+    meta = jobs.launch_background("echo hi; exit 3", "/tmp", shell_path=None,
+                                  shell_kind="sh", notify_cmd=_notify_script(tmp_path, marker))
+    assert _wait_file(marker)
+    got = open(marker).read()
+    assert meta["id"] in got and " 3 " in got and "echo hi; exit 3" in got   # id, exit code, cmd
+
+
+def test_no_notify_cmd_means_no_hook(tmp_path):
+    # a job with no notify_cmd must not reference the hook env at all
+    meta = jobs.launch_background("true", "/tmp", shell_path=None, shell_kind="sh")
+    s = _wait_state(meta["id"], "finished")
+    assert s["exit_code"] == 0          # still records normally, just no push
+
+
+def test_bash_background_passes_notify_cmd_from_config(tmp_path):
+    import drydock.tools as T
+    marker = tmp_path / "n.txt"
+    out = T.tool_bash({"command": "echo done; exit 0", "background": True},
+                      {"cwd": "/tmp", "job_notify_cmd": _notify_script(tmp_path, marker)})
+    jid = out.split("job ")[1].split()[0].rstrip(".")
+    assert _wait_file(marker)
+    assert jid in open(marker).read()

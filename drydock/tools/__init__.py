@@ -1593,7 +1593,8 @@ def tool_bash(params: dict, config: dict) -> str:
     if params.get("background"):
         from drydock import jobs
         meta = jobs.launch_background(cmd, config.get("cwd"),
-                                      shell_path=_SHELL_PATH, shell_kind=_SHELL_KIND)
+                                      shell_path=_SHELL_PATH, shell_kind=_SHELL_KIND,
+                                      notify_cmd=config.get("job_notify_cmd", ""))
         return (
             f"Started background job {meta['id']} (running detached — prompt is free).\n"
             f"  $ {cmd.strip()[:200]}\n"

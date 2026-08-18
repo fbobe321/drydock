@@ -83,6 +83,11 @@ DEFAULTS: dict[str, object] = {
     # drydock writes the full task trajectory (system prompt + transcript) there at
     # task end; a benchmark harness keeps only verifier-passing ones. Empty = off.
     "trajectory_file": "",
+    # Proactive background-job completion notify: a command run (from the job's own
+    # shell) when a background job finishes, with DRYDOCK_JOB_ID/_RC/_CMD in the env.
+    # Point it at an operator hook (e.g. a Comms→Telegram push). Empty = no push
+    # (the job still records its result; the agent reports it via the Jobs tool).
+    "job_notify_cmd": "",
     # Tool names dynamic tool selection must NEVER trim (tool_select.py), on top
     # of the built-in core coding set — e.g. ["WebSearch", "WebFetch"] keeps the
     # web tools surfaced even on tasks whose text never mentions the web. Names

@@ -60,6 +60,25 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **📊 2026-08-16 — CAMPAIGN 55/89; supervisor + Comms shipped; drydock 3.1.16 YANKED.**
+> tbench-2 **55/89 (62%)** (from 38 on 08-14), 235 traces. **Eratchet is cracking the hard tail** —
+> evolved-ratchet solves incl. `fix-ocaml-gc` + `mteb-leaderboard` (both former held-out, base 0/30).
+> Effort tiers: 18@t1 27@t2 5@t3.
+> - **`fleet_supervisor.sh`** (cron */10 + @reboot, flock) — never-idle self-healer: worker keepalive,
+>   per-task effort escalation ratchet→eratchet (`tbench_effort.tsv`), zombie reaper, experiment-queue,
+>   unified `tasks/pool` + `gen_pool.sh` generator. **Fixed a flock-FD leak** — FD 8 inherited by spawned
+>   workers locked the supervisor out for hours; workers now launch with `exec 8>&-`.
+> - **Daily Telegram report** (`campaign_daily_report.py`, 06:35): solved/89, 24h delta, health.
+> - **Drydock Comms Phase-1** (`drydock/comms/`): event bus → DETERMINISTIC attention policy → channels;
+>   non-suppressible approval/blocking/security invariants; testable silence (10 tests). Dogfooded via
+>   `comms_alert.sh` (agent.stuck → Telegram when a task maxes out).
+>   **⚠️ INCIDENT:** 3.1.16 shipped a Telegram sender (reads cred + POSTs api.telegram.org) IN THE CORE,
+>   past the HIGH security gate — the phone-home shape that quarantined v2. Remediated: sender removed from
+>   core (pluggable adapter injected at the operator site), clean **3.1.17** shipped, **3.1.16 YANKED**.
+>   Process fix: release via `scripts/release.sh` so the HIGH gate is honored (don't pipe build→scan→upload).
+> - Versions: **drydock-cli 3.1.17** · **omniterm 0.1.92** (scroll-back + last-letter fixes). Full spec:
+>   README_RUN.md PROGRESS block. See [[feedback_loop_detection]].
+>
 > **🎯 2026-08-14 — NORTH-STAR: SOLVE terminal-bench-2 COMPLETELY (ratchet+eratchet+self-distill), then next benchmark.**
 > Operator: "solve tbench, don't care how long, with self-distillation; ratchet and eratchet get us there." Fleet
 > switched from MEASUREMENT to an unattended **completion campaign**. Progress **37–38/89** (`tbench_progress.sh`).

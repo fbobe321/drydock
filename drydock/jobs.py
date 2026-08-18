@@ -114,10 +114,16 @@ def _tail(log: str | None, n_bytes: int = 4000) -> str:
 
 
 def launch_background(cmd: str, cwd: str | None, *, shell_path: str | None,
-                      shell_kind: str) -> dict:
+                      shell_kind: str, notify_cmd: str = "") -> dict:
     """Start `cmd` DETACHED; return its meta. Output → the job log; on POSIX the
     command is wrapped so its exit code is recorded when it finishes (even though
-    we never wait on it)."""
+    we never wait on it).
+
+    PROACTIVE notify: if `notify_cmd` is set, it runs from the job's own shell when
+    the command finishes — with DRYDOCK_JOB_ID / _RC / _CMD in the environment — so
+    completion is pushed (the operator's hook, e.g. Comms→Telegram) even if drydock
+    itself has since exited. Drydock core never sends anything; it just runs the
+    operator-configured command (no phone-home in the wheel)."""
     jid = _new_id()
     d = _dir(jid)
     os.makedirs(d, exist_ok=True)
@@ -125,9 +131,16 @@ def launch_background(cmd: str, cwd: str | None, *, shell_path: str | None,
     exit_file: str | None = os.path.join(d, "exit")
 
     # Run the command in a SUBSHELL ( … ) so its own `exit N` only exits the
-    # subshell — the marker line still runs and records the real exit code.
+    # subshell — the marker line still runs and records the real exit code. The
+    # notify hook (if any) fires after, with the job's id/rc/cmd in the env.
+    def _hook() -> str:
+        if not notify_cmd:
+            return ""
+        return (f"DRYDOCK_JOB_ID={jid} DRYDOCK_JOB_RC=$__rc "
+                f"DRYDOCK_JOB_CMD={shlex.quote(cmd)} {notify_cmd} >/dev/null 2>&1 || true; ")
+
     def _wrap(q):
-        return f"(\n{cmd}\n)\n__rc=$?; printf '%s' \"$__rc\" > {q}; exit $__rc"
+        return f"(\n{cmd}\n)\n__rc=$?; printf '%s' \"$__rc\" > {q}; {_hook()}exit $__rc"
 
     if shell_kind == "bash" and shell_path and not _IS_WINDOWS:
         argv, use_shell = [shell_path, "-c", _wrap(shlex.quote(exit_file))], False
