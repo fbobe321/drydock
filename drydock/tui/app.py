@@ -1146,20 +1146,31 @@ class DrydockApp(App):
 
     def _erx_worker(self, cfg, servers, opts, cancel) -> None:
         """Off-thread: drive run_eratchet, streaming each event into the UI."""
+        import json
+
         from drydock import eratchet as erx
 
         def on_event(kind, d):
             if kind == "generation_done":
                 cfg.progress["passed"], cfg.progress["total"] = d["passed"], d["total"]
             self.call_from_thread(self._info, erx.format_event(kind, d))
+        cap_fh = open(opts["capture"], "w") if opts.get("capture") else None
+
+        def _capture(rec) -> None:
+            assert cap_fh is not None
+            cap_fh.write(json.dumps(rec) + "\n")
+
+        capture = _capture if cap_fh else None
         try:
             erx.run_eratchet(cfg.goal, servers=servers, runner=erx.make_variant_runner(cfg),
                              effort=opts["effort"], max_generations=opts["generations"],
                              fanout=opts["fanout"], on_event=on_event,
-                             should_stop=cancel.is_set)
+                             should_stop=cancel.is_set, capture=capture)
         except Exception as e:  # noqa: BLE001 — surface, never crash the TUI
             self.call_from_thread(self._info, f"eratchet: crashed: {e}")
         finally:
+            if cap_fh:
+                cap_fh.close()
             self._erx = None
             self.call_from_thread(self._finish_ratchet_idle)
 

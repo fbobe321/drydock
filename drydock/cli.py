@@ -391,6 +391,8 @@ def main():
     )
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--max-tool-calls", type=int, default=0, help="Max tool calls (0=unlimited)")
+    parser.add_argument("--trajectory-file", dest="trajectory_file", default=None,
+                        help="Write the full run transcript (system + messages) here — for harvesting training data")
     parser.add_argument("--force-first-tool", action="store_true", help="Force tool_choice=required on first turn")
     parser.add_argument("--cli", action="store_true", help="Plain readline mode instead of the TUI")
     parser.add_argument(
@@ -434,6 +436,7 @@ def main():
         "max_tool_calls": args.max_tool_calls,
         "force_first_tool": args.force_first_tool,
         "_approve_all": args.dangerously_skip_permissions,
+        "trajectory_file": args.trajectory_file or cfg.get("trajectory_file", ""),
         "cwd": os.getcwd(),
         "history_path": str(Path.home() / ".drydock" / "history"),
         "onboarding": onboarding,

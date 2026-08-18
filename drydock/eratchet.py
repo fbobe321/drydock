@@ -46,6 +46,7 @@ class VariantOutcome:
     total: int
     ref: Optional[str] = None
     descriptor: Optional[frozenset] = None
+    messages: list = field(default_factory=list)   # captured transcript (training data)
     error: str = ""
 
 
@@ -104,10 +105,16 @@ def run_eratchet(
     fanout: int = 0,
     on_event: Optional[Callable[[str, dict], None]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
+    capture: Optional[Callable[[dict], None]] = None,
 ) -> EratchetResult:
     """Drive the parallel evolutionary ratchet. Pure control flow: every side
     effect (running an attempt, verifying, snapshotting) happens inside the
     injected `runner`; every progress signal goes out through `on_event`.
+
+    If `capture` is given, EVERY variant (not just the winner) is handed to it as
+    a training-data record — with its transcript, reward, and the shared base_ref +
+    generation that make same-generation variants a CONTRASTIVE set (a 5/8 next to a
+    3/8 from the same base — the RL/preference signal M1's winner-only corpus lacks).
 
     Each generation: pick the variation operator (escalates on stall via the
     tested VariationPolicy), expand it to an exploit-first list of variant specs,
@@ -162,6 +169,16 @@ def run_eratchet(
                 cost=float(g),
             )
             archive.consider(cand)
+            if capture:
+                capture({
+                    "goal": goal, "generation": g, "index": i,
+                    "base_ref": base_ref,            # shared base → contrastive key
+                    "spec": oc.spec, "server": oc.server,
+                    "passed": oc.passed, "total": oc.total,
+                    "solved": bool(oc.total and oc.passed >= oc.total),
+                    "descriptor": sorted(oc.descriptor) if oc.descriptor else None,
+                    "ref": oc.ref, "messages": oc.messages,
+                })
             emit("variant_done", generation=g, index=i, mode=oc.spec.get("mode"),
                  server=oc.server, passed=oc.passed, total=oc.total)
 
@@ -212,6 +229,7 @@ def _best_ref(a: Archive) -> Optional[str]:
 # throwaway `git worktree`; the attempt is a headless `drydock -p` against the
 # assigned server; fitness is the project verifier scored by drydock.ratchet.
 # ══════════════════════════════════════════════════════════════════════════════
+import json                                                    # noqa: E402
 import os                                                      # noqa: E402
 import subprocess                                              # noqa: E402
 import sys                                                     # noqa: E402
@@ -293,9 +311,13 @@ def exec_variant(cfg: ExecConfig, base_ref: Optional[str], server: str,
                 donor_wt = ""
 
         prompt = _variant_prompt(cfg.goal, spec, cfg.progress, xplan, donor_wt)
+        # capture this variant's transcript (training data) via drydock's own
+        # trajectory export, to a temp file OUTSIDE the worktree (kept out of the snapshot).
+        tf_fd, traj_path = tempfile.mkstemp(prefix="drydock-erx-traj-", suffix=".json")
+        os.close(tf_fd)
         argv = [*cfg.drydock_argv, "-p", prompt, "--provider", cfg.provider,
                 "--base-url", server, "--model", cfg.model,
-                "--dangerously-skip-permissions"]
+                "--trajectory-file", traj_path, "--dangerously-skip-permissions"]
         temp = spec.get("temperature")
         if temp is not None:
             argv += ["--temperature", str(temp)]
@@ -304,13 +326,25 @@ def exec_variant(cfg: ExecConfig, base_ref: Optional[str], server: str,
         except subprocess.TimeoutExpired:
             pass                                              # score whatever it managed
 
+        messages = []
+        try:
+            if os.path.getsize(traj_path):
+                messages = (json.load(open(traj_path)) or {}).get("messages", []) or []
+        except (OSError, ValueError):
+            pass
+        finally:
+            try:
+                os.unlink(traj_path)
+            except OSError:
+                pass
+
         ref = _snapshot(wt)
         vr = subprocess.run(cfg.verify_cmd, cwd=wt, shell=True,
                             capture_output=True, text=True)
         out = (vr.stdout or "") + (vr.stderr or "")
         passed, total = score_output(out, cfg.fitness, vr.returncode)
         return VariantOutcome(spec, server, passed, total, ref=ref,
-                              descriptor=parse_descriptor(out))
+                              descriptor=parse_descriptor(out), messages=messages)
     finally:
         _git(["worktree", "remove", "--force", wt], cfg.repo)
         if donor_wt:
@@ -366,13 +400,14 @@ def parse_eratchet(tokens: list) -> dict:
     ValueError with a usage-friendly message (never SystemExit — safe in the TUI)."""
     from drydock.ratchet import EFFORT_LEVELS
     goal, effort, verify, model, provider, base_url = [], "high", "", "", "", ""
+    capture = ""
     servers: list = []
     fanout = generations = 0
     i, seen_flag = 0, False
     while i < len(tokens):
         t = tokens[i]
         if t in ("--effort", "--verify", "--servers", "--fanout", "--generations",
-                 "--model", "--provider", "--base-url"):
+                 "--model", "--provider", "--base-url", "--capture"):
             seen_flag = True
             i += 1
             if i >= len(tokens):
@@ -396,6 +431,8 @@ def parse_eratchet(tokens: list) -> dict:
                 provider = v
             elif t == "--base-url":
                 base_url = v
+            elif t == "--capture":
+                capture = v
         elif seen_flag:
             raise ValueError(f"unexpected argument after flags: {t!r}")
         else:
@@ -405,7 +442,8 @@ def parse_eratchet(tokens: list) -> dict:
         raise ValueError("no goal given")
     return {"goal": " ".join(goal), "effort": effort, "verify": verify,
             "servers": servers, "fanout": fanout, "generations": generations,
-            "model": model, "provider": provider, "base_url": base_url}
+            "model": model, "provider": provider, "base_url": base_url,
+            "capture": capture}
 
 
 def resolve_config(opts: dict, config: dict) -> "ExecConfig | str":
@@ -462,7 +500,47 @@ def run_cli(argv: list, config: dict | None = None) -> int:
             cfg.progress["passed"], cfg.progress["total"] = d["passed"], d["total"]
         print(format_event(kind, d), flush=True)
 
-    res = run_eratchet(cfg.goal, servers=servers, runner=make_variant_runner(cfg),
-                       effort=opts["effort"], max_generations=opts["generations"],
-                       fanout=opts["fanout"], on_event=on_event)
+    cap_fh = open(opts["capture"], "w") if opts.get("capture") else None
+
+    def _capture(rec: dict) -> None:
+        assert cap_fh is not None
+        cap_fh.write(json.dumps(rec) + "\n")
+        cap_fh.flush()
+
+    capture = _capture if cap_fh else None
+    try:
+        res = run_eratchet(cfg.goal, servers=servers, runner=make_variant_runner(cfg),
+                           effort=opts["effort"], max_generations=opts["generations"],
+                           fanout=opts["fanout"], on_event=on_event, capture=capture)
+    finally:
+        if cap_fh:
+            cap_fh.close()
+            print(f"eratchet: captured every variant → {opts['capture']}", flush=True)
     return 0 if res.solved else 1
+
+
+def contrastive_pairs(records: list) -> list:
+    """From captured variant records, extract (better, worse) PREFERENCE pairs: two
+    variants from the SAME generation + base_ref whose scores differ. This is the
+    RL/preference signal — same starting point, one attempt beat another — that a
+    winner-only corpus can't provide (PRD §5). Yields dicts with the two transcripts
+    and their rewards, most-decisive (largest margin) first."""
+    groups: dict = {}
+    for r in records:
+        groups.setdefault((r.get("generation"), r.get("base_ref")), []).append(r)
+    pairs = []
+    for group in groups.values():
+        for a in group:
+            for b in group:
+                if a is b or a["passed"] <= b["passed"]:
+                    continue
+                pairs.append({
+                    "base_ref": a.get("base_ref"), "generation": a.get("generation"),
+                    "chosen": {"messages": a.get("messages"), "reward": a["passed"],
+                               "total": a["total"], "spec": a.get("spec")},
+                    "rejected": {"messages": b.get("messages"), "reward": b["passed"],
+                                 "total": b["total"], "spec": b.get("spec")},
+                    "margin": a["passed"] - b["passed"],
+                })
+    pairs.sort(key=lambda p: p["margin"], reverse=True)
+    return pairs

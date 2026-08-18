@@ -149,3 +149,37 @@ def test_run_cli_drives_the_loop_and_returns_exit_code(tmp_path, monkeypatch, ca
                        config={"cwd": repo, "base_url": "http://s"})
     assert code == 0                              # solved → exit 0
     assert "SOLVED" in capsys.readouterr().out
+
+
+# ── full-fidelity data capture + contrastive pairs ──────────────────────────
+
+def test_capture_records_every_variant_with_contrastive_key():
+    seen = []
+    def runner(base, server, spec, xplan):
+        # score varies by temperature so a generation yields differing variants
+        p = 5 if spec.get("temperature", 0) >= 0.5 else 3
+        return VariantOutcome(spec, server, p, 8, ref=f"r{p}",
+                              descriptor=_desc(p), messages=[{"role": "user", "content": "x"}])
+    # medium effort escalates to a 2-variant 'diversify' generation
+    run_eratchet("goal", servers=["s1", "s2"], runner=runner, effort="medium",
+                 capture=seen.append)
+    assert seen and all("messages" in r and "base_ref" in r and "generation" in r for r in seen)
+    # a generation with >1 variant shares base_ref + generation (the contrastive key)
+    from collections import Counter
+    keys = Counter((r["generation"], r["base_ref"]) for r in seen)
+    assert max(keys.values()) >= 2
+
+
+def test_contrastive_pairs_from_captured_records():
+    from drydock.eratchet import contrastive_pairs
+    recs = [
+        {"generation": 4, "base_ref": "B", "passed": 5, "total": 8, "spec": {"mode": "rethink"},
+         "messages": [{"role": "a", "content": "win"}]},
+        {"generation": 4, "base_ref": "B", "passed": 3, "total": 8, "spec": {"mode": "continue"},
+         "messages": [{"role": "a", "content": "lose"}]},
+        {"generation": 4, "base_ref": "OTHER", "passed": 9, "total": 9, "spec": {}},  # diff base
+    ]
+    pairs = contrastive_pairs(recs)
+    assert len(pairs) == 1                                # only the same-base pair
+    assert pairs[0]["chosen"]["reward"] == 5 and pairs[0]["rejected"]["reward"] == 3
+    assert pairs[0]["margin"] == 2
