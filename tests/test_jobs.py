@@ -163,11 +163,24 @@ def test_no_notify_cmd_means_no_hook(tmp_path):
     assert s["exit_code"] == 0          # still records normally, just no push
 
 
-def test_bash_background_passes_notify_cmd_from_config(tmp_path):
+def test_bash_background_reads_notify_from_env_not_config(tmp_path, monkeypatch):
+    # The notify command is env-ONLY. A synced config.toml value must NOT fire it
+    # (that would ride a shared config onto a work box and phone home — 3.1.16).
     import drydock.tools as T
-    marker = tmp_path / "n.txt"
-    out = T.tool_bash({"command": "echo done; exit 0", "background": True},
-                      {"cwd": "/tmp", "job_notify_cmd": _notify_script(tmp_path, marker)})
+
+    # 1) config key alone → NO notify (config is not a trusted source for this)
+    cfg_marker = tmp_path / "from_cfg.txt"
+    monkeypatch.delenv("DRYDOCK_JOB_NOTIFY_CMD", raising=False)
+    out = T.tool_bash({"command": "true", "background": True},
+                      {"cwd": "/tmp", "job_notify_cmd": _notify_script(tmp_path, cfg_marker)})
     jid = out.split("job ")[1].split()[0].rstrip(".")
-    assert _wait_file(marker)
-    assert jid in open(marker).read()
+    _wait_state(jid, "finished")
+    assert not os.path.exists(cfg_marker)      # config value ignored → no phone-home
+
+    # 2) machine-local env var → fires (explicit per-machine opt-in)
+    env_marker = tmp_path / "from_env.txt"
+    monkeypatch.setenv("DRYDOCK_JOB_NOTIFY_CMD", _notify_script(tmp_path, env_marker))
+    out = T.tool_bash({"command": "echo done; exit 0", "background": True}, {"cwd": "/tmp"})
+    jid = out.split("job ")[1].split()[0].rstrip(".")
+    assert _wait_file(env_marker)
+    assert jid in open(env_marker).read()

@@ -60,6 +60,17 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🔒 2026-08-18 — BACKGROUND-JOB NOTIFY IS ENV-ONLY (no phone-home can ride config to work).**
+> The proactive completion-notify hook (a command run from a finished background job's shell,
+> with `DRYDOCK_JOB_ID/_RC/_CMD` in the env) is read **ONLY** from the machine-local env var
+> **`DRYDOCK_JOB_NOTIFY_CMD`** — it is deliberately NOT a `config.toml` key. Reason (operator:
+> "I don't want my copy of Drydock to do that at work — big problem"): a persisted key would ride
+> a synced `~/.drydock/config.toml` onto a work box and phone home (Comms→Telegram) with no opt-in
+> — the 3.1.16 silent-activation shape. Env-only ⇒ off by default, opt-in per machine, never in the
+> wheel and never in saved config. Home fleet sets the env var in its tmux launch script; work never
+> does. Test `test_bash_background_reads_notify_from_env_not_config` proves a config value is IGNORED
+> and only the env var fires. Core still sends nothing itself — it just runs the operator command.
+
 > **📊 2026-08-16 — CAMPAIGN 55/89; supervisor + Comms shipped; drydock 3.1.16 YANKED.**
 > tbench-2 **55/89 (62%)** (from 38 on 08-14), 235 traces. **Eratchet is cracking the hard tail** —
 > evolved-ratchet solves incl. `fix-ocaml-gc` + `mteb-leaderboard` (both former held-out, base 0/30).
