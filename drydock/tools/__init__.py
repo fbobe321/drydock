@@ -1592,11 +1592,8 @@ def tool_bash(params: dict, config: dict) -> str:
     # the job is tracked; the agent reports on it later via the Jobs tool.
     if params.get("background"):
         from drydock import jobs
-        # Completion-notify is env-ONLY (never persisted config) so a synced
-        # config.toml can't carry a phone-home onto a work box — opt-in per machine.
         meta = jobs.launch_background(cmd, config.get("cwd"),
-                                      shell_path=_SHELL_PATH, shell_kind=_SHELL_KIND,
-                                      notify_cmd=os.environ.get("DRYDOCK_JOB_NOTIFY_CMD", ""))
+                                      shell_path=_SHELL_PATH, shell_kind=_SHELL_KIND)
         return (
             f"Started background job {meta['id']} (running detached — prompt is free).\n"
             f"  $ {cmd.strip()[:200]}\n"

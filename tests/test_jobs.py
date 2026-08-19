@@ -130,57 +130,24 @@ def test_jobs_tool_registered_and_surfaces_for_status_question():
     assert "Jobs" in surfaced
 
 
-# ── proactive completion notify (operator hook, fires from the job's shell) ──
+# ── no completion-notify surface at all (removed deliberately — no phone-home) ──
 
-def _notify_script(tmp_path, marker):
-    s = tmp_path / "notify.sh"
-    s.write_text('#!/bin/sh\nprintf "%s %s %s" "$DRYDOCK_JOB_ID" "$DRYDOCK_JOB_RC" '
-                 '"$DRYDOCK_JOB_CMD" > ' + str(marker) + '\n')
-    s.chmod(0o755)
-    return f"sh {s}"
+def test_no_completion_notify_surface(tmp_path, monkeypatch):
+    # There is NO hook that runs an extra command when a background job finishes.
+    # launch_background takes no notify param, and a background job must NOT run
+    # anything from any env var (the old DRYDOCK_JOB_NOTIFY_CMD is dead).
+    import inspect
+    assert "notify" not in inspect.signature(jobs.launch_background).parameters
 
-
-def _wait_file(path, timeout=4.0):
-    end = time.monotonic() + timeout
-    while time.monotonic() < end and not os.path.exists(path):
-        time.sleep(0.05)
-    return os.path.exists(path)
-
-
-def test_notify_hook_fires_on_completion_with_env(tmp_path):
-    marker = tmp_path / "notified.txt"
-    meta = jobs.launch_background("echo hi; exit 3", "/tmp", shell_path=None,
-                                  shell_kind="sh", notify_cmd=_notify_script(tmp_path, marker))
-    assert _wait_file(marker)
-    got = open(marker).read()
-    assert meta["id"] in got and " 3 " in got and "echo hi; exit 3" in got   # id, exit code, cmd
-
-
-def test_no_notify_cmd_means_no_hook(tmp_path):
-    # a job with no notify_cmd must not reference the hook env at all
-    meta = jobs.launch_background("true", "/tmp", shell_path=None, shell_kind="sh")
-    s = _wait_state(meta["id"], "finished")
-    assert s["exit_code"] == 0          # still records normally, just no push
-
-
-def test_bash_background_reads_notify_from_env_not_config(tmp_path, monkeypatch):
-    # The notify command is env-ONLY. A synced config.toml value must NOT fire it
-    # (that would ride a shared config onto a work box and phone home — 3.1.16).
     import drydock.tools as T
-
-    # 1) config key alone → NO notify (config is not a trusted source for this)
-    cfg_marker = tmp_path / "from_cfg.txt"
-    monkeypatch.delenv("DRYDOCK_JOB_NOTIFY_CMD", raising=False)
-    out = T.tool_bash({"command": "true", "background": True},
-                      {"cwd": "/tmp", "job_notify_cmd": _notify_script(tmp_path, cfg_marker)})
-    jid = out.split("job ")[1].split()[0].rstrip(".")
-    _wait_state(jid, "finished")
-    assert not os.path.exists(cfg_marker)      # config value ignored → no phone-home
-
-    # 2) machine-local env var → fires (explicit per-machine opt-in)
-    env_marker = tmp_path / "from_env.txt"
-    monkeypatch.setenv("DRYDOCK_JOB_NOTIFY_CMD", _notify_script(tmp_path, env_marker))
+    marker = tmp_path / "should_never_exist.txt"
+    hook = tmp_path / "hook.sh"
+    hook.write_text("#!/bin/sh\ntouch " + str(marker) + "\n")
+    hook.chmod(0o755)
+    monkeypatch.setenv("DRYDOCK_JOB_NOTIFY_CMD", f"sh {hook}")   # dead var: must be ignored
     out = T.tool_bash({"command": "echo done; exit 0", "background": True}, {"cwd": "/tmp"})
     jid = out.split("job ")[1].split()[0].rstrip(".")
-    assert _wait_file(env_marker)
-    assert jid in open(env_marker).read()
+    s = _wait_state(jid, "finished")
+    assert s["exit_code"] == 0                # job runs + records normally
+    time.sleep(0.3)
+    assert not marker.exists()                # ...but nothing extra ever fired
