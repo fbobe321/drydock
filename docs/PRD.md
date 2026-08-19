@@ -3,6 +3,17 @@
 Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
+> **Progress (2026-08-19) — CAMPAIGN SUBSTRATE UPGRADED TO Terminal-Bench 2.1.** The unattended
+> tbench-2 completion campaign now runs against **Terminal-Bench 2.1**, upstream's more-verified
+> iteration of 2.0: same 89 task names (drop-in), fixing 28/89 tasks (external-dependency, resource
+> budget, and misspecification bugs) plus reward-hack hardening. This matters for the mission — 2.1
+> guarantees *no task is unsolvable-by-bug*, so an **honest 100% is attainable** (it was not on 2.0,
+> where several fleet "flatlines" were broken tasks, not hard ones). Vendored from
+> `harbor-framework/terminal-bench-2-1` into the canonical task path (2.0 archived); 13 changed-and-
+> solved tasks invalidated for re-verification; the 11 parked flatlines unparked to retry on 2.1.
+> Honest post-switch baseline: **48/89** (2.0 read 60; the delta re-verifies). All steps reversible
+> (snapshots retained). Full detail: `RESUME.md`. See [[project_compass_mission]].
+
 > **Progress (2026-08-09) — SELF-DISTILLATION RESEARCH ARC + 3-BOX FLEET; heredity
 > generalization wall CONFIRMED at 2× corpus.** (Full blow-by-blow: `RESUME.md` + the
 > `project_*` memories; this is the product-level summary.) Since v3.1.x the research

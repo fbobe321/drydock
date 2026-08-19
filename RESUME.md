@@ -60,6 +60,32 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🔀 2026-08-19 — CAMPAIGN SUBSTRATE SWITCHED TO TERMINAL-BENCH 2.1 (drop-in; honest baseline reset 60→48).**
+> Upstream shipped tbench **2.1**, a more-verified iteration of 2.0: SAME 89 task names (drop-in,
+> directly comparable), fixes **28/89** tasks — 9 external-dependency, 8 resource/budget, 11
+> misspecification — plus reward-hack hardening. Decisive for the mission: **"no task is unsolved in
+> 2.1"** ⇒ an honest 100% is *attainable* on 2.1 but was NOT on 2.0 (some tasks were unsolvable-by-bug,
+> which is exactly where our fleet's flatlines were burning eratchet cycles). Still terminal-bench-2, so
+> consistent with the tbench-2-only directive. **All migration steps reversible — snapshots in
+> `frontier/selfdistill/heredity/migration-2.1-2026-08-19/`:**
+> - Vendored 2.1 from `harbor-framework/terminal-bench-2-1@main` (`7131e43`) into the canonical
+>   `tasks/terminal-bench-2/` (2.0 archived to `tasks/terminal-bench-2.0-snapshot-2026-08-19/`). Same
+>   PATH ⇒ every fleet script unchanged (they all hardcode `tasks/terminal-bench-2`). `task.toml`
+>   schema 1.0→1.1; one rename `install-windows-3.11`→`install-windows-3-11`. Directory rename is safe
+>   for in-flight containers (their mounts follow the inode → they finish their 2.0 task; new claims read 2.1).
+> - **Invalidated 13 changed-AND-solved markers** (adaptive-rejection-sampler, build-pmars, caffe-cifar-10,
+>   configure-git-webserver, extract-moves-from-video, filter-js-from-html, fix-git, hf-model-inference,
+>   mteb-leaderboard, mteb-retrieve, sam-cell-seg, sanitize-git-repo, torch-tensor-parallelism) → they
+>   re-verify on 2.1 (moved to `ratchet/invalidated-2.0-2026-08-19/`). Unchanged solves kept (comparable).
+> - **Unparked all 11 flatlines** + reset `ratchet/ratchet_evolve_results.csv` (2.0 rows archived) so the
+>   flatline auto-park only fires on FRESH 2.1 evidence — the external-dep/resource/misspec fixes may
+>   unblock several (make-doom-for-mips, make-mips-interpreter, db-wal-recovery, regex-chess, feal-*,
+>   dna-*, gpt2-codegolf, chess-best-move, break-filter-js-from-html) that were unsolvable-by-bug on 2.0.
+> - **Honest 2.1 baseline = 48/89** (2.0 was 60; the 13 re-verify + reset — real solves reconfirm in ~1
+>   round, and 2.1-fixed tasks now become newly winnable). Scoreboard/effort/park all keyed by the
+>   unchanged task names. Upstream provenance: [tbench.ai/news/terminal-bench-2-1]; the OLD vendored 2.0
+>   came from the private `fbobe321/RSI.git` (token-in-remote — still needs rotating).
+
 > **🔒 2026-08-18 — BACKGROUND-JOB COMPLETION-NOTIFY REMOVED ENTIRELY (no notify surface, no phone-home).**
 > A completion-notify hook was briefly added (run an operator command when a background job finishes),
 > first as a `config.toml` key then reworked to an env-only var. Operator decision: **remove it outright,
