@@ -1659,6 +1659,7 @@ def tool_bash(params: dict, config: dict) -> str:
         # process) once the cap is hit; the main loop polls cancel + timeout.
         chunks: list[str] = []
         total = [0]
+        last_output = [time.monotonic()]   # monotonic ts of the most recent output block
         capped = threading.Event()
         # When a foreground command is auto-promoted to a background job on
         # timeout, we point this sink at the job's log file; the daemon then keeps
@@ -1669,9 +1670,15 @@ def tool_bash(params: dict, config: dict) -> str:
         def _drain():
             assert proc.stdout is not None
             while True:
-                block = proc.stdout.read(8192)
+                # readline(cap) returns as soon as a line (or `cap` chars) is
+                # available — NOT blocking until a full 8 KB block like read(8192)
+                # would. That keeps `last_output` current for the idle watchdog
+                # (a dribble of small lines updates it), while the char cap still
+                # bounds a single runaway line. EOF returns "" → loop ends.
+                block = proc.stdout.readline(8192)
                 if not block:
                     break
+                last_output[0] = time.monotonic()   # for the idle-output watchdog
                 f = sink["file"]
                 if f is not None:
                     try:
@@ -1690,6 +1697,39 @@ def tool_bash(params: dict, config: dict) -> str:
         reader.start()
         start = time.monotonic()
         backgrounded = False
+        try:
+            idle_bg = int(float(config.get("bash_idle_bg_secs", 0) or 0))
+        except (TypeError, ValueError):
+            idle_bg = 0
+
+        def _adopt_bg(headline: str) -> str:
+            """Adopt the still-running proc as a background job and return a note.
+            Shared by the total-runtime auto-promote and the idle-output watchdog:
+            the command keeps running (the reader daemon drains its pipe into the
+            job log via `sink`), STOP no longer owns it, and the agent is freed."""
+            from drydock import jobs
+            partial = _sanitize_bash_output(_collapse_repeated_lines("".join(list(chunks))))
+            try:
+                pgid = os.getpgid(proc.pid)
+            except OSError:
+                pgid = None
+            # `start` is monotonic; jobs measures elapsed with wall-clock time.time().
+            wall_start = time.time() - (time.monotonic() - start)
+            meta = jobs.adopt(proc.pid, pgid, cmd, config.get("cwd"), wall_start,
+                              initial_output=partial)
+            try:
+                sink["file"] = open(meta["log"], "a")   # daemon appends here now
+            except OSError:
+                sink["file"] = None
+            config.get("_abort", {}).pop("proc", None)  # it's a job now
+            note = (headline + f" Left as background job {meta['id']}.\n  $ {cmd.strip()[:200]}\n"
+                    f"Check it with the Jobs tool (action=status id={meta['id']}). "
+                    f"Tell the user it's running in the background.")
+            tail = partial.rstrip()[-_PARTIAL_TAIL:]
+            if tail:
+                note += f"\n\n--- output so far ---\n{tail}"
+            return note
+
         while reader.is_alive():
             reader.join(0.3)
             if capped.is_set():
@@ -1723,42 +1763,31 @@ def tool_bash(params: dict, config: dict) -> str:
                 if reader.is_alive():
                     backgrounded = True
                     break
+            # IDLE-OUTPUT WATCHDOG: a command silent for `idle_bg` seconds is very
+            # likely stuck (a dead network download, a blocked prompt, an infinite
+            # loop with no prints) — but it may not hit the TOTAL timeout for a long
+            # time if the model set a big timeout. Adopt it as a background job so the
+            # agent stops blocking on it and can react, instead of stalling for
+            # minutes on one silent call (the caffe get_cifar10.sh 571s-no-output hang).
+            if idle_bg and proc.poll() is None and (time.monotonic() - last_output[0]) > idle_bg:
+                idle_s = int(time.monotonic() - last_output[0])
+                return _adopt_bg(
+                    f"No output for {idle_s}s (idle watchdog {idle_bg}s) — the command "
+                    f"looks stuck, so I've left it in the BACKGROUND instead of blocking "
+                    f"the prompt. If it is doing real silent work it keeps running; "
+                    f"otherwise stop it (Jobs action=stop) and take a DIFFERENT approach "
+                    f"— repeating the same command will just hang again."
+                )
             if time.monotonic() - start > timeout:
                 # AUTO-PROMOTE (only for already-long budgets): the command was
                 # given ≥ _AUTO_BG_TIMEOUT and STILL overran → it's genuinely long
                 # work, so adopt it as a background job instead of killing it (don't
-                # lose hours of a training run). The reader daemon keeps draining the
-                # pipe into the job log via `sink`, so the process can't block. STOP
-                # no longer owns it — the user manages it through the Jobs tool.
+                # lose hours of a training run).
                 if timeout >= _AUTO_BG_TIMEOUT and proc.poll() is None:
-                    from drydock import jobs
-                    partial = _sanitize_bash_output(
-                        _collapse_repeated_lines("".join(list(chunks)))
-                    )
-                    try:
-                        pgid = os.getpgid(proc.pid)
-                    except OSError:
-                        pgid = None
-                    # `start` is monotonic; jobs measures elapsed with wall-clock
-                    # time.time(), so convert to a wall-clock start or elapsed goes wild.
-                    wall_start = time.time() - (time.monotonic() - start)
-                    meta = jobs.adopt(proc.pid, pgid, cmd, config.get("cwd"), wall_start,
-                                      initial_output=partial)
-                    try:
-                        sink["file"] = open(meta["log"], "a")   # daemon appends here now
-                    except OSError:
-                        sink["file"] = None
-                    config.get("_abort", {}).pop("proc", None)  # it's a job now
-                    note = (
+                    return _adopt_bg(
                         f"Still running after {timeout}s — this is long-running work, so "
-                        f"I've left it in the BACKGROUND as job {meta['id']} and freed the "
-                        f"prompt (rather than killing it).\n  $ {cmd.strip()[:200]}\n"
-                        f"Check it with the Jobs tool (action=status id={meta['id']}). "
-                        f"Tell the user it's running in the background.")
-                    tail = partial.rstrip()[-_PARTIAL_TAIL:]
-                    if tail:
-                        note += f"\n\n--- output so far ---\n{tail}"
-                    return note
+                        f"I've left it in the BACKGROUND and freed the prompt (rather than "
+                        f"killing it).")
                 # Otherwise it overran a short/default budget → kill + guide the model:
                 # bump the timeout for merely-slow work, or background=true for a real
                 # long job (training / long build).

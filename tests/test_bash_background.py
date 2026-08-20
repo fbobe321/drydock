@@ -62,3 +62,45 @@ def test_timeout_no_output_stays_clean():
     from drydock.tools import tool_bash
     out = tool_bash({"command": "sleep 30", "timeout": 2}, {"cwd": "/tmp"})
     assert "timed out" in out and "output before timeout" not in out
+
+
+# ── idle-output watchdog (config bash_idle_bg_secs) — the caffe 571s-hang fix ──
+
+def test_idle_watchdog_backgrounds_silently_stuck_command():
+    """A command that goes SILENT past the idle threshold is adopted as a background
+    job (not blocked-on to the full timeout, not killed) — catches a command hung on
+    a long timeout far sooner than the total-runtime cap."""
+    try:
+        t0 = time.monotonic()
+        out = tool_bash(
+            {"command": "echo warming; sleep 25", "timeout": 60},
+            {"cwd": "/tmp", "bash_idle_bg_secs": 1},
+        )
+        dt = time.monotonic() - t0
+        assert dt < 5.0, f"idle watchdog didn't fire fast ({dt:.1f}s)"
+        assert "background" in out.lower() and "idle watchdog" in out.lower()
+        assert "warming" in out           # partial output preserved
+        time.sleep(0.3)
+        n = subprocess.run("pgrep -f 'sleep 25' | wc -l", shell=True,
+                           capture_output=True, text=True).stdout.strip()
+        assert int(n) >= 1, "idle-backgrounded process was killed (should survive)"
+    finally:
+        subprocess.run("pkill -f 'sleep 25'", shell=True)
+
+
+def test_idle_watchdog_off_by_default():
+    """Without the config knob, a silent command behaves exactly as before (hits the
+    normal timeout), so existing behavior is unchanged."""
+    out = tool_bash({"command": "echo hi; sleep 30", "timeout": 3}, {"cwd": "/tmp"})
+    assert "timed out" in out and "idle watchdog" not in out.lower()
+
+
+def test_idle_watchdog_not_tripped_by_active_output():
+    """A command that keeps producing output is never idle-backgrounded — the
+    watchdog only fires on genuine silence."""
+    out = tool_bash(
+        {"command": "for i in 1 2 3 4; do echo line$i; sleep 0.4; done", "timeout": 20},
+        {"cwd": "/tmp", "bash_idle_bg_secs": 1},
+    )
+    assert "line1" in out and "line4" in out
+    assert "background" not in out.lower()

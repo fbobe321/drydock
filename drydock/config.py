@@ -40,6 +40,15 @@ DEFAULTS: dict[str, object] = {
     # generation usually isn't stalled — a known gemma/llama.cpp hang). 0 = off.
     # Set to e.g. 600 on a stall-prone local server. Bounded to a few retries.
     "stall_retry_secs": 0,
+    # Idle-output watchdog for foreground Bash: if a running command produces NO
+    # output for this many seconds, drydock stops BLOCKING on it and adopts it as a
+    # background job (it keeps running; the agent gets the prompt back + a nudge to
+    # reconsider). Complements the total-runtime auto-background (_AUTO_BG_TIMEOUT):
+    # catches a command hung SILENTLY on a long timeout (e.g. a dead network
+    # download the model set timeout:1800 for) far sooner than the total cap.
+    # Non-destructive (backgrounds, never kills). 0 = off. Set e.g. 300 on the fleet
+    # where a weak local model loops on a silently-stuck command.
+    "bash_idle_bg_secs": 0,
     # Inject bundled technique recipes (drydock/recipes.py) relevant to the task
     # into the system prompt, so a local model has the *method* a task needs
     # instead of guessing. Retrieval is keyword-overlap; only relevant recipes are
