@@ -80,11 +80,20 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   the strong 31B a weak 4B-active model's solution style could regress it. ⇒ eval MUST have a
 >   **generalization arm** (held-out HARD tasks the 31B currently fails) + a **regression arm** (tasks it
 >   passes) + a **control** (31B trained on its OWN easy traces) to isolate whether cross-model helps.
-> - **NOW RUNNING:** bounded MoE collect over 8 diverse easy tasks → `moe_collect/` corpus (SEPARATE
->   from campaign `ratchet/` so MoE traces don't pollute the 31B corpus), on the idle .22. **TRAIN + EVAL
->   PENDING** — needs corpus accumulation + a free trainer (.20 is busy serving lanes).
-> - **Side finding:** the 31B ITSELF loops — caught `caffe-cifar-10` repeating `get_cifar10.sh`, stalled
->   571s (the 13h lane stall). Our loop-breakers miss the repeated-failed-bash pattern.
+> - **COLLECT (done, expanding):** MoE ratcheted 8 easy tasks → **6 solved trajs** into `moe_collect/`
+>   (SEPARATE from campaign `ratchet/`); an expanded 14-task collect is now growing it on the idle .22.
+>   **Harvest works:** `moe_collect/moe_sft.jsonl` (full-trajectory chat SFT, ~170 assistant turns;
+>   `_solved_traj.json` existence == verified — the inner `verified` field isn't stamped). **Eval splits
+>   built** (`moe_collect/eval_splits.json`): regression=54 (31B passes), generalization=35 (31B fails).
+>   **Scaffold + gating criteria:** `moe_collect/README.md`. **TRAIN + EVAL PENDING** a free trainer (.20
+>   busy) AND a bigger corpus (heredity memorized at 16–31; 6 is too few). Eval = generalization arm +
+>   regression guard + self-trace control.
+> - **Side finding → FIXED (drydock):** the 31B ITSELF loops — caught `caffe-cifar-10` repeating
+>   `get_cifar10.sh`, "no output for 571s" (the 13h lane stall). Root cause: a command hung SILENTLY on a
+>   long timeout, below the total-runtime auto-bg cap. Fix `88ca659`: config `bash_idle_bg_secs` — a
+>   command silent for N s is adopted as a background job (non-destructive; agent freed + nudged). Also
+>   fixed a latent `read(8192)`-blocks bug (→ `readline`). Default off; **fleet deploy = publish + bump
+>   DD_VER + set `bash_idle_bg_secs=300`**. 33 bash/jobs tests pass.
 > - **Reversible:** .22 MoE = container `moe-smoke`; `docker start llamacpp-gemma4-31b` restores the 31B.
 >   Campaign lanes on .20/.21 untouched throughout. Smoke harness: `moe_smoke/`, `moe_smoke_solve.sh`.
 
