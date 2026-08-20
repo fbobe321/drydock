@@ -42,7 +42,11 @@ experiment_active(){
   # moe_train_eval.sh STOPS the .20 workers and its server to free the 48GB card for
   # QLoRA training — so it MUST be listed here, else this supervisor would relaunch
   # those workers mid-training and contend for the GPU it just freed.
-  pgrep -f 'compound_measure.sh|ml_suite_sweep.sh|probe_mr.sh|probe_band.sh|moe_train_eval.sh' >/dev/null 2>&1
+  # moe_orchestrate.sh is included too: it DRAINS the .20 lanes on purpose (waiting for
+  # in-flight jobs to end, with stopped workers deliberately left down) before handing
+  # off to the trainer. If the supervisor kept relaunching those workers they'd claim
+  # fresh jobs and the drain would never complete.
+  pgrep -f 'compound_measure.sh|ml_suite_sweep.sh|probe_mr.sh|probe_band.sh|moe_train_eval.sh|moe_orchestrate.sh' >/dev/null 2>&1
 }
 
 # ── unified task pool: one namespace symlinking EVERY suite (+ generated) ─────
