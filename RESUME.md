@@ -88,6 +88,23 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   **Scaffold + gating criteria:** `moe_collect/README.md`. **TRAIN + EVAL PENDING** a free trainer (.20
 >   busy) AND a bigger corpus (heredity memorized at 16–31; 6 is too few). Eval = generalization arm +
 >   regression guard + self-trace control.
+> - **🧬 COLLECT DONE + A DIAGNOSTIC CORRECTION (2026-08-20): speciate on the INSTRUCTION, not the trace.**
+>   MoE corpus = **14 verified solve-trajectories, 391 assistant turns** (cancel-async-tasks,
+>   configure-git-webserver, fix-git, git-leak-recovery, git-multibranch, headless-terminal,
+>   largest-eigenval, log-summary-date-ranges, nginx-request-logging, openssl-selfsigned-cert,
+>   prove-plus-comm, regex-log, sqlite-with-gcov, vulnerable-secret). Ran the heredity failure-tell
+>   diagnostic: `speciate.py` on the TRACE text → **1 species** (the same alarming signal that was read as
+>   "memorizes format→solution"). But on the raw **INSTRUCTION** the SAME corpus → **5 species**
+>   (git/config · security-crypto · log/regex · proofs · sqlite). **⇒ the "1 species" result is an ARTIFACT
+>   of the uniform harness format** (identical system prompt + tool-call shape make every drydock trace
+>   look alike), NOT a real diversity failure — so it cannot be evidence for format-memorization.
+>   **This partially re-interprets the heredity verdict:** v1/v2 also clustered *condensed trace text*, so
+>   their headline tell ("31 diverse tasks → 1 cluster") likely measured the same artifact. RESUME had
+>   already flagged "cluster on the INSTRUCTION next" as lever (a) — this confirms it and shows the
+>   instruction-space signal is the meaningful one. **Practical upshot:** this corpus has REAL semantic
+>   diversity (5 species/14 tasks), so the experiment is not pre-doomed to the memorization failure; and
+>   any future per-species adapter split should key on instruction-space clusters.
+>   Diagnostic inputs: `moe_collect/moe_instructions.jsonl`, `moe_collect/moe_sft.jsonl`.
 > - **🔁 SEQUENCED (2026-08-20, operator: "finish parking then free .20 to train"):** the 3 lanes were all
 >   grinding flatlines (dna-assembly/dna-insert/db-wal-recovery, all `best=0 niches=1`) that will re-park —
 >   i.e. the trainer box was tied up on provably-null work. **`moe_orchestrate.sh`** now waits for BOTH
