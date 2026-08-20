@@ -88,6 +88,20 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   **Scaffold + gating criteria:** `moe_collect/README.md`. **TRAIN + EVAL PENDING** a free trainer (.20
 >   busy) AND a bigger corpus (heredity memorized at 16–31; 6 is too few). Eval = generalization arm +
 >   regression guard + self-trace control.
+> - **🔁 SEQUENCED (2026-08-20, operator: "finish parking then free .20 to train"):** the 3 lanes were all
+>   grinding flatlines (dna-assembly/dna-insert/db-wal-recovery, all `best=0 niches=1`) that will re-park —
+>   i.e. the trainer box was tied up on provably-null work. **`moe_orchestrate.sh`** now waits for BOTH
+>   (a) the .20 lanes' in-flight jobs to finish (nothing lost; auto-park records fresh 2.1 evidence) and
+>   (b) the MoE collect to finish growing the corpus, THEN fires **`moe_train_eval.sh`**:
+>   harvest (CANONICAL `compass harvest-tbench` — my raw MoE trajs feed it directly; `verified is False`
+>   check passes `None` through) → **canary leakage gate** (MoE traces verified canary-CLEAN) → stop the
+>   two .20 workers **by tmux session** (never `pkill -f` — the self-kill land-mine) → stop .20's
+>   llama.cpp server → QLoRA on .20 (the certified trainer: one 48GB card holds the 4-bit 31B, so
+>   **seq-1024** vs .22's 512-OOM) → LoRA→gguf → `trap restore EXIT` restarts .20's server, workers return
+>   on the supervisor's next tick. **Supervisor seam:** `moe_train_eval.sh` added to
+>   `experiment_active()` so collection is DEFERRED (else the */10 cron would relaunch the very workers we
+>   stopped and contend for the freed GPU). **Guard verified live:** `MIN_TRAJ=12` aborted cleanly at
+>   corpus=6 *before* touching any worker or server. Vendored to `research/selfdistill/`.
 > - **Side finding → FIXED (drydock):** the 31B ITSELF loops — caught `caffe-cifar-10` repeating
 >   `get_cifar10.sh`, "no output for 571s" (the 13h lane stall). Root cause: a command hung SILENTLY on a
 >   long timeout, below the total-runtime auto-bg cap. Fix `88ca659`: config `bash_idle_bg_secs` — a
