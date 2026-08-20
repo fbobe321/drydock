@@ -3,6 +3,19 @@
 Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
+> **Progress (2026-08-20) — MoE fast-generator experiment (throughput lever for the distillation loop).**
+> Self-distillation has been throughput-starved (the dense 31B is slow; hard tasks flatline and yield no
+> data). New lever: use the fast **Gemma-4 26B-A4B MoE (~4B active, ~4× the 31B's tok/s)** as a
+> high-throughput GENERATOR on *easier* problems, then train the mission's 31B dense on those verified
+> traces (same Gemma-4 family ⇒ format-native). This is a deliberate shift from *self*-distillation to
+> cross-model (26B→31B) throughput; the honesty bar holds (the 31B still solves the eval itself). **Gate
+> passed:** the MoE was originally benched for loop-collapse on hard tasks, but on easy tasks it engages
+> cleanly — smoke through the real TUI solved fix-git (2/2 r1) and regex-log (r2) with no looping, at ~4×
+> speed. **Open questions being measured:** does distilling diverse *easy* traces generalize to *hard*
+> held-out tasks (headroom), and does distilling *down* from a weak model regress the 31B (needs a
+> generalization arm + regression guard + a self-trace control). Collect stage running; train/eval pending
+> a free trainer. Full detail: `RESUME.md` 2026-08-20 block. See [[project_compass_mission]].
+
 > **Progress (2026-08-19) — CAMPAIGN SUBSTRATE UPGRADED TO Terminal-Bench 2.1.** The unattended
 > tbench-2 completion campaign now runs against **Terminal-Bench 2.1**, upstream's more-verified
 > iteration of 2.0: same 89 task names (drop-in), fixing 28/89 tasks (external-dependency, resource

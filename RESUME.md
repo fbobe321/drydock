@@ -60,6 +60,34 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🧪 2026-08-20 — MoE-AS-FAST-GENERATOR EXPERIMENT (26B-A4B → 31B); SMOKE GATE PASSED, collecting.**
+> Operator idea: self-distill data creation is throughput-starved (dense 31B = slow inference; hard
+> tasks flatline = zero data). Use the fast **Gemma-4 26B-A4B MoE (~4B active)** as a high-throughput
+> GENERATOR on EASIER problems → verified traces → train the mission's **31B dense** on them. Same
+> Gemma-4 family ⇒ traces are format-native to the 31B. **Reframe: this is NOT self-distillation — it's
+> a throughput hack (cross-model 26B→31B).** Honesty bar still holds: the 31B solves the eval itself;
+> traces are verified. The MoE is *weaker*, so it's not a stronger-teacher crutch.
+> - **THE GATE (why the MoE was benched in the first place): it loop-collapsed on hard tbench-2 with
+>   only ~4B active** (180× identical pytest). Hypothesis: looping = out-of-depth; easy problems relieve
+>   it. **VERIFIED PASS:** served MoE Q4_K_M on .22 (stopped the idle 31B there; restore via
+>   `docker start llamacpp-gemma4-31b`), **59 tok/s vs 31B ~15 = ~4×**. Smoke through the REAL TUI with
+>   working CTRF: `fix-git` SOLVED r1 **2/2** (matched the 31B, ~4× faster), `regex-log` SOLVED r2
+>   (0/1→1/1 via the partial-credit climb). **No looping on easy tasks** (n=2, clean). Bug found+fixed:
+>   a `/tmp` copy of the solver broke `$SD/ctrf_fitness.py` resolution → first pass scored a bogus 0/0.
+> - **TWO RISKS still to MEASURE (the experiment's whole point):** (1) **HEADROOM** — easy tasks the MoE
+>   solves are likely within the 31B's frontier → training on already-solved = no lift (the 07-21
+>   lesson) UNLESS diverse easy traces GENERALIZE to hard held-out. (2) **DISTILLING-DOWN** — teaching
+>   the strong 31B a weak 4B-active model's solution style could regress it. ⇒ eval MUST have a
+>   **generalization arm** (held-out HARD tasks the 31B currently fails) + a **regression arm** (tasks it
+>   passes) + a **control** (31B trained on its OWN easy traces) to isolate whether cross-model helps.
+> - **NOW RUNNING:** bounded MoE collect over 8 diverse easy tasks → `moe_collect/` corpus (SEPARATE
+>   from campaign `ratchet/` so MoE traces don't pollute the 31B corpus), on the idle .22. **TRAIN + EVAL
+>   PENDING** — needs corpus accumulation + a free trainer (.20 is busy serving lanes).
+> - **Side finding:** the 31B ITSELF loops — caught `caffe-cifar-10` repeating `get_cifar10.sh`, stalled
+>   571s (the 13h lane stall). Our loop-breakers miss the repeated-failed-bash pattern.
+> - **Reversible:** .22 MoE = container `moe-smoke`; `docker start llamacpp-gemma4-31b` restores the 31B.
+>   Campaign lanes on .20/.21 untouched throughout. Smoke harness: `moe_smoke/`, `moe_smoke_solve.sh`.
+
 > **🔀 2026-08-19 — CAMPAIGN SUBSTRATE SWITCHED TO TERMINAL-BENCH 2.1 (drop-in; honest baseline reset 60→48).**
 > Upstream shipped tbench **2.1**, a more-verified iteration of 2.0: SAME 89 task names (drop-in,
 > directly comparable), fixes **28/89** tasks — 9 external-dependency, 8 resource/budget, 11
