@@ -94,7 +94,13 @@ ensure_worker(){   # ensure_worker <id> <server>
   # CRITICAL: close the supervisor's flock FD (8) in the spawned worker — else the
   # long-lived worker inherits it and holds the lock forever, locking the supervisor
   # out of every future tick (keepalive/refill silently dead). `exec 8>&-` drops it.
-  tmux new-session -d -s "wrk_$id" "exec 8>&-; cd $SD && DDT_TASKS=$POOL bash cluster/worker.sh $id $server $DD_VER"
+  # The trailing `8>&-` closes FD 8 for the TMUX PROCESS ITSELF, not just the inner
+  # shell. When no server is running, `tmux new-session` BECOMES the server — which
+  # then inherits the supervisor's flock FD and holds the lock forever, locking every
+  # future tick out (keepalive/refill/auto-park all silently dead). The inner
+  # `exec 8>&-` runs too late to prevent that: it only fixes the worker shell.
+  # Cost when this bit on 2026-08-21: 4.5h of supervisor outage, campaign frozen.
+  tmux new-session -d -s "wrk_$id" "exec 8>&-; cd $SD && DDT_TASKS=$POOL bash cluster/worker.sh $id $server $DD_VER" 8>&-
   say "RELAUNCHED worker $id → $server (dd_ver=$DD_VER, pool) in tmux wrk_$id"
 }
 
