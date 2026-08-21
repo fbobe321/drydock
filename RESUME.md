@@ -60,6 +60,34 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🔍 2026-08-21 — WHY IT FAILED (diagnosed, not guessed) + the FIX now collecting: CONTRASTIVE PAIRS.**
+> Operator asked the right question: did it fail to pick up the RATCHET behavior, or was it poisoned by the
+> 4B's weakness? **Evidence says: mostly the former — the ratchet behavior was never in the data.**
+> - **10 of 14 traces solved at ROUND 1** (no across-round behavior existed at all); only **1 of 14** carried
+>   cross-round continuation context. And `_solved_traj.json` is `docker cp .dd_trajectory.json` taken AT the
+>   solve — each round runs a FRESH drydock session, so the file holds **only the winning round**. For the 4
+>   multi-round solves the failed round and the recovery from it were OVERWRITTEN. ⇒ we trained on "here is a
+>   successful attempt", never "here is how to preserve progress and improve". It could not learn what it was
+>   never shown.
+> - **Weakness is a real but SECONDARY factor:** 68 tool-failure results across 14 traces (~5/trace) and very
+>   verbose solutions (git-multibranch **54** assistant turns, git-leak-recovery 46). Training a strong model
+>   to imitate verbose flailing is a plausible mechanism for the regression — note `build-cython-ext` got
+>   WORSE at something it nearly aced (10/11→3/11). Both factors, compounding; missing-signal dominant.
+> - **⇒ THE FIX (built + LIVE): capture EVERY variant/round, not just the winner.** `drydock.eratchet`
+>   already has this (`--capture` + `contrastive_pairs()`, docstring: "the RL/preference signal … that a
+>   **winner-only corpus can't provide**") — but the FLEET's `ratchet_evolve.sh` is a separate docker/TUI loop
+>   with the SAME winner-only flaw. Patched both fleet scripts to save each variant's transcript + score to
+>   `ratchet/capture/` + `manifest.tsv` (env `CAPTURE_ROUNDS=1`, default on, additive). New
+>   **`build_pairs.py`** groups by the SHARED `(task, base_ref)` and emits (chosen, rejected) pairs by margin.
+> - **WHY THIS ALSO BEATS THE FRONTIER WALL:** a preference pair needs only *one attempt beat another* — **NOT
+>   a solve**. So it produces signal on tasks the 31B FAILS, which is exactly where the headroom is, and it
+>   comes from the 31B itself (no weak-model style to import). This sidesteps the "fast generator ⇒ easy tasks
+>   ⇒ no headroom" trap the MoE verdict identified. Collection **rides along on the campaign's existing
+>   eratchet runs** — no dedicated GPU time.
+> - **SAFETY NOTE:** both scripts were live (worker 20b mid-run), and bash reads scripts LAZILY — an in-place
+>   edit can make a running instance execute garbage. Patched a copy and **atomic `mv`** (new inode; the
+>   running process keeps the old one). Verified the in-flight eratchet continued cleanly.
+
 > **🏁 2026-08-21 — MoE→31B VERDICT: NULL on generalization + partial-credit REGRESSION. Do not promote.**
 > Full cycle ran end-to-end (collect→harvest→train→convert→leakage-clean A/B eval). **Result:**
 > | arm | generalization (31B FAILS, n=5) | regression (31B PASSES, n=5, leakage-clean) |

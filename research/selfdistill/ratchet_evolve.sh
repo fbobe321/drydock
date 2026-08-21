@@ -65,7 +65,7 @@ render_prompt(){   # per-variant prompt from the tested core; maps spec mode -> 
   "$PY" -c "
 import os,sys; sys.path.insert(0,os.environ['DRYDOCK_SRC'])
 from drydock.ratchet import diversify_prompt
-print(diversify_prompt(open('$TASKS/$task/instruction.md').read(), int('$passed'), int('$total'), '$dpop'))"
+print(diversify_prompt(open('$AUG_INSTR').read(), int('$passed'), int('$total'), '$dpop'))"
 }
 
 drive(){   # one turn through the real TUI with a given prompt
@@ -87,6 +87,17 @@ drive(){   # one turn through the real TUI with a given prompt
 
 say "===== EVOLVE $task (max_rounds=$MAX_ROUNDS budget=${ROUND_BUDGET}s) ====="
 instr="$(cat "$TASKS/$task/instruction.md")"
+# "More information" lever (matches ratchet_solve.sh): append optional per-task
+# domain reference; leaves tests/env untouched.
+if [ -f "$SD/augment/$task.md" ]; then
+  instr="$instr
+
+--- REFERENCE (background domain knowledge — general facts, NOT the solution to this task) ---
+$(cat "$SD/augment/$task.md")"
+fi
+# effective (possibly-augmented) instruction on disk so render_prompt's variants
+# see the reference too, not just the research/crossover modes.
+AUG_INSTR="$(mktemp)"; printf '%s' "$instr" > "$AUG_INSTR"; trap 'rm -f "$AUG_INSTR"' EXIT
 RESEARCH="
 Approach: investigate the actual files/errors first, research the technique empirically, verify with the task's own checker. Do not guess."
 op="exploit"; params='{"variants":1}'; best_ref=""; solved=0; bp=-1; bt=0
@@ -125,6 +136,20 @@ $RESEARCH
     drive "$vp"
     read -r ps pt desc < <(score "$(_ctr "$task")")
     say "round $r op=$op variant=$v/$nvar mode=$mode: $ps/$pt"
+    # ── CONTRASTIVE CAPTURE (2026-08-21) ────────────────────────────────────
+    # Every variant in a round starts from the SAME base_ref but scores differently,
+    # so these are exactly (better, worse) PREFERENCE pairs. The winner-only corpus
+    # (_evolved_traj.json = the solving round only) structurally cannot provide this
+    # — that gap is why the MoE->31B SFT run had nothing ratchet-like to learn.
+    # A pair needs only "one attempt beat another", NOT a solve, so this yields
+    # signal on tasks the model FAILS (where the headroom actually is).
+    if [ "${CAPTURE_ROUNDS:-1}" = 1 ]; then
+      _cd="$OUT/capture/$task"; mkdir -p "$_cd" 2>/dev/null
+      if docker cp "$(_ctr "$task"):/app/.dd_trajectory.json" "$_cd/r${r}_v${v}.json" >/dev/null 2>&1; then
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$task" "$r" "$v" "$mode" "${best_ref:-none}" "${ps:-0}" "${pt:-0}" \
+          >> "$OUT/capture/manifest.tsv"
+      fi
+    fi
     if [ "${ps:-0}" -gt "$best_p" ]; then best_p="$ps"; best_line="$ps $pt $desc"; fi
   done
   read -r ps pt desc <<< "$best_line"
