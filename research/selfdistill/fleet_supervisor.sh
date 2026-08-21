@@ -75,8 +75,22 @@ rebuild_pool(){
 # ── worker keepalive: relaunch a dead/missing worker in tmux (on the POOL) ────
 ensure_worker(){   # ensure_worker <id> <server>
   local id="$1" server="$2"
-  pgrep -f "worker.sh $id " >/dev/null 2>&1 && return 0        # already running
-  tmux has-session -t "wrk_$id" 2>/dev/null && tmux kill-session -t "wrk_$id" 2>/dev/null
+  # LIVENESS = the tmux SESSION, not pgrep. A leftover `tmux new-session -d ... bash
+  # cluster/worker.sh <id> ...` launcher keeps "worker.sh <id>" in its OWN cmdline
+  # after the session dies, so `pgrep -f` returns a FALSE POSITIVE and the supervisor
+  # silently never relaunches — lane 20a sat dead ~10h on 2026-08-21 this way, with
+  # the box at 0% util. pgrep cannot distinguish launcher from worker (both cmdlines
+  # contain the same string), so the session is the only reliable signal.
+  if tmux has-session -t "wrk_$id" 2>/dev/null; then
+    pgrep -f "bash cluster/worker.sh $id " >/dev/null 2>&1 && return 0
+    say "worker $id: tmux session exists but no worker process — recycling"
+    tmux kill-session -t "wrk_$id" 2>/dev/null
+  fi
+  # DO NOT try to "reap stale launcher PIDs" here. A `tmux new-session -d` process can
+  # BE THE TMUX SERVER hosting every session — killing it takes down all workers AND
+  # their ddt driver sessions mid-job. That exact mistake killed 3 lanes and orphaned
+  # 2 in-flight jobs on 2026-08-21. Session-scoped operations only (kill-session is
+  # targeted and safe); never kill a PID matched by cmdline here.
   # CRITICAL: close the supervisor's flock FD (8) in the spawned worker — else the
   # long-lived worker inherits it and holds the lock forever, locking the supervisor
   # out of every future tick (keepalive/refill silently dead). `exec 8>&-` drops it.
