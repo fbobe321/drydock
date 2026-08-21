@@ -60,6 +60,33 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🏁 2026-08-21 — MoE→31B VERDICT: NULL on generalization + partial-credit REGRESSION. Do not promote.**
+> Full cycle ran end-to-end (collect→harvest→train→convert→leakage-clean A/B eval). **Result:**
+> | arm | generalization (31B FAILS, n=5) | regression (31B PASSES, n=5, leakage-clean) |
+> |---|---|---|
+> | base | **0/5 solved**, 4 checks | **1/5 solved**, **21 checks** |
+> | +LoRA | **0/5 solved**, 4 checks | **1/5 solved**, **12 checks** |
+> - **Generalization lift = 0** (0 solves gained; checks net **+0** — caffe +1, filter-js −1). No transfer up.
+> - **Regression: no SOLVE lost** (`build-pmars` held 4/4 both arms) **but −9 checks**: `build-cython-ext`
+>   **10/11 → 3/11 (−7)**, `bn-fit-modify` 2/9 → 0/9 (−2). One-directional: 2 drops, 0 gains.
+> - **⇒ BOTH pre-registered risks landed on the bad side.** (1) **HEADROOM** — the easy tasks the MoE can
+>   solve sit INSIDE the 31B's frontier, so there was nothing to teach; the low starting loss (**1.13** vs
+>   heredity's 4.68/5.24) foreshadowed exactly this. (2) **DISTILLING DOWN** — training the strong 31B to
+>   imitate a weak 4B-active model's solution style applied real downward pressure on work it already did well.
+> - **THE STRUCTURAL TENSION (the real lesson):** the throughput logic was sound and every mechanical part
+>   worked — MoE ran **59 tok/s (~4×)**, did NOT loop on easy tasks, and built 14 verified traces in ~5h vs the
+>   31B's ~1–2 solves/day. But *fast generator ⟹ only easy tasks ⟹ no headroom*. To help the 31B the traces
+>   must come from tasks the 31B FAILS — which the weaker MoE cannot solve either. **Speed doesn't buy
+>   usable data; the binding constraint is the FRONTIER, not throughput.**
+> - **Honest limits:** n=5/arm, single stochastic attempt, 14-trace corpus, 60 steps. Suggestive, NOT proof —
+>   `build-cython-ext` −7 could be partly variance. A full 35/40 sweep would confirm. The cheap spot-check was
+>   chosen precisely so a null cost ~4h instead of ~10h. The **self-trace control arm was NOT run** (it needs
+>   ~1.5–2 days of 31B self-collection), so "cross-model specifically" isn't isolated from "small corpus".
+> - Artifacts: `adapters/moe-easy-20260820-2147`, `Models/moe-easy-20260820-2147-lora.gguf` (245M),
+>   `moe_collect/eval_results.csv`, `moe_eval.sh`. Fleet restored (.20 server back, .22 back to QAT
+>   collection config, campaign resumed **57/89**). Loss curve: 1.1257 → **0.1215** (mean_last_10 0.2006) —
+>   did NOT collapse to heredity's ~0.01, so this was not pure memorization either.
+
 > **🧪 2026-08-20 — MoE-AS-FAST-GENERATOR EXPERIMENT (26B-A4B → 31B); SMOKE GATE PASSED, collecting.**
 > Operator idea: self-distill data creation is throughput-starved (dense 31B = slow inference; hard
 > tasks flatline = zero data). Use the fast **Gemma-4 26B-A4B MoE (~4B active)** as a high-throughput

@@ -3,6 +3,18 @@
 Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
+> **Progress (2026-08-21) — MoE fast-generator VERDICT: null lift + partial-credit regression; the binding
+> constraint is the FRONTIER, not throughput.** The 26B-A4B→31B experiment ran end-to-end and answered
+> cleanly. Generalization lift **0** (0/5 → 0/5 on tasks the 31B fails; checks net +0). Regression lost no
+> solve but **−9 checks** (build-cython-ext 10/11→3/11, bn-fit-modify 2/9→0/9). Both pre-registered risks
+> landed badly: the easy tasks a fast generator can solve sit **inside** the 31B's frontier (no headroom —
+> the 07-21 lesson recurring), and imitating a weak 4B-active model's style applied downward pressure.
+> **The mechanical hack worked** (MoE ~4× faster, no looping on easy tasks, 14 verified traces in ~5h vs
+> ~1–2/day) — but *fast generator ⟹ easy tasks ⟹ nothing to teach*. Useful traces must come from tasks the
+> 31B FAILS, which a weaker model also cannot solve. Adapter NOT promoted; the regression guard did its job.
+> Caveats: n=5/arm, single attempt, 14 traces, and the self-trace control was not run, so "cross-model" isn't
+> isolated from "small corpus". Full detail: `RESUME.md` 2026-08-21 block. See [[project_compass_mission]].
+
 > **Progress (2026-08-20) — MoE fast-generator experiment (throughput lever for the distillation loop).**
 > Self-distillation has been throughput-starved (the dense 31B is slow; hard tasks flatline and yield no
 > data). New lever: use the fast **Gemma-4 26B-A4B MoE (~4B active, ~4× the 31B's tok/s)** as a
