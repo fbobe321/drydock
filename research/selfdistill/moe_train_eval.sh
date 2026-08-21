@@ -17,7 +17,11 @@ CL="$SD/cluster"
 OUT="$SD/moe_collect"
 LOG="$OUT/train.log"
 PY_TRAIN=/data3/compass/.venv-train/bin/python
+# NOTE: PYT is a .22-ONLY path. The gguf convert runs ON .20 via ssh, where
+# miniconda3 does NOT exist (that mistake failed the first convert instantly).
+# Anything executed remotely must use PY20, which exists on .20 and has torch.
 PYT=/home/bobef/miniconda3/bin/python3
+PY20=/data3/compass/.venv-train/bin/python
 MODEL_HF=/data3/Models/gemma-4-31B-it-hf
 LLAMA=/data3/build/llama.cpp
 T20=bobef@192.168.50.20
@@ -83,7 +87,7 @@ say "TRAIN done -> $ADAPTER (on .20)"
 # ── 5. convert LoRA -> gguf (for llama.cpp serving in the eval) ──────────────
 GGUF="/data3/Models/moe-easy-$STAMP-lora.gguf"
 say "converting adapter -> $GGUF"
-ssh20 3600 "PYTHONPATH=$LLAMA/gguf-py $PYT $LLAMA/convert_lora_to_gguf.py $ADAPTER \
+ssh20 3600 "PYTHONPATH=$LLAMA/gguf-py $PY20 $LLAMA/convert_lora_to_gguf.py $ADAPTER \
   --base $MODEL_HF --outfile $GGUF --outtype f16" >>"$LOG" 2>&1 \
   || { say "CONVERT FAILED"; exit 1; }
 say "DONE: adapter=$ADAPTER gguf=$GGUF (both on .20)"
