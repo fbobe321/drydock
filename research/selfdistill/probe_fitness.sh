@@ -17,7 +17,7 @@
 #   4  + it produced a non-source OUTPUT artifact
 set -u
 ctr="${1:?container}"
-docker exec "$ctr" bash -s <<'PROBE' 2>/dev/null || echo 0
+docker exec -i "$ctr" bash -s <<'PROBE' 2>/dev/null || echo 0
 set -u
 cd /app 2>/dev/null || { echo 0; exit 0; }
 score=0
