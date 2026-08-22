@@ -3,6 +3,22 @@
 Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
+> **Progress (2026-08-22) — MANUFACTURING GRADIENT: fine fitness + a checker-independent probe + a
+> logic-pattern ladder.** Selection can only climb a gradient, and on ~80% of the hard residue there wasn't
+> one: measured, 6 of 7 sampled tasks were pure flatlines, several with a single monolithic test (score is
+> structurally BINARY). Three levers shipped. (1) **Recovered a signal we already owned** — `ctrf_fitness.py`
+> grades failing checks on a sub-goal ladder (dead → crashed → asserted → pass), but only the plain ratchet
+> used it; the eratchet kept a coarse `(passed,total)` on exactly the hard tasks where gradient is scarcest.
+> Now wired in. (2) **Tier-C proxy gradient** (`probe_fitness.sh`): deterministic milestones observable
+> *before* any test passes — wrote source → syntactically valid → entry point runs → artifact produced.
+> Inspects `/app` only, never the checker, so it stays anti-cheat clean with no LLM judge. (3) **Logic-solving
+> pattern ladder**: the evolutionary "modes" were search-control knobs (how far to jump), not solving
+> approaches (what to try), so variants explored the same logic at different temperatures. Ten explicit
+> patterns now rotate per variant — and, critically, the strategy becomes the QD descriptor when no check
+> passes, fixing the structural reason flatlines never diversify (empty descriptor ⇒ always one niche ⇒
+> diversify/fan-out impotent). Fitness is now lexicographic (passed, partial, probe). Full detail:
+> `RESUME.md` 2026-08-22 block.
+
 > **Progress (2026-08-21) — MoE fast-generator VERDICT: null lift + partial-credit regression; the binding
 > constraint is the FRONTIER, not throughput.** The 26B-A4B→31B experiment ran end-to-end and answered
 > cleanly. Generalization lift **0** (0/5 → 0/5 on tasks the 31B fails; checks net +0). Regression lost no

@@ -60,6 +60,40 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🧭 2026-08-22 — MANUFACTURING GRADIENT WHERE THERE IS NONE (3 levers shipped).** Operator: "how do we
+> produce a gradient where there isn't one? … we need a list of logic solving patterns."
+> **Diagnosis first — measured, not assumed.** ~140 of 175 captured rows were PURE flatlines (polyglot-c-py
+> 31× `0/1`, polyglot-rust-c 31× `0/1`, protein-assembly 26× `0/1`, qemu-alpine-ssh 21× `0/1`, regex-chess
+> 26× `0/4`); only `path-tracing-reverse` had gradient. Several are `total=1` — a single monolithic test, so
+> the score is structurally BINARY. Campaign frozen 60/89 ~20h while near-misses (**sam-cell-seg 8/9**,
+> video-processing 4/5, path-tracing 4/5) sat PENDING but unreached, because a tier-3 run holds a lane ~8h.
+> - **ROOT GAP FOUND: eratchet was throwing the fine gradient away.** `ctrf_fitness.py` (built 08-07) grades
+>   each failing check on a sub-goal ladder — **dead 0 → crashed .33 → asserted .66 → pass 1** — but only the
+>   PLAIN ratchet used it. eratchet did its own inline parse keeping just `(passed,total,names)`, i.e. the
+>   COARSE binary signal, on exactly the hard tier-3 residue where gradient is scarcest. **Now wired in**
+>   (same parser, no logic drift). Verified: `call_failed`/`failed`→330, assertion→660, collection error→0.
+> - **LEVER 2 — TIER-C PROXY GRADIENT (`probe_fitness.sh`), independent of the checker.** The checker ladder
+>   collapses to a flat 0 when the solution never runs — no information exactly where we need it. The probe
+>   scores 0–4 from milestones observable BEFORE any test passes: wrote source → syntactically valid
+>   (py_compile/gcc/cargo/node) → an entry point RUNS without traceback → produced an output artifact.
+>   Deterministic, inspects `/app` ONLY (never `/tests`, never the checker) ⇒ anti-cheat clean, no LLM judge.
+> - **LEVER 3 — LOGIC-SOLVING PATTERN LADDER + strategy-as-NICHE.** eratchet's modes
+>   (continue/rethink/diversify/fanout) are SEARCH-CONTROL knobs — they set how far to jump, not WHAT to try,
+>   so variants explored the same logic at different temperatures. Added 10 distinct approaches (SPEC-LITERAL,
+>   WORK-BACKWARDS, ENVIRONMENT-FIRST, MINIMAL-REPRO, REFERENCE-IMPL, INSTRUMENT, BRUTE-FORCE-FIRST, DECOMPOSE,
+>   INVARIANT-CHECK, BISECT), rotated deterministically over (round, variant) — verified to spread across 9
+>   distinct strategies in 3×3. **The deeper fix:** QD keys niches on WHICH checks pass, so at 0/N every
+>   variant has an empty descriptor → **always exactly one niche** → `diversify`/`fanout` are structurally
+>   impotent. That is *why* flatlines never diversify. The strategy tag now becomes the descriptor when no
+>   check passes, giving the archive an axis to spread along.
+> - **Fitness is now lexicographic (passed, partial, probe)**; the flatline early-abort only counts a round
+>   flat when NOTHING moved on any axis (else a task climbing dead→crashed→asserting behind a constant `0/N`
+>   would be cut). Round logs now print `partial=` and `probe=` — without them we could not tell a genuinely
+>   dead task from one quietly making progress.
+> - Files: `ratchet_evolve.sh`, `probe_fitness.sh`, `ctrf_fitness.py` (reused). All installed by **atomic mv**
+>   (bash reads scripts lazily; in-flight jobs keep the old inode). Near-miss band seeded; `video-processing`
+>   already picked up by a lane.
+
 > **🔍 2026-08-21 — WHY IT FAILED (diagnosed, not guessed) + the FIX now collecting: CONTRASTIVE PAIRS.**
 > Operator asked the right question: did it fail to pick up the RATCHET behavior, or was it poisoned by the
 > 4B's weakness? **Evidence says: mostly the former — the ratchet behavior was never in the data.**

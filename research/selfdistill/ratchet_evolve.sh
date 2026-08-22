@@ -31,19 +31,26 @@ say(){ echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 _ctr(){ echo "ddt_$1"; }
 
 # fitness + behaviour descriptor from the REAL checker; strips /tests after (anti-cheat).
-score(){   # echoes: "<passed> <total> <descriptor-json>"
+score(){   # echoes: "<passed> <total> <partial_milli> <descriptor-json>"
   local ctr="$1"
   docker exec "$ctr" mkdir -p /tests /logs/verifier >/dev/null 2>&1
   docker cp "$TASKS/$task/tests/." "$ctr:/tests/" >/dev/null 2>&1
   timeout 340 docker exec "$ctr" bash /tests/test.sh >/dev/null 2>&1
-  docker exec "$ctr" cat /logs/verifier/ctrf.json 2>/dev/null | "$PY" -c "
+  # FINE FITNESS: reuse ctrf_fitness.py (the SAME parser the plain ratchet uses) so the
+  # sub-goal ladder — dead 0 / crashed .33 / asserted .66 — is not thrown away here.
+  # eratchet previously kept only (passed,total), i.e. a BINARY signal on single-test
+  # tasks, on exactly the hard tier-3 residue where gradient is scarcest.
+  local _c _pf _names
+  _c=$(docker exec "$ctr" cat /logs/verifier/ctrf.json 2>/dev/null)
+  _pf=$(printf '%s' "$_c" | "$PY" "$SD/ctrf_fitness.py" 2>/dev/null)   # "passed tests partial_milli"
+  _names=$(printf '%s' "$_c" | "$PY" -c "
 import sys,json
 try:
-  d=json.load(sys.stdin)['results']; s=d['summary']
-  names=[t.get('name') for t in d.get('tests',[]) if t.get('status')=='passed']
-  print(s.get('passed',0), s.get('tests',0), json.dumps(names))
-except Exception: print(0,0,'null')
-"
+  d=json.load(sys.stdin)['results']
+  print(json.dumps([t.get('name') for t in d.get('tests',[]) if t.get('status')=='passed']))
+except Exception: print('null')
+")
+  echo "${_pf:-0 0 0} ${_names:-null}"
   docker exec "$ctr" rm -rf /tests /logs >/dev/null 2>&1
 }
 
@@ -59,6 +66,38 @@ graft_donor(){   # crossover: make the donor's solution visible under /app_donor
   docker cp "$tmp:/app" "/tmp/$tmp" >/dev/null 2>&1 && docker cp "/tmp/$tmp" "$ctr:/app_donor" >/dev/null 2>&1
   docker rm -f "$tmp" >/dev/null 2>&1; rm -rf "/tmp/$tmp" >/dev/null 2>&1
 }
+# ── LOGIC-SOLVING PATTERN LADDER ──────────────────────────────────────────────
+# The eratchet's `mode` values (continue/rethink/diversify/fanout) are SEARCH-CONTROL
+# operators — they say how hard to jump, not WHAT to try. Variants therefore explored
+# the same logic at different temperatures. These are distinct problem-solving
+# approaches, rotated per (round, variant) so a stuck task gets genuinely different
+# attacks. They also become a QD descriptor axis (see desc_with_strategy) so a 0/N task
+# has something to speciate on instead of collapsing to niches=1.
+STRATEGIES=(
+  "SPEC-LITERAL: re-read the instruction and enumerate EVERY stated requirement as an explicit checklist; satisfy them one by one and state which line of the spec each change serves."
+  "WORK-BACKWARDS: identify the exact file/output the task must produce. Create it first (even with placeholder content), then make it correct."
+  "ENVIRONMENT-FIRST: before writing logic, verify the toolchain, dependencies, versions and paths actually present. Many failures here are wrong assumptions about the environment, not wrong algorithms."
+  "MINIMAL-REPRO: build the smallest thing that runs end-to-end and produces SOME output, then grow it toward the requirement."
+  "REFERENCE-IMPL: find the canonical algorithm or library for this problem (search if needed) and adapt a known-correct implementation rather than inventing one."
+  "INSTRUMENT: add prints/logging and RUN the code. Read the actual observed behaviour and fix what you SEE, instead of reasoning about what you assume happens."
+  "BRUTE-FORCE-FIRST: get any correct output by the simplest possible means, ignoring elegance and performance; only then meet the remaining constraints."
+  "DECOMPOSE: split the task into independent subproblems, solve and verify each one separately, then compose them."
+  "INVARIANT-CHECK: state what MUST be true of a correct output, write your own assertion for it, and iterate until your own check passes."
+  "BISECT: find where behaviour first diverges from expectation by narrowing the failing region step by step."
+)
+pick_strategy(){   # deterministic rotation over (round, variant) — reproducible, no RNG
+  local idx=$(( ( ($1 - 1) * 3 + ($2 - 1) ) % ${#STRATEGIES[@]} ))
+  echo "$idx"
+}
+# QD descriptor axis. When NO check passes the passing-name list is empty for every
+# variant, so the archive sees one niche and diversify/fan-out have nothing to spread
+# along — the structural reason flatlines never diversify. Tag the strategy in that
+# case so distinct approaches occupy distinct niches.
+desc_with_strategy(){   # <desc-json> <strategy-idx>
+  local d="$1" i="$2"
+  if [ -z "$d" ] || [ "$d" = "null" ] || [ "$d" = "[]" ]; then echo "[\"strat:$i\"]"; else echo "$d"; fi
+}
+
 render_prompt(){   # per-variant prompt from the tested core; maps spec mode -> diversify_prompt op
   local mode="$1" passed="$2" total="$3" dpop
   case "$mode" in rethink) dpop=diversify;; restart) dpop=restart;; *) dpop=continue;; esac
@@ -115,7 +154,7 @@ for r in $(seq 1 "$MAX_ROUNDS"); do
   nvar=$(echo $modes | wc -w)
 
   # ---- run the round; keep the best variant (exploit-first guarantees ≥ plain ratchet) ----
-  best_line=""; best_p=-1; v=0
+  best_line=""; best_p=-1; best_k=-1; v=0
   for mode in $modes; do
     v=$((v+1))
     if [ "$mode" = "crossover" ]; then
@@ -131,11 +170,18 @@ $RESEARCH" ;;
 $RESEARCH
 
 [CROSSOVER] A verifier passes $bp/$bt. A DIFFERENT working solution is mounted read-only at /app_donor — it already passes checks yours misses ($XWANTS). Inspect /app_donor, fold ITS approach for those checks into /app WITHOUT breaking what already passes." ;;
-      *) vp="$(render_prompt "$mode" "$bp" "$bt")" ;;
+      *) vp="$(render_prompt "$mode" "$bp" "$bt")"
+         _si=$(pick_strategy "$r" "$v")
+         vp="$vp
+
+[APPROACH] ${STRATEGIES[$_si]}" ;;
     esac
     drive "$vp"
-    read -r ps pt desc < <(score "$(_ctr "$task")")
-    say "round $r op=$op variant=$v/$nvar mode=$mode: $ps/$pt"
+    read -r ps pt pf desc < <(score "$(_ctr "$task")")
+    probe=$(bash "$SD/probe_fitness.sh" "$(_ctr "$task")" 2>/dev/null || echo 0)
+    # log ALL fitness axes: without partial/probe visible we cannot tell a task that is
+    # genuinely dead from one climbing dead->crashed->asserting behind a constant 0/N.
+    say "round $r op=$op variant=$v/$nvar mode=$mode strat=${_si:--}: $ps/$pt partial=${pf:-0} probe=${probe:-0}"
     # ── CONTRASTIVE CAPTURE (2026-08-21) ────────────────────────────────────
     # Every variant in a round starts from the SAME base_ref but scores differently,
     # so these are exactly (better, worse) PREFERENCE pairs. The winner-only corpus
@@ -150,13 +196,20 @@ $RESEARCH
           >> "$OUT/capture/manifest.tsv"
       fi
     fi
-    if [ "${ps:-0}" -gt "$best_p" ]; then best_p="$ps"; best_line="$ps $pt $desc"; fi
+    # LEXICOGRAPHIC pick: passes first, then sub-goal partial, then the checker-independent
+    # probe. On a 0/N task the first two are flat, so the probe is what breaks the tie —
+    # that is the whole point: a gradient where the checker provides none.
+    _k=$(( ${ps:-0}*1000000 + ${pf:-0}*100 + ${probe:-0} ))
+    if [ "$_k" -gt "${best_k:--1}" ]; then
+      best_k="$_k"; best_p="$ps"; best_line="$ps $pt $pf $probe $desc"
+    fi
   done
-  read -r ps pt desc <<< "$best_line"
+  read -r ps pt pf probe desc <<< "$best_line"
+  desc=$(desc_with_strategy "$desc" "$(pick_strategy "$r" 1)")
 
   # ---- snapshot this round + let the bridge decide the next move ----
   ref=$(commit_ref "$r"); [ -z "$ref" ] && ref="none"
-  echo "{\"id\":\"g$r\",\"passed\":${ps:-0},\"total\":${pt:-0},\"descriptor\":${desc:-null},\"snapshot\":\"$ref\",\"cost\":$r}" > "$OUT/${task}.payload.json"
+  echo "{\"id\":\"g$r\",\"passed\":${ps:-0},\"total\":${pt:-0},\"partial\":${pf:-0},\"probe\":${probe:-0},\"descriptor\":${desc:-null},\"snapshot\":\"$ref\",\"cost\":$r}" > "$OUT/${task}.payload.json"
   dec=$("$PY" "$SD/evolve_bridge.py" record "$STATE" "$OUT/${task}.payload.json")
   op=$(echo "$dec"      | "$PY" -c "import json,sys;print(json.load(sys.stdin)['operator'])")
   params=$(echo "$dec"  | "$PY" -c "import json,sys;print(json.dumps(json.load(sys.stdin)['params']))")
@@ -175,14 +228,18 @@ $RESEARCH
   # near-misses like sam-cell-seg 8/9 sat unreached in the queue.
   # Bail after FLAT_ABORT_ROUNDS such rounds; the supervisor's auto-park then keys
   # off the recorded best=0 exactly as it would after a full run.
-  if [ "${bp:-0}" -eq 0 ] && [ "${niches:-1}" -le 1 ]; then
+  # A round only counts as FLAT if nothing moved on ANY axis — passes, sub-goal partial,
+  # or the checker-independent probe. Before fine fitness was wired in, "best=0" looked
+  # flat even while the solution went dead -> crashing -> asserting, which is real progress.
+  _prog=$(( ${pf:-0} + ${probe:-0} ))
+  if [ "${bp:-0}" -eq 0 ] && [ "${niches:-1}" -le 1 ] && [ "$_prog" -le "${best_prog:-0}" ]; then
     flat=$((${flat:-0}+1))
     if [ "$flat" -ge "${FLAT_ABORT_ROUNDS:-5}" ]; then
       say "FLATLINE ABORT after $r rounds (best=0/$bt, niches=$niches, $flat flat) — freeing the lane"
       break
     fi
   else
-    flat=0
+    flat=0; best_prog="$_prog"
   fi
   if [ "$(echo "$dec" | "$PY" -c "import json,sys;print(json.load(sys.stdin)['solved'])")" = "True" ]; then
     solved=1; say "🎉 SOLVED $task at round $r ($bp/$bt) via evolutionary ratchet"
