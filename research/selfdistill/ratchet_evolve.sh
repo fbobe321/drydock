@@ -165,6 +165,25 @@ $RESEARCH
   bt=$(echo "$dec"      | "$PY" -c "import json,sys;print(json.load(sys.stdin)['best_total'])")
   niches=$(echo "$dec"  | "$PY" -c "import json,sys;print(json.load(sys.stdin)['niches'])")
   say "round $r: best=$bp/$bt niches=$niches next-op=$op"
+  # ── FLATLINE EARLY-ABORT (2026-08-22) ───────────────────────────────────────
+  # A task at best=0 with a SINGLE niche has never passed a check nor found any
+  # behavioural variation — there is nothing for selection to climb, and every
+  # remaining round restarts from a 0-progress state. Running the full 16 rounds
+  # costs a lane ~8h for provably zero signal (no solve, no partial gradient, and
+  # no contrastive pairs, since all variants score identically). Measured on
+  # 2026-08-22: 6 of 7 captured tasks were pure flatlines (~140 of 175 rows) while
+  # near-misses like sam-cell-seg 8/9 sat unreached in the queue.
+  # Bail after FLAT_ABORT_ROUNDS such rounds; the supervisor's auto-park then keys
+  # off the recorded best=0 exactly as it would after a full run.
+  if [ "${bp:-0}" -eq 0 ] && [ "${niches:-1}" -le 1 ]; then
+    flat=$((${flat:-0}+1))
+    if [ "$flat" -ge "${FLAT_ABORT_ROUNDS:-5}" ]; then
+      say "FLATLINE ABORT after $r rounds (best=0/$bt, niches=$niches, $flat flat) — freeing the lane"
+      break
+    fi
+  else
+    flat=0
+  fi
   if [ "$(echo "$dec" | "$PY" -c "import json,sys;print(json.load(sys.stdin)['solved'])")" = "True" ]; then
     solved=1; say "🎉 SOLVED $task at round $r ($bp/$bt) via evolutionary ratchet"
     docker cp "$(_ctr "$task"):/app/.dd_trajectory.json" "$OUT/${task}_evolved_traj.json" >/dev/null 2>&1; break
