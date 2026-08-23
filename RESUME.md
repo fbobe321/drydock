@@ -60,6 +60,39 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **📏 2026-08-23 — THE HONEST BASELINE (running): 63/89 is NOT leaderboard-comparable; measure the DELTA.**
+> Context: tbench-2.1 leaderboard shows #10 Claude Code/Sonnet-5 **74.6%**, #12 Claude Code/Opus-4.7 **68.9%**,
+> so our **63/89 = 70.8%** *looks* like ~11th. **It is not the same measurement, and must never be published
+> as one.** Submissions run `harbor run … -k 5` = **5 INDEPENDENT fresh attempts, no score feedback**. Our
+> number comes from up to **16 rounds × 2–3 variants (~48 attempts/task)**, snapshot/rollback carrying state
+> BETWEEN attempts, tasks re-queued at escalating tiers over WEEKS, and — decisively — **the hidden checker's
+> score fed back into the next prompt** ("you pass 2/3, advance without breaking"). We never show the model
+> the TESTS (anti-cheat deletes `/tests` pre-snapshot) but we do show it the SCORE and select on it across
+> ~48 attempts: that is **test-time RL against the evaluation metric**. Legitimate technique, non-comparable
+> number. Claiming ~70% vs the leaderboard would be debunked on the first protocol question — and given the
+> v2 quarantine + the 3.1.16 phone-home incident, a debunked benchmark claim is the one cost this project
+> cannot pay twice.
+> - **⇒ MEASURING THE COMPARABLE QUANTITY.** `baseline_sweep.sh` + `baseline_report.py`: **ONE attempt per
+>   task**, no rounds/snapshot/rollback/continuation, **no score feedback** (`control_noratchet.sh`, which
+>   uses the SAME research nudge as ratchet round 1 — a fair control, not a handicap). Running now: **89
+>   tasks × k=1 across 2 streams on .20** (~7h), campaign keeps **1 lane (21a)**.
+> - **STATS NOTE (corrected a bad first instinct):** for an AGGREGATE pass rate, task-to-task variance
+>   dominates run-to-run variance, so **k=1 over all 89 (89 runs, ~±5%)** estimates the mean BETTER than
+>   k=5 over 25 tasks (125 runs, ~±9%). Fewer runs *and* a tighter number. Raise K later for publication-grade
+>   per-task rates. Report uses a **Wilson** interval (well-behaved at small n / extreme p).
+> - **THE PUBLISHABLE CLAIM** is the delta: *"Drydock + verifier-guided test-time search lifts Gemma-4-31B
+>   from X% to 70.8% on Terminal-Bench 2.1."* X is unknown — the old `base_solved.txt` ~10 tasks (~11%) is a
+>   known UNDERCOUNT (predates driving through the real TUI + research nudge; many later solves were round-1).
+>   If X lands 35–45%, "search nearly doubles a 31B's agentic capability" stands on its own with no comparison
+>   games. **The paper is systems + rigorous NEGATIVE results** (heredity 0/6 transfer ×2; MoE→31B null+
+>   regression; winner-only corpora can't teach recovery; binary pass/fail destroys the gradient search needs)
+>   — not a SOTA claim. Ablation switches already exist: `control_noratchet.sh`, `FINE_FITNESS=0/1`, plain-vs-eratchet.
+> - Files: `baseline_sweep.sh` (resumable, flock'd CSV, container-collision guard), `baseline_report.py`,
+>   `baseline/baseline_results.csv`. `baseline_sweep.sh` added to `experiment_active()` so the supervisor
+>   won't relaunch the freed .20 workers. Their 2 in-flight jobs were closed as
+>   `orphaned-by-baseline-reallocation` and re-queued (NOT scored as task failures — that would feed false
+>   flatline evidence to the auto-park).
+
 > **🧭 2026-08-22 — MANUFACTURING GRADIENT WHERE THERE IS NONE (3 levers shipped).** Operator: "how do we
 > produce a gradient where there isn't one? … we need a list of logic solving patterns."
 > **Diagnosis first — measured, not assumed.** ~140 of 175 captured rows were PURE flatlines (polyglot-c-py

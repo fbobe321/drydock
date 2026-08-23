@@ -46,7 +46,7 @@ experiment_active(){
   # in-flight jobs to end, with stopped workers deliberately left down) before handing
   # off to the trainer. If the supervisor kept relaunching those workers they'd claim
   # fresh jobs and the drain would never complete.
-  pgrep -f 'compound_measure.sh|ml_suite_sweep.sh|probe_mr.sh|probe_band.sh|moe_train_eval.sh|moe_orchestrate.sh' >/dev/null 2>&1
+  pgrep -f 'compound_measure.sh|ml_suite_sweep.sh|probe_mr.sh|probe_band.sh|moe_train_eval.sh|moe_orchestrate.sh|baseline_sweep.sh' >/dev/null 2>&1
 }
 
 # ── unified task pool: one namespace symlinking EVERY suite (+ generated) ─────

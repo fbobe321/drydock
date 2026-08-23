@@ -3,6 +3,20 @@
 Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
+> **Progress (2026-08-23) — MEASURING THE HONEST BASELINE (the number that makes the result publishable).**
+> The campaign's **63/89 = 70.8%** on Terminal-Bench 2.1 would sit ~11th on the public leaderboard (#10 =
+> 74.6%), but it is **not the same measurement** and will not be presented as one. Leaderboard entries are 5
+> independent fresh attempts with no score feedback; ours is verifier-guided test-time search — ~48
+> attempts/task, state carried between attempts, weeks of re-queuing, and the checker's score fed into the
+> next prompt. That is optimization against the evaluation metric: a legitimate technique producing a
+> non-comparable number. Now measuring the comparable quantity — one attempt per task, no rounds, no score
+> feedback — across all 89 tasks (k=1 chosen over k=5-on-a-subset because task-to-task variance dominates, so
+> it estimates the mean with fewer runs and a tighter CI). **The intended contribution is the DELTA**
+> ("search lifts a local 31B from X% to 70.8%") **plus rigorous negative results** — self-distillation on
+> verified solves does not generalize (2 independent runs), cross-model MoE→31B gives null lift with
+> regression, winner-only corpora structurally cannot teach recovery, and binary pass/fail destroys the
+> gradient that search requires. Not a SOTA claim. Full detail: `RESUME.md` 2026-08-23 block.
+
 > **Progress (2026-08-22) — MANUFACTURING GRADIENT: fine fitness + a checker-independent probe + a
 > logic-pattern ladder.** Selection can only climb a gradient, and on ~80% of the hard residue there wasn't
 > one: measured, 6 of 7 sampled tasks were pure flatlines, several with a single monolithic test (score is
