@@ -60,6 +60,70 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🧠 2026-08-23 (later) — STRATEGY REFRAME + the generalization question, made measurable.**
+> Three threads converged today. Read this block before deciding what the project IS.
+> - **① REFRAME: the claim is SEARCH-AS-CAPABILITY-SUBSTITUTION, not benchmark placement.** DeepSeek reports
+>   V4-Pro **87.9 on TB 2.1** — above the #1 public entry (83.8) — and reports it with the harness in
+>   **"minimal mode"**. That detail is the whole insight: **a strong model needs little scaffolding; a weak
+>   one needs a lot.** Our data is the same curve from the other end (a 31B needing ~48 attempts + verifier
+>   feedback to reach 70.8%). So the durable research question is NOT "can a 31B compete" (it can't, and the
+>   frontier moves monthly) but **"how much capability can test-time search buy, and where does that
+>   substitution stop paying?"** That framing survives frontier progress; a placement claim does not.
+> - **② DeepSeek-harness teardown (cloned, read — not the hype articles).** 2472 TS files, `packages/`:
+>   acp api compaction context goal **guard** hooks jobs llm lsp mcp plan sandbox session **skill** spill
+>   **subagent** terminal **todo** workflow workspace. **Drydock independently converged on ~the same
+>   subsystem decomposition** (compaction, loop-guards, jobs, skills, todo/plan, subagents, MCP, sandbox);
+>   difference is packaging (their swappable plugins vs our flat modules), not conception. **Their
+>   `repeat-tool-reminder` is nearly line-for-line our `loop_detect.py`** — *"advisory loop-breaker… never
+>   vetoes or rewrites a call… the decision stays entirely with the model"*, escalating thresholds [3,5,8]
+>   vs our 2/3/5+. Two teams, same answer ⇒ the **advisory-never-blocking rule is validated**. Their
+>   `timeout-policy` = the idle-watchdog we shipped 08-21.
+>   **THE GAP THAT MATTERS: they do NO test-time search.** Grepped `packages/core/agent` +
+>   `packages/subagent` for checker/verifier/score-retry/rollback — **nothing**. A SOTA harness leaves that
+>   layer empty ⇒ the ratchet is our distinct contribution; we should NOT compete on harness features
+>   (converged) or distribution (unwinnable — 95k stars in 2 days is a brand/launch outcome).
+>   Also: their **`BENCHMARK.md` is a 3-line stub** — the 87.9 has no published protocol, so **our full
+>   protocol + ablations will be MORE reproducible than theirs**. One line is still useful evidence for us:
+>   *"use separate workspaces and session IDs for independent benchmark tasks"* = per-task isolation, the
+>   opposite of our state-carrying snapshot/rollback — independent confirmation our number isn't comparable.
+> - **③ DOES THE SCAFFOLDING HELP ORDINARY WORK? (the operator's question) — separate the two levers.**
+>   **The harness** needs no verifier and transfers unconditionally (evidence: `base_solved.txt` ~10 is a
+>   known undercount once driven through the real TUI + research nudge). **The search** needs a fitness
+>   signal — but "hidden benchmark checker" is only ONE source. Already shipped for the everyday case:
+>   `drydock/ratchet.py::Verifier` = *"the USER'S own tests/build/lint"* + `detect_verifier()`
+>   (cargo/pytest/npm/make), so bare `/ratchet <goal>` works in a real repo. **Fitness ladder when there are
+>   no tests:** (a) compile the stated goal into an executable check, authored BEFORE the solution and
+>   human-approved ONCE (cheap: approve 1 check, not 48 attempts); (b) quantitative goals score themselves
+>   (ms, bytes, lint count, type coverage — CONTINUOUS gradients, better than binary); (c) **differential /
+>   behavioural-equivalence** (run old vs new, diff outputs — the best trick for refactors and bug-fixes, no
+>   spec needed); (d) one golden example → distance; (e) property/metamorphic invariants; (f) the
+>   checker-independent `probe_fitness.sh` floor. **Risk to state plainly: search optimizes proxies
+>   ruthlessly — weak check + strong search = confident wrongness (reward hacking).** LLM-as-judge is
+>   self-grading and gameable: fine as a tiebreaker, bad as the thing you climb.
+> - **④ MEASUREMENT GAP FOUND:** the running baseline is single-attempt **WITH** Drydock, so harness value is
+>   baked in and invisible. Planned 3rd arm (same 89, single attempt, MINIMAL scaffolding) decomposes it:
+>   **raw model → +harness → +search**. That is a much stronger paper than the 2-point version.
+> - **⑤ NEW EXPERIMENT QUEUED — `selfcheck_probe.sh` (turn the benchmark into a testbed for the NO-benchmark
+>   case).** Operator's idea: have the agent write its OWN scorecard from `instruction.md` alone, then score
+>   the same solution with BOTH it and the official checker. **Headline = FALSE-PASS rate** (self✓ true✗) =
+>   exactly how far a self-authored target can be trusted as a SEARCH objective. Validity guards:
+>   (1) **no leakage** — verified `ddt_up` never copies `/tests` (only `ddt_verify`, at scoring time);
+>   (2) **frozen + ordered** — check written BEFORE any solution and copied to the host, solve runs in a
+>   FRESH container so it can't be reverse-engineered or edited to fit; (3) **same solver** as
+>   `control_noratchet.sh`, so it measures CHECK quality not a different solver. 12 tasks spanning
+>   easy/near-miss/hard, queued behind the baseline. Expect false-FAIL to be common (agent checks over-assert);
+>   false-PASS is the real finding. `selfcheck_report.py` prints the confusion matrix.
+> - **⑥ PUBLICATION STRATEGY (decided).** **No exclusivity / no "first shot" to a lab** — it costs the public
+>   timestamp, independent readers, and provenance, and buys nothing. **Publish openly** (arXiv or clean
+>   writeup + reproducible repo), ask for nothing, engage on substance. If a specific lab is the goal, apply
+>   through normal channels and let the artifact be the evidence; a private research email is a worse version
+>   of both. **The paper is systems + rigorous NEGATIVE results** (heredity 0/6 transfer ×2 · MoE→31B null +
+>   regression · winner-only corpora can't teach recovery · binary pass/fail destroys the search gradient)
+>   **plus the delta** — NOT a SOTA claim, which would be debunked on the first protocol question.
+>   **Ablations are load-bearing**: `control_noratchet.sh`, `FINE_FITNESS=0/1`, plain-vs-eratchet.
+> - **LIVE NUMBERS 09:08:** baseline **7/89 done**, interim **28.6%** (CI [8.2, 64.1] — far too early to read),
+>   campaign **63/89**. Claim shape the report prints: *"…lifts Gemma-4-31B from X% to 71% on TB 2.1"*.
+
 > **📏 2026-08-23 — THE HONEST BASELINE (running): 63/89 is NOT leaderboard-comparable; measure the DELTA.**
 > Context: tbench-2.1 leaderboard shows #10 Claude Code/Sonnet-5 **74.6%**, #12 Claude Code/Opus-4.7 **68.9%**,
 > so our **63/89 = 70.8%** *looks* like ~11th. **It is not the same measurement, and must never be published

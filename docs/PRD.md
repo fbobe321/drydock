@@ -3,6 +3,26 @@
 Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
+> **Positioning (2026-08-23) — the product thesis is SEARCH-AS-CAPABILITY-SUBSTITUTION.** Two external data
+> points reframed the goal. DeepSeek's harness (open-sourced, ~2472 TS files) shows the agent-infrastructure
+> layer has *converged*: their package set (compaction, guard, jobs, skill, todo, plan, subagent, mcp,
+> sandbox) is essentially Drydock's module list, and their `repeat-tool-reminder` is nearly line-for-line
+> Drydock's advisory `loop_detect` — independent validation of the "guide, never block" rule, but also proof
+> that harness features are not a moat. And they report 87.9 on TB 2.1 **in "minimal mode"**: a strong model
+> needs little scaffolding. **The durable position is therefore not "another harness" and not benchmark
+> placement — it is the layer they leave empty.** A grep of their agent core and subagent packages finds no
+> checker/verifier/score-retry/rollback machinery at all: **no test-time search**. Drydock's ratchet is that
+> layer, and the research question it answers — *how much capability can search buy a weaker model, and where
+> does the substitution stop paying?* — survives frontier models getting better, which a placement claim does
+> not. Practical consequence for the product: the ratchet must work **without a benchmark**, which it already
+> does (`Verifier` climbs the user's own tests/build/lint via `detect_verifier`), extended by a fitness ladder
+> for no-test work (executable check compiled from the goal and approved once; quantitative objectives;
+> behavioural-equivalence diffing for refactors; golden example; invariants; the checker-independent probe).
+> Known risk, stated plainly: search optimizes proxies, so a weak check plus strong search yields confident
+> wrongness — hence the queued experiment measuring an agent-authored scorecard against tbench ground truth,
+> whose false-pass rate bounds how far self-authored targets can be trusted. Full detail: `RESUME.md`
+> 2026-08-23 blocks.
+
 > **Progress (2026-08-23) — MEASURING THE HONEST BASELINE (the number that makes the result publishable).**
 > The campaign's **63/89 = 70.8%** on Terminal-Bench 2.1 would sit ~11th on the public leaderboard (#10 =
 > 74.6%), but it is **not the same measurement** and will not be presented as one. Leaderboard entries are 5
