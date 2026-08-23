@@ -46,7 +46,10 @@ experiment_active(){
   # in-flight jobs to end, with stopped workers deliberately left down) before handing
   # off to the trainer. If the supervisor kept relaunching those workers they'd claim
   # fresh jobs and the drain would never complete.
-  pgrep -f 'compound_measure.sh|ml_suite_sweep.sh|probe_mr.sh|probe_band.sh|moe_train_eval.sh|moe_orchestrate.sh|baseline_sweep.sh' >/dev/null 2>&1
+  # selfcheck_sweep.sh runs after the baseline drains and drives the same .20 lanes
+  # (2 phases per task through the real TUI). It must be listed so the supervisor does
+  # not reclaim those workers for the campaign the instant the baseline finishes.
+  pgrep -f 'compound_measure.sh|ml_suite_sweep.sh|probe_mr.sh|probe_band.sh|moe_train_eval.sh|moe_orchestrate.sh|baseline_sweep.sh|selfcheck_sweep.sh' >/dev/null 2>&1
 }
 
 # ── unified task pool: one namespace symlinking EVERY suite (+ generated) ─────
