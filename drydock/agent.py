@@ -107,6 +107,8 @@ class AgentState:
     events: "EventLog | SQLiteEventLog | None" = None  # optional durable execution trace
     recovery_stage: int = 0  # live recovery escalation stage (0 = normal); for the TUI
     progress_streak: int = 0  # consecutive no-progress (stall) actions; for the TUI
+    verify_fail_streak: int = 0  # consecutive FAILING checks; drives the /ratchet offer
+    last_verify_cmd: str = ""    # the command behind that streak (pre-fills the offer)
     budget: "BudgetState" = field(default_factory=lambda: BudgetState())  # scoped budgets
 
 
@@ -745,6 +747,16 @@ def run(
                 _vcmd = (tc.get("input") or {}).get("command", "")
                 if looks_like_verification(_vcmd):
                     last_verification = parse_evidence(_vcmd, result)
+                    # Streak of consecutive FAILING checks, for the TUI's proactive
+                    # /ratchet offer (ratchet.ratchet_offer). Reset on any pass, so it
+                    # only fires while the model is genuinely stuck re-running the same
+                    # check — which is precisely the ratchet's use case. Advisory: this
+                    # counter never changes the agent's own behaviour.
+                    if last_verification.status == "fail":
+                        state.verify_fail_streak += 1
+                        state.last_verify_cmd = _vcmd
+                    elif last_verification.status == "pass":
+                        state.verify_fail_streak = 0
                     # Accumulate what the checks touched (command + result text),
                     # capped, for criteria-coverage at completion time.
                     if len(verification_text) < 200_000:

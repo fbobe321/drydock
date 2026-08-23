@@ -585,3 +585,40 @@ def diversify_prompt(goal: str, passed: int, total: int, op: str) -> str:
             "remaining checks while preserving what passes — a fresh decomposition."
         )
     return continuation_prompt(goal, passed, total)
+
+
+# ── proactive offer ──────────────────────────────────────────────────────────
+# `/ratchet` is the most valuable thing in the harness and the least discoverable:
+# you only find it if you already know it exists. When the model has run the SAME
+# verification and watched it fail several times in a row, that is exactly the
+# situation the ratchet is built for — so offer it, once, with the switches already
+# filled in. Advisory only: it never interrupts or blocks the model's own attempts.
+OFFER_AFTER_FAILURES = 3
+
+
+def ratchet_offer(goal: str, verify: str, failures: int,
+                  threshold: int = OFFER_AFTER_FAILURES) -> str | None:
+    """Text offering to take over with the ratchet, or None if it's too early.
+
+    Mentions the ROLLBACK explicitly: the ratchet snapshots the work tree and
+    restores the last improving snapshot when a round regresses, so a user saying
+    "yes" needs to know uncommitted work can be rewound. Consent needs the cost,
+    not just the benefit.
+    """
+    if failures < threshold or not verify:
+        return None
+    g = (goal or "").strip()
+    short = (g[:70] + "…") if len(g) > 70 else g
+    return (
+        f"⚙ That check has failed {failures} times in a row. Want me to switch to the "
+        f"RATCHET?\n"
+        f"  What it does: retries in rounds, re-running `{verify}` each time. It keeps "
+        f"(snapshots) any round that makes MORE checks pass and rolls back rounds that "
+        f"make things worse, so progress accumulates instead of being lost — and it "
+        f"changes strategy when a round stalls.\n"
+        f"  Cost: it snapshots and can REWIND your working tree to the last improving "
+        f"round, so uncommitted changes made after that point can be discarded. It needs "
+        f"a git work tree.\n"
+        f"  Accept:  /ratchet" + (f"   (goal: \"{short}\")" if short else "") + "\n"
+        f"  Or tune: /ratchet <goal> --effort high --verify \"{verify}\""
+    )

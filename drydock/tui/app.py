@@ -322,6 +322,8 @@ class DrydockApp(App):
         self._queue: list[str] = []  # prompts submitted while a turn is running
         self._repeat: dict | None = None  # active /loop: {prompt, remaining, total}
         self._ratchet: dict | None = None  # active /ratchet: {state, verifier, checkpoint}
+        self._ratchet_offer: dict | None = None  # pending proactive offer {goal, verify}
+        self._offered_ratchet = False            # offer at most once per session (no nagging)
         self._erx: dict | None = None  # active /eratchet: {cancel}
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
@@ -969,6 +971,13 @@ class DrydockApp(App):
         signal. Esc (or /stop) ends it."""
         from drydock import ratchet as rmod
 
+        # Accepting the proactive offer: bare `/ratchet` right after one adopts its
+        # goal + the verify command that was already failing, so the user doesn't have
+        # to retype what the harness just detected. Explicit args always win.
+        if not (arg or "").strip() and self._ratchet_offer:
+            off = self._ratchet_offer
+            arg = f'{off["goal"]} --verify "{off["verify"]}"'
+        self._ratchet_offer = None
         try:
             goal, verify, rounds, fitness, effort = rmod.parse_ratchet_args(arg)
         except ValueError as e:
@@ -1871,6 +1880,22 @@ class DrydockApp(App):
         if self._ratchet and not self._cancel.is_set():
             self.run_worker(self._ratchet_step, thread=True)
             return
+        # PROACTIVE /ratchet OFFER: the model just spent a turn watching the same check
+        # fail repeatedly — the exact case the ratchet exists for, and the one a user
+        # who doesn't know the command will never reach. Offer ONCE per session, with
+        # the switches pre-filled; purely advisory (nothing is started, nothing blocked).
+        if (self._ratchet is None and not self._offered_ratchet
+                and not self._repeat and not self._cancel.is_set()):
+            from drydock import ratchet as rmod
+            st = getattr(self, "state", None)
+            streak = getattr(st, "verify_fail_streak", 0) if st else 0
+            vcmd = getattr(st, "last_verify_cmd", "") if st else ""
+            goal = (getattr(st, "task", None).objective if st and getattr(st, "task", None) else "") or ""
+            offer = rmod.ratchet_offer(goal, vcmd, streak)
+            if offer:
+                self._offered_ratchet = True
+                self._ratchet_offer = {"goal": goal, "verify": vcmd}
+                self._info(offer)
         # /loop: re-run the prompt until the count is exhausted OR the loop stops
         # itself (Esc/stop clears self._repeat). Queued user prompts take priority.
         if self._repeat and not self._cancel.is_set():
