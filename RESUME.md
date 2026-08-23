@@ -124,6 +124,14 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 > - **LIVE NUMBERS 09:08:** baseline **7/89 done**, interim **28.6%** (CI [8.2, 64.1] — far too early to read),
 >   campaign **63/89**. Claim shape the report prints: *"…lifts Gemma-4-31B from X% to 71% on TB 2.1"*.
 
+> **📏 2026-08-23 (DONE) — HONEST BASELINE MEASURED = 28.4%; the delta is real: +42.4pts / 2.49×.**
+> `baseline_sweep.sh` finished all 89 (88 scored, 1 err): **single-attempt, no ratchet, no score feedback =
+> 25/88 solved = 28.4% (Wilson 95% CI [20.0, 38.6])** vs the verifier-guided campaign **63/89 = 70.8%**.
+> So X landed BELOW the 35–45% guess — which makes the delta *stronger*: **"verifier-guided test-time search
+> lifts Gemma-4-31B from 28% to 71% on Terminal-Bench 2.1" (2.49×)**, standing entirely on its own with no
+> leaderboard comparison. `baseline_report.py` prints the claim shape. This is the comparable quantity; the 71%
+> is NOT (score feedback + ~48 attempts/task). Old `base_solved.txt` ~11% confirmed a large undercount.
+>
 > **📏 2026-08-23 — THE HONEST BASELINE (running): 63/89 is NOT leaderboard-comparable; measure the DELTA.**
 > Context: tbench-2.1 leaderboard shows #10 Claude Code/Sonnet-5 **74.6%**, #12 Claude Code/Opus-4.7 **68.9%**,
 > so our **63/89 = 70.8%** *looks* like ~11th. **It is not the same measurement, and must never be published

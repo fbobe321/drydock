@@ -38,19 +38,20 @@ say(){ echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 _ctr(){ echo "ddt_$1"; }
 [ -f "$CSV" ] || echo "task,self_pass,true_pass,true_passed,true_total,check_bytes" > "$CSV"
 
-drive(){   # one turn through the real TUI
-  local ctr sess st start; ctr=$(_ctr "$task"); sess="ddt_$task"
+drive(){   # one turn through the real TUI (identical wait logic to control_noratchet.sh)
+  local ctr sess pane st start; ctr=$(_ctr "$task"); sess="ddt_$task"
   printf 'trajectory_file = "/app/.dd_trajectory.json"\nstall_retry_secs = 300\n' \
     | docker exec -i "$ctr" bash -c 'mkdir -p ~/.drydock && cat > ~/.drydock/config.toml' 2>/dev/null
   ddt_tui "$task" >/dev/null 2>&1; sleep 10
   tmux send-keys -t "$sess" -- "$1"; tmux send-keys -t "$sess" Enter
   start=$(date +%s)
-  while :; do
-    st=$(tmux capture-pane -p -t "$sess" 2>/dev/null | tail -5)
+  while true; do
+    sleep 20
+    pane=$(tmux capture-pane -t "$sess" -p 2>/dev/null)
+    st=$(echo "$pane" | grep -oE "⚓ (working|ready)|Approve" | tail -1)
     echo "$st" | grep -q Approve && tmux send-keys -t "$sess" "a"
     echo "$st" | grep -q ready && break
     [ $(( $(date +%s)-start )) -gt "$BUDGET" ] && break
-    sleep 10
   done
 }
 
