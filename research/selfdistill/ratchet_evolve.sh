@@ -205,7 +205,6 @@ $RESEARCH
     fi
   done
   read -r ps pt pf probe desc <<< "$best_line"
-  desc=$(desc_with_strategy "$desc" "$(pick_strategy "$r" 1)")
 
   # ---- snapshot this round + let the bridge decide the next move ----
   ref=$(commit_ref "$r"); [ -z "$ref" ] && ref="none"
@@ -231,8 +230,13 @@ $RESEARCH
   # A round only counts as FLAT if nothing moved on ANY axis — passes, sub-goal partial,
   # or the checker-independent probe. Before fine fitness was wired in, "best=0" looked
   # flat even while the solution went dead -> crashing -> asserting, which is real progress.
-  _prog=$(( ${pf:-0} + ${probe:-0} ))
-  if [ "${bp:-0}" -eq 0 ] && [ "${niches:-1}" -le 1 ] && [ "$_prog" -le "${best_prog:-0}" ]; then
+  # Staleness = NO movement on any FITNESS axis. Deliberately does NOT look at `niches`:
+  # the strategy tag below mints a fresh niche every round, so niches climbs forever and
+  # a `niches<=1` guard could never fire — that interaction burned 8h on
+  # make-mips-interpreter at a pinned partial=440 (rounds 4-9, 8 strategies, 2 crossovers,
+  # zero movement) while the abort sat disabled.
+  _prog=$(( ${bp:-0}*100000 + ${pf:-0} + ${probe:-0} ))
+  if [ "$_prog" -le "${best_prog:--1}" ]; then
     flat=$((${flat:-0}+1))
     if [ "$flat" -ge "${FLAT_ABORT_ROUNDS:-5}" ]; then
       say "FLATLINE ABORT after $r rounds (best=0/$bt, niches=$niches, $flat flat) — freeing the lane"
@@ -254,7 +258,9 @@ $RESEARCH
 done
 
 say "===== EVOLVE $task DONE: solved=$solved best=$bp/$bt ====="
-echo "$task,$solved,$bp,$bt" >> "$OUT/ratchet_evolve_results.csv"
+# 5th column = best partial (sub-goal milli). The auto-park keys on best==0, which
+# WITHOUT this would shelve a task that runs to assertions (partial>0) as "no gradient".
+echo "$task,$solved,$bp,$bt,${best_prog:-0}" >> "$OUT/ratchet_evolve_results.csv"
 ddt_down "$task" >/dev/null 2>&1
 # cleanup this task's snapshot images
 for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep "^ratchet_${task}_g"); do docker rmi "$img" >/dev/null 2>&1; done

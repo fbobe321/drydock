@@ -164,7 +164,11 @@ _parked(){ grep -qxF "$1" "$PARKED" 2>/dev/null; }
 # flatlined = the task HAS a completed eratchet row and its LATEST one is
 # solved=0 AND best=0. `f` guards the not-found case: an uninitialized awk var
 # equals 0, so without it a task absent from the CSV would falsely read flatline.
-_eratchet_flatlined(){ awk -F, -v t="$1" '$1==t{s=$2;b=$3;f=1} END{exit (f&&s==0&&b==0)?0:1}' "$EVOLVE_CSV" 2>/dev/null; }
+# GENUINELY DEAD = no passes AND no sub-goal partial. A task at best=0 but partial>0
+# runs far enough to be CHECKED (assertion / crash), so it is stalled, not gradientless —
+# parking it as "no gradient" would shelve tasks that are close. Column 5 (partial) is
+# absent on legacy rows, which read as 0 and preserve the old behaviour.
+_eratchet_flatlined(){ awk -F, -v t="$1" '$1==t{s=$2;b=$3;p=($5==""?0:$5);f=1} END{exit (f&&s==0&&b==0&&p==0)?0:1}' "$EVOLVE_CSV" 2>/dev/null; }
 tb_solved(){ [ -e "$SD/ratchet/$1_solved_traj.json" ] || [ -e "$SD/ratchet/$1_evolved_traj.json" ]; }
 get_tier(){ awk -F'\t' -v t="$1" '$1==t{v=$2} END{print v+0}' "$EFFORT" 2>/dev/null; }
 set_tier(){ { grep -vP "^$1\t" "$EFFORT" 2>/dev/null; printf '%s\t%s\n' "$1" "$2"; } > "$EFFORT.tmp" && mv "$EFFORT.tmp" "$EFFORT"; }
