@@ -124,6 +124,25 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 > - **LIVE NUMBERS 09:08:** baseline **7/89 done**, interim **28.6%** (CI [8.2, 64.1] — far too early to read),
 >   campaign **63/89**. Claim shape the report prints: *"…lifts Gemma-4-31B from X% to 71% on TB 2.1"*.
 
+> **🔬 2026-08-23 (later) — SELFCHECK PROBE WAS SILENTLY NO-OP'ing; FIXED + re-running. First real
+> data point: self-authored check AGREES with ground truth on fix-git.**
+> The self-authored-scorecard experiment (item ⑤ below) — *can the model write its own fitness
+> signal off-benchmark?* — ran once and produced **0 usable rows (12/12 `NA`)**. Root cause: the
+> probe's `drive()` captured the TUI pane BEFORE its first sleep and grepped a bare `ready`, so it
+> matched the idle status line on loop iteration 1 and returned in ~17s — the agent never authored
+> `/app/selfcheck.sh`. **Fixed** to `control_noratchet.sh`'s proven wait logic (sleep-at-top +
+> `⚓ (working|ready)` glyph anchor); applied to live + vendored copies; committed **`0d93379`**.
+> Validated end-to-end: `fix-git` now authors a concrete **1076B** check (branch + conflict markers +
+> exact expected strings) instead of 0B. **First row: `fix-git self=1 true=1 (2/2)`** — solved AND
+> the self-check AGREED with the official checker, erring toward over-strict (the SAFE direction for a
+> search objective: false-FAIL costs only efficiency, false-PASS reward-hacks into wrongness). Sweep
+> re-running the balanced 12 (4 true-pass / 4 near-miss / 4 flatline) on .20; `openssl`+`nginx` checks
+> already authored (3.3K/3.9K). **Headline pending = the FALSE-PASS rate** (`selfcheck_report.py`
+> confusion matrix). **LAND-MINE re-hit + logged:** my relaunch pipeline's `while pgrep -f
+> "selfcheck_probe.sh fix-git"` self-matched its own wrapper argv and hung after the probe finished —
+> killed by exact PID, never `pkill -f`. PRD `PRD_internalized_ratchet.md` §12 updated with both
+> results (baseline = the internalization TARGET quantified; selfcheck = the off-benchmark verifier).
+>
 > **📏 2026-08-23 (DONE) — HONEST BASELINE MEASURED = 28.4%; the delta is real: +42.4pts / 2.49×.**
 > `baseline_sweep.sh` finished all 89 (88 scored, 1 err): **single-attempt, no ratchet, no score feedback =
 > 25/88 solved = 28.4% (Wilson 95% CI [20.0, 38.6])** vs the verifier-guided campaign **63/89 = 70.8%**.
