@@ -268,6 +268,63 @@ self-check and the official checker.
 4. M3 (v0 reward-weighted FT) remains gated on M2's real single-shot runner + a non-floored held-out
    split — unchanged by today's results.
 
+## 13. 2026-08-24 — the META-RATCHET: ratchet the fitness signal itself
+
+**Operator reframe:** the self-authored fitness signal "may be as important as solving a task —
+describing a problem well is prerequisite to solving it — almost need a ratchet-type approach to
+building good evaluation for the fitness signal." ⇒ a loop that sits UPSTREAM of the solution-ratchet:
+*propose a check → score how good the check is → revise → repeat.* The check is the reusable asset;
+the solve is disposable. §12.2's `selfcheck_probe.sh` measured a check ONCE; this makes the check a
+first-class ratcheted artifact.
+
+### 13.1 The crux — fitness-of-a-fitness-signal WITHOUT ground truth
+Off-benchmark there is no official checker to grade a check, so the check's quality must be scored by
+**discrimination / mutation**: a good check ACCEPTS a correct solution and REJECTS broken ones.
+Specificity-under-mutation needs no ground truth (corrupt a solution → a faithful check must fail).
+On-benchmark the official checker is demoted from "the thing we climb" to "the VALIDATOR that
+mutation-specificity predicts real false-pass." Two axes:
+- **specificity (GT-free) — MEASURED.** `selfcheck/check_specificity.sh` runs each authored check
+  against an unsolved and an emptied `/app` (known-negatives a faithful check must reject).
+  Result: **8/8 checks kill both mutants** — none are the trivially-degenerate `exit 0` type.
+  Necessary, NOT sufficient: `fix-git`'s check aces specificity yet is path-fragile (greps bare
+  `_includes/...` while the repo is at `/app/personal-site/`) → would false-FAIL a correct solve.
+- **sensitivity / false-pass (needs passing + near-miss solutions) — the dangerous cell (self✓/true✗).**
+  The old probe scored ONE (usually failing) solution, so this cell was near-empty and its
+  "0% false-pass / 8/8 agree (7 both-fail, 1 both-pass)" headline was hollow.
+
+### 13.2 `check_ratchet.sh` — populate false-pass, then ratchet the check
+Author check (frozen) → **ratchet-solve capturing a docker snapshot at EVERY official-fitness
+improvement** (`ckr_<task>:f<passed>`, tests deleted pre-commit = anti-cheat clean) = a LABELED
+solution spectrum (true-pass + genuine near-misses) → score the frozen check against each snapshot
+(this finally populates false-pass) → **META step:** if it false-passed any near-miss, tell the model
+which requirement-count it wrongly accepted and have it tighten the check; re-score; record
+check-fitness `v1→v2`. Outputs `check_ratchet/check_ratchet_{results,summary}.csv`.
+- **Live seed (freed .20 lane):** `fix-git` authored 665B, solved 2/2 r1, self✓=true✓, fp=0
+  (validates the pipeline; solved-immediately ⇒ no near-miss band). `video-processing` climbing
+  2/5→3/5 (building the near-miss spectrum where a lax check would false-pass) — v1/v2 pending.
+
+### 13.3 `graded_ratchet.sh` — apply it to the HARD (flatline) tasks
+The hard tasks flatline because their official checker is a single monolithic test (`total=1`) ⇒
+structurally binary ⇒ no gradient (RESUME 2026-08-22). `probe_fitness.sh`/`ctrf_fitness.py`
+manufacture GENERIC gradient; the self-authored check is TASK-SPECIFIC — decomposing the spec into N
+observable sub-requirements gives N gradient rungs the monolithic checker collapses into one bit. So
+the model authors a **decomposed graded scorecard** (`SCORE=<passed>/<total>`) and the ratchet climbs
+THAT. **Risk = reward-hacking** (a rich proxy is climbable but gameable), so the official checker never
+leaves — demoted to an ORACLE scored every round but NEVER shown to the model. Verdicts:
+`SOLVED-via-gradient` · `gradient-TRACKS` (authored↑ and official↑) · `PROXY-DIVERGED-rewardhack`
+(authored↑ while official flat) · `stuck`. Built + registered; launches on the freed lane once the
+`check_ratchet` seed validates (small-verified-steps: if the loop can't harden an EASY boolean check
+it won't harden a hard graded one).
+
+### 13.4 Next steps (supersedes 12.3)
+1. Read `check_ratchet_summary.csv`: does `video-processing` (or a swapped-in richer near-miss like
+   `sam-cell-seg` 8/9) show `false_pass_v2 < false_pass_v1`? That is the meta-ratchet's proof.
+2. On validation, run `graded_ratchet.sh` on one hard flatline (`regex-chess` / `make-doom-for-mips`):
+   does manufactured task-specific gradient produce cross-round movement where the binary signal sat
+   at 0/1 — WITHOUT the proxy diverging from the oracle?
+3. Feed the verdict into §7/§11b as in 12.2/12.3: safe-direction, oracle-tracking self-checks ⇒ the
+   task-pool generator emits checker + task together; otherwise keep the human-approve-one-check path.
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested

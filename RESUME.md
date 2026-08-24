@@ -60,6 +60,47 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 
 **One-command status:** `bash /data3/tbench_local/frontier/selfdistill/selfdistill_digest.sh`
 
+> **🧬 2026-08-24 — THE META-RATCHET: ratchet the FITNESS SIGNAL itself (a good check may matter as
+> much as solving). Measurement infra live on a freed .20 lane.**
+> Operator: the self-authored fitness signal "may be as important as solving a task — describing a
+> problem well is prerequisite to solving it — almost need a ratchet-type approach to building good
+> evaluation for the fitness signal." ⇒ a loop UPSTREAM of the solution-ratchet: *propose a check →
+> score how good the check is → revise → repeat.* The check is the reusable asset; the solve is
+> disposable. PRD §13 (`research/selfdistill/PRD_internalized_ratchet.md`, synced to the live copy).
+> - **THE CRUX = fitness-of-a-fitness-signal WITHOUT ground truth** (the off-benchmark case). Answer =
+>   **discrimination/mutation**: a good check ACCEPTS a correct solution and REJECTS broken ones;
+>   specificity-under-mutation needs no ground truth. tbench's official checker flips from "the thing we
+>   climb" to "the VALIDATOR that mutation-specificity predicts real false-pass."
+> - **① SPECIFICITY (GT-free) MEASURED:** `selfcheck/check_specificity.sh` runs each authored check vs
+>   an unsolved and an emptied `/app` (known-negatives it MUST reject). **8/8 checks kill both mutants**
+>   → none are the trivially-degenerate `exit 0` type. Necessary, NOT sufficient: `fix-git`'s check aces
+>   specificity yet is path-fragile (greps bare `_includes/...` while the repo is at
+>   `/app/personal-site/`) → would false-FAIL a correct solve. So the old probe's "0% false-pass, 8/8
+>   agree" headline was HOLLOW (7/8 were trivial both-fail; the dangerous self✓/true✗ cell was empty).
+> - **② `check_ratchet.sh` populates false-pass, then RATCHETS the check.** Author check (frozen) →
+>   ratchet-solve capturing a docker snapshot at EVERY official-fitness improvement
+>   (`ckr_<task>:f<passed>`, tests deleted pre-commit = anti-cheat clean) = a LABELED solution spectrum
+>   (true-pass + near-misses) → score the frozen check against each (populates false-pass) → META step:
+>   on any false-pass, tell the model which requirement-count it wrongly accepted, revise the check,
+>   re-score (`fitness_v1→v2`). Outputs `check_ratchet/check_ratchet_{results,summary}.csv`.
+>   **Live seed (tmux `ckr_run`):** `fix-git` authored 665B, solved 2/2 r1, self✓=true✓, fp=0 (pipeline
+>   validated); `video-processing` climbing 2/5→3/5 (building the near-miss band) — v1/v2 pending.
+> - **③ `graded_ratchet.sh` — apply it to the HARD flatlines (operator's extension).** Hard tasks
+>   flatline because the official checker is one monolithic test (`total=1`) ⇒ binary ⇒ NO gradient.
+>   The self-authored check is TASK-SPECIFIC: decompose the spec into N observable sub-requirements =
+>   N gradient rungs. Model authors a **decomposed graded scorecard** (`SCORE=<p>/<t>`); the ratchet
+>   climbs THAT. **Reward-hack guard:** the official checker never leaves — demoted to an ORACLE scored
+>   every round, NEVER shown to the model. Verdicts: `SOLVED-via-gradient` · `gradient-TRACKS` ·
+>   `PROXY-DIVERGED-rewardhack` · `stuck`. Built + registered; launches on the freed lane once the seed
+>   validates (small steps: can't harden a hard graded check if it can't harden an easy boolean one).
+> - **FLEET MECHANICS (reversible):** freed ONE .20 lane by stopping `wrk_20b` (tmux kill-session —
+>   NEVER pkill -f) + clearing its orphan container; `check_ratchet.sh`+`graded_ratchet.sh` registered
+>   in `fleet_supervisor.sh::experiment_active()` so the supervisor defers keepalive (won't relaunch
+>   20b) and AUTO-RESUMES the campaign when the experiment exits. Campaign keeps 2 lanes (20a=.20,
+>   21a=.21); the 28%→71% baseline delta is untouched. **LAND-MINE:** `tmux new-session -d` inherits the
+>   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
+>   See [[project_meta_ratchet_fitness_signal]].
+
 > **🧠 2026-08-23 (later) — STRATEGY REFRAME + the generalization question, made measurable.**
 > Three threads converged today. Read this block before deciding what the project IS.
 > - **① REFRAME: the claim is SEARCH-AS-CAPABILITY-SUBSTITUTION, not benchmark placement.** DeepSeek reports
