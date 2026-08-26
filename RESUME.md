@@ -101,6 +101,32 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **📊 2026-08-26 — RESULTS IN: self-authored checks err STRICT (0 false-pass, n=6); graded signal cracked
+> a flatline honestly. Now scaling the graded batch.**
+> Two threads closed cleanly (full detail: PRD §13.5).
+> - **(A) Do self-authored checks ever FALSE-PASS? NO — across every provocation.** specificity
+>   (unsolved/empty) **0/8** · honest near-miss (2/5–4/5, well-formed, fails ≥1 req) **0/4** · adversarial
+>   decoy (truncate-to-empty + same-size garble, `check_decoy_probe.sh`) **0/4**. ⇒ on this distribution the
+>   checks **err STRICT, not lax**: they verify actual CONTENT (reject emptied AND garbled outputs), catch a
+>   well-formed solution missing one requirement, and never accept a wrong one. For SEARCH this is the SAFE
+>   asymmetry (residual risk = false-FAIL wasted effort, never false-PASS reward-hack). **Honest limits:** the
+>   **revise loop (`v1→v2`) is built but NEVER FIRED** (no false-pass to fix — "not needed on 6 tasks," NOT
+>   "proven to work"); checks lean over-strict (only `fix-git` confirmed to ACCEPT a true solve, and its check
+>   was path-fragile); the subtly-wrong-VALUE band (valid format, wrong number) stays untested (truncate/garble
+>   too blunt). n=6, one model.
+> - **(B) Can a self-authored GRADED signal manufacture gradient on a flatline WITHOUT reward-hacking? First
+>   YES.** `graded_ratchet.sh` on `regex-chess` (pure campaign flatline, 26× `0/4`): climbing its self-authored
+>   7-point scorecard, the official ORACLE moved **`0/4→1/4`** and the run ended **`gradient-TRACKS`** (authored
+>   1→4/7 AND official 0→1; authored never ran ahead of the oracle ⇒ no `PROXY-DIVERGED`). n=1, stalled at a
+>   PARTIAL (not solved). **NOW SCALING (tmux `ckr_graded`, freed .20 lane):** graded batch over
+>   chess-best-move · polyglot-c-py · make-doom-for-mips · dna-assembly → the DISTRIBUTION (how often
+>   manufactured gradient cracks a flatline; how often the oracle catches divergence) is the publishable
+>   reward-signal / reward-hack-detection result, not the n=1.
+> - **⇒ PIVOT (decided):** the false-pass hunt is DONE (checks are conservative; forcing the revise loop with a
+>   subtler decoy would be manufacturing a failure to demo a fix — backwards). The live value is thread (B).
+>   Same freed-lane discipline (`check_decoy_probe.sh`+`graded_ratchet.sh` in `experiment_active()`; stop 20b by
+>   tmux; auto-resume on exit). Campaign untouched at 63/89. See [[project_meta_ratchet_fitness_signal]].
+
 > **🧠 2026-08-23 (later) — STRATEGY REFRAME + the generalization question, made measurable.**
 > Three threads converged today. Read this block before deciding what the project IS.
 > - **① REFRAME: the claim is SEARCH-AS-CAPABILITY-SUBSTITUTION, not benchmark placement.** DeepSeek reports

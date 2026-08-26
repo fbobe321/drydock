@@ -325,6 +325,40 @@ it won't harden a hard graded one).
 3. Feed the verdict into §7/§11b as in 12.2/12.3: safe-direction, oracle-tracking self-checks ⇒ the
    task-pool generator emits checker + task together; otherwise keep the human-approve-one-check path.
 
+### 13.5 2026-08-26 — results in: self-authored checks err STRICT; graded signal cracks a flatline
+Two threads reached honest conclusions.
+
+**(A) Do self-authored checks ever false-pass? — NO, across every provocation (n=6).** This is the
+trustworthiness question for using a self-authored check as a search objective. Results:
+| provocation | tasks | false-pass |
+|---|---|---|
+| specificity: unsolved / emptied `/app` (`check_specificity.sh`) | 8 | 0/8 |
+| honest near-miss (2/5–4/5, well-formed, fails ≥1 real requirement) (`check_ratchet.sh`) | 4 | 0 |
+| adversarial decoy: truncate-to-empty + same-size garble (`check_decoy_probe.sh`) | 2 | 0/4 |
+- **Conclusion:** on this distribution self-authored checks **err strict, not lax** — they verify actual
+  content (reject emptied AND garbled outputs), catch a well-formed solution missing even one
+  requirement, and never accept a wrong solution. For SEARCH this is the SAFE asymmetry: the residual
+  risk is false-FAIL (wasted effort), never false-PASS (reward-hack into confident wrongness). It
+  answers §12.2's headline: a self-authored fitness signal is trustworthy enough to climb here.
+- **Honest limits (state plainly):** (1) the **revise loop (`v1→v2`) is built but EMPIRICALLY
+  UNEXERCISED** — it never fired because no false-pass ever occurred; we can say it was not *needed* on
+  6 tasks, NOT that it works. (2) The checks lean **over-strict** — we rarely confirmed a check ACCEPTS
+  a truly-correct solution (only `fix-git`; whose check was even path-fragile), so false-fail is the
+  live cost. (3) The one untested band is a **subtly-wrong VALUE** (valid format, wrong number);
+  truncate/garble are too blunt to probe it, though the honest 4/5 near-miss is its closest real proxy
+  and was rejected. (4) n=6, single model.
+
+**(B) Can a self-authored GRADED signal manufacture gradient on a flatline without reward-hacking? —
+first evidence YES (`graded_ratchet.sh`, `regex-chess`).** `regex-chess` was a pure campaign flatline
+(26× `0/4`). Climbing its self-authored 7-point scorecard, the official ORACLE moved **`0/4 → 1/4`**
+(round 2) — a real crack a binary signal never produced — and the run ended `gradient-TRACKS`: authored
+rose 1→4/7 AND official rose 0→1, with the authored score NEVER running ahead of the oracle (no
+`PROXY-DIVERGED`). So the manufactured gradient stayed honest. Limits: n=1, stalled at a PARTIAL (1/4,
+not solved). **Now scaling** across a batch of hard flatlines (chess-best-move, polyglot-c-py,
+make-doom-for-mips, dna-assembly) to get the distribution: how often does manufactured gradient crack a
+flatline, and how often does the oracle catch divergence? That distribution — not the n=1 — is the
+result worth publishing (the reward-signal / reward-hack-detection contribution, §12/RESUME 2026-08-24).
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested
