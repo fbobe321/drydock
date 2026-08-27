@@ -380,6 +380,63 @@ what makes it safe."** Distribution over 11 hard flatlines:
   the authoring/capability/validity failure taxonomy, with the honest 9% crack rate stated up front.
   Ablation already latent: the oracle vs authored-score gap IS the divergence signal.
 
+## 14. 2026-08-27 — WHY SELF-DISTILLATION KEEPS RETURNING NULL (mechanical diagnosis + fixes)
+
+Operator: "best guess why self-d isn't working — not enough data, LoRA params, wrong data,
+different fine-tuning?" Answer, ranked by evidence. **The two leading causes are mechanical and
+were never controlled for.**
+
+**THE SMOKING GUN — we trained memorizers.** `compass/train.py` defaults `accum=8`, batch=1 =>
+effective batch 8. Epochs were never logged, so nobody noticed:
+| run | train windows | steps | **epochs** | final loss |
+|---|---|---|---|---|
+| heredity v1 | ~30 (16 traces) | 60 | **~16** | **0.016** |
+| heredity v2 | 53 (31 traces) | 120 | **~18** | **0.009** |
+| MoE→31B | ~390 turns | 60 | ~5 | 0.12 |
+Loss tracks epoch count exactly. 16–18 epochs on 30–53 examples is textbook catastrophic
+overfitting (standard: 2–3). Loss 0.009 = verbatim reproduction of 31 trajectories, nothing
+transferable — and it is the simplest sufficient explanation for BOTH the null transfer and the
+observed REGRESSION. (Ruled OUT by inspection: prompt-token loss masking is already correct —
+`labels = [-100]*prompt + resp`, assistant spans only — so "gradient wasted on boilerplate" is
+not the problem.)
+
+**RANKED DIAGNOSIS**
+1. **THE INSTRUMENT IS FLOORED — self-distillation may never have been MEASURED.** Every verdict
+   used BINARY SOLVES on held-out sets where **base scores 0/6** (and base stays 0/30 even
+   multi-round ⇒ beyond its frontier). An instrument reading 0 for base reads 0 for any improved
+   model: **no dynamic range upward**. Tellingly it *did* detect harm (reg 1→0, −9 checks) — damage
+   shows as checks lost. So "zero transfer" and "unmeasurable" are **indistinguishable** in the
+   existing data. This is the actual blocker.
+2. **Overfitting** (above) — would destroy any signal and adds regression pressure. Cheap to fix.
+3. **Corpus 2 orders of magnitude too small** — 16/31/14 examples is a few-shot prompt, not a
+   training set. And **30× more data already exists, untrained-on**: 1022 captured rounds vs 31
+   condensed winners.
+4. **Wrong objective** — SFT on winners teaches "emit output shaped like this"; the target behavior
+   (*given this state, choose the better next action*) is what preference learning addresses directly.
+5. **Headroom/frontier** — real, but demoted: invoked to explain nulls that (1)+(2) explain more simply.
+
+**FIXES SHIPPED THIS SESSION**
+- **THE RULER (`graded_eval.sh`)** — replaces the floored instrument. Metric = **graded CHECKS
+  PASSED**, not binary solved; taskset = the **near-miss band** (baseline partial>0 AND unsolved).
+  Measured headroom: **base = 52/109 checks = 47.7% over 23 tasks** — room to move in BOTH
+  directions, vs the old 0/6 floor. Arms: base vs base+adapter, same tasks, same honest
+  single-attempt protocol, matched serving.
+- **RECIPE DISCIPLINE (`dpo_train_31b.py`)** — holds out 10% (min 20 pairs), **logs EPOCHS
+  explicitly** (with a warning above 4), evaluates on the held-out split every `steps/8`, reports
+  the eval-loss curve + an **OVERFIT WARNING** when eval loss rises after its best point, and prints
+  **held-out preference accuracy** (0.5 = chance = learned nothing) — the honest read on whether the
+  preference signal generalizes at all, independent of any downstream eval.
+- **Trainer API fix:** trl 1.12 removed `max_prompt_length`; replaced with
+  `truncation_mode="keep_end"` (keeps task text), prompt capped upstream in `dpo_prep.py`.
+
+**EXPECTATION (stated honestly up front):** fixing ruler+recipe is NOT predicted to produce a large
+lift by itself. Its value is that it makes the question *decidable* — for the first time we can tell
+"self-distillation doesn't work" apart from "we couldn't see it working." The DPO arm (483 pairs,
+98% from tasks the 31B FAILS) is the best shot at real signal because it targets both the diagnosed
+data problem (recovery behavior absent from winner-only corpora) and the diagnosed objective problem.
+**Caveat on this diagnosis:** epoch counts are INFERRED from `accum=8` + documented step counts, not
+read from a log field — the loss values fit tightly, but future runs now log epochs directly.
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested

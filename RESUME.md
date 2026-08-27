@@ -101,6 +101,56 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **🔧 2026-08-27 — "BEAT TBENCH HONESTLY": eratchet DROPPED · self-distill diagnosed (we trained
+> memorizers + measured with a floored ruler) · 3 experiments in flight.**
+> Honest target restated: the leaderboard-comparable number is the **no-score-feedback protocol =
+> 28.4%**, NOT the 70.8% search figure. Everything below is legal under that protocol. Full detail:
+> PRD §14 (diagnosis) and §13.5 (fitness-signal results).
+> - **WHY THE RATCHET WORKS (quantified, from log mining).** 39 task-runs with round-level fitness:
+>   **12 of 13 solves happened at round ≥2** (only ONE at round 1) and **51% of runs improved best
+>   fitness after round 1**. Mechanism: best-of-N with fresh containers must get all k sub-goals right
+>   **simultaneously** (`q^k`), while the ratchet needs each sub-goal to succeed **once, ever**
+>   (`(1-(1-q)^N)^k`) — at q=0.4,k=5,N=8 that is **7.9% vs 91.9%**. The **pawl** (snapshot on
+>   improvement, `restore` on regression) forbids backward motion, turning a high-variance random walk
+>   into a monotone climb; fine-grained fitness (dead→crashed→asserted→pass) just adds more teeth.
+> - **⚠️ THE MISSING ABLATION, NOW RUNNING (`bestofn_ablation.sh`, tmux `ckr_bon_a/b`).** 28→71
+>   confounds *more attempts* with *cumulative selection* — best-of-N-without-ratchet was NEVER run.
+>   Set = **9 tasks where honest k=1 FAILED and the ratchet solved at round ≥2**
+>   (break-filter-js-from-html 5 · caffe-cifar-10 7 · extract-moves-from-video 6 · filter-js-from-html 7
+>   · fix-ocaml-gc 4 · gcode-to-text 9 · gpt2-codegolf 14 · raman-fitting 3 · rstan-to-pystan 6).
+>   Arm = N=8 INDEPENDENT fresh attempts, no state/rollback/feedback, early-exit on first solve, 2
+>   streams. **Read: 0–2/9 ⇒ the PAWL is the mechanism; 6–9/9 ⇒ it was mostly just more attempts.**
+> - **🚫 ERATCHET DROPPED (operator decision).** Post-`commit_ref`-fix it has never cracked a task the
+>   plain ratchet couldn't, costs ~3×/round, and its QD niching is structurally impotent at 0/N.
+>   Keep the PLAIN ratchet.
+> - **🔬 SELF-DISTILL DIAGNOSIS — two mechanical causes never controlled for.** (a) **We trained
+>   memorizers:** `accum=8`⇒eff-batch 8, so heredity v1 = **~16 epochs**, v2 = **~18 epochs** on 30–53
+>   windows → loss **0.016 / 0.009** (verbatim memorization; MoE at ~5 epochs landed 0.12 — loss tracks
+>   epochs exactly). Standard is 2–3 epochs. Epochs were never logged, so nobody saw it. (b) **THE RULER
+>   IS FLOORED:** every verdict used BINARY SOLVES on held-out sets where **base = 0/6** (base is 0/30
+>   even multi-round) — an instrument that reads 0 for base reads 0 for an improved model too. It
+>   detected *harm* (reg 1→0, −9 checks) but **could never have detected a gain** ⇒ "zero transfer" and
+>   "unmeasurable" are indistinguishable in the existing data. Ruled OUT: loss masking is already
+>   correct (prompt tokens `-100`), so boilerplate-gradient is NOT the problem.
+> - **FIXES SHIPPED:** **`graded_eval.sh`** = the new ruler — metric is graded **CHECKS PASSED** over
+>   the **near-miss band** (baseline partial>0 & unsolved); measured **base = 52/109 = 47.7% over 23
+>   tasks** ⇒ real headroom both directions. **`dpo_train_31b.py`** now holds out 10%, **logs EPOCHS**
+>   (warns >4), evals on the split, prints an OVERFIT WARNING when eval loss rises, and reports
+>   **held-out preference accuracy** (0.5 = chance). Also fixed trl 1.12 dropping `max_prompt_length`.
+> - **SELF-RATCHET (`selfratchet_solve.sh`) — protocol-legal eval-time self-verification**, and a real
+>   bug it exposed. First smoke left the frozen check readable at `/app/selfcheck.sh` AND told the model
+>   to make it pass → **4/5 false-pass** (self✓ while official ✗), `iters=0` everywhere (the loop never
+>   engaged). That is **in-context Goodhart with a clean control**: same model/checks/tasks scored
+>   **0 false-pass when the check was INDEPENDENT** (§13.5) vs 4/5 when the solver could read its own
+>   criterion. Fixed: check removed from the container, only failure OUTPUT returned. **Honest caveat:**
+>   re-run still shows `llm-inference-batching-scheduler` self-passing at official 5/6 ⇒ independence
+>   removes the *incentive* to game but does NOT guarantee the check captures every official
+>   requirement — a self-authored check can be genuinely incomplete. Archived control arm:
+>   `selfratchet_results.visible-check-BROKEN.csv`.
+> - **IN FLIGHT:** `ckr_selfr` (hidden-check smoke) → `ckr_bon_a/b` (the pawl ablation) → DPO
+>   (483 pairs, queued; its wait-loop knows all experiment session names). See
+>   [[project_meta_ratchet_fitness_signal]].
+
 > **📊 2026-08-26 — RESULTS IN: self-authored checks err STRICT (0 false-pass, n=6); graded signal cracked
 > a flatline honestly. Now scaling the graded batch.**
 > Two threads closed cleanly (full detail: PRD §13.5).
