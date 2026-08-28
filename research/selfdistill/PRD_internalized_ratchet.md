@@ -437,6 +437,79 @@ data problem (recovery behavior absent from winner-only corpora) and the diagnos
 **Caveat on this diagnosis:** epoch counts are INFERRED from `accum=8` + documented step counts, not
 read from a log field — the loss values fit tightly, but future runs now log epochs directly.
 
+## 15. 2026-08-28 — the pawl ablation CORRECTED (temperature was a confound), and the first
+## protocol-legal gains on the honest number
+
+### 15.1 CORRECTION: best-of-N was crippled by flat temperature; the pawl claim shrinks
+The §14/RESUME claim rested on best-of-8 solving ~0/9 of tasks the ratchet cracked at round ≥2.
+**That arm was confounded.** drydock's agent-loop default is `temperature=0.2`
+(`drydock/config.py`), but the ratchet EXPLORES over a ladder (`ratchet.py::variant_specs`:
+0.2 exploit, then 0.5/0.6/0.7/0.85). So the control ran **eight near-duplicate samples** while
+the ratchet got diversity — a THIRD variable, credited entirely to cumulative selection. The
+tell was in the data and was misread as signal: identical scores repeating verbatim
+(`0/2` ×7, `1/2` ×5) is duplicate sampling, not "a hard fitness ceiling".
+**Re-ran with a matched ladder [0.2,0.5,0.7,0.6,0.85,0.4,0.75,0.9]. Head-to-head, same tasks:**
+| task | flat best-of-8 | temp-diversified best-of-8 |
+|---|---|---|
+| break-filter-js-from-html | 0/1 | **1/1 SOLVED** (attempt 4) |
+| filter-js-from-html | 1/2 | **2/2 SOLVED** (attempt 8) |
+| caffe-cifar-10 | 2/6 | 3/6 (improved, unsolved) |
+| extract-moves-from-video | 0/2 | 0/2 |
+- **flat 0/4 → temp 2/4; temp arm overall 2/8 solved** (fix-ocaml-gc, gcode-to-text,
+  gpt2-codegolf, raman-fitting still 0; rstan-to-pystan pending).
+- **REVISED CLAIM: cumulative selection beats diversified best-of-8 by 9 vs 2, NOT 9 vs 0.**
+  The pawl still does most of the work, but ~25% of its apparent advantage was sampling
+  diversity. The earlier "fresh attempts hit a ceiling more attempts don't raise" statement is
+  **withdrawn** — it was an artifact.
+- **Process lesson (twice now):** an unexamined variable underneath a running comparison. Any
+  future ablation must enumerate what differs between arms BEFORE reading results.
+- Cost note: the flat arm was stopped at 4/9 once the pattern was established — the remaining
+  runs would have added nothing (documented rather than silently truncated).
+
+### 15.2 FIRST-PRINCIPLES SCAFFOLD — the compressed version wins, and cracked a flatline
+Operator proposed a first-principles framework as a flatline prompt. Tested as 3 arms, single
+attempt, honest protocol (no oracle feedback ⇒ any gain transfers to the comparable number),
+on 8 measured flatlines. Metric is `probe_fitness` 0–4 (wrote source → valid syntax → entry
+point RUNS → produced an artifact) **because binary-solved has no dynamic range at 0/N** —
+the floored-ruler lesson from §14 applied prospectively.
+| arm | n | mean probe | checks | solved | wrote CRITERIA.md |
+|---|---|---|---|---|---|
+| control (existing research nudge) | 8 | 0.50 | 0/10 | 0 | 0/8 |
+| **compact (5-question chain)** | 8 | **1.00** | 1/10 | **1** | **7/8** |
+| full (10-step framework) | 8 | 0.88 | 0/10 | 0 | 3/8 |
+- **`polyglot-c-py` — a measured `stuck` flatline (0/1 across 8 graded rounds) — was SOLVED by
+  the compact scaffold**, single attempt, prompt-only, no training, no oracle.
+- **compact DOUBLED control's mean probe (1.00 vs 0.50)** — more runs reached "code that runs".
+- Pre-registered prediction was `compact ≥ control > full`; actual `compact > full > control`
+  (compact-best correct, full-worst wrong). **Compliance explains it:** compact got CRITERIA.md
+  written **7/8**, full only **3/8** — the longer framework is FOLLOWED LESS, consistent with
+  the pre-stated analysis-paralysis risk on a 31B.
+
+### 15.3 THE CONVERGENT LEVER — externalize "done" before solving
+Three independent signals now point at one mechanism:
+1. self-ratchet solved 2/5 baseline-failing tasks with **`iters=0`** — the verification loop
+   NEVER ran, so the gain came from the turn that wrote the frozen check;
+2. the compact scaffold (writes `CRITERIA.md` first) beat both control and the longer framework;
+3. compliance with writing criteria tracks the arm that won.
+**Running total of protocol-legal solves on tasks the honest baseline FAILED: 3** —
+`cancel-async-tasks`, `distribution-search` (self-ratchet), `polyglot-c-py` (compact scaffold).
+No training, no oracle. **Honest caveat: n is small (1 solve per 8 in the scaffold arm is within
+noise alone); the claim rests on the convergence of three cheap experiments, not any one.**
+Next test = compact scaffold across the FULL 89 against a matched baseline.
+
+### 15.4 INFRA: vLLM adopted for experiments (measured, not assumed)
+Concurrency probe (200-tok, generation-bound): **.21 vLLM 24.2 tok/s @conc=1, 48.7 @conc=4,
+48.5 @conc=8** vs **.20 llama.cpp 12.9 / 17.7 / 18.1**. vLLM is **~2.8× at conc=4**; llama.cpp
+flatlines at ~18 because it serves `-np 2` (two slots). conc=4 is the knee.
+**Comparability guard:** the servers run DIFFERENT quantizations — `.20` =
+`gemma-4-31B-it-qat-UD-Q4_K_XL` (gguf, and the server the **28.4% reference baseline** was
+measured on) vs `.21` = `gemma-4-31B-it-qat-w4a16-ct`. Different quant = different model
+numerically, so vLLM results are NOT comparable to 28.4%. Therefore: (a) `baseline_sweep.sh`
+gained an `OUT_DIR` override so a vLLM re-baseline **cannot overwrite** the reference CSV;
+(b) a **vLLM re-baseline (89 tasks, k=1, 4 streams)** is running to establish the new yardstick;
+(c) the temp ablation deliberately STAYED on `.20`/llama.cpp so it remains comparable to its own
+flat arm. The 2.8× speedup is what makes re-baselining affordable (~2h vs ~7h).
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested

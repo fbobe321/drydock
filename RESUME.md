@@ -101,6 +101,53 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **⚠️✅ 2026-08-28 — PAWL ABLATION CORRECTED (temperature was a confound) + FIRST PROTOCOL-LEGAL
+> GAINS on the honest number. Full detail: PRD §15.**
+> - **⚠️ CORRECTION — the 08-27 ablation claim was CONFOUNDED and is REVISED.** best-of-N ran at
+>   drydock's flat default `temperature=0.2` while the RATCHET explores a ladder (0.2 exploit →
+>   0.5/0.6/0.7/0.85, `ratchet.py::variant_specs`) ⇒ the control got **8 near-duplicate samples**, a
+>   THIRD variable credited to the pawl. The tell was misread as signal: verbatim-repeating scores
+>   (`0/2`×7, `1/2`×5) = duplicate sampling, NOT "a hard ceiling". Re-ran with a matched ladder:
+>   | task | flat best-of-8 | temp-diversified |
+>   |---|---|---|
+>   | break-filter-js-from-html | 0/1 | **1/1 SOLVED** |
+>   | filter-js-from-html | 1/2 | **2/2 SOLVED** |
+>   | caffe-cifar-10 | 2/6 | 3/6 |
+>   | extract-moves-from-video | 0/2 | 0/2 |
+>   **flat 0/4 → temp 2/4; temp arm 2/8 overall.** ⇒ **REVISED: cumulative selection beats
+>   diversified best-of-8 9 vs 2, NOT 9 vs 0.** The pawl still does most of the work but ~25% of its
+>   apparent edge was sampling diversity. My "fresh attempts hit a ceiling more attempts don't raise"
+>   claim is **WITHDRAWN**. Process lesson (2nd time): enumerate what differs between arms BEFORE
+>   reading results. Flat arm stopped at 4/9 once established (documented, not silently truncated).
+> - **✅ FIRST-PRINCIPLES SCAFFOLD (operator's framework) — the COMPRESSED version wins and cracked a
+>   flatline.** 3 arms × 8 flatlines, single attempt, honest protocol, metric = `probe_fitness` 0–4
+>   (binary-solved has NO dynamic range at 0/N — §14's floored-ruler lesson applied prospectively):
+>   | arm | mean probe | solved | wrote CRITERIA.md |
+>   |---|---|---|---|
+>   | control (research nudge) | 0.50 | 0 | 0/8 |
+>   | **compact (5 questions)** | **1.00** | **1** | **7/8** |
+>   | full (10 steps) | 0.88 | 0 | 3/8 |
+>   **`polyglot-c-py` (a measured `stuck` flatline, 0/1 over 8 graded rounds) SOLVED by the compact
+>   scaffold** — prompt-only, no training, no oracle. compact DOUBLED control's probe. Pre-registered
+>   `compact ≥ control > full`; actual `compact > full > control`. **Compliance explains it:** compact
+>   wrote CRITERIA.md 7/8 vs full 3/8 — the longer framework is FOLLOWED LESS (analysis paralysis).
+> - **🎯 CONVERGENT LEVER — externalize "done" BEFORE solving.** Three independent signals: self-ratchet
+>   solved 2/5 with **`iters=0`** (loop never ran ⇒ the gain was the check-AUTHORING turn) · compact
+>   scaffold (writes CRITERIA.md first) beat both arms · criteria-compliance tracks the winner.
+>   **Protocol-legal solves on tasks the honest baseline FAILED = 3**: `cancel-async-tasks`,
+>   `distribution-search` (self-ratchet), `polyglot-c-py` (compact). **Caveat: small n — 1/8 is within
+>   noise alone; the claim rests on CONVERGENCE of three cheap experiments.** Next: compact scaffold
+>   over the full 89 vs a matched baseline.
+> - **⚡ vLLM ADOPTED for experiments (measured):** `.21` vLLM **24.2 / 48.7 / 48.5** tok/s at conc
+>   1/4/8 vs `.20` llama.cpp **12.9 / 17.7 / 18.1** ⇒ **~2.8× at conc=4**; llama.cpp flatlines (`-np 2`).
+>   **COMPARABILITY GUARD:** different QUANTS — `.20` `…-UD-Q4_K_XL` (gguf, where the **28.4% reference**
+>   was measured) vs `.21` `…-qat-w4a16-ct` ⇒ vLLM numbers are NOT comparable to 28.4%. So:
+>   `baseline_sweep.sh` gained an `OUT_DIR` override (vLLM run **cannot overwrite** the reference CSV),
+>   a **vLLM re-baseline is running** (89×k=1, 4 streams) to set the new yardstick, and the temp ablation
+>   deliberately STAYED on `.20` to stay comparable to its own flat arm.
+> - **LAND-MINE:** DPO died silently — launched via `nohup … &` from the supervisor subshell, not tmux
+>   (the documented failure mode). Relaunched as tmux `ckr_dpo`. **Launch long jobs in tmux, always.**
+
 > **🔧 2026-08-27 — "BEAT TBENCH HONESTLY": eratchet DROPPED · self-distill diagnosed (we trained
 > memorizers + measured with a floored ruler) · 3 experiments in flight.**
 > Honest target restated: the leaderboard-comparable number is the **no-score-feedback protocol =
