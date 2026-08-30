@@ -580,9 +580,27 @@ def diversify_prompt(goal: str, passed: int, total: int, op: str) -> str:
             "everything that already passes."
         )
     if op == "restart":
+        # "Reconsider from first principles" was aspirational — a model given that
+        # sentence mostly re-words its previous plan. Measured on terminal-bench-2, the
+        # EXPLICIT five-question form beats the vague one on stuck runs (mean
+        # progress-milestone 1.00 vs 0.50 over an 89-task single-attempt sweep) and
+        # cracked a task that had flatlined for 8 graded rounds. The two questions doing
+        # the work are "what am I ASSUMING (how do I know?)" — stuck runs are usually
+        # stuck on a false premise rather than a missing strategy — and "the SIMPLEST
+        # thing I can test", which turns a restart into a cheap experiment rather than
+        # another full attempt. `restart` is the right home because it only fires when
+        # progress is stuck: the same prompt applied unconditionally REGRESSED tasks the
+        # model would otherwise have solved.
         return base + (
-            "Progress is stuck. Reconsider the problem from first principles for the "
-            "remaining checks while preserving what passes — a fresh decomposition."
+            "Progress is stuck. Do NOT re-word your previous plan — re-derive the "
+            "problem, answering briefly and in order: (1) What do I want? — the "
+            "remaining outcome as concrete checkable criteria (exact files, formats, "
+            "values). (2) What do I KNOW? — only what you have VERIFIED by looking at "
+            "the actual files/errors. (3) What am I ASSUMING? — for each, how do you "
+            "know it? Check the ones you can. (4) What PREVENTS the remaining checks "
+            "from passing — the single specific blocker? (5) What is the SIMPLEST thing "
+            "you can test to find out if you are right? Run that smallest test first. "
+            "Keep everything that already passes."
         )
     return continuation_prompt(goal, passed, total)
 

@@ -396,5 +396,8 @@ def test_diversify_prompt_varies_by_operator():
     restart = diversify_prompt("goal", 2, 5, "restart")
     assert "2/5" in div and "2/5" in restart
     assert "DIFFERENT strategy" in div and "STALLED" in div
-    assert "first principles" in restart
+    # `restart` used to just SAY "first principles", which a model mostly answers by
+    # re-wording its previous plan. It now asks the questions explicitly (measured
+    # better on stuck runs, 2026-08-30) — so assert the substance, not the slogan.
+    assert "ASSUMING" in restart and "SIMPLEST" in restart and "PREVENTS" in restart
     assert div != exploit and restart != exploit and div != restart
