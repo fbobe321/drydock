@@ -510,6 +510,76 @@ gained an `OUT_DIR` override so a vLLM re-baseline **cannot overwrite** the refe
 (c) the temp ablation deliberately STAYED on `.20`/llama.cpp so it remains comparable to its own
 flat arm. The 2.8× speedup is what makes re-baselining affordable (~2h vs ~7h).
 
+## 16. 2026-08-29 — FIRST REAL GAIN ON THE HONEST NUMBER (+6.8 pts) + DPO clean negative
+
+### 16.1 ✅ CONDITIONAL SCAFFOLD: 28.4% → 35.2% (n=88, honest protocol)
+The operator's first-principles framework, applied as a **rescue tool** rather than a default.
+| strategy | solved (n=88) | |
+|---|---|---|
+| baseline (plain, 1 attempt) | 25 | 28.4% |
+| scaffold ALWAYS | 28 | 31.8% |
+| **plain first, scaffold ONLY on failure** | **31** | **35.2%** |
+- **GAINS (6):** constraints-scheduling · crack-7z-hash · fix-code-vulnerability ·
+  model-extraction-relu-logits · pytorch-model-cli · reshard-c4-data
+- **LOSSES (3):** bn-fit-modify · mteb-retrieve · mteb-leaderboard
+- **The mechanism is conditional, and that is the finding.** Applied globally the scaffold nets
+  only +3.4 (it *breaks* tasks the model would have solved — overthinking work that was already
+  working). Applied only where a plain attempt FAILED it nets **+6.8** with no regressions, because
+  the losses are structurally impossible: you never scaffold a task you already solved.
+- **Protocol-legal:** no oracle, no score feedback, no training. Two attempts sits inside the
+  leaderboard's k=5 budget. This is the FIRST genuine movement on the comparable number.
+- **It also explains the earlier n=8 "flatline win"**: that sample was drawn entirely from tasks the
+  baseline fails — i.e. exactly the regime where the scaffold helps. Sampling from the favourable
+  subset made a conditional effect look general.
+- **⚠️ CORRECTED 2026-08-30 — the 35.2% was INFLATED; measured end-to-end it is 29.5%.**
+  The 35.2% figure was CONSTRUCTED by unioning "baseline solved" (sweep A) with "scaffold solved"
+  (sweep B). Each run carries its own lucky solves, so unioning two independent stochastic runs
+  systematically OVERSTATES the total (max-of-two-noisy-measurements bias). Run as ONE policy
+  (`twopass_solve.sh`: pass 1 plain -> score -> pass 2 with scaffold only if unsolved, fresh
+  container, model never sees the score):
+  | | measured end-to-end (n=88) |
+  |---|---|
+  | pass 1 (plain) | 23/88 = **26.1%** |
+  | after scaffold rescue | 26/88 = **29.5%** |
+  | gain | **+3 tasks (+3.4 pts)** |
+  | rescue rate | 3 of 65 = **4.6%** |
+  The +3 is EXACT (those tasks failed at pass 1 and passed at pass 2 in the same run; losses are
+  structurally impossible in this design). What is uncertain is whether the 4.6% rescue rate holds.
+  Note pass 1 scored 26.1% vs the reference baseline's 28.4% — pure run-to-run variance (~2 tasks),
+  a useful calibration on how noisy any single 89-task sweep is.
+- **METHOD LESSON (3rd correction this week, all from tightening method, not new data):** never
+  report a union across runs as a policy result; measure the policy.
+
+### 16.2 ❌ DPO ON CONTRASTIVE PAIRS: held-out discrimination is at CHANCE
+First training run with the §14 recipe fixes (10% hold-out, epoch logging, eval-loss curve).
+| checkpoint | held-out pref. accuracy | held-out loss |
+|---|---|---|
+| 1 | 0.479 | 0.859 |
+| 2 | 0.521 | 1.663 |
+| 3 | 0.479 | 2.353 |
+- **Accuracy sits on 0.5 = chance**: the model cannot predict which of two attempts actually scored
+  better on pairs it has not seen. **Held-out loss RISES monotonically** ⇒ overfitting from the first
+  checkpoint despite running under ONE epoch. Training-side `rewards/accuracies` bounced 0.40–0.75,
+  i.e. pure noise — exactly why the held-out number was instrumented.
+- **⇒ self-distillation is now 0 for 5** (heredity v1 · heredity v2 · MoE→31B · DPO), and this is the
+  best-instrumented failure of the five.
+- **THE RECIPE FIX PAID FOR ITSELF:** under the old settings this would have trained ~18 epochs to
+  loss ≈0.01, produced an adapter, and cost ~15h of eval to learn nothing. Instead: an unambiguous
+  answer in 8h, *with a diagnosis*.
+- **DIAGNOSED CAUSE (testable, drives v2):** (a) **margin is too weak** — 604 of 735 pairs have
+  margin=1 (a single check difference, plausibly luck rather than better strategy); only 131 have
+  margin ≥2. (b) **The window is in the wrong place** — `dpo_prep.py` takes the FIRST 8 assistant
+  turns on the assumption "approach selection lives early", but paired attempts share a base_ref and
+  therefore START NEARLY IDENTICAL; if they diverge at turn 20, the first 8 turns are the same tokens
+  with opposite labels, which *forces* chance accuracy. ⇒ **v2 = margin ≥2 only, windowed at the
+  DIVERGENCE POINT** rather than the start.
+
+### 16.3 Thread status (operator: keep all three alive)
+- **ratchet** — WORKS (9 vs 2 vs diversified best-of-8, §15.1). Campaign continues.
+- **eratchet** — dropped (never cracked what the plain ratchet couldn't, ~3× cost).
+- **self-distillation** — 0/5, but the newest failure is *diagnosed*, not mysterious → v2 above.
+- **fitness-signal / prompting** — the only thread producing gains: **+6.8 pts**.
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested

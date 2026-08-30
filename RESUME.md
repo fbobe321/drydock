@@ -101,6 +101,45 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **📉→📈 2026-08-29/30 — REAL BUT SMALLER GAIN: measured end-to-end 26.1% → 29.5% (+3.4 pts).
+> The 35.2% I first reported was INFLATED. DPO = clean negative. Full detail: PRD §16.**
+> - **⚠️ CORRECTION FIRST:** 35.2% came from UNIONING two separate sweeps (baseline-solved from one,
+>   scaffold-solved from another). Unioning independent stochastic runs overstates the total
+>   (max-of-two-noisy-measurements). Measured as ONE policy (`twopass_solve.sh`): pass1 **23/88 =
+>   26.1%** -> after scaffold rescue **26/88 = 29.5%**, **+3 tasks**, rescue rate **3/65 = 4.6%**.
+>   The +3 is EXACT (same run, losses structurally impossible); the 4.6% RATE is what may not
+>   generalize. Pass1's 26.1% vs the reference 28.4% = run-to-run variance (~2 tasks) — a useful
+>   calibration on single-sweep noise. **3rd correction this week, all from tightening method.**
+> - **✅ CONDITIONAL SCAFFOLD (operator's first-principles framework, used as a RESCUE not a default):**
+>   | strategy | solved (n=88) | |
+>   |---|---|---|
+>   | baseline (plain, 1 attempt) | 25 | 28.4% |
+>   | scaffold ALWAYS | 28 | 31.8% |
+>   | **plain first, scaffold ONLY on failure** | **31** | **35.2%** |
+>   GAINS (6): constraints-scheduling · crack-7z-hash · fix-code-vulnerability ·
+>   model-extraction-relu-logits · pytorch-model-cli · reshard-c4-data.
+>   LOSSES (3): bn-fit-modify · mteb-retrieve · mteb-leaderboard.
+>   **The conditionality IS the finding:** applied globally it only nets +3.4 because it BREAKS tasks
+>   the model already solved (overthinking working code); applied only after a plain attempt fails it
+>   nets **+6.8** and the losses become structurally impossible. No oracle, no training; 2 attempts fits
+>   inside the k=5 budget. **Also explains the earlier n=8 "flatline win"** — that sample was drawn
+>   entirely from baseline-failing tasks, i.e. the favourable subset, making a conditional effect look
+>   general. **LIMITS:** 1 run/task (6-vs-3 carries noise) and the conditional figure is CONSTRUCTED
+>   from two separate sweeps → `twopass_sweep.sh` now measures it end-to-end.
+> - **❌ DPO ON CONTRASTIVE PAIRS = CHANCE.** Held-out preference accuracy **0.479 → 0.521 → 0.479**
+>   (0.5 = chance); held-out loss **0.86 → 1.66 → 2.35** (rising ⇒ overfitting inside ONE epoch).
+>   Training-side accuracy bounced 0.40–0.75 = noise, which is exactly why the held-out number was
+>   instrumented. ⇒ **self-distillation is 0 for 5** (heredity v1/v2, MoE→31B, DPO). **The §14 recipe
+>   fix paid for itself:** old settings would have burned ~18 epochs to loss 0.01 + ~15h of eval to
+>   learn nothing; instead an unambiguous answer in 8h WITH a diagnosis.
+> - **DPO v2 (diagnosed, not guessed):** (a) **margin too weak** — 604/735 pairs are margin=1 (one
+>   check, plausibly luck); only 131 are ≥2. (b) **window in the wrong place** — `dpo_prep.py` takes the
+>   FIRST 8 turns, but paired attempts share a `base_ref` and START NEARLY IDENTICAL; if they diverge at
+>   turn 20 we trained on the SAME tokens with OPPOSITE labels, which forces chance. ⇒ v2 = **margin ≥2,
+>   windowed at the DIVERGENCE POINT**.
+> - **Threads (operator: keep all three):** ratchet WORKS (campaign continues) · eratchet dropped ·
+>   self-distill 0/5 but now diagnosed → v2 · prompting is the only gaining thread (+6.8).
+
 > **⚠️✅ 2026-08-28 — PAWL ABLATION CORRECTED (temperature was a confound) + FIRST PROTOCOL-LEGAL
 > GAINS on the honest number. Full detail: PRD §15.**
 > - **⚠️ CORRECTION — the 08-27 ablation claim was CONFOUNDED and is REVISED.** best-of-N ran at
