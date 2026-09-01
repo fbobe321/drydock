@@ -116,37 +116,12 @@ class RecoveryController:
                 "move you closer to the goal.]"
             ))
         if stage == 2:
-            # FIRST-PRINCIPLES REFLECTION (2026-08-30). The earlier wording asked for
-            # goal / known / failed-strategy / new-strategy / avoid-repeating. Measured
-            # on terminal-bench-2, this five-question form does better on exactly the
-            # situation this stage fires in — a run that is stuck:
-            #   89-task sweep, single attempt, no oracle: mean progress-milestone score
-            #   1.00 (this form) vs 0.50 (the plain nudge), and it solved a task that had
-            #   been a measured flatline. Two additions carry most of the difference:
-            #   (a) "what am I ASSUMING / how do I know?" — stuck runs are usually stuck
-            #       on an inherited false premise, not on a missing strategy;
-            #   (b) "the SIMPLEST thing I can test" — it converts reflection into a cheap
-            #       experiment instead of another full attempt.
-            # It asks for CONCRETE success criteria first because externalising "what does
-            # done mean" is the part that tracked the gain (criteria written in 7/8 of the
-            # winning arm's runs vs 3/8 of a longer 10-step variant, which was followed
-            # LESS — brevity matters here, so resist growing this list).
-            # IMPORTANT — apply only when STUCK: the same prompt applied to every task
-            # REGRESSED tasks the model would otherwise have solved (it overthinks working
-            # code). Stage 2 is the right home precisely because it fires on a stall.
             return RecoveryDirective(stage=2, note=(
                 "[STOP AND REFLECT: you have repeated actions without progress. "
-                "Before doing anything else, answer these five questions briefly, "
-                "in order: (1) What do I want? — the required outcome in one "
-                "sentence, as concrete checkable criteria (exact files, formats, "
-                "values), not prose. (2) What do I KNOW? — only facts you have "
-                "VERIFIED by looking at the actual files/errors. (3) What am I "
-                "ASSUMING? — for each, how do you know it? Check the ones you can; "
-                "a stuck run is usually stuck on a false assumption. (4) What "
-                "PREVENTS the outcome right now? — the single specific blocker. "
-                "(5) What is the SIMPLEST thing I can test to find out if I am "
-                "right? Then run that smallest test — prefer running something "
-                "over reasoning about it.]"
+                "Before doing anything else, state in one short paragraph: (1) the "
+                "current goal, (2) what you now know, (3) the strategy that has "
+                "FAILED, (4) a DIFFERENT strategy to try next, and (5) the exact "
+                "action you will avoid repeating.]"
             ))
         if stage == 3:
             if offender_signature and offender_signature not in self._suppressed:
