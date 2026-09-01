@@ -580,6 +580,68 @@ First training run with the §14 recipe fixes (10% hold-out, epoch logging, eval
 - **self-distillation** — 0/5, but the newest failure is *diagnosed*, not mysterious → v2 above.
 - **fitness-signal / prompting** — the only thread producing gains: **+6.8 pts**.
 
+## 17. 2026-09-01 — RETRACTION: the scaffold gain was retry variance. Self-distill #6 null.
+
+### 17.1 ❌ RETRACTED: the first-principles scaffold adds NOTHING over a plain retry
+Reported as +6.8 pts (§16.1), corrected to +3.4 (measured end-to-end), now **+0.0**.
+The missing control finally ran — pass 1 plain, pass 2 **also plain** (no scaffold):
+| arm | rescue rate |
+|---|---|
+| scaffold run 1 | 3/65 = 4.6% |
+| scaffold run 2 | 3/64 = 4.7% |
+| **plain retry (control)** | **2/40 = 5.0%** |
+- **Plain retry MATCHES (slightly exceeds) the scaffold.** The reasoning prompt contributes
+  nothing; the entire effect was "a second independent attempt sometimes works".
+- Corroborating tells that were visible earlier and under-weighted: (a) the two scaffold runs
+  rescued DISJOINT task sets; (b) `merge-diff-arc-agi-task` was "rescued" by both a scaffold run
+  AND the plain control, and solved at pass 1 in another run — a coin-flip boundary task;
+  (c) pass 1 alone disagreed on **10 of 69** tasks between identical runs (14.5% noise floor)
+  while the claimed effect was 3-4%.
+- **WHAT SURVIVES:** a second attempt rescues ~5% of failures (+2 to +3 tasks, consistent across
+  three runs). Real, but that is just k>1 sampling — which the leaderboard protocol already
+  assumes. NOT a novel finding.
+- **CODE REVERTED:** commit 6350a2e shipped this wording into `recovery.py` stage 2 and
+  `ratchet.py`'s restart op citing a measured 1.00-vs-0.50 superiority. That justification is
+  refuted, so the commit was reverted. The replaced wording was at least field-tested;
+  "sounds more specific" is not evidence.
+- **PROCESS:** four corrections in a week, each from tightening method on existing data
+  (temperature confound -> global-vs-conditional -> union-vs-policy -> missing control).
+  Standing rule going forward: **name the control arm BEFORE reporting an effect.**
+
+### 17.2 ❌ SELF-DISTILLATION #6 — null on a corpus whose known defect was FIXED
+Held-out preference accuracy: **0.484 / 0.418 / 0.451 / 0.418 / 0.440**, eval loss rising
+1.02 -> 1.34. Stopped by a kill rule written to `DPO_V3_KILL_RULE.txt` BEFORE results existed.
+- This is the strongest of the six nulls: the corpus defect was real and repaired
+  (254 pairs/5 tasks/87%-one-task -> 4,660 pairs/14 tasks/25% max; training rows 483 -> 918
+  across 13 tasks) by pairing on the LEXICOGRAPHIC fitness the ratchet actually climbs
+  (passed, partial, probe) instead of binary check counts. The answer did not change.
+- **NEW CLUE — accuracy is consistently BELOW 0.5, not at it.** That is not "no signal", it is
+  ANTI-correlated signal: the model systematically prefers the attempt that scored WORSE. A
+  null would sit on 0.50; sitting at 0.42-0.45 across five checkpoints means something
+  systematic separates chosen from rejected in the wrong direction. Prime suspect is a
+  surface confound (length/verbosity) rather than strategy — see §17.3.
+
+### 17.3 🔍 THE v3 NULL IS DIAGNOSED — DPO learned "prefer the longer trajectory" (v4 fixes it)
+Not a mystery null. Two numbers match almost exactly:
+| quantity | value |
+|---|---|
+| rate at which `chosen` is the LONGER side | **43%** |
+| v3 held-out preference accuracy | **41.8-45.1%** (mean ~43.6%) |
+DPO's implicit reward SUMS token log-probs, so raw sequence length leaks into the
+comparison; the policy can satisfy the objective with "prefer the longer trajectory"
+instead of learning strategy. Here length is ANTI-correlated with quality — rejected
+attempts average **876 chars vs chosen 512**, i.e. *worse attempts ramble* — so that
+shortcut scores systematically BELOW chance. That is the whole 0.42-0.45 signature.
+(Independently consistent with the 08-21 diagnosis that the 31B's failing traces are very
+verbose: git-multibranch 54 assistant turns, git-leak-recovery 46.)
+- **v4 FIX:** truncate BOTH sides to an identical character budget. Verified: **100% of
+  pairs equal-length**, so "prefer longer/shorter" now scores EXACTLY chance by
+  construction and content is the only remaining discriminator. 904 rows / 13 tasks.
+- **Kill rule pre-registered in `DPO_V4_KILL_RULE.txt` before results**, bar raised
+  0.52 -> 0.55. **Prediction registered in advance: if v4 lands ~0.50 +/- 0.03, the
+  confound is gone AND there is no learnable strategy signal — that is the honest death of
+  this lever, and it should be stopped rather than re-tried an 8th time.**
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested

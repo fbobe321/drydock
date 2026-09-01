@@ -101,6 +101,29 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **❌🔍 2026-09-01 — SCAFFOLD RETRACTED (+0.0, control matched it) · SELF-DISTILL #6 null but
+> DIAGNOSED: DPO learned "prefer the longer trajectory". v4 running. PRD §17.**
+> - **RETRACTED — the scaffold adds NOTHING.** The missing control (pass2 = plain, no scaffold):
+>   scaffold **3/65 = 4.6%** and **3/64 = 4.7%** vs **plain retry 2/40 = 5.0%**. Plain retry MATCHES
+>   it. The whole effect was "a second attempt sometimes works". Trajectory of this claim:
+>   +6.8 → +3.4 → **+0.0**. Tells I under-weighted: disjoint rescued-task sets across runs;
+>   `merge-diff-arc-agi-task` rescued by BOTH a scaffold run and the plain control (a coin-flip
+>   boundary task); and a **14.5% noise floor** (pass1 alone disagreed on 10/69 tasks) dwarfing a
+>   3-4% claimed effect. **Code REVERTED** (6350a2e shipped it citing a measured 1.00-vs-0.50 that
+>   no longer holds). **What survives:** a 2nd attempt rescues ~5% — real, but that is just k>1,
+>   which the leaderboard already assumes. **RULE: name the control arm BEFORE reporting an effect.**
+> - **SELF-DISTILL #6 = null, and it is the STRONGEST null** because the known corpus defect was
+>   FIXED first (lexicographic `(passed, partial, probe)` pairing → 254 pairs/5 tasks/87%-one-task
+>   became 4,660/14 tasks/25%; 918 rows/13 tasks). Held-out accuracy **0.484/0.418/0.451/0.418/0.440**,
+>   loss rising; stopped by a kill rule written BEFORE results.
+> - **🔍 BUT IT IS DIAGNOSED, NOT MYSTERIOUS.** `chosen` is the longer side in **43%** of pairs;
+>   v3 held-out accuracy was **~43.6%**. Same number. DPO sums token log-probs, so length leaks in
+>   and the policy learned **"prefer the longer trajectory"** — anti-correlated with quality here
+>   (rejected 876 chars vs chosen 512: *worse attempts ramble*), which is exactly why it scored
+>   BELOW chance. **v4 truncates both sides to an identical budget (verified 100% equal-length)**, so
+>   that shortcut is now exactly chance by construction. Kill rule pre-registered at 0.55.
+>   **Prediction on record: v4 ≈ 0.50 ⇒ the lever is genuinely dead — stop, do not try #8.**
+
 > **📉→📈 2026-08-29/30 — REAL BUT SMALLER GAIN: measured end-to-end 26.1% → 29.5% (+3.4 pts).
 > The 35.2% I first reported was INFLATED. DPO = clean negative. Full detail: PRD §16.**
 > - **⚠️ CORRECTION FIRST:** 35.2% came from UNIONING two separate sweeps (baseline-solved from one,
