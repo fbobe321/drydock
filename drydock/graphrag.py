@@ -65,6 +65,26 @@ def default_store_path(cwd: str) -> Path:
     return Path(cwd) / ".drydock" / "graphrag.db"
 
 
+def knowledge_base_exists(cwd: str) -> bool:
+    """True when this project has a built GraphRAG index (SQLite or legacy JSON).
+
+    Used to PIN the `Knowledge` tool for the turn. Dynamic tool selection
+    (tool_select) otherwise gates Knowledge behind the keywords
+    knowledge/graph/entity/graphrag/ingest, which the user has no reason to type:
+    the whole point of the feature is that a plain question like "what does the
+    auth module do?" is answered FROM their index. With 46 tools and a cap of 12,
+    that question dropped Knowledge from the toolset and the model's call came
+    back "[The 'Knowledge' tool is not available here]" — the bug reported
+    2026-09-03. Knowledge is read-only and cheap, so pinning it whenever an index
+    exists costs one slot and restores the documented behaviour; when no index
+    exists nothing is pinned and the tool stays gated as before.
+    """
+    try:
+        return _resolve_store(default_store_path(cwd)).exists()
+    except Exception:      # never let a tool-selection helper break the turn
+        return False
+
+
 def _resolve_store(store_path) -> Path:
     """Given a requested store path, return the one that actually exists — a
     ``.db`` (SQLite) if present, else a legacy ``.json`` sibling, else the path

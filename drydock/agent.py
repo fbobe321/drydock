@@ -310,12 +310,24 @@ def run(
                 # relevant to this task + phase, capped at max_tools (default 12).
                 # Trims nothing when already under the cap; core coding tools are
                 # never dropped.
+                # Pin Knowledge when the project HAS a GraphRAG index. Its purpose
+                # is to answer plain questions from the user's own corpus, but the
+                # keyword gate only fires on knowledge/graph/entity/graphrag/ingest
+                # — words a user asking "what does the auth module do?" never types
+                # — so it was trimmed and the call came back "not available here".
+                _pins = list(turn_config.get("pin_tools") or [])
+                try:
+                    from drydock.graphrag import knowledge_base_exists
+                    if "Knowledge" not in _pins and knowledge_base_exists(os.getcwd()):
+                        _pins.append("Knowledge")
+                except Exception:
+                    pass          # advisory: never let this break the turn
                 available = select_tools(
                     available,
                     phase=str(state.task.phase),
                     task_text=state.task.objective,
                     max_tools=turn_config.get("max_tools", DEFAULT_MAX_TOOLS),
-                    pin_tools=turn_config.get("pin_tools") or [],
+                    pin_tools=_pins,
                 )
                 for event in stream(
                     model=turn_config["model"],
