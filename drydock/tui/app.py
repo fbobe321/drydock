@@ -1890,7 +1890,13 @@ class DrydockApp(App):
             st = getattr(self, "state", None)
             streak = getattr(st, "verify_fail_streak", 0) if st else 0
             vcmd = getattr(st, "last_verify_cmd", "") if st else ""
-            goal = (getattr(st, "task", None).objective if st and getattr(st, "task", None) else "") or ""
+            # Bind the task ONCE: the previous form called getattr twice and
+            # dereferenced .objective on the second call, which pyright cannot narrow
+            # to non-None (reportOptionalMemberAccess). Runtime was safe, but the
+            # release gate blocked on it — which is why 3.1.24 was committed and never
+            # published. Binding first is both type-safe and clearer.
+            _task = getattr(st, "task", None) if st else None
+            goal = (getattr(_task, "objective", "") or "") if _task is not None else ""
             offer = rmod.ratchet_offer(goal, vcmd, streak)
             if offer:
                 self._offered_ratchet = True
