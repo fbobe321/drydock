@@ -589,9 +589,11 @@ The missing control finally ran — pass 1 plain, pass 2 **also plain** (no scaf
 |---|---|
 | scaffold run 1 | 3/65 = 4.6% |
 | scaffold run 2 | 3/64 = 4.7% |
-| **plain retry (control)** | **2/40 = 5.0%** |
-- **Plain retry MATCHES (slightly exceeds) the scaffold.** The reasoning prompt contributes
-  nothing; the entire effect was "a second independent attempt sometimes works".
+| **plain retry (control)** | **4/64 = 6.2%** (final, n=89) |
+- **Plain retry EXCEEDS the scaffold.** §17.1 was written at n=60 (5.0%); the control finished
+  all 89 at **4/64 = 6.2%** — more rescues (4 vs 3) at a higher rate than either scaffold run.
+  The reasoning prompt contributes nothing; the entire effect was "a second independent attempt
+  sometimes works", and the scaffold is if anything a slight drag on it.
 - Corroborating tells that were visible earlier and under-weighted: (a) the two scaffold runs
   rescued DISJOINT task sets; (b) `merge-diff-arc-agi-task` was "rescued" by both a scaffold run
   AND the plain control, and solved at pass 1 in another run — a coin-flip boundary task;
@@ -641,6 +643,74 @@ verbose: git-multibranch 54 assistant turns, git-leak-recovery 46.)
   0.52 -> 0.55. **Prediction registered in advance: if v4 lands ~0.50 +/- 0.03, the
   confound is gone AND there is no learnable strategy signal — that is the honest death of
   this lever, and it should be stopped rather than re-tried an 8th time.**
+
+## 18. 2026-09-03/05 — SHIPPED: Knowledge-tool fix, and the release gate had been silently broken
+
+### 18.1 Product bug: the Knowledge tool was unreachable for plain questions
+User report: *"Drydock can't use knowledge tool anymore, says not in current toolset."* Reproduced
+deterministically: drydock has **46 tools** and shows at most **12/turn** (`tool_select`), and
+`Knowledge` was gated behind the keywords knowledge/graph/entity/graphrag/ingest.
+| task text | Knowledge surfaced? |
+|---|---|
+| "what does the authentication module do?" | **dropped** |
+| "summarize how billing works in this codebase" | **dropped** |
+| "search the **knowledge** base for auth" | present |
+- The model's call was then rejected with `[The 'Knowledge' tool is not available here]`.
+- **Root cause is a design mismatch, not a typo:** the trigger keywords describe the tool's
+  DOMAIN, not the situations where it is useful, so the gate only opened for users who already
+  knew the feature existed and named it — while the feature's own help text promises the opposite
+  ("the agent draws on it via the Knowledge tool when you just ASK a question — no slash command").
+  Anyone using GraphRAG as designed would hit this.
+- **Fix (`df5aca0`):** `graphrag.knowledge_base_exists()` + pin `Knowledge` for the turn when the
+  project has a built index. Deliberately narrow — **no index ⇒ nothing pinned**, so the tool stays
+  gated and the slot is not wasted; read-only and cheap, so it costs one of 12 slots only for users
+  who actually built a KB; wrapped in try/except (tool selection must never break a turn).
+- **⚠️ LIKELY WIDER:** the same keyword gating covers the Git, Web, PDF and Jobs families. Any of
+  them can be unreachable when a user phrases a request naturally. **Unaudited — worth a sweep.**
+
+### 18.2 The release gate had been silently blocking releases for 11 days
+`scripts/release.sh` runs pyright as a **hard gate**. `fa18c53` (2026-08-23) introduced a
+`reportOptionalMemberAccess` in `tui/app.py` — the proactive /ratchet offer called
+`getattr(st,"task",None)` twice and dereferenced `.objective` on the second call. Runtime was safe
+(same conditional guards it) but pyright cannot narrow it.
+- **Consequence: every release attempt since 08-23 died at step 1/3.** That is why **v3.1.24 was
+  committed but never published** — PyPI sat on 3.1.23 while the tree said 3.1.24, and nobody
+  noticed for 11 days. The gate worked; it failed *quietly*.
+- Fixed by binding the task once (`e9b6f84`) — type-safe and clearer.
+- **Process note:** the release was run through `scripts/release.sh` end-to-end rather than piping
+  build→scan→upload by hand. That shortcut is what let the 3.1.16 phone-home through and forced a
+  yank; this project cannot pay that cost twice.
+
+### 18.3 Deployment state (2026-09-03)
+- **PyPI: `drydock-cli 3.1.25` LIVE** — verified by installing it into a clean venv with
+  `--no-cache-dir` and confirming the Knowledge fix is present in the shipped package.
+  Gates on the release: ruff ✓ · pyright 0 errors ✓ · pytest ✓ · build ✓ · security scan
+  **0 HIGH** (1 MEDIUM, non-blocking: `recipes.py` uses exec/eval, pre-existing).
+  3.1.25 carries BOTH the never-published 3.1.24 bash idle-watchdog and the Knowledge fix.
+- **GitHub `fbobe321/drydock` main: 43 commits pushed** (`539f74f..e9b6f84`) — the whole
+  meta-ratchet arc, fleet fixes, retractions, and the product fixes.
+- **PyPI CDN caveat:** `/pypi/<pkg>/json` and `pip index versions` lag (they still showed 3.1.23
+  for a while); `/simple/<pkg>/` — the index pip actually resolves from — had 3.1.25 immediately.
+  Verify a publish against the simple index or a clean install, not the JSON endpoint.
+- **🔑 OUTSTANDING SECURITY:** the git remote embeds a GitHub PAT in plaintext
+  (`https://x-access-token:ghp_***@github.com/...`). It was exposed in a session transcript on
+  2026-09-03. **Rotate it and move to SSH or a credential helper.** RESUME already flagged the same
+  pattern for `fbobe321/RSI.git` — this is recurring, not a one-off.
+
+### 18.4 Fleet: .20 loaned out; self-distillation staged, not abandoned
+- **`.20` is loaned to another project (2026-09-05).** `cluster/STOP_20` flag added to
+  `fleet_supervisor.sh`: while it exists the supervisor skips `.20` entirely (no worker keepalive,
+  no GPU contention). Hand the box back with `rm cluster/STOP_20`.
+- **DPO v4 is STAGED and blocked only on `.20`:** 904 length-equalized rows / 13 tasks,
+  `DPO_V4_KILL_RULE.txt` on disk with the bar (0.55) and the falsifying prediction written BEFORE
+  results. Resume with
+  `DPO_ROWS=.../moe_collect/dpo_rows_v4.jsonl STEPS=100 SEQ=1024 bash dpo_train_eval.sh` (~19h).
+- **Capture keeps growing for free** on the surviving lane: **1,725 rows / 30 tasks** (1,282 on
+  08-31). Rebuilding pairs would now add ~20% more, and would pick up the `partial`/`probe` columns
+  that `ratchet_evolve.sh` writes natively rather than back-filling from logs.
+- **Idle capacity worth noting:** the supervisor only manages `20a/20b/21a`, so **`.22`'s GPU has
+  never run campaign work** (0% util) even though it serves the SAME `Q4_K_XL` quant as `.20` and is
+  therefore baseline-comparable. With `.20` loaned, the fleet is at one lane of three.
 
 ## 11. Open questions
 

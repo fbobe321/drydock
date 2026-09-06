@@ -101,6 +101,40 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **🚢 2026-09-03/05 — SHIPPED v3.1.25 (PyPI + GitHub) · Knowledge-tool bug fixed · the RELEASE GATE
+> had been silently broken for 11 days · .20 loaned out, DPO v4 staged. PRD §18.**
+> - **PRODUCT BUG FIXED — the Knowledge tool was unreachable for plain questions.** Reported as
+>   *"says not in current toolset"*. Reproduced: 46 tools, cap 12, and `Knowledge` gated behind the
+>   keywords knowledge/graph/entity/graphrag/ingest — so *"what does the auth module do?"* DROPPED it
+>   and the model's call was rejected. **The keywords describe the tool's DOMAIN, not when it's
+>   useful**, so the gate only opened for users who already knew the feature existed — the exact
+>   opposite of the help text ("draws on it when you just ASK a question"). Fix (`df5aca0`):
+>   `knowledge_base_exists()` + pin `Knowledge` when the project HAS an index; no index ⇒ nothing
+>   pinned (slot not wasted). **⚠️ The same gating covers Git / Web / PDF / Jobs — UNAUDITED, likely
+>   the same bug there.**
+> - **🚨 THE RELEASE GATE WAS SILENTLY BLOCKING RELEASES SINCE 08-23.** `scripts/release.sh` runs
+>   pyright as a HARD gate; `fa18c53` introduced a `reportOptionalMemberAccess` in `tui/app.py`
+>   (double `getattr` then `.objective` — runtime safe, un-narrowable). **Every release attempt died
+>   at step 1/3 ⇒ v3.1.24 was committed but NEVER published** (PyPI sat on 3.1.23 for 11 days). Fixed
+>   `e9b6f84`. The gate worked — it failed QUIETLY, which is the lesson.
+> - **DEPLOYED:** **PyPI `drydock-cli 3.1.25` LIVE** (verified by clean-venv `--no-cache-dir` install
+>   + confirming the fix is in the shipped package); gates ruff/pyright-0/pytest/build/security
+>   **0 HIGH**. **GitHub main: 43 commits pushed** (`539f74f..e9b6f84`). Released via
+>   `scripts/release.sh` end-to-end — NOT hand-piped (that shortcut caused the 3.1.16 phone-home yank).
+>   **CDN caveat:** `/pypi/<pkg>/json` and `pip index versions` LAG; verify against `/simple/<pkg>/`
+>   or a clean install.
+> - **🔑 ROTATE THE GITHUB PAT.** The remote embeds it in plaintext
+>   (`x-access-token:ghp_***@github.com/...`) and it was exposed in a transcript 09-03. Move to SSH or
+>   a credential helper. Same pattern already flagged for `fbobe321/RSI.git` — recurring.
+> - **FLEET:** `.20` **loaned to another project** — `cluster/STOP_20` makes the supervisor skip it
+>   entirely; `rm cluster/STOP_20` hands it back. **DPO v4 staged, blocked only on .20** (904
+>   length-equalized rows / 13 tasks; kill rule + falsifying prediction on disk BEFORE results).
+>   Capture grows free on the one surviving lane: **1,725 rows / 30 tasks**. **`.22`'s GPU has NEVER
+>   run campaign work** (supervisor manages only 20a/20b/21a) though it serves the same Q4_K_XL quant
+>   and is baseline-comparable — with .20 out, the fleet is at 1 lane of 3.
+> - **CONTROL FINALISED:** plain retry finished all 89 at **4/64 = 6.2%** vs scaffold 4.6%/4.7% —
+>   the retraction stands and is if anything understated (plain retry BEATS the scaffold).
+
 > **❌🔍 2026-09-01 — SCAFFOLD RETRACTED (+0.0, control matched it) · SELF-DISTILL #6 null but
 > DIAGNOSED: DPO learned "prefer the longer trajectory". v4 running. PRD §17.**
 > - **RETRACTED — the scaffold adds NOTHING.** The missing control (pass2 = plain, no scaffold):
