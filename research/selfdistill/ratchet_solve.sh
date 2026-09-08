@@ -65,8 +65,13 @@ restore_snapshot(){   # bring ddt_<task> up from the best snapshot (has drydock 
 }
 
 drive(){   # one round through the real TUI
-  local ctr sess pane st start; ctr=$(_ctr "$task"); sess="ddt_$task"
-  printf 'trajectory_file = "/app/.dd_trajectory.json"\nstall_retry_secs = 300\n' \
+  local ctr sess pane st start cfg; ctr=$(_ctr "$task"); sess="ddt_$task"
+  cfg=$'trajectory_file = "/app/.dd_trajectory.json"\nstall_retry_secs = 300\n'
+  # LOOP-CONTROL with-loop arm: pin the first-principles Ledger tool so it is never
+  # trimmed and persists across rounds. Opt-in via env; empty (plain arm) = no change,
+  # so the running campaign is byte-for-byte unaffected. See loop_control/PRE_REGISTRATION.md.
+  [ -n "${LOOP_PINS:-}" ] && cfg="${cfg}pin_tools = [${LOOP_PINS}]"$'\n'
+  printf '%s' "$cfg" \
     | docker exec -i "$ctr" bash -c 'mkdir -p ~/.drydock && cat > ~/.drydock/config.toml' 2>/dev/null
   ddt_tui "$task" >/dev/null 2>&1; sleep 10
   tmux send-keys -t "$sess" -- "$1"; tmux send-keys -t "$sess" Enter

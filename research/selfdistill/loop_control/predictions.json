@@ -1,0 +1,29 @@
+[
+  {
+    "id": "p1",
+    "claim": "LOOP-CONTROL: exposing the first-principles loop as ARTIFACTS (ground-truth ledger + bottleneck register, as the Ledger tool) beats a plain ratchet at equal tasks/budget/seeds",
+    "expected": "with-loop arm solves >= plain+2 tasks on the 14-task set, OR reaches equal solves in fewer rounds (median rounds-to-solve lower by >=1) \u2014 a real marginal effect above ratchet+retry",
+    "falsifier": "with-loop solves within +/-1 of plain AND median rounds-to-solve not lower => the artifacts add nothing the ratchet+retry did not already get; they go the way of the scaffold (removed, not shipped into the loop)",
+    "observed": "",
+    "status": "open",
+    "note": ""
+  },
+  {
+    "id": "p2",
+    "claim": "USAGE GUARD: the with-loop effect (if any) is mediated by the tool actually being invoked, not by its mere presence",
+    "expected": "in solved with-loop tasks, the Ledger tool was called (add/next/component/lever) in >=50% of them",
+    "falsifier": "with-loop beats plain YET the Ledger tool was invoked in <20% of its solves => the gain is not from the artifact (confound: seed/variance); do NOT credit the loop",
+    "observed": "",
+    "status": "open",
+    "note": ""
+  },
+  {
+    "id": "p3",
+    "claim": "BOTTLENECK-SPECIFIC: on the HARD flatline tasks (monolithic checker, no gradient), decomposing into components and attacking the highest share*headroom lever helps more than on easy tasks",
+    "expected": "with-loop minus plain solve-delta is larger on the hard subset than on the easy subset",
+    "falsifier": "delta on hard <= delta on easy => the bottleneck step is not where the value is; keep only the ground-truth half if p1 survives",
+    "observed": "",
+    "status": "open",
+    "note": ""
+  }
+]

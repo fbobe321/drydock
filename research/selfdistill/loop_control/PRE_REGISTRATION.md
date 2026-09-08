@@ -1,0 +1,78 @@
+# Loop control — ratchet-with-artifacts vs plain ratchet (PRE-REGISTERED)
+
+**Written 2026-09-08, before any data.** Predictions + falsifiers are registered
+machine-readably in `predictions.json` (via `drydock/predictions.py` — the artifact
+under test is used to register its own trial, on purpose). The only conclusion in this
+project's week-long log that needed no correction was the one pre-registered to disk;
+this file is that discipline applied to the first-principles loop.
+
+## The claim being tested
+The first-principles loop was **measured dead as a prompt** (PRD §17.1): a reasoning
+checklist regressed when always-on, lost to a plain retry when on-failure, and the
+*longer* variant did *worse* because it was followed less. The loop was therefore rebuilt
+as **artifacts** the model calls, not text it is told to obey:
+- `drydock/groundtruth.py` — FACT/ASSUMPTION/UNKNOWN ledger + `next_test()` (rank unknowns
+  by decision impact). Steps 2 + 6.
+- `drydock/bottleneck.py` — decompose → rank components by `share × headroom`, attack the
+  one limiting factor. The step between decompose and hypothesize.
+- `drydock/predictions.py` — register claim + falsifier before looking. Step 8.
+
+Exposed together as the **`Ledger` tool** (actions: add / next / verify / refute / show /
+component / lever). This control asks the only question that matters: **does the artifact
+form beat a plain ratchet, or does it go the way of the scaffold?**
+
+## Design — one variable
+Both arms are the *same* `ratchet_solve.sh` on the *same* tasks, budget, seeds, and model.
+They differ in exactly one thing:
+
+| | Plain arm (`ratchet_solve.sh`) | With-loop arm (`loop_ratchet.sh`) |
+|---|---|---|
+| ratchet, snapshots, retry, diversify-on-stall | ✓ | ✓ (identical) |
+| `Ledger` tool exposed + pinned across rounds | ✗ | ✓ (persists in `/app/.drydock/*.json`, survives the snapshot) |
+| extra prompt instructions | none | **none** — the tool is *available*, the model is not lectured |
+
+The "no extra prompt" column is deliberate and is the whole point: §17.1 showed that
+*telling* the model to reason harder backfires. If there is a gain it must come from the
+model choosing to use a place to put its facts/bottleneck, not from a new instruction.
+
+## Tasks, budget, seeds
+- **Tasks:** the 14-task set the DPO corpus was built from (the same set the ratchet's
+  28%→71% baseline delta was measured on). Tagged easy vs hard (hard = monolithic
+  single-`total=1` checker, no gradient) for prediction p3.
+- **Budget:** identical `MAX_ROUNDS` and `ROUND_BUDGET_S` per arm (the ratchet's current
+  defaults). Equal wall-clock per task, both arms.
+- **Seeds:** run each task in **both** arms; report per-task paired outcome. If fleet time
+  allows, ≥2 repeats per (task, arm) to separate effect from the ratchet's known variance.
+
+## Metrics
+1. **solves** per arm (primary).
+2. **median rounds-to-solve** among tasks solved by both (does it solve *faster*?).
+3. **Ledger tool invocation rate** in with-loop solves (the usage guard, p2) — parsed from
+   the trajectory logs.
+4. solve-delta on the **hard** subset vs the **easy** subset (p3).
+
+## Kill rule (enforced, not remembered)
+The DPO v4 lesson: *"a pre-registered rule is worth only what enforces it — it ran to step
+72 because nothing stopped it at 50."* So this rule is mechanical:
+
+> **If p1's falsifier fires** — with-loop solves within ±1 of plain AND median
+> rounds-to-solve not lower — **the artifacts are NOT wired into the agent loop and the
+> `Ledger` tool ships behind a default-off flag or is removed.** No "try once more with a
+> better nudge": that is exactly the scaffold's death spiral (more instruction, less
+> behaviour).
+
+> **If p1 survives but p2's falsifier fires** (gain without the tool being used), the gain
+> is a seed/variance confound — **do not credit the loop**; re-run with more repeats before
+> any claim.
+
+> **If p1 survives and p2 holds but p3's falsifier fires**, keep only the ground-truth half
+> and drop the bottleneck step from the shipped surface.
+
+## Status
+- Artifacts: built, gated (ruff ✓, pyright 0 ✓, 13+16 tests). Ledger tool: wired.
+- Predictions: registered to `predictions.json` before data. ✓
+- **NOT LAUNCHED.** The live fleet (`wrk_20a/20b/21a`) is running the 28%→71% campaign;
+  this control needs a free lane and must not contend with it. It launches when the
+  operator frees a lane (`cluster/STOP_*` / a stopped `wrk_` session), same mechanics as
+  the meta-ratchet campaign. Until then this is staged, not measured — and this file says
+  so rather than implying coverage that does not exist.

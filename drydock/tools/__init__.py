@@ -789,25 +789,34 @@ SCHEMAS = [
     {
         "name": "Ledger",
         "description": (
-            "Ground-truth ledger. Record what you have VERIFIED vs what you are only "
-            "ASSUMING, and ask which unknown to test first. Use it when a task is not "
-            "going well: a stuck run is usually stuck on a false assumption rather than "
-            "a missing strategy. action='add' to record a belief (kind: fact|assumption|"
-            "unknown, impact 0-3 = how much the plan changes if it is false, cost 0-3 = "
-            "how hard to check); action='next' to be told the highest-impact unknown to "
-            "settle; action='verify'/'refute' with the evidence you observed; "
-            "action='show' to see the ledger."
+            "First-principles loop scratchpad. Two things it does. (1) GROUND TRUTH: "
+            "record what you have VERIFIED vs what you are only ASSUMING, and ask which "
+            "unknown to test first — a stuck run is usually stuck on a false assumption. "
+            "action='add' (kind: fact|assumption|unknown, impact 0-3 = how much the plan "
+            "changes if it is false, cost 0-3 = how hard to check); action='next' for the "
+            "highest-impact unknown; action='verify'/'refute' with the evidence; "
+            "action='show'. (2) BOTTLENECK: after you DECOMPOSE the problem, record each "
+            "component's share (0-1 = fraction of the objective it controls) and headroom "
+            "(0-1 = how much of it is still improvable; 0 = a fundamental constraint you "
+            "cannot move), and be told the one limiting factor to attack — the biggest "
+            "share×headroom, not the easiest thing to optimise. action='component' to add "
+            "one (statement=name, share, headroom); action='lever' for the bottleneck."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "action": {"type": "string",
-                           "description": "add | verify | refute | next | show"},
-                "statement": {"type": "string", "description": "The belief (for add)."},
+                           "description": "add | verify | refute | next | show | component | lever"},
+                "statement": {"type": "string",
+                              "description": "The belief (add) or component name (component)."},
                 "kind": {"type": "string", "description": "fact | assumption | unknown"},
                 "impact": {"type": "integer",
                            "description": "0-3: how much the approach changes if this is false."},
                 "cost": {"type": "integer", "description": "0-3: how expensive to find out."},
+                "share": {"type": "number",
+                          "description": "0-1: fraction of the objective this component controls (component)."},
+                "headroom": {"type": "number",
+                             "description": "0-1: how much of this component is still improvable; 0 = a wall (component)."},
                 "id": {"type": "string", "description": "Ledger id (for verify/refute)."},
                 "evidence": {"type": "string",
                              "description": "What you actually observed (required to verify/refute)."},
@@ -2678,8 +2687,39 @@ def tool_ledger(params: dict, config: dict) -> str:
     if action == "show":
         return lg.render()
 
-    return ("Error: `action` must be one of add | verify | refute | next | show. "
-            f"(got {action!r})")
+    if action in ("component", "lever"):
+        from drydock.bottleneck import Bottlenecks
+        bn = Bottlenecks(Path(cwd) / ".drydock" / "bottlenecks.json")
+        if action == "component":
+            name = _as_str_arg(params.get("statement")).strip()
+            if not name:
+                return "Error: `component` needs a `statement` (the component name)."
+            def _num(val: object, default: float) -> float:
+                try:
+                    return float(val)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    return default
+            share = _num(params.get("share"), 0.0)
+            hr = params.get("headroom")
+            headroom = _num(hr, 1.0) if hr is not None else 1.0
+            c = bn.add(name, share=share, headroom=headroom,
+                       note=_as_str_arg(params.get("evidence")))
+            top = bn.bottleneck()
+            tail = (f"\nCurrent bottleneck: {top.id} ({top.name}) — attack this first "
+                    f"(realizable gain {top.gain():.0%}, ceiling {top.ceiling():.0%})."
+                    if top else "\nNo movable lever yet — every component is a wall.")
+            return f"Recorded {c.id} (share {c.share:.0%}, headroom {c.headroom:.0%}).{tail}"
+        top = bn.bottleneck()
+        if top is None:
+            return ("No movable bottleneck (every component is a wall, or none "
+                    "recorded). Components:\n" + bn.render())
+        return (f"Attack this first: {top.id} — {top.name}\n"
+                f"(realizable gain {top.gain():.0%}, Amdahl ceiling {top.ceiling():.0%}, "
+                f"headroom {top.headroom:.0%}). Optimising anything else is capped below "
+                f"its ceiling. Full ranking:\n{bn.render()}")
+
+    return ("Error: `action` must be one of add | verify | refute | next | show | "
+            f"component | lever. (got {action!r})")
 
 
 def tool_knowledge(params: dict, config: dict) -> str:
