@@ -71,8 +71,16 @@ The DPO v4 lesson: *"a pre-registered rule is worth only what enforces it — it
 ## Status
 - Artifacts: built, gated (ruff ✓, pyright 0 ✓, 13+16 tests). Ledger tool: wired.
 - Predictions: registered to `predictions.json` before data. ✓
-- **NOT LAUNCHED.** The live fleet (`wrk_20a/20b/21a`) is running the 28%→71% campaign;
-  this control needs a free lane and must not contend with it. It launches when the
-  operator frees a lane (`cluster/STOP_*` / a stopped `wrk_` session), same mechanics as
-  the meta-ratchet campaign. Until then this is staged, not measured — and this file says
-  so rather than implying coverage that does not exist.
+- **LAUNCHED 2026-09-08 18:22** as tmux `loop_ctrl` → `run_loop_control.sh 6 900`, a
+  4-task pilot (`tasks.txt`: build-cython-ext, count-dataset-tokens, largest-eigenval,
+  dna-assembly), both arms paired, `MAX_ROUNDS=6 ROUND_BUDGET=900s`.
+- **No fleet disruption, by construction.** The runner is registered in
+  `fleet_supervisor.sh::experiment_active()`, so while it runs the supervisor skips all
+  refill+keepalive; it WAITS for the `.20` lanes (`wrk_20a/20b`) to finish their in-flight
+  jobs and go idle before taking the lane (nothing killed, no job orphaned — the opposite
+  of the 2026-08-21 mistake), and aborts on any container the fleet still owns. The
+  campaign auto-resumes on the supervisor's next tick after the pilot exits.
+- Progress: `loop_control/run.log`; results accrue to `loop_control/results.csv`
+  (`task,arm,solved,best,total,ledger_used`). Predictions get resolved against that CSV.
+- This is a **pilot** to validate the pipeline and get a first signal; the full 14-task
+  set + repeats follow if the pilot runs clean. The kill rule above is unchanged.
