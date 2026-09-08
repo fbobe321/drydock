@@ -712,6 +712,65 @@ deterministically: drydock has **46 tools** and shows at most **12/turn** (`tool
   never run campaign work** (0% util) even though it serves the SAME `Q4_K_XL` quant as `.20` and is
   therefore baseline-comparable. With `.20` loaned, the fleet is at one lane of three.
 
+## 19. 2026-09-08 — SELF-DISTILLATION CLOSED (#7, pre-registered) + the first-principles
+## loop built as ARTIFACTS, not a prompt
+
+### 19.1 🏁 DPO v4 — the registered verdict: this lever is DEAD in this form
+Held-out preference accuracy across 8 checkpoints: **mean 0.4736** (min 0.4222, max 0.5111).
+The falsifying prediction written to `DPO_V4_KILL_RULE.txt` on 09-01, **before any v4 data
+existed**, was: *"if v4 lands ~0.50 ± 0.03 [0.47–0.53], self-distillation via ratchet
+preference pairs is DEAD and should be stopped, not re-tried an 8th time."* **0.4736 is inside
+that band. The verdict stands as written; there is no v5.**
+- **Why this null is trustworthy where the previous six were not:** both known defects were
+  repaired AND verified first. (a) The corpus carried the wrong gradient — `build_pairs.py`
+  required a strict binary check improvement and so discarded every round that climbed the
+  sub-goal ladder the ratchet's own pawl uses (254 pairs/5 tasks → 4,660/14 tasks). (b) The
+  policy had learned a LENGTH shortcut — v3's accuracy (~0.436) matched the rate at which
+  `chosen` was the longer side (43%) almost exactly; v4 truncates both sides to an identical
+  budget (verified 100% equal-length) so that shortcut scores exactly chance by construction.
+  v4 duly rose off the floor (0.442 → 0.474, loss 1.02–1.38 → 0.69–0.83) — **the fix worked,
+  and revealed there was nothing underneath it.**
+- **⇒ The honest conclusion is not "the experiment failed again" but "once the artifact is
+  removed, there is no learnable strategy signal in these pairs."**
+- **PROCESS FAILURE, recorded:** the rule said stop at step 50; the run reached step 72 because
+  nothing enforced it between manual status checks (~4h of GPU wasted). **A pre-registered rule
+  is only worth what enforces it — it belongs in the training loop as an early-stopping
+  callback, not in the operator's head.** This is precisely what §19.2 addresses.
+
+### 19.2 ✅ THE FIRST-PRINCIPLES LOOP — built as two artifacts (operator design)
+Operator specified a Define → Ground → Decompose → Constrain → Hypothesise → Test → Measure →
+Learn → Iterate loop. **Gap analysis against what drydock already had:** step 9 (iterate) is the
+ratchet and is validated; steps 1/3/10 are partially covered (`task.objective`, `todo`/plan,
+completion gate); `fiar.py` already proves drydock can carry a typed phase machine with
+artifacts. **Steps 2, 4, 5, 6 and 8 were entirely absent.**
+- **NOT BUILT AS A PROMPT — that form is measured dead** (§17.1): the checklist regressed tasks
+  when applied always, lost to a plain retry when applied on failure, and the LONGER ten-step
+  variant did worse than the short one because it was followed less (criteria written 3/8 vs
+  7/8). More instructions bought less behaviour.
+- **`drydock/groundtruth.py` — the ledger (steps 2, 6).** Separates FACT / ASSUMPTION / UNKNOWN;
+  a belief can only become a FACT via `verify(evidence)`, and unevidenced FACTs are flagged as
+  assumptions wearing a fact's badge. The product is `next_test()`: rank open unknowns by
+  **decision impact**, using cost only to break ties — deliberately *not* by ease or interest.
+  **Motivated by this project's own log:** the scaffold claim went +6.8 → +3.4 → +0.0 and every
+  correction came from a control runnable on day one; the highest-impact unknown was always
+  "would a plain retry do the same?" and it went unasked for six days.
+- **`drydock/predictions.py` — the register (step 8).** Register a claim, its expected
+  observation, and **a falsifier**, before looking; then record the observation and the error.
+  Reports calibration and flags predictions with no falsifier ("hopes, not tests"). Note the
+  docstring's caution that a HIGH hit-rate is a bad sign — it means predictions are only being
+  made where the answer is already known.
+  **Evidence for this one is unusually clean:** of everything claimed in the 08-27→09-01 week,
+  **the only conclusion that needed no correction was the single one whose prediction was
+  written to disk beforehand** (the DPO kill rule). Four un-pre-registered claims were all
+  walked back.
+- Both are advisory by contract (never raise, never block, degrade on bad input, survive a
+  corrupt state file), persist as JSON like `fiar.py`, and are covered by 16 tests asserting the
+  RANKING and the never-raise contract. ruff ✓ · pyright 0 ✓ · 962 tests pass.
+- **NOT YET WIRED INTO THE AGENT LOOP, deliberately.** §17.1 is the cautionary tale: a plausible
+  mechanism was shipped on a measured claim that a control later destroyed. **Next step is the
+  control, not the integration:** ratchet-with-ledger vs plain ratchet, same tasks, same budget.
+  **If it does not beat plain ratchet it goes the way of the scaffold.**
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested

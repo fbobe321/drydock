@@ -101,6 +101,44 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **🏁🧭 2026-09-08 — SELF-DISTILLATION CLOSED (pre-registered verdict) + the first-principles
+> loop built as ARTIFACTS, not a prompt. PRD §19.**
+> - **🏁 DPO v4 = the registered death of this lever.** Held-out accuracy over 8 checkpoints:
+>   **mean 0.4736** (min 0.4222, max 0.5111). The falsifying prediction written to
+>   `DPO_V4_KILL_RULE.txt` on 09-01 **before any data existed** said: *"~0.50 ± 0.03 ⇒ DEAD, stop,
+>   do not try an 8th time."* **0.4736 is inside the band. No v5.**
+>   **Why this null is the trustworthy one:** both defects were fixed AND verified first —
+>   (a) the corpus carried the wrong gradient (`build_pairs.py` demanded a strict binary check
+>   improvement, discarding every round that climbed the sub-goal ladder the pawl itself uses;
+>   254 pairs/5 tasks → 4,660/14 tasks), and (b) the policy had learned a LENGTH shortcut (v3's
+>   0.436 ≈ the 43% rate at which `chosen` was longer). v4 equalised lengths (100% verified) and
+>   duly rose off the floor (0.442 → 0.474; loss 1.02–1.38 → 0.69–0.83). **The fix worked and
+>   showed there was nothing underneath it** ⇒ once the artifact is removed there is no learnable
+>   strategy signal in these pairs.
+>   **PROCESS FAILURE LOGGED:** the rule said stop at step 50; it ran to 72 because nothing
+>   enforced it between manual checks (~4h GPU wasted). **A pre-registered rule is worth only what
+>   enforces it — it belongs in the training loop, not the operator's head.**
+> - **🧭 FIRST-PRINCIPLES LOOP (operator's design) — gap analysis + build.** Step 9 (iterate) is
+>   the ratchet and is already validated; steps 1/3/10 partially exist; `fiar.py` proves drydock
+>   can carry a typed artifact machine. **Steps 2, 4, 5, 6, 8 were absent.**
+>   **NOT built as a prompt — that form is measured dead** (§17.1: regressions when always-on,
+>   beaten by plain retry when on-failure, and the LONGER variant did worse because it was
+>   followed less — criteria 3/8 vs 7/8).
+>   - **`drydock/groundtruth.py`** (steps 2+6): FACT/ASSUMPTION/UNKNOWN ledger; FACT only via
+>     `verify(evidence)`; unevidenced "facts" flagged. Product = **`next_test()` — rank unknowns
+>     by DECISION IMPACT**, cost only breaks ties. Motivated by our own log: +6.8 → +3.4 → +0.0,
+>     every correction from a control runnable on day one.
+>   - **`drydock/predictions.py`** (step 8): register claim + expected + **falsifier** BEFORE
+>     looking, then record observation and error; reports calibration, flags falsifier-less
+>     "hopes". **Evidence: the ONLY conclusion that week needing no correction was the one
+>     pre-registered to disk.** (High hit-rate is a bad sign, not a good one.)
+>   - Advisory by contract (never raise/block, survive corrupt state), JSON-persisted like
+>     `fiar.py`, **16 tests** on the ranking + never-raise contract. ruff ✓ pyright 0 ✓ 962 pass.
+>   - **DELIBERATELY NOT WIRED INTO THE AGENT LOOP YET.** §17.1 is the cautionary tale — a
+>     plausible mechanism was shipped on a claim a control later destroyed. **Next is the control:
+>     ratchet-with-ledger vs plain ratchet, same tasks/budget. If it doesn't beat plain ratchet it
+>     goes the way of the scaffold.**
+
 > **🚢 2026-09-03/05 — SHIPPED v3.1.25 (PyPI + GitHub) · Knowledge-tool bug fixed · the RELEASE GATE
 > had been silently broken for 11 days · .20 loaned out, DPO v4 staged. PRD §18.**
 > - **PRODUCT BUG FIXED — the Knowledge tool was unreachable for plain questions.** Reported as
