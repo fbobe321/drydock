@@ -787,6 +787,35 @@ SCHEMAS = [
         },
     },
     {
+        "name": "Ledger",
+        "description": (
+            "Ground-truth ledger. Record what you have VERIFIED vs what you are only "
+            "ASSUMING, and ask which unknown to test first. Use it when a task is not "
+            "going well: a stuck run is usually stuck on a false assumption rather than "
+            "a missing strategy. action='add' to record a belief (kind: fact|assumption|"
+            "unknown, impact 0-3 = how much the plan changes if it is false, cost 0-3 = "
+            "how hard to check); action='next' to be told the highest-impact unknown to "
+            "settle; action='verify'/'refute' with the evidence you observed; "
+            "action='show' to see the ledger."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string",
+                           "description": "add | verify | refute | next | show"},
+                "statement": {"type": "string", "description": "The belief (for add)."},
+                "kind": {"type": "string", "description": "fact | assumption | unknown"},
+                "impact": {"type": "integer",
+                           "description": "0-3: how much the approach changes if this is false."},
+                "cost": {"type": "integer", "description": "0-3: how expensive to find out."},
+                "id": {"type": "string", "description": "Ledger id (for verify/refute)."},
+                "evidence": {"type": "string",
+                             "description": "What you actually observed (required to verify/refute)."},
+            },
+            "required": ["action"],
+        },
+    },
+    {
         "name": "Knowledge",
         "description": (
             "Search the user's KNOWLEDGE BASE (a GraphRAG index they built from "
@@ -2592,6 +2621,67 @@ def tool_webfetch(params: dict, config: dict) -> str:
     return text or f"(no readable text extracted from {url})"
 
 
+def tool_ledger(params: dict, config: dict) -> str:
+    """Ground-truth ledger: record what is KNOWN vs ASSUMED, and get told which unknown
+    to test first (highest decision-impact, cheapest among equals).
+
+    Deliberately a LEDGER, not advice. A reasoning checklist covering the same ideas was
+    measured on terminal-bench-2 and lost to a plain retry, so this tool never tells the
+    model how to think — it stores beliefs, requires evidence to promote one to a fact,
+    and computes the one ranking a model is bad at doing in its head.
+    """
+    from drydock.groundtruth import Ledger, ASSUMPTION
+
+    cwd = config.get("cwd") or os.getcwd()
+    lg = Ledger(Path(cwd) / ".drydock" / "ledger.json")
+    action = _as_str_arg(params.get("action")).strip().lower() or "next"
+
+    if action == "add":
+        stmt = _as_str_arg(params.get("statement")).strip()
+        if not stmt:
+            return "Error: `add` needs a `statement`."
+        kind = _as_str_arg(params.get("kind")).strip().lower() or ASSUMPTION
+        try:
+            impact = int(params.get("impact") or 0)
+            cost = int(params.get("cost") or 1)
+        except (TypeError, ValueError):
+            impact, cost = 0, 1
+        it = lg.add(stmt, kind, evidence=_as_str_arg(params.get("evidence")),
+                    impact=impact, cost=cost)
+        nxt = lg.next_test()
+        tail = (f"\nHighest-impact open unknown is now {nxt.id}: {nxt.statement}"
+                if nxt else "")
+        return f"Recorded {it.id} ({it.kind}).{tail}"
+
+    if action in ("verify", "refute"):
+        iid = _as_str_arg(params.get("id")).strip()
+        ev = _as_str_arg(params.get("evidence")).strip()
+        if not iid or not ev:
+            return f"Error: `{action}` needs `id` and `evidence` (what you actually observed)."
+        it = (lg.verify if action == "verify" else lg.refute)(iid, ev)
+        if it is None:
+            return f"No ledger item {iid!r}. Current ledger:\n{lg.render()}"
+        verb = "verified" if action == "verify" else "REFUTED"
+        nxt = lg.next_test()
+        tail = f"\nNext to test: {nxt.id} ({nxt.statement})" if nxt else "\nNo open unknowns left."
+        return f"{iid} {verb}.{tail}"
+
+    if action == "next":
+        nxt = lg.next_test()
+        if nxt is None:
+            return ("No open unknown with impact > 0. Ledger:\n" + lg.render())
+        return (f"Test this first: {nxt.id} — {nxt.statement}\n"
+                f"(impact {nxt.impact}/3, cost {nxt.cost}/3). "
+                f"Find the cheapest way to settle it, then record the result with "
+                f"action='verify' or 'refute' and the evidence.")
+
+    if action == "show":
+        return lg.render()
+
+    return ("Error: `action` must be one of add | verify | refute | next | show. "
+            f"(got {action!r})")
+
+
 def tool_knowledge(params: dict, config: dict) -> str:
     """Query the project's GraphRAG knowledge base (built with /graphrag build).
     Read-only; returns the most relevant passages plus related graph entities.
@@ -2987,6 +3077,7 @@ def register_all():
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
             "Worker": tool_worker,
             "Consult": tool_consult, "Knowledge": tool_knowledge,
+            "Ledger": tool_ledger,
             "BuildKnowledge": tool_build_knowledge,
             "GraphQuery": tool_graphquery, "GraphAdd": tool_graphadd,
             "StigRules": tool_stigrules, "StigRule": tool_stigrule, "StigSet": tool_stigset,
