@@ -101,6 +101,38 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   tmux SERVER's cwd, not the shell's — use ABSOLUTE paths in the launched command (cost me 3 launches).
 >   See [[project_meta_ratchet_fitness_signal]].
 
+> **🧠 2026-09-08 — NEW PROGRAMME: CLTA (Continuous Learning Transformer Architecture) replaces
+> self-distillation. PRD: `research/clta/PRD_continuous_learning.md`.**
+> Operator's design: inference, in-context learning and parameter adaptation as CONCURRENT
+> processes across timescales — `W_eff = W_base(frozen) + ΔW_fast(LoRA) + ΔW_slow(consolidated)`,
+> with a controller routing each observation to context / episodic / fast / consolidated.
+> - **PRIOR ART — stand on it, don't re-derive.** The draft independently reconstructs published
+>   lines: fast weights (Schmidhuber; Ba 2016; Miconi), **Test-Time Training / TTT layers** (= the
+>   draft's reread-after-update), **Titans** (= the multi-timescale memory + surprise-gated write),
+>   forward-forward / predictive coding / DNI (= local learning), and the continual-learning
+>   literature (EWC, replay). ⇒ **RQ1 and RQ6 are largely ANSWERED YES already — do not burn compute
+>   re-proving them.** The genuinely un-built part is the **arbitrating controller** (RQ4).
+> - **⚠️ THE ONE DESIGN FIX: single-skill tests are ones plasticity can LOSE while still being
+>   valuable.** If demos are retrievable, retrieval+ICL gets the skill — that is what transformers
+>   are best at. Fast weights' real edge is **capacity + composition**: after N demos the skill
+>   costs ZERO context tokens, and 50 skills cannot co-occupy a context window while weights can
+>   hold them. **So §20 was redesigned from ONE skill to 20–50 skills learned sequentially, demos
+>   permanently dropped, tested interleaved on HELD-OUT instances.**
+> - **SCOPE CUTS (both deferred, with reasons):** async concurrent inference/learning (engineering,
+>   not science — and unvalidatable before plasticity works) and local/no-backprop learning (its own
+>   multi-year programme; full backprop on 350M+rank-8 is cheap). MVP = frozen base + plastic LoRA +
+>   surprise-gated controller + episodic buffer + the many-skill test.
+> - **Phase 0 (ZORG=1847 fact retention) DEMOTED to a wiring check** — retrieval solves it trivially,
+>   so a green light there is not evidence. Pre-registered as such so it cannot be mis-sold later.
+> - **🖥️ FIRST WORKLOAD THIS FLEET IS ACTUALLY SUITED TO:** ~350M + rank-8 trains in MINUTES on the
+>   RTX 8000 vs ~19h for 100 DPO steps on the 31B; Turing's missing bf16/FA2 barely matters at this
+>   scale. ~2 orders of magnitude more iterations ⇒ the full 7-baseline matrix becomes affordable.
+> - **BINDING METHOD RULE:** baselines 1–3 (frozen · long-context · **RAG/episodic**) are built and
+>   measured **BEFORE any plastic model exists** — baseline 3 is the one that decides the project.
+>   3 predictions + falsifiers already registered to `research/clta/predictions.json` before any
+>   code. Track record justifying this: 7 nulls, 4 retractions, every retraction from measuring
+>   loosely before controlling tightly.
+
 > **🏁🧭 2026-09-08 — SELF-DISTILLATION CLOSED (pre-registered verdict) + the first-principles
 > loop built as ARTIFACTS, not a prompt. PRD §19.**
 > - **🏁 DPO v4 = the registered death of this lever.** Held-out accuracy over 8 checkpoints:

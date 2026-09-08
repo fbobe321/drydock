@@ -1,0 +1,29 @@
+[
+  {
+    "id": "p1",
+    "claim": "CLTA RQ10: fast-weight plasticity beats retrieval+ICL on many-skill retention",
+    "expected": "plastic model beats RAG baseline on held-out instances of skills whose demos left context",
+    "falsifier": "RAG/episodic baseline matches or beats the plastic model at equivalent compute -> plasticity adds nothing for this workload; programme stops at the MVP",
+    "observed": "",
+    "status": "open",
+    "note": ""
+  },
+  {
+    "id": "p2",
+    "claim": "A SINGLE-skill test would be won by retrieval (why the experiment was redesigned)",
+    "expected": "on one skill with retrievable demos, RAG >= plastic",
+    "falsifier": "plastic clearly beats RAG on a single skill -- would mean the capacity/composition framing is wrong and single-skill tests are fine",
+    "observed": "",
+    "status": "open",
+    "note": ""
+  },
+  {
+    "id": "p3",
+    "claim": "Phase 0 fact retention (ZORG=1847) is not evidence for plasticity",
+    "expected": "RAG baseline solves Phase 0 completely",
+    "falsifier": "RAG fails Phase 0 -- would make fact retention a meaningful discriminator after all",
+    "observed": "",
+    "status": "open",
+    "note": ""
+  }
+]

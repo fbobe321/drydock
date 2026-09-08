@@ -771,6 +771,14 @@ artifacts. **Steps 2, 4, 5, 6 and 8 were entirely absent.**
   control, not the integration:** ratchet-with-ledger vs plain ratchet, same tasks, same budget.
   **If it does not beat plain ratchet it goes the way of the scaffold.**
 
+### 19.3 SUCCESSOR PROGRAMME
+Self-distillation is closed. It is replaced by **CLTA — Continuous Learning Transformer
+Architecture** (`research/clta/PRD_continuous_learning.md`, 2026-09-08): inference, in-context
+learning and parameter adaptation as concurrent processes over multiple timescales. The
+connection to this document is direct — the internalized-ratchet thesis was *"train the loop into
+the weights, offline"*; CLTA asks whether the weights can change **during** operation instead,
+which sidesteps the corpus-construction problem that produced all seven nulls here.
+
 ## 11. Open questions
 
 - REFLECT step: harvest the model's own inter-round reasoning, or synthesize it? (Harvested
