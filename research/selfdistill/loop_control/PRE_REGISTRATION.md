@@ -108,9 +108,23 @@ It was **not** — the with-loop arm never differed from plain, because the Ledg
 2. `run_loop_control.sh` deploys that wheel via `DD_WHEEL` to **both** arms (robust, no
    PyPI dependency; the single variable stays the pin). The running fleet keeps its own
    PyPI pin and is untouched.
-3. Usage detection rewritten (`ledger_usage.py`): parses the **host-side** trajectory
-   captures and reports `exposed=<rounds Ledger was offered>/<rounds>;calls=<invocations>`.
-   `exposed=0/N` now hard-marks an arm VOID instead of silently reading like a real null.
+3. Wiring is now guarded UP FRONT by `preflight_exposure()` in `run_loop_control.sh`: a
+   throwaway container runs drydock's real `schemas()→select_tools(pin)→filter_tool_schemas
+   (gemma4)` pipeline against the deployed wheel and ABORTS the whole run if `Ledger` is not
+   in the final tool list. This is the correct exposure test — the trajectory cannot serve
+   as one (its `tools` field lists only tools the model CALLED, not tools OFFERED, so absence
+   there cannot distinguish "not offered" from "offered-but-unused" — the exact misread that
+   made pilot #1 look like a real null). `ledger_usage.py` is therefore scoped to the p2
+   USAGE signal only: `calls=<invocations>;used_rounds=<rounds with a call>/<rounds>`.
 
 This does **not** trip the kill rule — the kill rule presumes a wired tool; pilot #1 tested
-nothing. Pilot #2 (relaunched 2026-09-09 08:03, tmux `loop_ctrl`) is the first real trial.
+nothing.
+
+### Pilot #2 — RUNNING (relaunched 2026-09-09 08:03, tmux `loop_ctrl`)
+Exposure CONFIRMED out-of-band: the live loop-arm container runs drydock **3.1.26** with
+`pin_tools=["Ledger"]`, and its real pipeline yields 12 tools **including Ledger** — the tool
+IS being offered to the model. (The preflight above automates this check for future runs; it
+was added after pilot #2 had already launched.) Early signal: on `build-cython-ext` the model
+made **0 Ledger calls across all 6 rounds** despite the tool being available — the
+"available-but-unused" p2 pattern. Resolve p1/p3 against solves only once the run completes;
+p2 is now directly measurable via `calls`/`used_rounds` in the `ledger_used` column.

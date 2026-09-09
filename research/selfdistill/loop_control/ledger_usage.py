@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""Ledger-usage signal for the loop-control experiment (p2 in PRE_REGISTRATION.md).
+"""Ledger-USAGE signal for the loop-control experiment (p2 in PRE_REGISTRATION.md).
 
-Reads the HOST-SIDE trajectory captures the ratchet already writes per round
-(ratchet/capture/<task>/r*.json) — these survive container teardown, unlike the
-old `docker exec` probe that always read `torndown`. Reports two things the pilot
-could not measure:
+Reads the HOST-SIDE trajectory captures the ratchet writes per round
+(ratchet/capture/<task>/r*.json), which survive container teardown.
 
-  exposed=<rounds the Ledger schema was actually OFFERED>/<rounds>
-  calls=<total Ledger tool invocations across rounds>
+IMPORTANT — what this can and cannot measure. The trajectory's own `tools` field
+(trajectory.py) is built from messages with role=="tool": it lists the tools the
+model actually CALLED, not the tools it was OFFERED. So a trajectory can prove
+USAGE but says nothing about EXPOSURE. Do NOT infer "the tool was unavailable"
+from an absence here — that is exactly the misread that made pilot #1 look like a
+real null. Exposure is guarded separately and up front by the preflight in
+run_loop_control.sh (a throwaway container that runs the real select_tools →
+filter_tool_schemas pipeline and aborts the experiment if Ledger is not offered).
 
-`exposed` is the wiring guard: if it is 0/N the tool never reached the model
-(wrong wheel / pin not applied) and a null solve-delta means nothing. `calls` is
-the p2 usage signal proper: the model choosing to use the artifact.
+Given exposure is already established, this reports the p2 signal proper:
 
-Prints one field string on stdout, e.g. "exposed=6/6;calls=3". Never raises.
+  calls=<total Ledger tool invocations across rounds>;used_rounds=<rounds with >=1 call>/<rounds>
+
+Prints one field string on stdout, e.g. "calls=3;used_rounds=2/6". Never raises.
 """
 from __future__ import annotations
 
@@ -21,20 +25,6 @@ import glob
 import json
 import os
 import sys
-
-
-def _tool_names(tools: object) -> list[str]:
-    if not isinstance(tools, list):
-        return []
-    out: list[str] = []
-    for t in tools:
-        if isinstance(t, str):
-            out.append(t)
-        elif isinstance(t, dict):
-            n = t.get("name") or t.get("function", {}).get("name")
-            if n:
-                out.append(n)
-    return out
 
 
 def _ledger_calls(messages: object) -> int:
@@ -64,8 +54,8 @@ def main() -> int:
         print("no-capture")
         return 0
     rounds = 0
-    exposed = 0
-    calls = 0
+    total_calls = 0
+    used_rounds = 0
     for f in files:
         try:
             with open(f) as fh:
@@ -73,10 +63,11 @@ def main() -> int:
         except Exception:
             continue
         rounds += 1
-        if "Ledger" in _tool_names(d.get("tools")):
-            exposed += 1
-        calls += _ledger_calls(d.get("messages"))
-    print(f"exposed={exposed}/{rounds};calls={calls}")
+        k = _ledger_calls(d.get("messages"))
+        total_calls += k
+        if k > 0:
+            used_rounds += 1
+    print(f"calls={total_calls};used_rounds={used_rounds}/{rounds}")
     return 0
 
 

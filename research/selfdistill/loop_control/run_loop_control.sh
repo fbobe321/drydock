@@ -58,6 +58,43 @@ wait_for_idle(){
   return 0
 }
 
+# ── EXPOSURE PREFLIGHT — the real wiring guard (replaces the broken trajectory metric) ──
+# Pilot #1 was VOID because the Ledger tool was never OFFERED to the model, yet nothing
+# caught it: the trajectory `tools` field records only tools the model CALLED, so absence
+# there cannot distinguish "not offered" from "offered-but-unused". This preflight settles
+# offering ONCE, up front, against the actual deployed wheel: bring a container up via the
+# same ddt_up path (installs DD_WHEEL), write the with-loop config (pin_tools=["Ledger"]),
+# and run drydock's real schemas()→select_tools(pin)→filter_tool_schemas(gemma4) pipeline
+# in the container. If Ledger is not in the final tool list, ABORT the whole experiment —
+# a null result would be meaningless. No LLM calls, no .20 lane needed.
+preflight_exposure(){   # <vehicle-task>
+  local task="$1" ctr="ddt_$1"
+  if docker ps -a --format '{{.Names}}' | grep -qx "$ctr"; then
+    say "PREFLIGHT ABORT: $ctr exists (fleet owns it) — cannot verify exposure safely"; return 1
+  fi
+  say "PREFLIGHT: verifying the Ledger tool is OFFERED to gemma4 under $(basename "$DD_WHEEL") + pin_tools=[\"Ledger\"] (vehicle=$task)…"
+  ddt_up "$task" >>"$LOG" 2>&1 || { say "PREFLIGHT: ddt_up failed"; return 1; }
+  printf 'trajectory_file = "/app/.dd_trajectory.json"\npin_tools = ["Ledger"]\n' \
+    | docker exec -i "$ctr" bash -c 'mkdir -p ~/.drydock && cat > ~/.drydock/config.toml' 2>/dev/null
+  local out
+  out=$(docker exec "$ctr" bash -lc 'PY=$HOME/.local/share/uv/tools/drydock-cli/bin/python; "$PY" - <<"EOF"
+import drydock, drydock.config as c, drydock.tools
+from drydock.tool_registry import schemas
+from drydock.tool_select import select_tools, DEFAULT_MAX_TOOLS
+from drydock.tuning import filter_tool_schemas
+cfg=c.resolve({}, c.default_config_path())
+pins=list(cfg.get("pin_tools") or [])
+kept=select_tools(schemas(), phase="execute", task_text="", max_tools=cfg.get("max_tools", DEFAULT_MAX_TOOLS), pin_tools=pins)
+final=[s.get("name") for s in filter_tool_schemas(kept, "gemma4")]
+print("VER", drydock.__version__, "PIN", pins, "LEDGER_OFFERED", "Ledger" in final)
+EOF' 2>/dev/null)
+  say "PREFLIGHT: $out"
+  ddt_down "$task" >/dev/null 2>&1
+  echo "$out" | grep -q "LEDGER_OFFERED True" && return 0
+  say "PREFLIGHT FAILED: Ledger is NOT offered — refusing to run (a null here would be meaningless, as in pilot #1)."
+  return 1
+}
+
 # ── run one arm of one task; append a tagged result row ──────────────────────
 run_arm(){   # <task> <arm: plain|loop>
   local task="$1" arm="$2" ctr="ddt_$1" pins="" used="n/a"
@@ -68,10 +105,11 @@ run_arm(){   # <task> <arm: plain|loop>
   say "RUN $task arm=$arm (LOOP_PINS=[${pins}], rounds=$MAX_ROUNDS budget=${ROUND_BUDGET}s, wheel=$(basename "$DD_WHEEL"))"
   LOOP_PINS="$pins" LLM_URL="$LLM_URL" DD_VER="$DD_VER" DD_WHEEL="$DD_WHEEL" \
     bash "$SD/ratchet_solve.sh" "$task" "$MAX_ROUNDS" "$ROUND_BUDGET" >>"$LOG" 2>&1
-  # Usage signal from the HOST-SIDE trajectory captures (survives teardown, unlike the
-  # old docker-exec probe that always read "torndown"). Reports exposed=<rounds the Ledger
-  # schema was OFFERED>/<rounds> and calls=<Ledger invocations>. exposed=0/N ⇒ the tool
-  # never reached the model and this arm is VOID (the failure that silently sank pilot #1).
+  # p2 USAGE signal from the HOST-SIDE trajectory captures (survives teardown): reports
+  # calls=<Ledger invocations>;used_rounds=<rounds with >=1 call>/<rounds>. This measures
+  # whether the model CHOSE to use the tool. It does NOT measure exposure — the trajectory
+  # only records tools that were CALLED — so the wiring guard is the up-front
+  # preflight_exposure(), not this. Exposure is already established when we reach here.
   if [ "$arm" = "loop" ]; then
     used=$("$PY" "$OUT/ledger_usage.py" "$SD/ratchet/capture/$task" 2>/dev/null)
     [ -z "$used" ] && used="unmeasured"
@@ -86,6 +124,13 @@ run_arm(){   # <task> <arm: plain|loop>
 
 say "===== LOOP CONTROL START (rounds=$MAX_ROUNDS budget=${ROUND_BUDGET}s) ====="
 say "tasks: $(tr '\n' ' ' < "$TASKFILE")"
+# WIRING GUARD FIRST — prove the Ledger is offered before spending hours on arms whose
+# null would be meaningless (the pilot-#1 trap). Vehicle = first task in the list.
+PREFLIGHT_TASK=$(grep -m1 -v '^[[:space:]]*$' "$TASKFILE")
+if ! preflight_exposure "$PREFLIGHT_TASK"; then
+  say "===== ABORTED at preflight — fix the wheel/pin so the Ledger is offered, then relaunch ====="
+  exit 1
+fi
 wait_for_idle
 while read -r task; do
   [ -z "$task" ] && continue
