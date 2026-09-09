@@ -84,3 +84,33 @@ The DPO v4 lesson: *"a pre-registered rule is worth only what enforces it — it
   (`task,arm,solved,best,total,ledger_used`). Predictions get resolved against that CSV.
 - This is a **pilot** to validate the pipeline and get a first signal; the full 14-task
   set + repeats follow if the pilot runs clean. The kill rule above is unchanged.
+
+## Pilot #1 — VOID (2026-09-09): the tool was never exposed
+The pilot completed (plain 2/4 = loop 2/4, identical rounds) and read like p1's falsifier.
+It was **not** — the with-loop arm never differed from plain, because the Ledger tool was
+**never offered to the model in any round**. Root cause, traced to ground truth:
+- The container installs `drydock-cli==$DD_VER` from **PyPI**. The Ledger tool
+  (`groundtruth`+`bottleneck`, commit `e09f229`) was added **after** PyPI **v3.1.25** was
+  published (`c8752ce`) with **no version bump** — so `pip install drydock-cli==3.1.25`
+  pulls a wheel with **46 tools, no Ledger** (verified against live PyPI). The local git
+  tree at the same version string has 47 tools incl. Ledger. Version string ≠ artifact.
+- With 47 tools and `max_tools=12`, the Ledger is trimmed out unless pinned; the pin was
+  correct, but a pin on a **nonexistent** tool is a silent no-op ⇒ both arms ran identical
+  plain ratchets. Proven from the host-side trajectory captures: their `tools` field
+  (schemas offered per turn) contains **no `Ledger` in any round** — `ledger_usage.py`
+  reports `exposed=0/N` on all pilot-1 tasks.
+- The old usage probe compounded the blindness: it `docker exec`'d the container **after**
+  `ratchet_solve.sh` had torn it down, so it always logged `torndown` — no signal at all.
+
+**Fix applied (2026-09-09), the pilot re-run under it:**
+1. Version bumped **3.1.25 → 3.1.26** (release-hygiene: never add a tool under an
+   already-published version). A local wheel is built from that tree.
+2. `run_loop_control.sh` deploys that wheel via `DD_WHEEL` to **both** arms (robust, no
+   PyPI dependency; the single variable stays the pin). The running fleet keeps its own
+   PyPI pin and is untouched.
+3. Usage detection rewritten (`ledger_usage.py`): parses the **host-side** trajectory
+   captures and reports `exposed=<rounds Ledger was offered>/<rounds>;calls=<invocations>`.
+   `exposed=0/N` now hard-marks an arm VOID instead of silently reading like a real null.
+
+This does **not** trip the kill rule — the kill rule presumes a wired tool; pilot #1 tested
+nothing. Pilot #2 (relaunched 2026-09-09 08:03, tmux `loop_ctrl`) is the first real trial.

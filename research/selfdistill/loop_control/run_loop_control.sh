@@ -17,7 +17,18 @@ SD=/data3/tbench_local/frontier/selfdistill
 ROOT=/data3/tbench_local
 export TASKS="$ROOT/tasks/terminal-bench-2"
 export LLM_URL="${LLM_URL:-http://192.168.50.20:8000/v1}"
-export DD_VER="${DD_VER:-3.1.25}"
+# The Ledger tool (groundtruth + bottleneck, PRD §19) landed AFTER PyPI v3.1.25 was
+# published without a version bump, so `drydock-cli==3.1.25` on PyPI has NO Ledger tool
+# — the 2026-09-08 pilot pinned a tool that did not exist and both arms ran identical
+# plain ratchets (see PRE_REGISTRATION.md "Pilot #1 — VOID"). Deploy the local wheel that
+# actually contains the tool to BOTH arms via DD_WHEEL, so the only variable stays the
+# pin. DD_WHEEL takes precedence over DD_VER in tui_task_lib.sh; the running fleet keeps
+# its own PyPI pin and is untouched.
+export DD_VER="${DD_VER:-3.1.26}"
+export DD_WHEEL="${DD_WHEEL:-$SD/loop_control/drydock_cli-3.1.26-py3-none-any.whl}"
+if [ ! -f "$DD_WHEEL" ]; then
+  echo "FATAL: DD_WHEEL not found at $DD_WHEEL — build it: (cd /data3/drydock-v3 && python3 -m build --wheel)"; exit 1
+fi
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/bobef/miniforge3/bin:/home/bobef/.local/bin"
 source "$ROOT/tui_task_lib.sh"
 PY=/home/bobef/miniconda3/bin/python3
@@ -54,17 +65,16 @@ run_arm(){   # <task> <arm: plain|loop>
     say "ABORT $task/$arm: $ctr exists (fleet owns it) — skipping"; return 0
   fi
   [ "$arm" = "loop" ] && pins='"Ledger"'
-  say "RUN $task arm=$arm (LOOP_PINS=[${pins}], rounds=$MAX_ROUNDS budget=${ROUND_BUDGET}s)"
-  LOOP_PINS="$pins" LLM_URL="$LLM_URL" DD_VER="$DD_VER" \
+  say "RUN $task arm=$arm (LOOP_PINS=[${pins}], rounds=$MAX_ROUNDS budget=${ROUND_BUDGET}s, wheel=$(basename "$DD_WHEEL"))"
+  LOOP_PINS="$pins" LLM_URL="$LLM_URL" DD_VER="$DD_VER" DD_WHEEL="$DD_WHEEL" \
     bash "$SD/ratchet_solve.sh" "$task" "$MAX_ROUNDS" "$ROUND_BUDGET" >>"$LOG" 2>&1
-  # best-effort usage signal: did the model actually write to the Ledger's stores?
+  # Usage signal from the HOST-SIDE trajectory captures (survives teardown, unlike the
+  # old docker-exec probe that always read "torndown"). Reports exposed=<rounds the Ledger
+  # schema was OFFERED>/<rounds> and calls=<Ledger invocations>. exposed=0/N ⇒ the tool
+  # never reached the model and this arm is VOID (the failure that silently sank pilot #1).
   if [ "$arm" = "loop" ]; then
-    if docker ps --format '{{.Names}}' | grep -qx "$ctr"; then
-      used=$(docker exec "$ctr" sh -c 'ls /app/.drydock/ 2>/dev/null | grep -E "ledger|bottleneck|prediction" | tr "\n" ";"' 2>/dev/null)
-      [ -z "$used" ] && used="none-written"
-    else
-      used="torndown"
-    fi
+    used=$("$PY" "$OUT/ledger_usage.py" "$SD/ratchet/capture/$task" 2>/dev/null)
+    [ -z "$used" ] && used="unmeasured"
   fi
   local row; row=$(awk -F, -v t="$task" '$1==t{r=$0} END{print r}' "$SD/ratchet/ratchet_results.csv" 2>/dev/null)
   local solved best total
