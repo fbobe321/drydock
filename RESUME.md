@@ -150,26 +150,36 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   **PROCESS FAILURE LOGGED:** the rule said stop at step 50; it ran to 72 because nothing
 >   enforced it between manual checks (~4h GPU wasted). **A pre-registered rule is worth only what
 >   enforces it — it belongs in the training loop, not the operator's head.**
-> - **🧭 FIRST-PRINCIPLES LOOP (operator's design) — gap analysis + build.** Step 9 (iterate) is
->   the ratchet and is already validated; steps 1/3/10 partially exist; `fiar.py` proves drydock
->   can carry a typed artifact machine. **Steps 2, 4, 5, 6, 8 were absent.**
->   **NOT built as a prompt — that form is measured dead** (§17.1: regressions when always-on,
->   beaten by plain retry when on-failure, and the LONGER variant did worse because it was
->   followed less — criteria 3/8 vs 7/8).
+> - **🧭 FIRST-PRINCIPLES LOOP (operator's design) — built as THREE artifacts + control LAUNCHED.**
+>   Step 9 (iterate) is the ratchet and is validated; steps 1/3/10 partially exist; `fiar.py` proves
+>   drydock can carry a typed artifact machine. **Steps 2, 4, 5, 6, 8 + the bottleneck step were
+>   absent.** **NOT built as a prompt — that form is measured dead** (§17.1: regressions when
+>   always-on, beaten by plain retry on-failure, LONGER variant did worse — followed less, 3/8 vs 7/8).
 >   - **`drydock/groundtruth.py`** (steps 2+6): FACT/ASSUMPTION/UNKNOWN ledger; FACT only via
 >     `verify(evidence)`; unevidenced "facts" flagged. Product = **`next_test()` — rank unknowns
->     by DECISION IMPACT**, cost only breaks ties. Motivated by our own log: +6.8 → +3.4 → +0.0,
->     every correction from a control runnable on day one.
+>     by DECISION IMPACT**, cost only breaks ties. Motivated by our own log: +6.8 → +3.4 → +0.0.
 >   - **`drydock/predictions.py`** (step 8): register claim + expected + **falsifier** BEFORE
->     looking, then record observation and error; reports calibration, flags falsifier-less
->     "hopes". **Evidence: the ONLY conclusion that week needing no correction was the one
->     pre-registered to disk.** (High hit-rate is a bad sign, not a good one.)
->   - Advisory by contract (never raise/block, survive corrupt state), JSON-persisted like
->     `fiar.py`, **16 tests** on the ranking + never-raise contract. ruff ✓ pyright 0 ✓ 962 pass.
->   - **DELIBERATELY NOT WIRED INTO THE AGENT LOOP YET.** §17.1 is the cautionary tale — a
->     plausible mechanism was shipped on a claim a control later destroyed. **Next is the control:
->     ratchet-with-ledger vs plain ratchet, same tasks/budget. If it doesn't beat plain ratchet it
->     goes the way of the scaffold.**
+>     looking, record observation + error; flags falsifier-less "hopes". **The ONLY conclusion that
+>     week needing no correction was the one pre-registered to disk** (high hit-rate is a bad sign).
+>   - **`drydock/bottleneck.py`** (operator's added Decompose→Hypothesise step, 2026-09-08): rank
+>     KNOWN components by **realizable gain = `share × headroom`**, attack the one limiting factor.
+>     DISTINCT from `next_test()` (that ranks *unknowns*): "throughput is the lever" and "write-back,
+>     not fancier search" were bottleneck findings, not unknowns. Rejects the **wall** (high share/0
+>     headroom = fundamental constraint) and the **decoy** (high headroom/low share, capped by its
+>     Amdahl ceiling — the search-quality trap) by construction.
+>   - Advisory by contract (never raise/block, survive corrupt state), JSON-persisted. **Exposed via
+>     the single `Ledger` tool** (add/next/verify/refute/show + component/lever) — one surface, no new
+>     slot, no extra prompt text. 16+13 tests on ranking + never-raise. ruff ✓ pyright 0 ✓ **1029 pass**.
+>   - **🚀 THE CONTROL IS LAUNCHED (2026-09-08 18:22, tmux `loop_ctrl`).** ratchet-with-ledger vs
+>     plain ratchet, same tasks/budget/seeds, ONE variable (`loop_ratchet.sh` pins the Ledger tool
+>     via env `LOOP_PINS`; plain arm byte-identical). 4-task pilot, both arms paired. Falsifiers
+>     **pre-registered before data** (`loop_control/predictions.json`), mechanical kill rule (if
+>     with-loop ≤ plain+1 and not faster → removed, NOT re-nudged). **Safe by construction:**
+>     registered in `fleet_supervisor.sh::experiment_active()` (supervisor defers refill+keepalive),
+>     WAITS for `wrk_20a/20b` to go idle before taking the `.20` lane — nothing killed, no job
+>     orphaned — and auto-resumes on exit. Progress: `loop_control/run.log`; results →
+>     `loop_control/results.csv`. Design + kill rule: `loop_control/PRE_REGISTRATION.md`. **NEXT:
+>     resolve the 3 predictions against the CSV, apply the kill rule, then full 14-task set if clean.**
 
 > **🚢 2026-09-03/05 — SHIPPED v3.1.25 (PyPI + GitHub) · Knowledge-tool bug fixed · the RELEASE GATE
 > had been silently broken for 11 days · .20 loaned out, DPO v4 staged. PRD §18.**
