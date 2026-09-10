@@ -143,24 +143,48 @@ def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> Wo
                         out_tokens=int(getattr(state, "total_output_tokens", 0) or 0))
 
 
-def make_verifier_evaluator(verify_cmd: str, fitness: str = "auto",
-                            timeout: int = 1800) -> EvaluatorFn:
+def _median(xs: list[float]) -> float:
+    s = sorted(xs)
+    n = len(s)
+    return s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2.0
+
+
+def make_verifier_evaluator(verify_cmd: str, fitness: str = "auto", timeout: int = 1800,
+                            samples: int = 1, noise_band: float = 0.0) -> EvaluatorFn:
     """Deterministic Evaluator (§7.4): run the project's own check, score it, KEEP only if it
-    did not regress the metric (§19). Never the builder's word — a real measurement."""
+    beats the metric by more than the noise band (§9/§20). Never the builder's word.
+
+    Noise policy: run the check `samples` times and take the MEDIAN, so one flaky run can't
+    flip the decision; KEEP only if median rose by more than `noise_band` points. Within the
+    band = no meaningful change → not accepted (the code is reverted to the known-good tree),
+    so a variance-driven blip is never locked in as a 'win'. The baseline is measured by the
+    same evaluator, so baseline and experiments use identical sampling."""
     from drydock.ratchet import score_output
+    n = max(1, int(samples))
 
     def evaluate(task: dict, mission: dict, cwd: str, before: float) -> Evaluation:
-        try:
-            r = subprocess.run(verify_cmd, cwd=cwd, shell=True, capture_output=True,
-                               text=True, timeout=timeout)
-        except (OSError, subprocess.SubprocessError):
-            return Evaluation(accept=False, metric_before=before, reason="verifier failed to run")
-        passed, total = score_output((r.stdout or "") + (r.stderr or ""), fitness, r.returncode)
-        after = 100.0 * passed / total if total else (100.0 if r.returncode == 0 else 0.0)
-        accept = after >= before          # KEEP forward progress; REVERT regressions (§19)
+        runs: list[tuple[float, int, int]] = []
+        for _ in range(n):
+            try:
+                r = subprocess.run(verify_cmd, cwd=cwd, shell=True, capture_output=True,
+                                   text=True, timeout=timeout)
+            except (OSError, subprocess.SubprocessError):
+                return Evaluation(accept=False, metric_before=before,
+                                  reason="verifier failed to run")
+            passed, total = score_output((r.stdout or "") + (r.stderr or ""), fitness, r.returncode)
+            score = 100.0 * passed / total if total else (100.0 if r.returncode == 0 else 0.0)
+            runs.append((score, passed, total))
+        metrics = [x[0] for x in runs]
+        after = _median(metrics)
+        spread = max(metrics) - min(metrics)
+        # representative pass count = the run nearest the median (for the 'all passed' flag)
+        rep = min(runs, key=lambda x: abs(x[0] - after))
+        accept = after > before + noise_band     # must clear the noise band to count (§9/§20)
+        band = f", band {noise_band:.1f}" if noise_band else ""
+        spr = f", spread {spread:.1f}" if n > 1 else ""
         return Evaluation(accept=accept, metric_before=before, metric_after=after,
-                          passed=bool(total and passed >= total),
-                          reason=f"metric {before:.1f}→{after:.1f} ({passed}/{total})")
+                          passed=bool(rep[2] and rep[1] >= rep[2]),
+                          reason=f"metric {before:.1f}→{after:.1f} (median of {n}{spr}{band})")
     return evaluate
 
 

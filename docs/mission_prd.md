@@ -91,6 +91,12 @@ result is **rejected without running the (possibly rigged) verifier**, reverted,
 as a `tamper` event + negative knowledge — closing the false-pass hole (cf. the eratchet
 false-pass bug). The metric is never advanced under a tampered apparatus.
 
+**Metric-noise policy (§9/§20) — DONE.** The verifier evaluator runs the check `--samples N`
+times and takes the MEDIAN (one flaky run can't flip KEEP/REVERT), and KEEP requires the
+median to beat the baseline by more than `--noise-band F` points — so a variance-driven blip
+is never locked in as a win. Baseline and experiments use the same sampling. Defaults
+(1 sample, 0 band) preserve prior behavior; noisy benchmarks should set both.
+
 **Next (Phase 3):** escalation ladder (§23 / AT-7), *semantic* stagnation/loop detection
-(§22, beyond the current lexical baseline), metric-noise policy for KEEP/REVERT (§9/§20),
-fuller model routing (§32). Then the AT-1..AT-10 acceptance run.
+(§22, beyond the current lexical baseline), fuller model routing (§32). Then the AT-1..AT-10
+acceptance run.

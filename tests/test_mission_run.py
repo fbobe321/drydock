@@ -239,6 +239,27 @@ def test_establish_baseline_is_immutable(tmp_path):
     assert s.get_mission(mid)["baseline"]["metric"] == 61.4
 
 
+def test_noise_band_rejects_within_band_gains(tmp_path):
+    repo = _repo(tmp_path)
+    (Path(repo) / "answer.txt").write_text("PASS")
+    # measured metric is 100; baseline 99.5 → only +0.5, inside a 1.0 noise band → NOT a real gain
+    ev = R.make_verifier_evaluator("grep -q PASS answer.txt", fitness="exitcode", noise_band=1.0)
+    r = ev({}, {}, repo, 99.5)
+    assert r.metric_after == 100.0 and not r.accept
+    # the same +0.5 clears a smaller 0.4 band
+    ev2 = R.make_verifier_evaluator("grep -q PASS answer.txt", fitness="exitcode", noise_band=0.4)
+    assert ev2({}, {}, repo, 99.5).accept
+
+
+def test_sampling_takes_median_so_one_flake_does_not_flip(tmp_path):
+    repo = _repo(tmp_path)
+    # run 2 of 3 is a spurious failure; median of [100,0,100] = 100 survives the flake
+    cmd = "n=$(cat c 2>/dev/null || echo 0); n=$((n+1)); echo $n > c; [ $n -eq 2 ] && exit 1 || exit 0"
+    ev = R.make_verifier_evaluator(cmd, fitness="exitcode", samples=3)
+    r = ev({}, {}, repo, 50.0)
+    assert r.metric_after == 100.0 and r.accept and "median of 3" in r.reason
+
+
 def test_verifier_evaluator_measures(tmp_path):
     repo = _repo(tmp_path)
     (Path(repo) / "answer.txt").write_text("PASS")

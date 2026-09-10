@@ -54,6 +54,16 @@ def test_cli_create_requires_objective(tmp_path):
     assert C.run_cli(["create"], {"cwd": str(tmp_path)}) == 1
 
 
+def test_cli_create_persists_integrity_and_noise_flags(tmp_path):
+    rc = C.run_cli(["create", "harden", "the", "loop", "--protect", "tests", "--protect",
+                    "verify.sh", "--samples", "3", "--noise-band", "1.5"], {"cwd": str(tmp_path)})
+    assert rc == 0
+    mid = M.list_missions(tmp_path)[0]
+    cfg = M.open_store(tmp_path, mid).get_mission(mid)["config"]
+    assert cfg["protected_paths"] == ["tests", "verify.sh"]
+    assert cfg["eval_samples"] == 3 and cfg["noise_band"] == 1.5
+
+
 def test_cli_knowledge_view(tmp_path, capsys):
     C.run_cli(["create", "obj here"], {"cwd": str(tmp_path)})
     mid = M.list_missions(tmp_path)[0]

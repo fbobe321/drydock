@@ -107,13 +107,14 @@ def write_views(store: M.MissionStore, mission_id: str, cwd: str) -> None:
 
 
 # ── CLI (§36) ─────────────────────────────────────────────────────────────────
-def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], list[str]]:
+def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], dict, list[str]]:
     """Pull mission flags out of argv, returning
-    (budget, success_criteria, verify, protected_paths, rest)."""
+    (budget, success_criteria, verify, protected_paths, eval_cfg, rest)."""
     budget: dict = {}
     success: dict = {}
     verify = ""
     protected: list[str] = []
+    eval_cfg: dict = {}
     rest: list[str] = []
     i = 0
     while i < len(argv):
@@ -137,10 +138,19 @@ def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], list[str
         elif a == "--protect" and nxt:            # measurement apparatus a worker must not edit
             protected.append(nxt)
             i += 2
+        elif a == "--samples" and nxt:            # noise policy: run the check N times, take median
+            eval_cfg["eval_samples"] = int(nxt) if nxt.isdigit() else 1
+            i += 2
+        elif a == "--noise-band" and nxt:         # noise policy: min metric gain to KEEP (§9/§20)
+            try:
+                eval_cfg["noise_band"] = float(nxt)
+            except ValueError:
+                pass
+            i += 2
         else:
             rest.append(a)
             i += 1
-    return budget, success, verify, protected, rest
+    return budget, success, verify, protected, eval_cfg, rest
 
 
 def _latest(cwd: str) -> str | None:
@@ -156,15 +166,16 @@ def run_cli(argv: list, config: dict | None = None) -> int:
     rest = argv[1:]
 
     if sub == "create":
-        budget, success, verify, protected, objparts = _parse_budget(rest)
+        budget, success, verify, protected, eval_cfg, objparts = _parse_budget(rest)
         objective = " ".join(objparts).strip()
         if not objective:
             print('usage: drydock mission create "<objective>" [--target ">=70"] '
-                  '[--verify CMD] [--protect GLOB]... [--time-budget 48h] [--max-experiments N]')
+                  '[--verify CMD] [--protect GLOB]... [--samples N] [--noise-band F] '
+                  '[--time-budget 48h] [--max-experiments N]')
             return 1
         mconf = {"verify_cmd": verify, "model": config.get("model", ""),
                  "base_url": config.get("base_url", ""), "provider": config.get("provider", "vllm"),
-                 "protected_paths": protected}
+                 "protected_paths": protected, **eval_cfg}
         mid, store = M.create_mission(cwd, objective, success_criteria=success or None,
                                       budget=budget or None, config=mconf)
         initial_plan(store, mid, objective, verify)
@@ -238,7 +249,10 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
                 verify = found[0]
         except Exception:  # noqa: BLE001
             verify = ""
-    evaluator = R.make_verifier_evaluator(verify) if verify else None
+    samples = int(mconf.get("eval_samples") or 1)
+    noise_band = float(mconf.get("noise_band") or 0.0)
+    evaluator = (R.make_verifier_evaluator(verify, samples=samples, noise_band=noise_band)
+                 if verify else None)
     base_config = dict(config)
     if evaluator is not None:
         b = R.establish_baseline(store, mid, cwd, evaluator)
