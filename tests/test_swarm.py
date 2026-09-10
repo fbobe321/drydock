@@ -222,6 +222,25 @@ def test_judge_ranks_by_evidence():
     assert swarm.judge([e, d]).id == "c-4"
 
 
+def test_should_auto_escalate_policy():
+    from drydock.ratchet import OFFER_AFTER_FAILURES as THR
+    # hard (streak past threshold) + verifiable + git repo + not yet escalated → escalate
+    assert swarm.should_auto_escalate("fix tests", "pytest -q", THR,
+                                      is_git_repo=True, already_escalated=False) is True
+    # not enough failures yet → don't escalate
+    assert swarm.should_auto_escalate("fix tests", "pytest -q", THR - 1,
+                                      is_git_repo=True, already_escalated=False) is False
+    # no verifier → can't judge candidates → don't escalate
+    assert swarm.should_auto_escalate("fix tests", "", THR,
+                                      is_git_repo=True, already_escalated=False) is False
+    # not a git repo → no worktree isolation → don't escalate
+    assert swarm.should_auto_escalate("fix tests", "pytest -q", THR,
+                                      is_git_repo=False, already_escalated=False) is False
+    # already escalated this session → at most once
+    assert swarm.should_auto_escalate("fix tests", "pytest -q", THR,
+                                      is_git_repo=True, already_escalated=True) is False
+
+
 def test_run_swarm_needs_git_repo(tmp_path):
     import pytest
     with pytest.raises(ValueError):

@@ -325,7 +325,8 @@ class DrydockApp(App):
         self._ratchet_offer: dict | None = None  # pending proactive offer {goal, verify}
         self._offered_ratchet = False            # offer at most once per session (no nagging)
         self._erx: dict | None = None  # active /eratchet: {cancel}
-        self._swarm: dict | None = None  # active /swarm run (in-process, streams into this session)
+        self._swarm: dict | None = None  # active swarm run (in-process, streams into this session)
+        self._auto_swarmed = False       # harness auto-escalates to a swarm at most once/session
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
         # Live "working" line state.
@@ -1221,12 +1222,23 @@ class DrydockApp(App):
             self._info("swarm needs a git repository here (for per-agent worktree isolation) — "
                        "run `git init` first.")
             return
-        self._swarm = {"active": True}
-        self._info(f"⇶ /swarm launching: {objective!r} — {agents} agents exploring in "
-                   "isolated worktrees (in-process). Esc to stop.")
-        self.run_worker(lambda: self._swarm_worker(cwd, objective, agents), thread=True)
+        self._launch_swarm(cwd, objective, agents)
 
-    def _swarm_worker(self, cwd: str, objective: str, agents: int) -> None:
+    def _launch_swarm(self, cwd: str, objective: str, agents: int,
+                      verify_cmd: str | None = None, auto: bool = False) -> None:
+        """Start an in-process swarm streaming into this session. `auto=True` is the
+        harness escalating on its own (no user command); `verify_cmd` pins the checker
+        (e.g. the one the single agent kept failing)."""
+        self._swarm = {"active": True}
+        head = ("⚙ the harness is escalating to a parallel swarm" if auto
+                else f"⇶ /swarm launching: {objective!r}")
+        self._info(f"{head} — {agents} agents exploring in isolated worktrees "
+                   "(in-process, your working tree is left alone). Esc to stop.")
+        self.run_worker(
+            lambda: self._swarm_worker(cwd, objective, agents, verify_cmd), thread=True)
+
+    def _swarm_worker(self, cwd: str, objective: str, agents: int,
+                      verify_cmd: str | None = None) -> None:
         """Off-thread: drive run_swarm, streaming milestones into this session's transcript."""
         from drydock import swarm as swarmmod
 
@@ -1249,7 +1261,7 @@ class DrydockApp(App):
 
         try:
             res = swarmmod.run_swarm(cwd, objective, agents=agents, base_config=self.config,
-                                     on_event=on_event)
+                                     verify_cmd=verify_cmd, on_event=on_event)
             if res.converged and res.winner is not None:
                 tail = (f"\nApply it:  git cherry-pick {res.winner.commit}")
             elif res.winner is not None:
@@ -1965,7 +1977,7 @@ class DrydockApp(App):
         # fail repeatedly — the exact case the ratchet exists for, and the one a user
         # who doesn't know the command will never reach. Offer ONCE per session, with
         # the switches pre-filled; purely advisory (nothing is started, nothing blocked).
-        if (self._ratchet is None and not self._offered_ratchet
+        if (self._ratchet is None and self._swarm is None
                 and not self._repeat and not self._cancel.is_set()):
             from drydock import ratchet as rmod
             st = getattr(self, "state", None)
@@ -1978,11 +1990,27 @@ class DrydockApp(App):
             # published. Binding first is both type-safe and clearer.
             _task = getattr(st, "task", None) if st else None
             goal = (getattr(_task, "objective", "") or "") if _task is not None else ""
+            # ratchet_offer returns non-None only once the same check has failed enough
+            # times — i.e. the single agent is stuck on a KNOWN, VERIFIABLE task. That is
+            # exactly the escalate-on-difficulty signal: the harness decides on its own to
+            # fan out a parallel swarm (no user command). Needs a git repo (worktree
+            # isolation) + the verifier vcmd (to judge candidates honestly). When a swarm
+            # can't run, fall back to the advisory /ratchet offer as before.
             offer = rmod.ratchet_offer(goal, vcmd, streak)
             if offer:
-                self._offered_ratchet = True
-                self._ratchet_offer = {"goal": goal, "verify": vcmd}
-                self._info(offer)
+                from drydock import swarm as swarmmod
+                cwd = self.config.get("cwd") or "."
+                if swarmmod.should_auto_escalate(
+                        goal, vcmd, streak,
+                        is_git_repo=swarmmod.repo_root(cwd) is not None,
+                        already_escalated=self._auto_swarmed):
+                    self._auto_swarmed = True
+                    self._info(f"⚙ That check has failed {streak}× — escalating.")
+                    self._launch_swarm(cwd, goal, 4, verify_cmd=vcmd, auto=True)
+                elif not self._offered_ratchet:
+                    self._offered_ratchet = True
+                    self._ratchet_offer = {"goal": goal, "verify": vcmd}
+                    self._info(offer)
         # /loop: re-run the prompt until the count is exhausted OR the loop stops
         # itself (Esc/stop clears self._repeat). Queued user prompts take priority.
         if self._repeat and not self._cancel.is_set():

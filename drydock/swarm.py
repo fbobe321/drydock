@@ -688,6 +688,22 @@ def candidate_diversity(repo: str | Path, candidates: list[Candidate], base_ref:
             "diversity_ratio": (n_distinct / n_verified) if n_verified else 0.0}
 
 
+def should_auto_escalate(goal: str, verify_cmd: str, fail_streak: int, *,
+                         is_git_repo: bool, already_escalated: bool) -> bool:
+    """Decide whether the harness should auto-escalate a stuck single-agent turn into a
+    swarm (escalate-on-difficulty — the harness decides, no user command). True only when:
+    a KNOWN verifier has failed enough times in a row (reusing the ratchet's threshold, so
+    the task is hard AND verifiable), the repo supports worktree isolation, and we haven't
+    already escalated this session. This is the whole trigger policy in one testable place."""
+    if already_escalated or not is_git_repo or not verify_cmd:
+        return False
+    try:
+        from drydock.ratchet import ratchet_offer
+        return ratchet_offer(goal, verify_cmd, fail_streak) is not None
+    except Exception:  # noqa: BLE001 — a decision helper must never raise into the turn loop
+        return False
+
+
 @dataclass
 class SwarmResult:
     swarm_id: str
