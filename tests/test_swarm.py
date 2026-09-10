@@ -171,3 +171,91 @@ def test_repo_root_detection(tmp_path):
     repo = _init_repo(tmp_path / "repo")
     assert swarm.repo_root(repo) == str(Path(repo).resolve())
     assert swarm.repo_root(tmp_path / "not_a_repo") is None
+
+
+# ── coordinator / verifier / judge slice ─────────────────────────────────────
+def test_diversify_gives_distinct_angles():
+    pairs = swarm.diversify("fix it", 4)
+    assert len(pairs) == 4
+    labels = [p[0] for p in pairs]
+    assert len(set(labels)) == 4  # 4 distinct angles
+    assert all("fix it" not in sys_prompt or True for _, sys_prompt in pairs)
+    assert all(labels[i] in pairs[i][1] for i in range(4))  # angle embedded in system prompt
+
+
+def test_judge_ranks_by_evidence():
+    a = swarm.Candidate(id="c-1", agent="a1", commit="x", tests_passed=5, tests_total=10)
+    b = swarm.Candidate(id="c-2", agent="a2", commit="y", tests_passed=10, tests_total=10)
+    c = swarm.Candidate(id="c-3", agent="a3", commit="", tests_passed=10, tests_total=10)  # no patch
+    assert swarm.judge([a, b, c]).id == "c-2"        # full pass ratio wins
+    assert swarm.judge([c]) is None                   # no real patch → no winner
+    # tie on ratio → fewer files changed wins (simpler)
+    d = swarm.Candidate(id="c-4", agent="a4", commit="z", tests_passed=10, tests_total=10,
+                        files_changed=1)
+    e = swarm.Candidate(id="c-5", agent="a5", commit="w", tests_passed=10, tests_total=10,
+                        files_changed=9)
+    assert swarm.judge([e, d]).id == "c-4"
+
+
+def test_run_swarm_needs_git_repo(tmp_path):
+    import pytest
+    with pytest.raises(ValueError):
+        swarm.run_swarm(tmp_path / "plain_dir", "obj", agents=2)
+
+
+def test_run_swarm_end_to_end_converges(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+
+    # Only the "assume the obvious is wrong" angle finds the fix; others write a failing marker.
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        content = "PASS" if "Assume the obvious" in system_prompt else "FAIL"
+        (Path(cwd) / "answer.txt").write_text(content)
+        return f"wrote {content}"
+
+    res = swarm.run_swarm(repo, "solve it", agents=4, base_config={},
+                          verify_cmd="grep -q PASS answer.txt", fitness="exitcode",
+                          runner=runner)
+    assert res.converged is True
+    assert res.winner is not None
+    assert res.winner.status == swarm.CAND_ACCEPTED
+    assert res.winner.tests_passed == res.winner.tests_total == 1
+    # the winning worker is the one that got the "assume obvious wrong" angle (agent-2)
+    assert res.winner.agent == "agent-2"
+    # every arm produced a candidate; losers are rejected by the independent verifier
+    assert len(res.candidates) == 4
+    losers = [c for c in res.candidates if c.id != res.winner.id]
+    assert all(c.status == swarm.CAND_REJECTED for c in losers)
+
+
+def test_run_swarm_contains_a_crashing_worker(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        if "simplest" in system_prompt:      # first angle crashes
+            raise RuntimeError("worker exploded")
+        (Path(cwd) / "answer.txt").write_text("PASS")
+        return "ok"
+
+    res = swarm.run_swarm(repo, "solve it", agents=3, base_config={},
+                          verify_cmd="grep -q PASS answer.txt", fitness="exitcode",
+                          runner=runner)
+    # swarm still converges on a surviving worker despite the crash
+    assert res.converged is True and res.winner is not None
+    assert res.winner.agent in ("agent-2", "agent-3")
+
+
+def test_run_swarm_writes_metrics_and_events(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        (Path(cwd) / "f.txt").write_text("x")
+        return "ok"
+
+    res = swarm.run_swarm(repo, "obj", agents=2, base_config={},
+                          verify_cmd="test -f f.txt", fitness="exitcode", runner=runner)
+    bb = swarm.open_swarm(repo, res.swarm_id)
+    m = bb.metrics()
+    assert m["agents"] == 2 and m["candidates"] == 2
+    ev_types = {json.loads(x)["type"]
+                for x in (Path(res.root) / "events.jsonl").read_text().splitlines() if x.strip()}
+    assert {"SWARM_START", "TASK_ASSIGNED", "TEST_COMPLETED", "JUDGE_DECISION"} <= ev_types

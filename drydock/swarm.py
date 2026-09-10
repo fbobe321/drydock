@@ -376,10 +376,16 @@ def repo_root(cwd: str | Path) -> str | None:
         return None
 
 
+# Git serializes worktree-metadata writes, but concurrent `worktree add` on one repo can
+# still race; the coordinator adds N at once, so serialize just the (fast) add/remove.
+_WORKTREE_LOCK = threading.Lock()
+
+
 def add_worktree(repo: str | Path, base_ref: str, path: str | Path) -> bool:
     """Create a detached worktree at `path` from `base_ref` (eratchet pattern)."""
     try:
-        r = _git(["worktree", "add", "--detach", str(path), base_ref], repo)
+        with _WORKTREE_LOCK:
+            r = _git(["worktree", "add", "--detach", str(path), base_ref], repo)
         return r.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
@@ -505,3 +511,185 @@ def run_worker(bb: Blackboard, repo: str, base_ref: str, agent_id: str, objectiv
             files_changed=files_changed, ok=bool(commit) and not error)
     return WorkerOutcome(agent=agent_id, ok=bool(commit) and not error, candidate_id=cand.id,
                          commit=commit, files_changed=files_changed, summary=summary, error=error)
+
+
+# ── diversity injection (§15): make agents cover the search space, not duplicate ──
+_BUILDER_SYSTEM = (
+    "You are ONE worker in a swarm of agents solving a shared objective. Work only in your "
+    "own working directory; produce a concrete, minimal change that solves the objective and "
+    "leave the tree in a state a test suite could verify. Do not narrate — act."
+)
+
+# Distinct angles so N builders explore different regions of the solution space (§15).
+DIVERSITY_ANGLES = (
+    "Take the simplest, most likely-correct approach first.",
+    "Assume the obvious explanation is wrong; look for a subtler root cause.",
+    "Suspect a dependency, version, or configuration problem and check that first.",
+    "Trace backward from the failing behavior/test to its origin before changing anything.",
+    "Inspect the most recent changes for what broke, and target those.",
+    "Build a minimal reproduction, then fix the smallest thing that makes it pass.",
+    "Consider concurrency, ordering, or state/caching issues.",
+    "Attempt a fully independent solution without assuming the existing structure is right.",
+)
+
+
+def diversify(objective: str, n: int) -> list[tuple[str, str]]:
+    """Return n (angle_label, system_prompt) pairs — each worker gets a different angle so
+    the swarm covers the space instead of making n copies of the same mistake (§39)."""
+    out: list[tuple[str, str]] = []
+    for i in range(max(1, n)):
+        angle = DIVERSITY_ANGLES[i % len(DIVERSITY_ANGLES)]
+        out.append((angle, f"{_BUILDER_SYSTEM}\n\nApproach for this worker: {angle}"))
+    return out
+
+
+# ── independent verification (§18) + evidence-based judging (§20) ─────────────
+# verify_fn(candidate) -> (passed, total). Default runs a shell command in the worktree.
+VerifyFn = Callable[["Candidate"], "tuple[int, int]"]
+
+
+def make_shell_verifier(verify_cmd: str, fitness: str = "auto",
+                        timeout: int = 1800) -> VerifyFn:
+    """A verifier that runs `verify_cmd` in the candidate's worktree and scores the output
+    with drydock.ratchet.score_output — the same scorer the ratchet/eratchet use, so a
+    candidate is judged by a real test run, never by the builder's self-report (§18/§20)."""
+    from drydock.ratchet import score_output
+
+    def verify(cand: Candidate) -> tuple[int, int]:
+        if not cand.worktree or not Path(cand.worktree).exists():
+            return 0, 0
+        try:
+            r = subprocess.run(verify_cmd, cwd=cand.worktree, shell=True,
+                               capture_output=True, text=True, timeout=timeout)
+        except (OSError, subprocess.SubprocessError):
+            return 0, 1
+        return score_output((r.stdout or "") + (r.stderr or ""), fitness, r.returncode)
+
+    return verify
+
+
+def verify_candidate(bb: Blackboard, cand: Candidate, verify: VerifyFn) -> Candidate:
+    """Score one candidate independently and update its evidence on the blackboard."""
+    passed, total = verify(cand)
+    status = cand.status
+    if total > 0:
+        status = CAND_PROMISING if passed >= total else CAND_REJECTED
+    bb.update("candidates", cand.id, tests_passed=passed, tests_total=total,
+              verifications=cand.verifications + 1, status=status)
+    bb.emit("TEST_COMPLETED", candidate=cand.id, passed=passed, total=total, status=status)
+    updated = next((c for c in bb.candidates() if c.id == cand.id), cand)
+    return updated
+
+
+def _evidence_key(c: Candidate):
+    """Higher is better. Candidates compete on EVIDENCE, not confidence (§20): a real
+    patch (commit) that passes the most tests, at the highest pass-ratio, then the simplest
+    (fewest files), then the most independently verified."""
+    has_patch = 1 if c.commit else 0
+    ratio = (c.tests_passed / c.tests_total) if c.tests_total > 0 else 0.0
+    return (has_patch, ratio, c.tests_passed, -c.files_changed, c.verifications)
+
+
+def judge(candidates: list[Candidate]) -> Candidate | None:
+    """Pick the strongest candidate by evidence, or None if none has a patch."""
+    real = [c for c in candidates if c.commit]
+    if not real:
+        return None
+    return max(real, key=_evidence_key)
+
+
+@dataclass
+class SwarmResult:
+    swarm_id: str
+    objective: str
+    root: str
+    converged: bool
+    winner: Candidate | None
+    candidates: list[Candidate]
+
+
+def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: dict | None = None,
+              base_ref: str = "HEAD", verify_cmd: str | None = None, fitness: str = "auto",
+              max_turns: int = 40, max_tool_calls: int = 40, max_workers: int | None = None,
+              runner: AgentRunner = default_agent_runner, verify: VerifyFn | None = None,
+              swarm_id: str | None = None) -> SwarmResult:
+    """Coordinate a parallel-strategy swarm end to end (§24 Parallel, the MVP default):
+    decompose into N diversity-injected Builders (§15), fan them out concurrently over one
+    shared inference server (§22), verify each candidate independently (§18), and converge on
+    the best by evidence (§20). Never raises on an individual worker — failures are contained
+    (§32). `runner`/`verify` are injectable for testing without a live model."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    repo = repo_root(cwd)
+    if repo is None:
+        raise ValueError("swarm needs a git repository (run `git init` first) for worktree "
+                         "isolation")
+    n = max(1, agents)
+    bb = create_swarm(repo, objective, {"agents": n, "strategy": "parallel",
+                                        "verify_cmd": verify_cmd or "", "fitness": fitness},
+                      swarm_id=swarm_id)
+    bb.emit("SWARM_START", agents=n, strategy="parallel", base_ref=base_ref)
+
+    # Resolve the verifier once (auto-detect if not given) so scoring is identical per arm.
+    if verify is None:
+        vc = verify_cmd
+        if not vc:
+            try:
+                from drydock.ratchet import detect_verifier
+                found = detect_verifier(repo)
+                if found:
+                    vc, fitness = found
+            except Exception:  # noqa: BLE001 — detection is best-effort
+                vc = None
+        verify = make_shell_verifier(vc, fitness) if vc else None
+        if vc:
+            bb.emit("VERIFIER_RESOLVED", verify_cmd=vc, fitness=fitness)
+        else:
+            bb.emit("VERIFIER_MISSING")
+
+    # 1. decompose into diversity-injected Builder tasks (§6, §15).
+    angles = diversify(objective, n)
+    for i, (angle, _sys) in enumerate(angles):
+        bb.add_task(role="builder", objective=objective, assignee=f"agent-{i + 1}",
+                    status=TASK_ASSIGNED)
+        bb.emit("TASK_ASSIGNED", agent=f"agent-{i + 1}", angle=angle)
+
+    # 2. fan out workers concurrently over the shared server (§22). Each is isolated + safe.
+    def _spawn(i: int) -> WorkerOutcome:
+        angle, sysprompt = angles[i]
+        return run_worker(bb, repo, base_ref, f"agent-{i + 1}", objective,
+                          role="builder", system_prompt=sysprompt, base_config=base_config,
+                          max_turns=max_turns, max_tool_calls=max_tool_calls, runner=runner)
+
+    workers = max_workers or min(n, 8)
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        list(ex.map(_spawn, range(n)))
+
+    # 3. verify each candidate independently (§18) — the builder never grades itself.
+    cands = [c for c in bb.candidates() if c.commit]
+    if verify is not None:
+        for c in cands:
+            verify_candidate(bb, c, verify)
+
+    # 4. judge on evidence (§20) and check convergence (§19).
+    final = bb.candidates()
+    winner = judge(final)
+    converged = bool(winner and winner.tests_total > 0 and winner.tests_passed == winner.tests_total)
+    if winner is not None:
+        status = CAND_ACCEPTED if converged else winner.status
+        bb.update("candidates", winner.id, status=status)
+        bb.emit("JUDGE_DECISION", candidate=winner.id, converged=converged,
+                tests_passed=winner.tests_passed, tests_total=winner.tests_total)
+    if converged:
+        bb.emit("SWARM_CONVERGED", candidate=winner.id if winner else "")
+
+    bb.set_metrics({"agents": n, "candidates": len(final),
+                    "candidates_with_patch": len([c for c in final if c.commit]),
+                    "converged": converged,
+                    "winner": winner.id if winner else "",
+                    "ts": time.time()})
+    # Re-read the winner so its ACCEPTED status is reflected in the returned object.
+    if winner is not None:
+        winner = next((c for c in bb.candidates() if c.id == winner.id), winner)
+    return SwarmResult(swarm_id=bb.root.name, objective=objective, root=str(bb.root),
+                       converged=converged, winner=winner, candidates=bb.candidates())
