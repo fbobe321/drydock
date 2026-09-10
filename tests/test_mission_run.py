@@ -192,6 +192,69 @@ def test_no_tamper_when_only_source_changes(tmp_path):
     assert not any(e["type"] == "tamper" for e in s.events(mid))
 
 
+def test_escalate_switches_model_and_replans_then_continues(tmp_path):
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", config={"escalation_model": "big-model"})
+    base = {"model": "small-model"}
+
+    def planner(store, mission):
+        store.add_task(mission["id"], "alternative strategy")
+        return 1
+    disp = R.escalate(s, mid, count=1, max_escalations=3, base_config=base, planner=planner)
+    assert disp == "continue"
+    assert base["model"] == "big-model"                     # L5 model routing (§32)
+    assert any(e["type"] == "escalation" for e in s.events(mid))
+    assert s.knowledge(mid, M.K_ASSUMPTION)[0]["statement"].startswith("CRITIC:")  # L2 critic
+
+
+def test_escalate_blocks_when_no_alternative_work(tmp_path):
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")                            # not mission-critical, no planner
+    assert R.escalate(s, mid, count=1, max_escalations=3, base_config={}) == "blocked"
+
+
+def test_escalate_awaits_human_when_mission_critical(tmp_path):
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", config={"mission_critical": True})
+    # hit the escalation cap → a critical mission asks for a human instead of silently blocking
+    assert R.escalate(s, mid, count=3, max_escalations=3, base_config={}) == "human"
+
+
+def test_run_mission_escalates_before_blocking(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", success_criteria={"score": ">=999"})
+    s.add_task(mid, "first")
+
+    def planner(store, mission):
+        store.add_task(mission["id"], "alt")
+        return 1
+    summ = R.run_mission(s, mid, cwd=repo, repo=repo, worker=_writer_worker("x.py"),
+                         evaluator=lambda *a: R.Evaluation(accept=False, metric_after=0.0),
+                         planner=planner, stagnation_limit=2, max_escalations=2)
+    assert summ.status == M.M_BLOCKED                        # only after the ladder is exhausted
+    escs = [e for e in s.events(mid) if e["type"] == "escalation"]
+    assert len(escs) == 2                                    # climbed to the cap, then blocked
+    assert s.knowledge(mid, M.K_ASSUMPTION)                  # critic left a trail (§23/§44)
+
+
+def test_run_mission_awaiting_human_for_critical_mission(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", success_criteria={"score": ">=999"},
+                           config={"mission_critical": True})
+    s.add_task(mid, "first")
+
+    def planner(store, mission):
+        store.add_task(mission["id"], "alt")
+        return 1
+    summ = R.run_mission(s, mid, cwd=repo, repo=repo, worker=_writer_worker("x.py"),
+                         evaluator=lambda *a: R.Evaluation(accept=False, metric_after=0.0),
+                         planner=planner, stagnation_limit=2, max_escalations=2)
+    # a critical mission that exhausts the ladder asks for a human rather than silently blocking
+    assert summ.status == M.M_AWAITING_HUMAN
+
+
 def test_run_mission_stops_on_success(tmp_path):
     repo = _repo(tmp_path)
     s = M.MissionStore(tmp_path / "s.db")

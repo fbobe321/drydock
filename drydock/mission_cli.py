@@ -75,7 +75,11 @@ def render_status(store: M.MissionStore, mission_id: str) -> str:
     revs = store.reviews(mission_id)
     since = store.last_review_ts(mission_id)
     to_go = max(0, 10 - store.experiments_since(mission_id, since))
+    escs = sum(1 for e in store.events(mission_id) if e["type"] == "escalation")
     lines.append(f"Reviews:   {len(revs)}   next strategic review in {to_go} experiments")
+    if escs:
+        lines.append(f"Escalations: {escs}"
+                     + ("   ⚠ AWAITING HUMAN" if m["status"] == M.M_AWAITING_HUMAN else ""))
     if revs:
         lines.append(f"Last review: {revs[-1]['summary'].get('limiting_factor', '')}")
     return "\n".join(lines)

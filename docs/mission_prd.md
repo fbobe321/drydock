@@ -97,6 +97,15 @@ median to beat the baseline by more than `--noise-band F` points — so a varian
 is never locked in as a win. Baseline and experiments use the same sampling. Defaults
 (1 sample, 0 band) preserve prior behavior; noisy benchmarks should set both.
 
-**Next (Phase 3):** escalation ladder (§23 / AT-7), *semantic* stagnation/loop detection
-(§22, beyond the current lexical baseline), fuller model routing (§32). Then the AT-1..AT-10
-acceptance run.
+**Escalation ladder (§23 / AT-7) — DONE.** Stagnation no longer sends the whole mission
+straight to BLOCKED. On stall it climbs a ladder (advisory, never raises §50): L2 Critic
+analyses the stall (optional model hook, else a recorded assumption), L3 Planner proposes an
+alternative strategy, L5 model routing swaps to a configured `escalation_model`. Because
+stagnation must never be "solved" by unlimited iterations (§23), after `max_escalations`
+climbs — or when no alternative work can be produced — it stops: `AWAITING_HUMAN` for a
+`mission_critical` mission, else `BLOCKED`. Escalations are shown in `mission status`.
+
+**Next (Phase 3):** *semantic* stagnation/loop detection (§22, beyond the current lexical
+baseline); fuller model routing across roles (§32). Known wart: an empty queue with no
+planner leaves the mission `EXECUTING` (the CLI always supplies a planner, so it only bites
+programmatic callers). Then the AT-1..AT-10 acceptance run.

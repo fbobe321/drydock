@@ -387,13 +387,66 @@ def run_strategic_review(store: M.MissionStore, mission_id: str, *,
     return facts
 
 
+def escalate(store: M.MissionStore, mission_id: str, *, count: int, max_escalations: int,
+             base_config: dict, planner: Callable[[M.MissionStore, dict], int] | None = None,
+             critic: Callable[[M.MissionStore, dict, dict], str] | None = None) -> str:
+    """Climb the escalation ladder (§23) when a worker stalls — advisory, never raises (§50).
+    Returns the next disposition: 'continue' (try again with a changed strategy/model),
+    'blocked' (task/mission out of ideas), or 'human' (mission-critical, needs a human).
+
+    Deterministic subset of the ladder: L2 Critic analyses the stall (optional model hook,
+    else a recorded finding), L3 Planner proposes an alternative strategy, L5 model routing
+    swaps to `escalation_model` if configured, and — because stagnation must never be 'solved'
+    by unlimited iterations (§23) — after `max_escalations` climbs or when no alternative work
+    can be produced it stops: AWAITING_HUMAN if the mission is critical, else BLOCKED."""
+    m = store.get_mission(mission_id) or {}
+    cfg = m.get("config") or {}
+    facts = {"objective": m.get("objective", ""), "escalation": count,
+             "failed_strategies": [k["statement"] for k in
+                                   store.knowledge(mission_id, M.K_NEGATIVE)][-5:]}
+    # L2 — Critic: why are we stuck? (model hook optional; deterministic fallback below)
+    note = ""
+    if critic is not None:
+        try:
+            note = critic(store, m, dict(facts)) or ""
+        except Exception:  # noqa: BLE001 — the critic never crashes the mission
+            note = ""
+    if not note:
+        note = (f"stalled after repeated non-progress (escalation {count}); recent approaches "
+                f"are not moving the metric — a different tactic is needed")
+    store.add_knowledge(mission_id, M.K_ASSUMPTION, f"CRITIC: {note}", confidence=0.5)
+    # L5 — model routing: switch to a stronger/different model for subsequent workers (§32)
+    alt = str(cfg.get("escalation_model") or "")
+    model_switched = False
+    if alt and base_config.get("model") != alt:
+        base_config["model"] = alt
+        model_switched = True
+    # L3 — Planner: create an alternative strategy
+    added = 0
+    if planner is not None:
+        try:
+            added = planner(store, m) or 0
+        except Exception:  # noqa: BLE001
+            added = 0
+    store.event(mission_id, "escalation", level=count, note=note, backlog_added=added,
+                model_switched=model_switched)
+    # L6/L7/L8 — stop climbing: no unlimited iterations (§23)
+    critical = bool(cfg.get("mission_critical"))
+    if count >= max_escalations:
+        return "human" if critical else "blocked"
+    if added == 0 and not store.ready_tasks(mission_id):
+        return "human" if critical else "blocked"
+    return "continue"
+
+
 def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str = "",
                 worker: WorkerFn = default_worker, evaluator: EvaluatorFn | None = None,
                 planner: Callable[[M.MissionStore, dict], int] | None = None,
                 base_config: dict | None = None, worker_id: str = "worker-1",
-                max_cycles: int = 10000, stagnation_limit: int = 5,
+                max_cycles: int = 10000, stagnation_limit: int = 5, max_escalations: int = 3,
                 review_every_tasks: int = 10, review_every_secs: float = 3600.0,
                 reviewer: Callable[[M.MissionStore, dict, dict], dict] | None = None,
+                critic: Callable[[M.MissionStore, dict, dict], str] | None = None,
                 on_event: Callable[[str, dict], None] | None = None) -> RunSummary:
     """Drive a mission to a stopping condition with a SINGLE worker (§41/§49). Stops on
     success (§30), budget (§30), stagnation (§22), or an empty queue (planner is a later
@@ -406,7 +459,9 @@ def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str =
                 pass
 
     store.set_status(mission_id, M.M_EXECUTING)
+    base_config = dict(base_config or {})   # own copy: model routing (§32) may mutate it
     no_progress = 0
+    escalations = 0
     cycles = 0
     while cycles < max_cycles:
         cycles += 1
@@ -450,9 +505,20 @@ def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str =
             metric=out.metric_after if out else None)
         no_progress = 0 if progressed else no_progress + 1
         if no_progress >= stagnation_limit:
-            store.set_status(mission_id, M.M_BLOCKED)
             store.event(mission_id, "stagnation", cycles=no_progress)
             _ev("stagnation", cycles=no_progress)
+            escalations += 1
+            disp = escalate(store, mission_id, count=escalations, max_escalations=max_escalations,
+                            base_config=base_config, planner=planner, critic=critic)
+            _ev("escalation", level=escalations, disposition=disp)
+            if disp == "continue":
+                no_progress = 0                   # a changed strategy earns a fresh window (§23)
+                continue
+            status = M.M_AWAITING_HUMAN if disp == "human" else M.M_BLOCKED
+            store.set_status(mission_id, status)
+            store.event(mission_id, "blocked" if disp != "human" else "awaiting_human",
+                        escalations=escalations)
+            _ev(disp, escalations=escalations)
             break
     m = store.get_mission(mission_id) or {}
     return RunSummary(mission_id=mission_id, status=m.get("status", "?"), cycles=cycles,
