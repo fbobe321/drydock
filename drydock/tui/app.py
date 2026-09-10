@@ -2004,10 +2004,11 @@ class DrydockApp(App):
             if offer:
                 from drydock import swarm as swarmmod
                 cwd = self.config.get("cwd") or "."
-                if swarmmod.should_auto_escalate(
-                        goal, vcmd, streak,
-                        is_git_repo=swarmmod.repo_root(cwd) is not None,
-                        already_escalated=self._auto_swarmed):
+                if (self.config.get("swarm_auto_escalate", True)
+                        and swarmmod.should_auto_escalate(
+                            goal, vcmd, streak,
+                            is_git_repo=swarmmod.repo_root(cwd) is not None,
+                            already_escalated=self._auto_swarmed)):
                     self._auto_swarmed = True
                     self._info(f"⚙ That check has failed {streak}× — escalating.")
                     self._launch_swarm(cwd, goal, 4, verify_cmd=vcmd, auto=True)

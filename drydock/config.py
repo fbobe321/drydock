@@ -97,6 +97,11 @@ DEFAULTS: dict[str, object] = {
     # web tools surfaced even on tasks whose text never mentions the web. Names
     # not in the registry are ignored.
     "pin_tools": [],
+    # When a single agent stays stuck on a KNOWN verifier (it keeps failing), the harness
+    # may auto-escalate to an in-process multi-agent swarm to explore approaches in parallel
+    # (docs/multi_agent_swarm_prd.md). On by default; set false to keep every request single-
+    # agent unless the user runs /swarm explicitly.
+    "swarm_auto_escalate": True,
     # URL substrings the web tools refuse: WebSearch drops matching results,
     # WebFetch declines matching URLs (with a plain message, never an error).
     # Used to keep benchmark/solution sites out of harvested training runs.
