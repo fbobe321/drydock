@@ -208,6 +208,7 @@ class RunSummary:
 
 def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str = "",
                 worker: WorkerFn = default_worker, evaluator: EvaluatorFn | None = None,
+                planner: Callable[[M.MissionStore, dict], int] | None = None,
                 base_config: dict | None = None, worker_id: str = "worker-1",
                 max_cycles: int = 10000, stagnation_limit: int = 5,
                 on_event: Callable[[str, dict], None] | None = None) -> RunSummary:
@@ -243,8 +244,13 @@ def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str =
         store.reclaim_expired(mission_id)
         ready = store.ready_tasks(mission_id)
         if not ready:
+            added = planner(store, m) if planner else 0
+            if added:
+                store.event(mission_id, "replan", added=added)
+                _ev("replan", added=added)
+                continue
             store.event(mission_id, "no_ready_tasks")
-            _ev("idle", reason="no ready tasks (planner not yet run)")
+            _ev("idle", reason="no ready tasks")
             break
         task = ready[0]
         out = run_task(store, task, mission=m, cwd=cwd, repo=repo, worker=worker,

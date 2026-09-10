@@ -383,6 +383,15 @@ def main():
         cfg["cwd"] = os.getcwd()
         sys.exit(swarm_run_cli(sys.argv[2:], config=cfg))
 
+    # `drydock mission <create|status|run|resume|…>` — long-horizon autonomous missions.
+    if len(sys.argv) > 1 and sys.argv[1] == "mission":
+        from drydock import config as cfgmod
+        from drydock.mission_cli import run_cli as mission_run_cli
+        cfg = cfgmod.resolve({}, cfgmod.default_config_path())
+        cfgmod.resolve_active_model(cfg)
+        cfg["cwd"] = os.getcwd()
+        sys.exit(mission_run_cli(sys.argv[2:], config=cfg))
+
     parser = argparse.ArgumentParser(description="DryDock — local coding agent")
     parser.add_argument(
         "--version", "-V", action="version", version=f"drydock {__version__}"
