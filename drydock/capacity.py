@@ -6,14 +6,15 @@ agents just queue — more tokens, no more wall-clock. So "hammer the 8-GPU vLLM
 down the -np 2 laptop" reduces to: estimate the server's concurrency C, then size the swarm
 to min(C, task-demand, budget). This module estimates C.
 
-Detection order (first hit wins), all swallow-error / never-raise:
-  1. explicit — `config['swarm_concurrency']` or $DRYDOCK_SWARM_CONCURRENCY (the operator
-     knows their hardware; always the most reliable);
-  2. llama.cpp — GET /slots (its `-np` parallel slots);
-  3. empirical probe — fire a burst of tiny concurrent requests and infer parallelism from
-     wall-time vs single-request latency (server-agnostic; the honest signal for vLLM, whose
-     max_num_seqs isn't exposed over the OpenAI API);
-  4. fallback — a conservative default.
+Detection is FULLY AUTOMATIC — the user configures nothing. Order (first hit wins), all
+swallow-error / never-raise:
+  1. llama.cpp — GET /slots (its `-np` parallel slots), a free exact read;
+  2. empirical ramp probe — double a burst of tiny concurrent requests until the server
+     saturates (server-agnostic; the honest signal for vLLM, whose max_num_seqs isn't exposed
+     over the OpenAI API — an 8-GPU box reads big, a -np 2 laptop reads small, with no config);
+  3. fallback — a conservative default.
+An OPTIONAL escape hatch, checked first and needed by no one: `config['swarm_concurrency']`
+or $DRYDOCK_SWARM_CONCURRENCY, for an operator who wants to pin it or skip probing entirely.
 
 Stdlib-only; the probe funcs are injectable so this is testable without a live server.
 """
@@ -71,30 +72,12 @@ def _default_requester(base_url: str, model: str) -> Callable[[], None]:
     return req
 
 
-def probe_concurrency(base_url: str, model: str, *, burst: int = 16,
-                      requester: Callable[[], None] | None = None) -> int:
-    """Empirically estimate useful parallelism: one warm request costs t1; `burst` concurrent
-    requests finish in wall time W. Total work ≈ burst·t1 done in W ⇒ parallelism ≈ burst·t1/W
-    (≈burst if fully batched, ≈1 if serialized). Server-agnostic. Returns 1..burst."""
-    req = requester or _default_requester(base_url, model)
-    try:
-        t0 = time.monotonic()
-        req()
-        t1 = time.monotonic() - t0
-    except Exception:  # noqa: BLE001
-        return 1
-    if t1 <= 0:
-        return burst
-    start = time.monotonic()
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=burst) as ex:
-            list(ex.map(lambda _: _safe_call(req), range(burst)))
-    except Exception:  # noqa: BLE001
-        return 1
-    wall = time.monotonic() - start
-    if wall <= 0:
-        return burst
-    return max(1, min(burst, round(burst * t1 / wall)))
+_PROBE_CACHE: dict[str, int] = {}
+
+
+def clear_probe_cache() -> None:
+    """Forget cached probe results (mainly for tests / a changed server)."""
+    _PROBE_CACHE.clear()
 
 
 def _safe_call(req: Callable[[], None]) -> None:
@@ -102,6 +85,53 @@ def _safe_call(req: Callable[[], None]) -> None:
         req()
     except Exception:  # noqa: BLE001
         pass
+
+
+def _burst_wall(req: Callable[[], None], b: int) -> float:
+    start = time.monotonic()
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=b) as ex:
+            list(ex.map(lambda _: _safe_call(req), range(b)))
+    except Exception:  # noqa: BLE001
+        return -1.0
+    return time.monotonic() - start
+
+
+def probe_concurrency(base_url: str, model: str, *, max_probe: int = 64,
+                      requester: Callable[[], None] | None = None, cache: bool = True) -> int:
+    """Empirically estimate useful parallelism with ZERO configuration, by RAMPING the burst
+    until the server saturates — so an 8-GPU vLLM box is detected as big and a -np 2 laptop
+    as small, without anyone declaring anything.
+
+    One warm request costs t1; a burst of B concurrent requests finishes in wall W, so
+    parallelism P ≈ B·t1/W (≈B if fully batched, ≈1 if serialized). Ramp B = 4, 8, 16, …:
+    while the server keeps the whole burst parallel (P ≈ B) it can take more, so double B;
+    the first time it can't (P < B) is its ceiling. Cached per server (the probe costs a
+    handful of max_tokens=1 requests, run once)."""
+    if cache and base_url in _PROBE_CACHE:
+        return _PROBE_CACHE[base_url]
+    req = requester or _default_requester(base_url, model)
+    try:
+        t0 = time.monotonic()
+        req()
+        t1 = time.monotonic() - t0
+    except Exception:  # noqa: BLE001 — server unreachable
+        return 1
+    if t1 <= 0:
+        result = max_probe
+    else:
+        best, burst = 1, 4
+        while burst <= max_probe:
+            wall = _burst_wall(req, burst)
+            p = burst if wall <= 0 else max(1, min(burst, round(burst * t1 / wall)))
+            best = max(best, p)
+            if p < burst * 0.75:          # couldn't keep the whole burst parallel → ceiling
+                break
+            burst *= 2
+        result = best
+    if cache:
+        _PROBE_CACHE[base_url] = result
+    return result
 
 
 def detect_concurrency(base_url: str, *, provider: str = "vllm", model: str = "",

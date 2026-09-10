@@ -59,20 +59,40 @@ def test_detect_order_slots_then_probe_then_default(monkeypatch):
     assert capacity.detect_concurrency("http://x/v1", model="", config={"swarm_concurrency_default": 9}) == 9
 
 
-def test_probe_detects_parallel_vs_serial():
-    # parallel server: burst finishes in ~one request's time → P near burst
+def test_probe_ramps_to_detect_a_big_parallel_server():
+    # a fully-batched server keeps every burst parallel → the ramp climbs past the old cap,
+    # so an 8-GPU vLLM box reads BIG with zero config
     def parallel_req():
-        time.sleep(0.03)
+        time.sleep(0.02)
 
-    p = capacity.probe_concurrency("http://x/v1", "m", burst=8, requester=parallel_req)
-    assert p >= 4  # detected substantial parallelism
+    p = capacity.probe_concurrency("http://big/v1", "m", max_probe=32,
+                                   requester=parallel_req, cache=False)
+    assert p >= 16
 
-    # serialized server: a lock forces one-at-a-time → P collapses toward 1
+
+def test_probe_detects_a_small_serial_server():
+    # a lock forces one-at-a-time → the ramp stops immediately at ~1 (auto tone-down)
     lock = threading.Lock()
 
     def serial_req():
         with lock:
-            time.sleep(0.03)
+            time.sleep(0.02)
 
-    s = capacity.probe_concurrency("http://x/v1", "m", burst=8, requester=serial_req)
-    assert s <= 3  # detected near-serial
+    s = capacity.probe_concurrency("http://small/v1", "m", max_probe=32,
+                                   requester=serial_req, cache=False)
+    assert s <= 3
+
+
+def test_probe_result_is_cached_per_server():
+    calls = {"n": 0}
+
+    def req():
+        calls["n"] += 1
+        time.sleep(0.005)
+
+    capacity.clear_probe_cache()
+    a = capacity.probe_concurrency("http://cache/v1", "m", max_probe=8, requester=req)
+    n_after_first = calls["n"]
+    assert n_after_first > 1                       # it actually probed (warm + bursts)
+    b = capacity.probe_concurrency("http://cache/v1", "m", max_probe=8, requester=req)
+    assert a == b and calls["n"] == n_after_first  # cached: no new requests

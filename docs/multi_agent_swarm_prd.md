@@ -48,9 +48,11 @@
 > on real temp repos). The `default_agent_runner` path against a **live model** is validated
 > separately by a real 2-agent run (see the run log referenced in RESUME).
 >
-> **Auto-sizing (how MANY agents) — resource detection BUILT.** `drydock/capacity.py`
-> detects the inference server's real concurrency (explicit `swarm_concurrency` config /
-> env → llama.cpp `/slots` → empirical burst probe → default), and `swarm_size()` sets
+> **Auto-sizing (how MANY agents) — resource detection BUILT, ZERO config.**
+> `drydock/capacity.py` detects the inference server's real concurrency with no user setup —
+> llama.cpp `/slots`, else an **empirical ramp probe** that doubles a tiny-request burst
+> until the server saturates (so an 8-GPU vLLM box reads big and a `-np 2` laptop small,
+> cached per server; `swarm_concurrency` config is only an optional pin). `swarm_size()` sets
 > N = min(hardware concurrency, task-demand, budget), never maximized (§39). `agents="auto"`
 > (the TUI default + auto-escalation) uses it: an 8-GPU vLLM box gets hammered (task-demand
 > binds), a `-np 2` laptop is toned down (hardware binds). **Still deferred:** the fully
