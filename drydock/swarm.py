@@ -22,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -494,95 +493,6 @@ def _last_assistant(state) -> str:
     return ""
 
 
-# ── TUI-driving runner: drive the REAL drydock TUI, like a user (§25/§26) ─────
-# The operator-faithful method (this project's hard rule): drive the actual TUI via
-# tmux send-keys + capture-pane — NOT headless `-p` or in-process agent.run, which take
-# different code paths. Mirrors ratchet_solve.sh's drive(): launch the TUI in the worktree,
-# type the objective, poll the pane (auto-approve, wait for the ⚓ ready state), then read
-# the trajectory for compute. drydock isn't on the host by default, so base_config must
-# point `tui_drydock_cmd` at a drydock that has the TUI (e.g. a venv's `drydock`).
-def _tmux(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["tmux", *args], capture_output=True, text=True, timeout=30)
-
-
-def _tmux_pane(sess: str) -> str:
-    try:
-        return _tmux("capture-pane", "-t", sess, "-p").stdout
-    except (OSError, subprocess.SubprocessError):
-        return ""
-
-
-def _tui_status(pane: str) -> str:
-    """Latest anchor status in the pane: 'working' | 'ready' | ''."""
-    st = ""
-    for ln in pane.splitlines():
-        if "⚓" in ln and " working" in ln:
-            st = "working"
-        elif "⚓" in ln and " ready" in ln:
-            st = "ready"
-    return st
-
-
-def _parse_trajectory(path: str) -> RunResult:
-    try:
-        d = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return RunResult(summary="")
-    summary = ""
-    for m in reversed(d.get("messages") or []):
-        if isinstance(m, dict) and m.get("role") == "assistant" and (m.get("content") or "").strip():
-            summary = str(m["content"]).strip()[:4000]
-            break
-    return RunResult(summary=summary,
-                     in_tokens=int(d.get("in_tokens") or 0),
-                     out_tokens=int(d.get("out_tokens") or 0),
-                     turns=int(d.get("n_messages") or 0))
-
-
-def tui_agent_runner(objective: str, cwd: str, base_config: dict, system_prompt: str,
-                     allow: list[str], max_turns: int, max_tool_calls: int) -> RunResult:
-    """Run one worker by driving the REAL drydock TUI in `cwd` via tmux (like a user).
-    Never raises — a driver failure yields an empty RunResult so the swarm stays up (§32)."""
-    budget_s = int(base_config.get("tui_budget_s", 900))
-    poll_s = int(base_config.get("tui_poll_s", 12))
-    drydock_cmd = str(base_config.get("tui_drydock_cmd", "drydock"))
-    model = str(base_config.get("model", "gemma4"))
-    base_url = str(base_config.get("base_url", "http://localhost:8000/v1"))
-    provider = str(base_config.get("provider", "vllm"))
-    # Trajectory lives OUTSIDE the worktree so it never shows up in the candidate's diff.
-    traj = str(Path(cwd).parent / "dd_trajectory.json")
-    sess = "swarm_tui_" + Path(cwd).parent.name.replace(".", "")[-24:]
-    launch = (f"cd {shlex.quote(cwd)} && {drydock_cmd} --provider {shlex.quote(provider)} "
-              f"--base-url {shlex.quote(base_url)} --model {shlex.quote(model)} "
-              f"--trajectory-file {shlex.quote(traj)}")
-    try:
-        _tmux("kill-session", "-t", sess)
-        _tmux("new-session", "-d", "-s", sess, "-x", "200", "-y", "50", launch)
-        time.sleep(min(14, budget_s))
-        prompt = (system_prompt + "\n\n" + objective) if system_prompt else objective
-        _tmux("send-keys", "-t", sess, "--", prompt)
-        time.sleep(0.5)
-        _tmux("send-keys", "-t", sess, "Enter")
-        start = time.monotonic()
-        seen_working = False
-        while time.monotonic() - start < budget_s:
-            time.sleep(poll_s)
-            pane = _tmux_pane(sess)
-            if "Approve" in pane:                 # auto-approve like a user driving it
-                _tmux("send-keys", "-t", sess, "a")
-                continue
-            st = _tui_status(pane)
-            if st == "working":
-                seen_working = True
-            elif st == "ready" and seen_working:
-                break
-    except (OSError, subprocess.SubprocessError):
-        pass
-    finally:
-        _tmux("kill-session", "-t", sess)
-    return _parse_trajectory(traj)
-
-
 @dataclass
 class WorkerOutcome:
     agent: str
@@ -959,11 +869,6 @@ def run_cli(argv: list, config: dict | None = None) -> int:
     p.add_argument("--max-turns", type=int, default=40)
     p.add_argument("--max-tool-calls", type=int, default=40)
     p.add_argument("--max-workers", type=int, default=None, help="max concurrent workers")
-    p.add_argument("--driver", choices=["inproc", "tui"], default="inproc",
-                   help="inproc = in-process agent loop (fast); tui = drive the real drydock "
-                        "TUI per worker (operator-faithful, needs --tui-cmd)")
-    p.add_argument("--tui-cmd", default="drydock",
-                   help="drydock executable the tui driver launches (e.g. a venv's drydock)")
     try:
         args = p.parse_args(argv)
     except SystemExit as e:
@@ -978,19 +883,13 @@ def run_cli(argv: list, config: dict | None = None) -> int:
         print("Swarm needs a git repository for per-agent worktree isolation. Run `git init` first.")
         return 1
 
-    runner = default_agent_runner
-    if args.driver == "tui":
-        runner = tui_agent_runner
-        config = dict(config)
-        config["tui_drydock_cmd"] = args.tui_cmd
-
-    print(f"⚓ Drydock swarm — {args.agents} agents ({args.driver} driver) on: {objective}")
+    print(f"⚓ Drydock swarm — {args.agents} agents on: {objective}")
     print("   (isolated git worktrees, independent verification, evidence-based judging)\n")
     try:
         res = run_swarm(cwd, objective, agents=args.agents, base_config=config,
                         base_ref=args.base_ref, verify_cmd=args.verify, fitness=args.fitness,
                         max_turns=args.max_turns, max_tool_calls=args.max_tool_calls,
-                        max_workers=args.max_workers, runner=runner)
+                        max_workers=args.max_workers)
     except ValueError as e:
         print(f"Error: {e}")
         return 1

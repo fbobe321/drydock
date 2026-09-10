@@ -198,34 +198,6 @@ def test_repo_root_detection(tmp_path):
     assert swarm.repo_root(tmp_path / "not_a_repo") is None
 
 
-# ── TUI-driver helpers (the tmux-driving parts are validated by a real run) ──
-def test_tui_status_reads_anchor_line():
-    assert swarm._tui_status("⚓ working  ·  gemma4  ·  ctx 0/65k") == "working"
-    assert swarm._tui_status("⚓ ready  ·  gemma4  ·  Ctrl+C quit") == "ready"
-    # latest status line wins (working then ready)
-    assert swarm._tui_status("⚓ working\nsome output\n⚓ ready  ·  gemma4") == "ready"
-    assert swarm._tui_status("no anchor here") == ""
-
-
-def test_parse_trajectory_extracts_summary_and_compute(tmp_path):
-    traj = tmp_path / "dd_trajectory.json"
-    traj.write_text(json.dumps({
-        "messages": [
-            {"role": "user", "content": "fix it"},
-            {"role": "assistant", "content": "done: changed a-b to a+b"},
-        ],
-        "in_tokens": 1234, "out_tokens": 567, "n_messages": 8,
-    }))
-    rr = swarm._parse_trajectory(str(traj))
-    assert rr.in_tokens == 1234 and rr.out_tokens == 567 and rr.turns == 8
-    assert "a+b" in rr.summary
-
-
-def test_parse_trajectory_missing_file_is_empty(tmp_path):
-    rr = swarm._parse_trajectory(str(tmp_path / "nope.json"))
-    assert rr.summary == "" and rr.in_tokens == 0
-
-
 # ── coordinator / verifier / judge slice ─────────────────────────────────────
 def test_diversify_gives_distinct_angles():
     pairs = swarm.diversify("fix it", 4)
