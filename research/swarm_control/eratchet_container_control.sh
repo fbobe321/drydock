@@ -26,11 +26,20 @@ LOG="$OUT/eratchet_container.log"
 say(){ echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 [ -f "$CSV" ] || echo "task,arm,solved,best,total,generations,variants" > "$CSV"
 
-# The in-container verify eratchet runs per variant (cwd = the variant's worktree). Under a
-# lock: mirror the worktree into /app, run the task's checker, print its reward so
-# score_output (fitness=auto) can read it. Keeps /tests out of /app (anti-cheat + no clobber).
-VERIFY='flock /tmp/erx_score.lock bash -c '\''rsync -a --delete --exclude .git ./ /app/ >/dev/null 2>&1; \
-  bash /tests/test.sh >/dev/null 2>&1; cat /logs/verifier/ctrf.json 2>/dev/null'\'' '
+# A small in-container scorer parses the CTRF report the task's test.sh writes and prints
+# "<passed> passed, <failed> failed" (which score_output(auto) reads as a real gradient) while
+# EXITING non-zero unless all tests pass. The exit code is load-bearing — the earlier false
+# pass came from the wrapper's exit code being `cat`'s (always 0); here a missing/failing
+# checker is a real 0/1. /tests stays out of /app (anti-cheat + no clobber of the checker).
+SCORER='import json,sys
+try:
+    d=json.load(open("/logs/verifier/ctrf.json")); s=d["results"]["summary"]
+    p=int(s.get("passed",0)); t=int(s.get("tests",0))
+except Exception:
+    p,t=0,1
+print(p,"passed,",max(0,t-p),"failed"); sys.exit(0 if (t and p>=t) else 1)'
+VERIFY='flock /tmp/erx_score.lock bash -c '\''rsync -a --delete --exclude=.git ./ /app/ >/dev/null 2>&1; \
+  bash /tests/test.sh >/dev/null 2>&1; python3 /erx_score.py'\'' '
 
 run_arm(){   # <task> <arm: blind|share>
   local task="$1" arm="$2" ctr="ddt_$1" shareflag=""
@@ -49,6 +58,7 @@ run_arm(){   # <task> <arm: blind|share>
     git config user.name e && git add -A && git commit -q --allow-empty -m base' >>"$LOG" 2>&1
   docker exec "$ctr" mkdir -p /tests /logs/verifier >/dev/null 2>&1
   docker cp "$TASKS/$task/tests/." "$ctr:/tests/" >/dev/null 2>&1
+  printf '%s' "$SCORER" | docker exec -i "$ctr" bash -c 'cat > /erx_score.py'   # authoritative scorer
   local goal; goal="$(cat "$TASKS/$task/instruction.md")"
   # Drive eratchet inside the container against the shared server.
   docker exec "$ctr" bash -lc "export PATH=\$HOME/.local/bin:\$PATH; cd /app; \
