@@ -151,6 +151,15 @@ def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], dict, li
             except ValueError:
                 pass
             i += 2
+        elif a == "--model" and nxt:              # mission carries its own model/endpoint (§33)
+            eval_cfg["model"] = nxt
+            i += 2
+        elif a == "--base-url" and nxt:
+            eval_cfg["base_url"] = nxt
+            i += 2
+        elif a == "--provider" and nxt:
+            eval_cfg["provider"] = nxt
+            i += 2
         else:
             rest.append(a)
             i += 1
@@ -258,6 +267,12 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
     evaluator = (R.make_verifier_evaluator(verify, samples=samples, noise_band=noise_band)
                  if verify else None)
     base_config = dict(config)
+    # A mission is model-independent (§33): it carries its own model/endpoint so `run`/`resume`
+    # target the right server regardless of the session's default config.
+    for key in ("model", "base_url", "provider"):
+        if mconf.get(key):
+            base_config[key] = mconf[key]
+    print(f"   model: {base_config.get('model')} @ {base_config.get('base_url')}")
     if evaluator is not None:
         b = R.establish_baseline(store, mid, cwd, evaluator)
         if b is not None:
