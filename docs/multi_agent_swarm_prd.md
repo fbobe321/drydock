@@ -48,11 +48,15 @@
 > on real temp repos). The `default_agent_runner` path against a **live model** is validated
 > separately by a real 2-agent run (see the run log referenced in RESUME).
 >
-> **Auto-sizing (how MANY agents) — partially deferred.** The auto-escalation currently
-> fans a fixed count (4). The adaptive sizer — grow only while agents produce distinct
-> verified candidates (the `candidate_diversity`/novelty signal), capped by the server's real
-> concurrency (slots × #servers) and the budget, since useful N ≈ min(hardware, task-demand,
-> budget) and is never maximized — is the next refinement.
+> **Auto-sizing (how MANY agents) — resource detection BUILT.** `drydock/capacity.py`
+> detects the inference server's real concurrency (explicit `swarm_concurrency` config /
+> env → llama.cpp `/slots` → empirical burst probe → default), and `swarm_size()` sets
+> N = min(hardware concurrency, task-demand, budget), never maximized (§39). `agents="auto"`
+> (the TUI default + auto-escalation) uses it: an 8-GPU vLLM box gets hammered (task-demand
+> binds), a `-np 2` laptop is toned down (hardware binds). **Still deferred:** the fully
+> *adaptive* sizer that grows N mid-run only while agents keep producing distinct verified
+> candidates (the `candidate_diversity`/novelty signal) — capacity detection sets the
+> ceiling; adaptive growth toward it within a task is the next refinement.
 >
 > **Deliberately deferred to Phase 2/3** (§36/§37): dynamic spawning, specialized
 > Explorer/Critic/Tester/Reviewer roles, hypothesis tracking as a first-class loop,
