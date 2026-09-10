@@ -1,0 +1,29 @@
+[
+  {
+    "id": "p1",
+    "claim": "SWARM-COORDINATION: giving parallel Builders their peers' verified discoveries + rejected approaches (blackboard consumption) beats blind parallelism (eratchet-equivalent) at MATCHED compute, on flatline tasks",
+    "expected": "blackboard-consuming arm solves >= baseline+2 on the flatline subset, OR equal solves at strictly lower total tokens (arms within +/-20% tokens) -- a real lift from coordination above raw parallel tries",
+    "falsifier": "treatment within +/-1 solves of baseline AND not cheaper => reading peers' findings adds nothing blind parallelism did not => coordination is NOT the lever; swarm ships as a user feature, NOT wired into the ratchet (no retry-with-better-prompt, the scaffold death spiral)",
+    "observed": "",
+    "status": "open",
+    "note": "prior favors null: this programme found search is not the bottleneck (write-back is)."
+  },
+  {
+    "id": "p2",
+    "claim": "MECHANISM GUARD: any lift is mediated by agents ACTUALLY using shared information, not by seed/variance/parallelism",
+    "expected": "in treatment solves, the blackboard was read and its content demonstrably shaped the solve (trajectory references a peer discovery or avoids a peer's rejected approach) in >=50% of them",
+    "falsifier": "treatment beats baseline YET shared content was used in <20% of its solves => the gain is a parallelism/variance confound (eratchet already gives parallel tries) => do NOT credit the swarm; re-run with more seeds",
+    "observed": "",
+    "status": "open",
+    "note": "the swarm-specific analog of loop-control's usage guard (the Ledger was offered but called 0 times)."
+  },
+  {
+    "id": "p3",
+    "claim": "FLATLINE-SPECIFIC: shared information helps the no-gradient tasks (where a lone ratchet stalls) more than the gradient tasks",
+    "expected": "(treatment - baseline) solve delta is larger on the flatline subset than on the gradient subset",
+    "falsifier": "delta_flatline <= delta_gradient => shared information is not where the value is; coordination does not target the ratchet's actual failure mode",
+    "observed": "",
+    "status": "open",
+    "note": "flatline = monolithic checker, total=1, no partial-credit gradient."
+  }
+]
