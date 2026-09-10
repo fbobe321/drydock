@@ -33,10 +33,26 @@
 >   `detect_verifier`), `judge()` by evidence, `SWARM_CONVERGED` on all-pass.
 > - **CLI + status** (§25/§26) — `run_cli`: `solve` / `status` / `list` / `resume`;
 >   `render_status()` ranked view + cherry-pick hint.
+> - **In-TUI + auto-escalation** (§40, primary UX) — the user just **prompts normally**; they
+>   do NOT invoke a swarm or pick an agent count. After a normal single-agent turn, the
+>   harness auto-escalates to an **in-process** swarm (no extra TUI windows) via
+>   `should_auto_escalate()` — policy = **escalate-on-difficulty**: a known verifier has
+>   failed enough times in a row (reusing the ratchet's `verify_fail_streak` /
+>   `ratchet_offer` signal ⇒ hard AND verifiable) and the repo supports worktree isolation.
+>   Progress streams into the same session (`on_event`); workers are ephemeral (no resume
+>   pollution). `/swarm <objective> [--agents N]` remains as a manual override. Compute-safe
+>   by construction: swarm cost is spent only when a single agent is demonstrably stuck on a
+>   verifiable task (§39 "more agents ≠ more intelligence").
 >
 > **Verified with an injected runner** (worktree/verify/judge/git plumbing proven end-to-end
 > on real temp repos). The `default_agent_runner` path against a **live model** is validated
 > separately by a real 2-agent run (see the run log referenced in RESUME).
+>
+> **Auto-sizing (how MANY agents) — partially deferred.** The auto-escalation currently
+> fans a fixed count (4). The adaptive sizer — grow only while agents produce distinct
+> verified candidates (the `candidate_diversity`/novelty signal), capped by the server's real
+> concurrency (slots × #servers) and the budget, since useful N ≈ min(hardware, task-demand,
+> budget) and is never maximized — is the next refinement.
 >
 > **Deliberately deferred to Phase 2/3** (§36/§37): dynamic spawning, specialized
 > Explorer/Critic/Tester/Reviewer roles, hypothesis tracking as a first-class loop,
