@@ -325,6 +325,7 @@ class DrydockApp(App):
         self._ratchet_offer: dict | None = None  # pending proactive offer {goal, verify}
         self._offered_ratchet = False            # offer at most once per session (no nagging)
         self._erx: dict | None = None  # active /eratchet: {cancel}
+        self._swarm: dict | None = None  # active /swarm run (in-process, streams into this session)
         self._ctx_tokens = 0  # current context size (last turn's prompt tokens)
         self._ctrl_c_armed = False  # first Ctrl+C arms; second within ~2s exits
         # Live "working" line state.
@@ -695,6 +696,7 @@ class DrydockApp(App):
                 "  /ratchet         persist verified progress across rounds until tests pass\n"
                 "  /eratchet        parallel evolutionary ratchet — fan \u03bb variants across servers\n"
                 "                   /ratchet <goal>  (verifier auto-detected; --verify \"<cmd>\" to override)\n"
+                "  /swarm           solve with a swarm of agents (in-process) — /swarm <objective> [--agents N]\n"
                 "  /mcp             list connected MCP servers and their tools\n"
                 "  /rmf             RMF automation — /rmf bootstrap, then /rmf-control etc.\n"
                 "  /stig            /stig new <xccdf> → blank .ckl; summarize; /stig-assess\n"
@@ -714,6 +716,8 @@ class DrydockApp(App):
             self._cmd_ratchet(arg)
         elif cmd == "/eratchet":
             self._cmd_eratchet(arg)
+        elif cmd == "/swarm":
+            self._cmd_swarm(arg)
         elif cmd == "/skills":
             self._cmd_skills(arg)
         elif cmd[1:] in self._skills:
@@ -1181,6 +1185,83 @@ class DrydockApp(App):
             if cap_fh:
                 cap_fh.close()
             self._erx = None
+            self.call_from_thread(self._finish_ratchet_idle)
+
+    def _cmd_swarm(self, arg: str) -> None:
+        """/swarm <objective> [--agents N] — solve the objective with a swarm of agents.
+        Runs IN-PROCESS from this one session (no extra TUI windows): N diverse workers
+        each explore in their own isolated git worktree, candidates are verified
+        independently, and the strongest by evidence is reported here. Your working tree
+        is untouched — apply the winner with the printed git cherry-pick."""
+        from drydock import swarm as swarmmod
+
+        if self._busy or self._ratchet or self._repeat or self._erx or self._swarm:
+            self._info("Something is already running — stop it (Esc) before /swarm.")
+            return
+        parts = arg.split()
+        agents, obj = 4, []
+        i = 0
+        while i < len(parts):
+            if parts[i] == "--agents" and i + 1 < len(parts):
+                try:
+                    agents = max(2, min(8, int(parts[i + 1])))
+                except ValueError:
+                    pass
+                i += 2
+            else:
+                obj.append(parts[i])
+                i += 1
+        objective = " ".join(obj).strip()
+        if not objective:
+            self._info('usage: /swarm <objective> [--agents N]   '
+                       '(e.g. /swarm "fix the failing auth tests" --agents 4)')
+            return
+        cwd = self.config.get("cwd") or "."
+        if swarmmod.repo_root(cwd) is None:
+            self._info("swarm needs a git repository here (for per-agent worktree isolation) — "
+                       "run `git init` first.")
+            return
+        self._swarm = {"active": True}
+        self._info(f"⇶ /swarm launching: {objective!r} — {agents} agents exploring in "
+                   "isolated worktrees (in-process). Esc to stop.")
+        self.run_worker(lambda: self._swarm_worker(cwd, objective, agents), thread=True)
+
+    def _swarm_worker(self, cwd: str, objective: str, agents: int) -> None:
+        """Off-thread: drive run_swarm, streaming milestones into this session's transcript."""
+        from drydock import swarm as swarmmod
+
+        def on_event(kind: str, d: dict) -> None:
+            if kind == "start":
+                msg = f"⇶ swarm: {d.get('agents')} agents exploring…"
+            elif kind == "worker_done":
+                patch = f"patch {d['commit'][:8]}" if d.get("commit") else "no patch"
+                err = f" ⚠ {d['error']}" if d.get("error") else ""
+                msg = f"  · {d.get('agent')}: {patch} ({d.get('files', 0)} files){err}"
+            elif kind == "verified":
+                msg = f"  · verify {d.get('candidate')}: {d.get('passed')}/{d.get('total')} → {d.get('status')}"
+            elif kind == "judge":
+                tag = "  ✓ CONVERGED" if d.get("converged") else ""
+                w = d.get("winner") or "(none)"
+                msg = f"⚑ winner {w} by {d.get('agent')} ({d.get('passed')}/{d.get('total')}){tag}"
+            else:
+                return
+            self.call_from_thread(self._info, msg)
+
+        try:
+            res = swarmmod.run_swarm(cwd, objective, agents=agents, base_config=self.config,
+                                     on_event=on_event)
+            if res.converged and res.winner is not None:
+                tail = (f"\nApply it:  git cherry-pick {res.winner.commit}")
+            elif res.winner is not None:
+                tail = (f"\nBest candidate {res.winner.id} not fully verified — inspect "
+                        f"{res.winner.commit[:8]} before applying.")
+            else:
+                tail = "\nNo candidate produced a usable patch."
+            self.call_from_thread(self._info, "⚓ swarm done." + tail)
+        except Exception as e:  # noqa: BLE001 — surface, never crash the TUI
+            self.call_from_thread(self._info, f"swarm: crashed: {e}")
+        finally:
+            self._swarm = None
             self.call_from_thread(self._finish_ratchet_idle)
 
     def _cmd_skills(self, arg: str = "") -> None:

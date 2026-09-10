@@ -474,6 +474,11 @@ def default_agent_runner(objective: str, cwd: str, base_config: dict, system_pro
     cfg["_abort"] = {}
     cfg.pop("_todo", None)
     cfg.pop("_plan_autocontinue", None)
+    # Workers are ephemeral: don't let them write resume snapshots or the session event log
+    # to the parent's paths (else the user's TUI offers to "resume" a swarm-worker context).
+    cfg["resume"] = False
+    cfg.pop("resume_path", None)
+    cfg.pop("event_log_path", None)
     turns = 0
     for ev in agent_run(objective, state, cfg, system_prompt):
         if isinstance(ev, TurnDone):
@@ -697,6 +702,7 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
               base_ref: str = "HEAD", verify_cmd: str | None = None, fitness: str = "auto",
               max_turns: int = 40, max_tool_calls: int = 40, max_workers: int | None = None,
               runner: AgentRunner = default_agent_runner, verify: VerifyFn | None = None,
+              on_event: "Callable[[str, dict], None] | None" = None,
               swarm_id: str | None = None) -> SwarmResult:
     """Coordinate a parallel-strategy swarm end to end (§24 Parallel, the MVP default):
     decompose into N diversity-injected Builders (§15), fan them out concurrently over one
@@ -714,6 +720,15 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
                                         "verify_cmd": verify_cmd or "", "fitness": fitness},
                       swarm_id=swarm_id)
     bb.emit("SWARM_START", agents=n, strategy="parallel", base_ref=base_ref)
+
+    def _ev(kind: str, **d) -> None:
+        if on_event is not None:
+            try:
+                on_event(kind, d)
+            except Exception:  # noqa: BLE001 — a UI callback must never break the swarm
+                pass
+
+    _ev("start", agents=n, objective=objective)
 
     # Resolve the verifier once (auto-detect if not given) so scoring is identical per arm.
     if verify is None:
@@ -742,9 +757,12 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
     # 2. fan out workers concurrently over the shared server (§22). Each is isolated + safe.
     def _spawn(i: int) -> WorkerOutcome:
         angle, sysprompt = angles[i]
-        return run_worker(bb, repo, base_ref, f"agent-{i + 1}", objective,
-                          role="builder", system_prompt=sysprompt, base_config=base_config,
-                          max_turns=max_turns, max_tool_calls=max_tool_calls, runner=runner)
+        out = run_worker(bb, repo, base_ref, f"agent-{i + 1}", objective,
+                         role="builder", system_prompt=sysprompt, base_config=base_config,
+                         max_turns=max_turns, max_tool_calls=max_tool_calls, runner=runner)
+        _ev("worker_done", agent=out.agent, ok=out.ok, files=out.files_changed,
+            commit=out.commit, error=out.error)
+        return out
 
     workers = max_workers or min(n, 8)
     with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -754,7 +772,9 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
     cands = [c for c in bb.candidates() if c.commit]
     if verify is not None:
         for c in cands:
-            verify_candidate(bb, c, verify)
+            vc = verify_candidate(bb, c, verify)
+            _ev("verified", candidate=vc.id, passed=vc.tests_passed, total=vc.tests_total,
+                status=vc.status)
 
     # 4. judge on evidence (§20) and check convergence (§19).
     final = bb.candidates()
@@ -767,6 +787,11 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
                 tests_passed=winner.tests_passed, tests_total=winner.tests_total)
     if converged:
         bb.emit("SWARM_CONVERGED", candidate=winner.id if winner else "")
+    _ev("judge", winner=winner.id if winner else "", converged=converged,
+        agent=winner.agent if winner else "",
+        commit=winner.commit if winner else "",
+        passed=winner.tests_passed if winner else 0,
+        total=winner.tests_total if winner else 0)
 
     bb.set_metrics({"agents": n, "candidates": len(final),
                     "candidates_with_patch": len([c for c in final if c.commit]),
