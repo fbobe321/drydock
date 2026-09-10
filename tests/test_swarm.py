@@ -294,6 +294,42 @@ def test_swarm_records_matched_compute(tmp_path):
     assert all(c.in_tokens == 100 and c.turns == 3 for c in res.candidates)
 
 
+def test_share_injects_peer_notes_into_later_waves(tmp_path):
+    import threading
+    repo = _init_repo(tmp_path / "repo")
+    seen, lock = [], threading.Lock()
+
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        with lock:
+            seen.append(system_prompt)
+        (Path(cwd) / "answer.txt").write_text("PASS")
+        return swarm.RunResult(summary="tried approach X", in_tokens=1, out_tokens=1, turns=1)
+
+    swarm.run_swarm(repo, "solve it", agents=2, base_config={},
+                    verify_cmd="grep -q PASS answer.txt", fitness="exitcode",
+                    runner=runner, share=True, waves=2)
+    # 2 agents / 2 waves → the wave-2 agent's prompt carries peers' notes referencing agent-1
+    assert any("other agents already tried" in s for s in seen)
+    assert any("agent-1" in s and "SOLVED" in s for s in seen)
+
+
+def test_no_share_means_no_peer_notes(tmp_path):
+    import threading
+    repo = _init_repo(tmp_path / "repo")
+    seen, lock = [], threading.Lock()
+
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        with lock:
+            seen.append(system_prompt)
+        (Path(cwd) / "answer.txt").write_text("PASS")
+        return "ok"
+
+    swarm.run_swarm(repo, "solve it", agents=2, base_config={},
+                    verify_cmd="grep -q PASS answer.txt", fitness="exitcode",
+                    runner=runner, share=False)  # baseline = blind parallel (eratchet-equivalent)
+    assert not any("other agents already tried" in s for s in seen)
+
+
 def test_run_swarm_contains_a_crashing_worker(tmp_path):
     repo = _init_repo(tmp_path / "repo")
 

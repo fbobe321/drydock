@@ -688,6 +688,25 @@ def candidate_diversity(repo: str | Path, candidates: list[Candidate], base_ref:
             "diversity_ratio": (n_distinct / n_verified) if n_verified else 0.0}
 
 
+def _peer_notes(candidates: list[Candidate], limit: int = 8) -> str:
+    """A compact 'what peers already tried' digest for blackboard consumption (§10/§31):
+    each attempt's verdict + verified score + one-line summary, so a reader builds on the
+    partials and avoids repeating the failures. Only summaries cross between agents, never
+    full transcripts (§8 — preserve independence while still comparing notes)."""
+    lines = []
+    for c in candidates[:limit]:
+        score = f"{c.tests_passed}/{c.tests_total}" if c.tests_total else "unverified"
+        if c.tests_total and c.tests_passed >= c.tests_total:
+            verdict = "SOLVED"
+        elif c.tests_passed:
+            verdict = "partial"
+        else:
+            verdict = "failed"
+        summ = (c.summary or "").strip().splitlines()[0][:160] if c.summary else "(no summary)"
+        lines.append(f"- {c.agent} [{verdict} {score}]: {summ}")
+    return "\n".join(lines)
+
+
 def should_auto_escalate(goal: str, verify_cmd: str, fail_streak: int, *,
                          is_git_repo: bool, already_escalated: bool) -> bool:
     """Decide whether the harness should auto-escalate a stuck single-agent turn into a
@@ -719,6 +738,7 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
               max_turns: int = 40, max_tool_calls: int = 40, max_workers: int | None = None,
               runner: AgentRunner = default_agent_runner, verify: VerifyFn | None = None,
               on_event: "Callable[[str, dict], None] | None" = None,
+              share: bool = False, waves: int = 2,
               swarm_id: str | None = None) -> SwarmResult:
     """Coordinate a parallel-strategy swarm end to end (§24 Parallel, the MVP default):
     decompose into N diversity-injected Builders (§15), fan them out concurrently over one
@@ -770,27 +790,54 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
                     status=TASK_ASSIGNED)
         bb.emit("TASK_ASSIGNED", agent=f"agent-{i + 1}", angle=angle)
 
-    # 2. fan out workers concurrently over the shared server (§22). Each is isolated + safe.
-    def _spawn(i: int) -> WorkerOutcome:
+    # 2. fan out workers over the shared server (§22). Each is isolated + safe. `extra_sys`
+    # carries peers' notes (blackboard consumption, §10) for waves after the first.
+    def _spawn(i: int, extra_sys: str) -> WorkerOutcome:
         angle, sysprompt = angles[i]
         out = run_worker(bb, repo, base_ref, f"agent-{i + 1}", objective,
-                         role="builder", system_prompt=sysprompt, base_config=base_config,
-                         max_turns=max_turns, max_tool_calls=max_tool_calls, runner=runner)
+                         role="builder", system_prompt=sysprompt + extra_sys,
+                         base_config=base_config, max_turns=max_turns,
+                         max_tool_calls=max_tool_calls, runner=runner)
         _ev("worker_done", agent=out.agent, ok=out.ok, files=out.files_changed,
             commit=out.commit, error=out.error)
         return out
 
-    workers = max_workers or min(n, 8)
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        list(ex.map(_spawn, range(n)))
+    def _verify_unscored() -> None:
+        """Independently score any candidate not yet verified (§18)."""
+        if verify is None:
+            return
+        for c in bb.candidates():
+            if c.commit and c.tests_total == 0:
+                vc = verify_candidate(bb, c, verify)
+                _ev("verified", candidate=vc.id, passed=vc.tests_passed,
+                    total=vc.tests_total, status=vc.status)
 
-    # 3. verify each candidate independently (§18) — the builder never grades itself.
-    cands = [c for c in bb.candidates() if c.commit]
-    if verify is not None:
-        for c in cands:
-            vc = verify_candidate(bb, c, verify)
-            _ev("verified", candidate=vc.id, passed=vc.tests_passed, total=vc.tests_total,
-                status=vc.status)
+    workers = max_workers or min(n, 8)
+    if share and waves > 1 and n >= 2:
+        # BLACKBOARD CONSUMPTION (§10): run in waves. Wave 0 explores blind (independence,
+        # §8); each later wave READS peers' verified attempts, so agents compare notes and
+        # build on partials instead of repeating failures. Verify after each wave so the
+        # notes the next wave reads are already scored.
+        per = -(-n // max(2, waves))  # ceil(n / waves)
+        i0, w = 0, 0
+        while i0 < n:
+            idxs = list(range(i0, min(i0 + per, n)))
+            i0 += per
+            notes = _peer_notes(bb.candidates()) if w > 0 else ""
+            extra = (f"\n\nWhat other agents already tried on this SAME objective (build on the "
+                     f"partials; do NOT repeat the failed approaches):\n{notes}") if notes else ""
+            if notes:
+                _ev("share", wave=w, agents=len(idxs))
+            with ThreadPoolExecutor(max_workers=min(len(idxs), workers)) as ex:
+                list(ex.map(lambda i: _spawn(i, extra), idxs))
+            _verify_unscored()   # score this wave before the next reads it
+            w += 1
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            list(ex.map(lambda i: _spawn(i, ""), range(n)))
+
+    # 3. verify any remaining candidates independently (§18) — the builder never grades itself.
+    _verify_unscored()
 
     # 4. judge on evidence (§20) and check convergence (§19).
     final = bb.candidates()

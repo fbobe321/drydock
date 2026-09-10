@@ -1249,6 +1249,8 @@ class DrydockApp(App):
                 patch = f"patch {d['commit'][:8]}" if d.get("commit") else "no patch"
                 err = f" ⚠ {d['error']}" if d.get("error") else ""
                 msg = f"  · {d.get('agent')}: {patch} ({d.get('files', 0)} files){err}"
+            elif kind == "share":
+                msg = f"  ↔ wave {d.get('wave')}: {d.get('agents')} agent(s) comparing notes with peers…"
             elif kind == "verified":
                 msg = f"  · verify {d.get('candidate')}: {d.get('passed')}/{d.get('total')} → {d.get('status')}"
             elif kind == "judge":
@@ -1260,8 +1262,10 @@ class DrydockApp(App):
             self.call_from_thread(self._info, msg)
 
         try:
+            # share=True: later-wave agents read peers' verified attempts off the blackboard
+            # and compare notes, instead of exploring fully blind (§10).
             res = swarmmod.run_swarm(cwd, objective, agents=agents, base_config=self.config,
-                                     verify_cmd=verify_cmd, on_event=on_event)
+                                     verify_cmd=verify_cmd, on_event=on_event, share=True)
             if res.converged and res.winner is not None:
                 tail = (f"\nApply it:  git cherry-pick {res.winner.commit}")
             elif res.winner is not None:
