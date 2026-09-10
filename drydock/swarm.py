@@ -20,12 +20,21 @@ Stdlib-only, provider-agnostic — consistent with the rest of Drydock.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
+import tempfile
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from drydock.events import make_event_log
+
+# Builder tool profile (§7): the writable coding loop, mirroring WORKER_TOOLS in
+# drydock/tools/__init__.py. Read-only roles (Explorer/Critic) drop Write/Edit.
+BUILDER_TOOLS = ("Read", "Write", "Edit", "Bash", "Glob", "Grep", "ViewImage")
+EXPLORER_TOOLS = ("Read", "Glob", "Grep", "Bash", "ViewImage")
 
 # ── statuses (PRD §11, §13, §17) ─────────────────────────────────────────────
 # Hypothesis lifecycle (§11).
@@ -138,7 +147,6 @@ class Blackboard:
         try:
             self.root.mkdir(parents=True, exist_ok=True)
             (self.root / "candidates").mkdir(exist_ok=True)
-            (self.root / "worktrees").mkdir(exist_ok=True)
         except OSError:
             pass
         self.events = make_event_log(self.root / "events.jsonl")
@@ -340,3 +348,160 @@ def list_swarms(cwd: str | Path) -> list[str]:
         return sorted(p.name for p in root.iterdir() if p.is_dir())
     except OSError:
         return []
+
+
+# ── worker: one agent in an isolated git worktree → a candidate (§16, §17) ────
+# A "swarm worker" is one in-process `drydock.agent.run` scoped to its own worktree
+# (cwd), its own tool allowlist, and a fresh private AgentState/context (§8). Builders
+# get an isolated worktree so parallel patches never collide (§16); each result is
+# snapshotted as a git commit and recorded as a first-class candidate (§17). The agent
+# runner is injectable so the worktree/snapshot/candidate plumbing is testable without a
+# live model, mirroring eratchet's injected `runner`.
+
+# runner(objective, cwd, base_config, system_prompt, allow, max_turns, max_tool_calls) -> summary
+AgentRunner = Callable[[str, str, dict, str, "list[str]", int, int], str]
+
+
+def _git(args: list[str], cwd: str | Path, timeout: int = 300) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
+                          text=True, timeout=timeout)
+
+
+def repo_root(cwd: str | Path) -> str | None:
+    """The git top-level for `cwd`, or None if not a repo (worktrees require one, §16)."""
+    try:
+        r = _git(["rev-parse", "--show-toplevel"], cwd)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def add_worktree(repo: str | Path, base_ref: str, path: str | Path) -> bool:
+    """Create a detached worktree at `path` from `base_ref` (eratchet pattern)."""
+    try:
+        r = _git(["worktree", "add", "--detach", str(path), base_ref], repo)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _rmtree(path: str | Path) -> None:
+    shutil.rmtree(str(path), ignore_errors=True)
+
+
+def remove_worktree(repo: str | Path, path: str | Path) -> None:
+    """Tear a worktree down (git bookkeeping + its temp parent); never raises."""
+    try:
+        _git(["worktree", "remove", "--force", str(path)], repo)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    # `path` is <temp-parent>/wt; drop the temp parent too.
+    parent = Path(path).parent
+    if parent.name.startswith("swarm-") or str(parent).startswith(tempfile.gettempdir()):
+        _rmtree(parent)
+
+
+def snapshot_worktree(wt: str | Path) -> tuple[str, int]:
+    """Commit the worker's changes in its worktree and return (commit_sha, files_changed).
+    An empty diff yields ("", 0) — a worker that changed nothing produced no candidate."""
+    try:
+        changed = _git(["status", "--porcelain"], wt).stdout.strip()
+        if not changed:
+            return "", 0
+        n = len([ln for ln in changed.splitlines() if ln.strip()])
+        _git(["add", "-A"], wt)
+        # -c user.* keeps the snapshot working even where git identity is unset.
+        c = _git(["-c", "user.name=drydock-swarm", "-c", "user.email=swarm@drydock",
+                  "commit", "-m", "swarm candidate snapshot", "--no-verify"], wt)
+        if c.returncode != 0:
+            return "", n
+        sha = _git(["rev-parse", "HEAD"], wt).stdout.strip()
+        return sha, n
+    except (OSError, subprocess.SubprocessError):
+        return "", 0
+
+
+def default_agent_runner(objective: str, cwd: str, base_config: dict, system_prompt: str,
+                         allow: list[str], max_turns: int, max_tool_calls: int) -> str:
+    """Run one in-process agent to completion in `cwd` and return its final summary.
+
+    This is the Dispatch/_run_subagent recipe (drydock/tools/__init__.py): a fresh
+    AgentState + a scoped config copy with its own cwd, tool allowlist, and a FRESH
+    `_abort` dict — the last is load-bearing for parallel safety, since the provider
+    shares `_abort['client']` and a shared holder would let one worker's stop close
+    another's in-flight client."""
+    from drydock.agent import AgentState, TurnDone
+    from drydock.agent import run as agent_run
+
+    state = AgentState()
+    cfg = dict(base_config)
+    cfg["cwd"] = cwd
+    cfg["tool_allowlist"] = list(allow)
+    cfg["max_turns"] = max_turns
+    cfg["max_tool_calls"] = max_tool_calls
+    cfg["trajectory_file"] = ""
+    cfg["_abort"] = {}
+    cfg.pop("_todo", None)
+    cfg.pop("_plan_autocontinue", None)
+    for ev in agent_run(objective, state, cfg, system_prompt):
+        _ = isinstance(ev, TurnDone)  # drain; per-turn hooks (loop detection) land here later
+    return _last_assistant(state)
+
+
+def _last_assistant(state) -> str:
+    for m in reversed(getattr(state, "messages", []) or []):
+        if isinstance(m, dict) and m.get("role") == "assistant":
+            c = (m.get("content") or "").strip()
+            if c:
+                return c[:4000]
+    return ""
+
+
+@dataclass
+class WorkerOutcome:
+    agent: str
+    ok: bool
+    candidate_id: str = ""
+    commit: str = ""
+    files_changed: int = 0
+    summary: str = ""
+    error: str = ""
+
+
+def run_worker(bb: Blackboard, repo: str, base_ref: str, agent_id: str, objective: str, *,
+               role: str = "builder", system_prompt: str = "", allow=BUILDER_TOOLS,
+               base_config: dict | None = None, max_turns: int = 40, max_tool_calls: int = 40,
+               runner: AgentRunner = default_agent_runner) -> WorkerOutcome:
+    """Run one worker to a candidate: worktree → agent → snapshot → recorded candidate.
+
+    Robust by construction (§32): a worker that raises is caught and recorded as a failed
+    outcome; it never takes down the swarm. The worktree is left in place for the verifier
+    (§18) — the coordinator cleans up losers and keeps/integrates the winner."""
+    bb.emit("AGENT_STARTED", agent=agent_id, role=role, objective=objective)
+    # Worktrees live OUTSIDE the repo (eratchet pattern): nesting one inside the repo's
+    # own working tree breaks git and pollutes the main status. The durable artifact is
+    # the snapshot commit in the object store, not this scratch tree. `wt` is a not-yet-
+    # existing subdir of a temp parent, so `git worktree add` creates it cleanly.
+    parent = tempfile.mkdtemp(prefix=f"swarm-{agent_id}-")
+    wt = Path(parent) / "wt"
+    if not add_worktree(repo, base_ref, wt):
+        bb.emit("AGENT_FAILED", agent=agent_id, error="worktree_create_failed")
+        _rmtree(parent)
+        return WorkerOutcome(agent=agent_id, ok=False, error="worktree_create_failed")
+
+    summary, error = "", ""
+    try:
+        summary = runner(objective, str(wt), base_config or {}, system_prompt,
+                         list(allow), max_turns, max_tool_calls)
+    except Exception as e:  # noqa: BLE001 — one worker's crash must not sink the swarm (§32)
+        error = f"{type(e).__name__}: {e}"
+        bb.emit("AGENT_FAILED", agent=agent_id, error=error)
+
+    commit, files_changed = snapshot_worktree(wt)
+    cand = bb.add_candidate(agent=agent_id, summary=summary, worktree=str(wt),
+                            base_ref=base_ref, commit=commit, files_changed=files_changed,
+                            status=CAND_DRAFT if commit else CAND_REJECTED)
+    bb.emit("AGENT_TERMINATED", agent=agent_id, candidate=cand.id,
+            files_changed=files_changed, ok=bool(commit) and not error)
+    return WorkerOutcome(agent=agent_id, ok=bool(commit) and not error, candidate_id=cand.id,
+                         commit=commit, files_changed=files_changed, summary=summary, error=error)
