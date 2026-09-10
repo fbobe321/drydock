@@ -373,6 +373,16 @@ def main():
         cfg["cwd"] = os.getcwd()
         sys.exit(run_cli(sys.argv[2:], config=cfg))
 
+    # `drydock swarm <objective> …` / `swarm status|list|resume` — multi-agent swarm.
+    # Same argv-intercept pattern as eratchet so the subcommand parses its own flags.
+    if len(sys.argv) > 1 and sys.argv[1] == "swarm":
+        from drydock import config as cfgmod
+        from drydock.swarm import run_cli as swarm_run_cli
+        cfg = cfgmod.resolve({}, cfgmod.default_config_path())
+        cfgmod.resolve_active_model(cfg)
+        cfg["cwd"] = os.getcwd()
+        sys.exit(swarm_run_cli(sys.argv[2:], config=cfg))
+
     parser = argparse.ArgumentParser(description="DryDock — local coding agent")
     parser.add_argument(
         "--version", "-V", action="version", version=f"drydock {__version__}"

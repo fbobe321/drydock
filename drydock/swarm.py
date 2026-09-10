@@ -7,19 +7,20 @@ blackboard (§10), verifies them independently (§18), and converges on the best
 evidence (§20) — never by an agent's self-report.
 
 This file is layered so each piece is testable on its own:
-  * Blackboard  — the shared-knowledge store (this section). Append-only JSONL under
+  * Blackboard  — the shared-knowledge store. Append-only JSONL under
                   <cwd>/.drydock/swarms/<id>/, following the events.py / rmf.py idioms:
                   swallow-all-errors I/O, typed accessors over plain dicts, and a
                   unified EventLog (§27) so a run survives interruption (§28).
-  * worker      — one agent-in-a-worktree run to a candidate (added next).
-  * coordinator — decompose + diversity-inject + fan out + verify + judge (added next).
-  * run_cli     — the `drydock swarm` subcommand (added next).
+  * run_worker  — one agent-in-a-worktree run to a candidate (§16/§17).
+  * run_swarm   — coordinator: decompose + diversity-inject + fan out + verify + judge.
+  * run_cli     — the `drydock swarm` subcommand (solve / status / list / resume).
 
 Stdlib-only, provider-agnostic — consistent with the rest of Drydock.
 """
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -348,6 +349,11 @@ def list_swarms(cwd: str | Path) -> list[str]:
         return sorted(p.name for p in root.iterdir() if p.is_dir())
     except OSError:
         return []
+
+
+def latest_swarm(cwd: str | Path) -> str | None:
+    ids = list_swarms(cwd)
+    return ids[-1] if ids else None
 
 
 # ── worker: one agent in an isolated git worktree → a candidate (§16, §17) ────
@@ -693,3 +699,132 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
         winner = next((c for c in bb.candidates() if c.id == winner.id), winner)
     return SwarmResult(swarm_id=bb.root.name, objective=objective, root=str(bb.root),
                        converged=converged, winner=winner, candidates=bb.candidates())
+
+
+# ── terminal status display (§26) ────────────────────────────────────────────
+def render_status(bb: Blackboard) -> str:
+    """A compact text view of one swarm's state (§26). Reused by the end-of-run summary
+    and the `drydock swarm status` subcommand; reads only the persisted blackboard, so it
+    works on a finished or interrupted swarm alike."""
+    cands = bb.candidates()
+    tasks = bb.tasks()
+    metrics = bb.metrics()
+    winner = judge(cands)
+    lines = [
+        f"DRYDOCK SWARM  {bb.root.name}",
+        f"Objective:  {bb.objective()}",
+        f"Agents:     {len(tasks)} spawned    Candidates: {len(cands)} "
+        f"({len([c for c in cands if c.commit])} with a patch)",
+        f"Converged:  {bool(metrics.get('converged'))}",
+        "",
+        "Candidates (strongest first):",
+    ]
+    if not cands:
+        lines.append("  (none yet)")
+    for c in sorted(cands, key=_evidence_key, reverse=True):
+        mark = "*" if winner and c.id == winner.id else " "
+        tests = f"{c.tests_passed}/{c.tests_total}" if c.tests_total else "—"
+        lines.append(f" {mark} {c.id:5} {c.agent:9} tests={tests:>7} "
+                     f"files={c.files_changed:<3} {c.status}")
+    if winner is not None:
+        lines += ["", f"Winner: {winner.id} by {winner.agent} — {winner.status}"]
+        if winner.commit:
+            lines.append(f"  commit {winner.commit[:12]} in {winner.worktree or '(worktree removed)'}")
+        if winner.summary:
+            lines.append(f"  {winner.summary[:200]}")
+    return "\n".join(lines)
+
+
+# ── `drydock swarm` subcommand (§25) ─────────────────────────────────────────
+def run_cli(argv: list, config: dict | None = None) -> int:
+    """Entry point for `drydock swarm ...`. Subcommands: solve (default), status, list,
+    resume. Returns a process exit code (0 ok, 2 converged-with-winner is still 0; non-zero
+    only on usage/setup errors), mirroring eratchet.run_cli."""
+    import argparse
+
+    config = config or {}
+    cwd = config.get("cwd") or os.getcwd()
+    argv = list(argv or [])
+
+    if argv and argv[0] == "list":
+        ids = list_swarms(cwd)
+        print("\n".join(ids) if ids else "(no swarms in this project)")
+        return 0
+
+    if argv and argv[0] == "status":
+        sid = argv[1] if len(argv) > 1 else latest_swarm(cwd)
+        if not sid:
+            print("No swarms yet. Run: drydock swarm \"<objective>\" --agents N")
+            return 1
+        print(render_status(open_swarm(cwd, sid)))
+        return 0
+
+    if argv and argv[0] == "resume":
+        sid = argv[1] if len(argv) > 1 else latest_swarm(cwd)
+        if not sid:
+            print("Nothing to resume.")
+            return 1
+        return _resume(cwd, sid, config)
+
+    # default: solve
+    p = argparse.ArgumentParser(prog="drydock swarm", add_help=True,
+                                description="Coordinate a swarm of agents against one objective.")
+    p.add_argument("objective", nargs="*", help="the problem to solve")
+    p.add_argument("--agents", type=int, default=4, help="number of worker agents (2-8 for MVP)")
+    p.add_argument("--verify", default=None, help="test/verify command (auto-detected if omitted)")
+    p.add_argument("--fitness", default="auto", help="score mode for --verify (auto|exitcode|regex)")
+    p.add_argument("--base-ref", default="HEAD", help="git ref each worker branches from")
+    p.add_argument("--max-turns", type=int, default=40)
+    p.add_argument("--max-tool-calls", type=int, default=40)
+    p.add_argument("--max-workers", type=int, default=None, help="max concurrent workers")
+    try:
+        args = p.parse_args(argv)
+    except SystemExit as e:
+        return int(e.code or 0)
+
+    objective = " ".join(args.objective).strip()
+    if not objective:
+        p.print_usage()
+        print('\nExample: drydock swarm "fix the failing auth tests" --agents 4')
+        return 1
+    if repo_root(cwd) is None:
+        print("Swarm needs a git repository for per-agent worktree isolation. Run `git init` first.")
+        return 1
+
+    print(f"⚓ Drydock swarm — {args.agents} agents on: {objective}")
+    print("   (isolated git worktrees, independent verification, evidence-based judging)\n")
+    try:
+        res = run_swarm(cwd, objective, agents=args.agents, base_config=config,
+                        base_ref=args.base_ref, verify_cmd=args.verify, fitness=args.fitness,
+                        max_turns=args.max_turns, max_tool_calls=args.max_tool_calls,
+                        max_workers=args.max_workers)
+    except ValueError as e:
+        print(f"Error: {e}")
+        return 1
+
+    print("\n" + render_status(open_swarm(cwd, res.swarm_id)))
+    if res.converged and res.winner is not None:
+        print(f"\nSWARM CONVERGED. Apply the winner with:\n"
+              f"  git cherry-pick {res.winner.commit}")
+    elif res.winner is not None:
+        print(f"\nBest candidate: {res.winner.id} (not fully verified — inspect "
+              f"{res.winner.commit[:12]} before applying).")
+    else:
+        print("\nNo candidate produced a usable patch.")
+    return 0
+
+
+def _resume(cwd: str, sid: str, config: dict) -> int:
+    """Light MVP resume (§28): re-open a swarm, re-verify any candidate that was never
+    scored, re-judge, and print status. Full worker re-spawn is Phase 2."""
+    bb = open_swarm(cwd, sid)
+    cfg = bb.config()
+    vc = cfg.get("verify_cmd") or None
+    print(f"Resuming {sid} — {bb.objective()}")
+    if vc:
+        verify = make_shell_verifier(vc, str(cfg.get("fitness") or "auto"))
+        for c in bb.candidates():
+            if c.commit and c.tests_total == 0:
+                verify_candidate(bb, c, verify)
+    print(render_status(bb))
+    return 0

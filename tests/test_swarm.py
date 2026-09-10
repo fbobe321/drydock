@@ -259,3 +259,65 @@ def test_run_swarm_writes_metrics_and_events(tmp_path):
     ev_types = {json.loads(x)["type"]
                 for x in (Path(res.root) / "events.jsonl").read_text().splitlines() if x.strip()}
     assert {"SWARM_START", "TASK_ASSIGNED", "TEST_COMPLETED", "JUDGE_DECISION"} <= ev_types
+
+
+# ── CLI slice ────────────────────────────────────────────────────────────────
+def test_render_status_shows_key_fields(tmp_path):
+    bb = swarm.create_swarm(tmp_path, "fix auth", swarm_id="swarm-r")
+    bb.add_task("builder", "fix auth", assignee="agent-1")
+    bb.add_candidate("agent-1", commit="deadbeefcafe", files_changed=2, summary="patched it")
+    bb.update("candidates", "c-1", tests_passed=10, tests_total=10, status=swarm.CAND_ACCEPTED)
+    out = swarm.render_status(bb)
+    assert "fix auth" in out
+    assert "10/10" in out
+    assert "Winner" in out and "agent-1" in out
+
+
+def test_cli_list_and_status(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    swarm.create_swarm(repo, "obj", swarm_id="swarm-a")
+    assert swarm.run_cli(["list"], {"cwd": repo}) == 0
+    assert "swarm-a" in capsys.readouterr().out
+    assert swarm.run_cli(["status", "swarm-a"], {"cwd": repo}) == 0
+    assert "obj" in capsys.readouterr().out
+
+
+def test_cli_status_no_swarms(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    assert swarm.run_cli(["status"], {"cwd": repo}) == 1
+
+
+def test_cli_solve_requires_git_repo(tmp_path, capsys):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    rc = swarm.run_cli(["fix", "the", "bug"], {"cwd": str(plain)})
+    assert rc == 1
+    assert "git" in capsys.readouterr().out.lower()
+
+
+def test_cli_solve_empty_objective(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    assert swarm.run_cli([], {"cwd": repo}) == 1
+
+
+def test_cli_solve_dispatches_to_run_swarm(tmp_path, capsys, monkeypatch):
+    repo = _init_repo(tmp_path / "repo")
+    seen = {}
+
+    def fake_run_swarm(cwd, objective, **kw):
+        seen["objective"] = objective
+        seen["agents"] = kw.get("agents")
+        seen["verify_cmd"] = kw.get("verify_cmd")
+        bb = swarm.create_swarm(cwd, objective, {"agents": kw.get("agents")}, swarm_id="swarm-x")
+        bb.add_candidate("agent-1", commit="abc123", files_changed=1)
+        bb.update("candidates", "c-1", tests_passed=1, tests_total=1, status=swarm.CAND_ACCEPTED)
+        return swarm.SwarmResult("swarm-x", objective, str(bb.root), True,
+                                 bb.candidates()[0], bb.candidates())
+
+    monkeypatch.setattr(swarm, "run_swarm", fake_run_swarm)
+    rc = swarm.run_cli(["fix", "the", "bug", "--agents", "3", "--verify", "pytest -q"],
+                       {"cwd": repo})
+    assert rc == 0
+    assert seen == {"objective": "fix the bug", "agents": 3, "verify_cmd": "pytest -q"}
+    out = capsys.readouterr().out
+    assert "SWARM CONVERGED" in out and "cherry-pick abc123" in out
