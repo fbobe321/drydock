@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS knowledge (
     statement TEXT, confidence REAL, sources TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_mission ON knowledge(mission_id, type);
+CREATE TABLE IF NOT EXISTS reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, mission_id TEXT, ts REAL, summary TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reviews_mission ON reviews(mission_id, id);
 """
 
 # Knowledge types (§15). negative_result/failure are the "don't repeat" memory (§16).
@@ -369,6 +373,42 @@ class MissionStore:
                 scored.append((overlap, k))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [k for _, k in scored[:top]]
+
+    # ── strategic reviews (§24) ─────────────────────────────────────────────────
+    def record_review(self, mission_id: str, summary: dict) -> int:
+        with self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO reviews(mission_id,ts,summary) VALUES(?,?,?)",
+                (mission_id, _now(), _j(summary)))
+        return int(cur.lastrowid or 0)
+
+    def reviews(self, mission_id: str) -> list[dict]:
+        rows = self.conn.execute("SELECT * FROM reviews WHERE mission_id=? ORDER BY id",
+                                 (mission_id,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["summary"] = _u(d.get("summary")) or {}
+            out.append(d)
+        return out
+
+    def last_review_ts(self, mission_id: str) -> float:
+        """ts of the most recent review, else the mission's created_at (so the first
+        elapsed-time trigger measures from mission start). Survives resume (§28)."""
+        row = self.conn.execute(
+            "SELECT MAX(ts) AS t FROM reviews WHERE mission_id=?", (mission_id,)).fetchone()
+        if row and row["t"] is not None:
+            return float(row["t"])
+        m = self.get_mission(mission_id)
+        return float(m["created_at"]) if m else _now()
+
+    def experiments_since(self, mission_id: str, ts: float) -> int:
+        """Count of KEEP/REVERT experiments recorded after `ts` — the task-count review
+        trigger (§24). Derived from the durable event log, so it is resume-correct."""
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM events WHERE mission_id=? AND type='experiment' AND ts>?",
+            (mission_id, ts)).fetchone()
+        return int(row["n"]) if row else 0
 
     # ── budgets / usage (§29/§30) ───────────────────────────────────────────────
     def add_usage(self, mission_id: str, *, tokens: int = 0, wall_s: float = 0.0,

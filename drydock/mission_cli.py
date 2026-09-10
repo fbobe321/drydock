@@ -72,6 +72,12 @@ def render_status(store: M.MissionStore, mission_id: str) -> str:
         f"Experiments: {len(exps)}  (kept {kept}, reverted {rev})",
         f"Usage:     tokens={u['tokens']}  experiments={u['experiments']}  failures={u['failures']}",
     ]
+    revs = store.reviews(mission_id)
+    since = store.last_review_ts(mission_id)
+    to_go = max(0, 10 - store.experiments_since(mission_id, since))
+    lines.append(f"Reviews:   {len(revs)}   next strategic review in {to_go} experiments")
+    if revs:
+        lines.append(f"Last review: {revs[-1]['summary'].get('limiting_factor', '')}")
     return "\n".join(lines)
 
 

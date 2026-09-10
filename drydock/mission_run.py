@@ -243,11 +243,75 @@ class RunSummary:
     events: list = field(default_factory=list)
 
 
+def strategic_review_due(store: M.MissionStore, mission_id: str, *,
+                         every_tasks: int = 10, every_secs: float = 3600.0) -> str:
+    """Return a trigger reason if a strategic review is due (§24), else "". Triggers off the
+    durable event log / review table, so it is correct across resume. every_tasks<=0 or
+    every_secs<=0 disables that trigger."""
+    since = store.last_review_ts(mission_id)
+    if every_tasks > 0 and store.experiments_since(mission_id, since) >= every_tasks:
+        return f"{every_tasks} experiments since last review"
+    if every_secs > 0 and (time.time() - since) >= every_secs:
+        return f"{int(every_secs // 60)} minutes since last review"
+    return ""
+
+
+def run_strategic_review(store: M.MissionStore, mission_id: str, *,
+                         planner: Callable[[M.MissionStore, dict], int] | None = None,
+                         reviewer: Callable[[M.MissionStore, dict, dict], dict] | None = None,
+                         trigger: str = "") -> dict:
+    """Reconsider strategy (§24). Deterministically answers the measurable review questions
+    from durable state, records an immutable review + event, then refreshes the backlog via
+    the planner. An optional model-backed `reviewer(store, mission, facts)->dict` may enrich
+    the summary (model routing, §32) — never required for the loop to make progress."""
+    m = store.get_mission(mission_id) or {}
+    exps = [e for e in store.events(mission_id) if e["type"] == "experiment"]
+    kept = sum(1 for e in exps if e.get("decision") == "KEEP")
+    reverted = sum(1 for e in exps if e.get("decision") == "REVERT")
+    completed = sum(1 for t in store.tasks(mission_id) if t["status"] == M.T_COMPLETED)
+    baseline = (m.get("baseline") or {}).get("metric")
+    current, best = m.get("current_metric"), m.get("best_metric")
+    failed = [k["statement"] for k in store.knowledge(mission_id, M.K_NEGATIVE)][-5:]
+    gained = current is not None and baseline is not None and current > baseline
+    if reverted and reverted >= 3 * max(kept, 1):
+        limiting = "most experiments regress — current approaches are not working; change tactics"
+    elif not gained:
+        limiting = "no measurable gain over baseline yet"
+    else:
+        limiting = "progressing; keep pursuing the current line"
+    facts = {
+        "trigger": trigger, "objective": m.get("objective", ""),
+        "target": (m.get("success_criteria") or {}).get("metric"),
+        "baseline": baseline, "current": current, "best": best,
+        "tasks_completed": completed, "experiments_kept": kept,
+        "experiments_reverted": reverted, "failed_strategies": failed,
+        "limiting_factor": limiting,
+    }
+    if reviewer is not None:
+        try:
+            facts.update(reviewer(store, m, dict(facts)) or {})
+        except Exception:  # noqa: BLE001 — a review never crashes the mission (§7.4/§50)
+            pass
+    store.record_review(mission_id, facts)
+    added = 0
+    if planner is not None:
+        try:
+            added = planner(store, m) or 0
+        except Exception:  # noqa: BLE001
+            added = 0
+    facts["backlog_added"] = added
+    store.event(mission_id, "strategic_review", trigger=trigger, kept=kept,
+                reverted=reverted, added=added, limiting=limiting)
+    return facts
+
+
 def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str = "",
                 worker: WorkerFn = default_worker, evaluator: EvaluatorFn | None = None,
                 planner: Callable[[M.MissionStore, dict], int] | None = None,
                 base_config: dict | None = None, worker_id: str = "worker-1",
                 max_cycles: int = 10000, stagnation_limit: int = 5,
+                review_every_tasks: int = 10, review_every_secs: float = 3600.0,
+                reviewer: Callable[[M.MissionStore, dict, dict], dict] | None = None,
                 on_event: Callable[[str, dict], None] | None = None) -> RunSummary:
     """Drive a mission to a stopping condition with a SINGLE worker (§41/§49). Stops on
     success (§30), budget (§30), stagnation (§22), or an empty queue (planner is a later
@@ -279,6 +343,12 @@ def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str =
             _ev("completed", metric=m.get("current_metric"))
             break
         store.reclaim_expired(mission_id)
+        why_review = strategic_review_due(store, mission_id, every_tasks=review_every_tasks,
+                                          every_secs=review_every_secs)
+        if why_review:
+            facts = run_strategic_review(store, mission_id, planner=planner,
+                                         reviewer=reviewer, trigger=why_review)
+            _ev("strategic_review", trigger=why_review, added=facts.get("backlog_added", 0))
         ready = store.ready_tasks(mission_id)
         if not ready:
             added = planner(store, m) if planner else 0

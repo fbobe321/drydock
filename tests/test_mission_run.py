@@ -104,6 +104,50 @@ def test_revert_records_negative_knowledge_and_feeds_next_worker(tmp_path):
     assert seen["neg"] and any("REVERTED" in n for n in seen["neg"])
 
 
+def test_strategic_review_due_after_n_experiments(tmp_path):
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")
+    assert R.strategic_review_due(s, mid, every_tasks=3, every_secs=0) == ""
+    for _ in range(3):
+        s.event(mid, "experiment", decision="KEEP")
+    assert "experiments" in R.strategic_review_due(s, mid, every_tasks=3, every_secs=0)
+
+
+def test_run_strategic_review_records_and_replans(tmp_path):
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", success_criteria={"score": ">=70"})
+    s.set_baseline(mid, {"metric": 60.0})
+    s.event(mid, "experiment", decision="KEEP")
+    s.event(mid, "experiment", decision="REVERT")
+    s.event(mid, "experiment", decision="REVERT")
+    s.event(mid, "experiment", decision="REVERT")
+    seeded = {"n": 0}
+
+    def planner(store, mission):
+        seeded["n"] += 1
+        return 2
+    facts = R.run_strategic_review(s, mid, planner=planner, trigger="test")
+    assert facts["experiments_kept"] == 1 and facts["experiments_reverted"] == 3
+    assert facts["backlog_added"] == 2 and seeded["n"] == 1
+    assert "not working" in facts["limiting_factor"]        # reverts dominate → change tactics
+    assert len(s.reviews(mid)) == 1
+    assert any(e["type"] == "strategic_review" for e in s.events(mid))
+    # after a review, the counter resets — no longer due (§24)
+    assert R.strategic_review_due(s, mid, every_tasks=4, every_secs=0) == ""
+
+
+def test_run_mission_fires_review_on_trigger(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", success_criteria={"score": ">=999"})
+    for i in range(4):
+        s.add_task(mid, f"t{i}")
+    R.run_mission(s, mid, cwd=repo, repo=repo, worker=_writer_worker("x.py"),
+                  evaluator=lambda *a: R.Evaluation(accept=True, metric_after=float(1)),
+                  review_every_tasks=2, review_every_secs=0, stagnation_limit=99)
+    assert s.reviews(mid), "a review should have fired after 2 experiments"
+
+
 def test_run_mission_stops_on_success(tmp_path):
     repo = _repo(tmp_path)
     s = M.MissionStore(tmp_path / "s.db")
