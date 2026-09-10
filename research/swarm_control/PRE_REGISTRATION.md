@@ -103,13 +103,16 @@ more-diverse corpus lifts the base model more. Pre-registered separately when ro
 
 ## Status
 - Matched-compute accounting: **built + tested** (`run_swarm` metrics: total tokens/turns).
+- **Blackboard consumption (the single variable): BUILT + tested.** `run_swarm(share=...)` —
+  `share=True` runs in waves where later agents read peers' verified attempts (`_peer_notes`);
+  `share=False` is blind parallel = the **eratchet-equivalent baseline arm**. So the control's
+  one variable now exists as a flag, exactly as this pre-registration requires.
 - Predictions: registered to `predictions.json` before data. ✓
-- **NOT launched.** Blocked on two build items, in order:
-  1. **Blackboard consumption** — the single variable. Give each Builder its peers' verified
-     discoveries + rejected approaches in-context (`swarm.py`; a `--share`/no-share flag makes
-     the baseline arm = eratchet-equivalent). Until this exists there is nothing to test.
-  2. **Task set** — a flatline/gradient-split git-repo task set both tools run natively, kept
+- **NOT launched.** Remaining blocker:
+  1. **Task set** — a flatline/gradient-split git-repo task set both tools run natively, kept
      aligned with terminal-bench-2 (operator decision).
+  2. an eratchet candidate-diversity readout comparable to the swarm's (for the write-back
+     companion experiment).
 - Harness will mirror loop-control: paired per task, same server/budget, fleet-safe
   registration in `fleet_supervisor.sh::experiment_active()`, results to `results.csv`
   (`task, arm, solved, tokens, turns, shared_reads`), predictions resolved against it.
