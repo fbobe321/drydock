@@ -13,6 +13,7 @@ CLI) build on it. Stdlib-only (sqlite3); logging-style writes never raise.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -67,7 +68,24 @@ CREATE TABLE IF NOT EXISTS usage (
     mission_id TEXT PRIMARY KEY, tokens INTEGER DEFAULT 0, wall_s REAL DEFAULT 0,
     experiments INTEGER DEFAULT 0, failures INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS knowledge (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, mission_id TEXT, ts REAL, type TEXT,
+    statement TEXT, confidence REAL, sources TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_mission ON knowledge(mission_id, type);
 """
+
+# Knowledge types (§15). negative_result/failure are the "don't repeat" memory (§16).
+K_FINDING = "finding"
+K_ASSUMPTION = "assumption"
+K_HYPOTHESIS = "hypothesis"
+K_DECISION = "decision"
+K_FAILURE = "failure"
+K_CONSTRAINT = "constraint"
+K_MEASUREMENT = "measurement"
+K_NEGATIVE = "negative_result"
+_STOP = {"the", "a", "an", "to", "of", "and", "or", "in", "on", "for", "is", "it", "this",
+         "that", "with", "as", "by", "at", "be", "make", "one", "toward", "objective"}
 
 
 def _now() -> float:
@@ -86,6 +104,12 @@ def _u(s) -> object:
         return json.loads(s) if s else None
     except (TypeError, ValueError):
         return None
+
+
+def _words(text: str) -> set[str]:
+    """Lower-cased content words (len>2, not stop-words) — the similarity key for §16."""
+    return {w for w in re.findall(r"[a-z0-9_]+", (text or "").lower())
+            if len(w) > 2 and w not in _STOP}
 
 
 class MissionStore:
@@ -300,6 +324,51 @@ class MissionStore:
             d = d if isinstance(d, dict) else {}
             out.append({"seq": r["seq"], "ts": r["ts"], "type": r["type"], **d})
         return out[::-1] if limit else out
+
+    # ── knowledge store (§15) + negative knowledge (§16) ────────────────────────
+    def add_knowledge(self, mission_id: str, type: str, statement: str, *,
+                      confidence: float = 0.5, sources: list | None = None) -> int:
+        now = _now()
+        with self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO knowledge(mission_id,ts,type,statement,confidence,sources) "
+                "VALUES(?,?,?,?,?,?)", (mission_id, now, type, statement, confidence,
+                                       _j(sources or [])))
+        return int(cur.lastrowid or 0)
+
+    def knowledge(self, mission_id: str, type: str | None = None) -> list[dict]:
+        if type:
+            rows = self.conn.execute(
+                "SELECT * FROM knowledge WHERE mission_id=? AND type=? ORDER BY id",
+                (mission_id, type)).fetchall()
+        else:
+            rows = self.conn.execute("SELECT * FROM knowledge WHERE mission_id=? ORDER BY id",
+                                     (mission_id,)).fetchall()
+        out = []
+        for r in rows:
+            k = dict(r)
+            k["sources"] = _u(k.get("sources")) or []
+            out.append(k)
+        return out
+
+    def similar_knowledge(self, mission_id: str, text: str, *, type: str | None = None,
+                          top: int = 5) -> list[dict]:
+        """Retrieve prior knowledge most similar to `text` by content-word overlap (§16). A
+        cheap, model-free relevance signal — the Planner uses it to surface failed approaches
+        before repeating them; semantic embeddings are a later phase."""
+        want = _words(text)
+        if not want:
+            return []
+        scored = []
+        for k in self.knowledge(mission_id, type):
+            have = _words(k["statement"])
+            if not have:
+                continue
+            overlap = len(want & have) / len(want | have)
+            if overlap > 0:
+                scored.append((overlap, k))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [k for _, k in scored[:top]]
 
     # ── budgets / usage (§29/§30) ───────────────────────────────────────────────
     def add_usage(self, mission_id: str, *, tokens: int = 0, wall_s: float = 0.0,

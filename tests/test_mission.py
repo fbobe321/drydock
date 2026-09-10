@@ -96,6 +96,32 @@ def test_budget_exhaustion(tmp_path):
     assert s.budget_exhausted(mid2)[0] is True
 
 
+def test_knowledge_store_and_typed_query(tmp_path):
+    s = _store(tmp_path)
+    mid = s.create_mission("obj")
+    s.add_knowledge(mid, M.K_FINDING, "empty stdout is read as command failure",
+                    confidence=0.9, sources=["trace-82"])
+    s.add_knowledge(mid, M.K_NEGATIVE, "raising retry limit increased loop rate",
+                    sources=["exp-31"])
+    assert len(s.knowledge(mid)) == 2
+    negs = s.knowledge(mid, M.K_NEGATIVE)
+    assert len(negs) == 1 and negs[0]["sources"] == ["exp-31"]
+    assert s.knowledge(mid, M.K_FINDING)[0]["confidence"] == 0.9
+
+
+def test_similar_knowledge_surfaces_related_failures(tmp_path):
+    s = _store(tmp_path)
+    mid = s.create_mission("obj")
+    s.add_knowledge(mid, M.K_NEGATIVE, "raising shell retry limit increased loop frequency")
+    s.add_knowledge(mid, M.K_NEGATIVE, "rewriting the markdown renderer had no effect")
+    # a proposal about shell retries must surface the related failed approach (§16/AT-8)
+    hits = s.similar_knowledge(mid, "increase the retry limit for shell commands",
+                               type=M.K_NEGATIVE)
+    assert hits and "retry limit" in hits[0]["statement"]
+    # an unrelated proposal matches nothing
+    assert s.similar_knowledge(mid, "unrelated topic about kittens", type=M.K_NEGATIVE) == []
+
+
 def test_state_persists_across_reopen(tmp_path):
     mid, store = M.create_mission(tmp_path, "durable obj",
                                   budget={"wall_time_hours": 6})

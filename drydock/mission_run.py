@@ -87,8 +87,13 @@ def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> Wo
     cfg["_abort"] = {}
     cfg["resume"] = False
     cfg.pop("resume_path", None)
+    system_prompt = task.get("system_prompt", "")
+    neg = task.get("negative_knowledge") or []
+    if neg:
+        system_prompt += ("\n\nKNOWN FAILED APPROACHES on this mission — do NOT repeat them "
+                          "without new evidence:\n" + "\n".join(f"- {n}" for n in neg))
     try:
-        for ev in agent_run(objective, state, cfg, task.get("system_prompt", "")):
+        for ev in agent_run(objective, state, cfg, system_prompt):
             _ = isinstance(ev, TurnDone)
     except Exception as e:  # noqa: BLE001 — a worker crash is contained by the loop (§32)
         return WorkerResult(ok=False, error=f"{type(e).__name__}: {e}")
@@ -166,6 +171,11 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
     before = mission.get("current_metric") or 0.0
     cp = checkpoint(repo) if repo else ""
     store.event(mid, "task_started", task=tid, objective=task.get("objective", ""))
+    # Context reconstruction (§13): surface known failed approaches so the worker doesn't
+    # repeat them (§16). Relevance by content-word overlap with this task.
+    neg = store.similar_knowledge(mid, task.get("objective", ""), type=M.K_NEGATIVE, top=3)
+    task = dict(task)
+    task["negative_knowledge"] = [k["statement"] for k in neg]
     t0 = time.monotonic()
     wr = worker(task, mission, cwd, base_config or {})
     store.add_usage(mid, tokens=wr.in_tokens + wr.out_tokens, wall_s=time.monotonic() - t0)
@@ -185,6 +195,10 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
                              "commit": end})
         store.event(mid, "experiment", task=tid, decision="KEEP",
                     metric_before=ev.metric_before, metric_after=ev.metric_after, commit=end)
+        if wr.summary:
+            store.add_knowledge(mid, M.K_FINDING,
+                                f"KEPT (metric {ev.metric_before:.1f}→{ev.metric_after:.1f}): "
+                                f"{wr.summary[:280]}", confidence=0.7, sources=[tid])
     else:
         if repo and cp:
             restore(repo, cp)      # auto-revert the regression (§19)
@@ -193,6 +207,13 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
         # negative knowledge stays in history even though the code is reverted (§16/§19)
         store.event(mid, "experiment", task=tid, decision="REVERT",
                     metric_before=ev.metric_before, metric_after=ev.metric_after, reason=ev.reason)
+        # Key the statement on the *approach* (task objective) so a later proposal that
+        # resembles it is caught by similar_knowledge (§16/AT-8); the summary/reason add detail.
+        approach = task.get("objective", "")
+        detail = " ".join(x for x in (wr.summary, ev.reason) if x)[:280]
+        store.add_knowledge(mid, M.K_NEGATIVE,
+                            f"REVERTED (metric {ev.metric_before:.1f}→{ev.metric_after:.1f}, "
+                            f"no improvement): {approach}. {detail}", confidence=0.6, sources=[tid])
     return TaskOutcome(tid, accept=ev.accept, metric_after=ev.metric_after, reverted=not ev.accept)
 
 

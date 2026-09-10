@@ -68,6 +68,42 @@ def test_run_task_revert_restores_repo(tmp_path):
     assert exps and exps[-1]["decision"] == "REVERT"
 
 
+def test_keep_records_finding_knowledge(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")
+    tid = s.add_task(mid, "make fix")
+    R.run_task(s, s.get_task(tid), mission=s.get_mission(mid), cwd=repo, repo=repo,
+               worker=_writer_worker("fix.py", ),
+               evaluator=lambda *a: R.Evaluation(accept=True, metric_before=60, metric_after=66.9))
+    findings = s.knowledge(mid, M.K_FINDING)
+    assert findings and "KEPT" in findings[0]["statement"]
+
+
+def test_revert_records_negative_knowledge_and_feeds_next_worker(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")
+    s.set_metric(mid, 60.0)
+    tid = s.add_task(mid, "increase shell retry limit")
+    R.run_task(s, s.get_task(tid), mission=s.get_mission(mid), cwd=repo, repo=repo,
+               worker=_writer_worker("bad.py"),
+               evaluator=lambda *a: R.Evaluation(accept=False, metric_before=60, metric_after=57,
+                                                 reason="loop rate rose"))
+    negs = s.knowledge(mid, M.K_NEGATIVE)
+    assert negs and "REVERTED" in negs[0]["statement"]
+    # a later related task must receive that negative knowledge in its worker prompt (§13/§16)
+    seen = {}
+
+    def spy(task, mission, cwd, base_config):
+        seen["neg"] = task.get("negative_knowledge")
+        return R.WorkerResult(ok=True, summary="ok")
+    tid2 = s.add_task(mid, "try raising the retry limit again")
+    R.run_task(s, s.get_task(tid2), mission=s.get_mission(mid), cwd=repo, repo=repo,
+               worker=spy, evaluator=lambda *a: R.Evaluation(accept=True, metric_after=61.0))
+    assert seen["neg"] and any("REVERTED" in n for n in seen["neg"])
+
+
 def test_run_mission_stops_on_success(tmp_path):
     repo = _repo(tmp_path)
     s = M.MissionStore(tmp_path / "s.db")
