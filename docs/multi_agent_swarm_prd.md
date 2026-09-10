@@ -2,11 +2,11 @@
 
 - **Product:** Drydock
 - **Feature:** Multi-Agent Swarm / Parallel Problem Solving
-- **Status:** Proposed → **MVP in progress** (see §35 and "Implementation Plan" below)
+- **Status:** Proposed → **MVP IMPLEMENTED** (`drydock/swarm.py`, `drydock swarm` CLI) — see "Implementation Status" below
 - **Version:** 1.0
 - **Date:** September 2026
 
-> **Implementation note (2026-09-09).** This feature is being built **MVP-first** (§35),
+> **Implementation note (2026-09-09).** This feature is built **MVP-first** (§35),
 > grounded in Drydock's existing primitives rather than greenfield: the `Dispatch`
 > sub-agent tool (programmatic agent launch), the ratchet/eratchet worktree isolation, the
 > `events.py` stream, the `tool_registry`/agent-loop, and the file-based job-queue pattern
@@ -14,6 +14,34 @@
 > (§35) is: **does coordinated parallel exploration materially increase Drydock's task
 > completion rate?** Everything past the MVP is gated on a "yes" measured on the same
 > tbench-class tasks Drydock already targets.
+
+> ## Implementation Status (2026-09-09)
+>
+> **MVP shipped** as `drydock/swarm.py` + the `drydock swarm` subcommand (`cli.py`), 24
+> tests in `tests/test_swarm.py`, gate-clean (ruff / pyright / suite). Delivered in four
+> slices:
+> - **Blackboard** (§9/§10/§28) — `Blackboard`: append-only JSONL under
+>   `.drydock/swarms/<id>/` (discoveries/hypotheses/candidates/tasks), unified `EventLog`
+>   (§27), `create/open/list/latest_swarm`, resumable.
+> - **Worker** (§16/§17/§32) — `run_worker`: each Builder runs the in-process agent loop
+>   (`default_agent_runner`, the Dispatch recipe) in its own detached git worktree; result
+>   snapshotted as a commit and recorded as a `Candidate`; crashes contained. Runner is
+>   injectable for model-free testing.
+> - **Coordinator + verify + judge** (§6/§15/§18/§20/§24) — `run_swarm`: Parallel strategy
+>   with `diversify()` (8 angles), `ThreadPoolExecutor` fan-out over one shared server
+>   (§22), independent scoring via `make_shell_verifier` (reusing `ratchet.score_output` /
+>   `detect_verifier`), `judge()` by evidence, `SWARM_CONVERGED` on all-pass.
+> - **CLI + status** (§25/§26) — `run_cli`: `solve` / `status` / `list` / `resume`;
+>   `render_status()` ranked view + cherry-pick hint.
+>
+> **Verified with an injected runner** (worktree/verify/judge/git plumbing proven end-to-end
+> on real temp repos). The `default_agent_runner` path against a **live model** is validated
+> separately by a real 2-agent run (see the run log referenced in RESUME).
+>
+> **Deliberately deferred to Phase 2/3** (§36/§37): dynamic spawning, specialized
+> Explorer/Critic/Tester/Reviewer roles, hypothesis tracking as a first-class loop,
+> tournament/debate/map-reduce strategies, heterogeneous per-role models, context
+> compression, advanced anti-loop novelty scoring, distributed/hierarchical execution.
 
 ---
 
