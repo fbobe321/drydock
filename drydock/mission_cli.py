@@ -107,11 +107,13 @@ def write_views(store: M.MissionStore, mission_id: str, cwd: str) -> None:
 
 
 # ── CLI (§36) ─────────────────────────────────────────────────────────────────
-def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str]]:
-    """Pull mission flags out of argv, returning (budget, success_criteria, verify, rest)."""
+def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], list[str]]:
+    """Pull mission flags out of argv, returning
+    (budget, success_criteria, verify, protected_paths, rest)."""
     budget: dict = {}
     success: dict = {}
     verify = ""
+    protected: list[str] = []
     rest: list[str] = []
     i = 0
     while i < len(argv):
@@ -132,10 +134,13 @@ def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str]]:
         elif a == "--verify" and nxt:
             verify = nxt
             i += 2
+        elif a == "--protect" and nxt:            # measurement apparatus a worker must not edit
+            protected.append(nxt)
+            i += 2
         else:
             rest.append(a)
             i += 1
-    return budget, success, verify, rest
+    return budget, success, verify, protected, rest
 
 
 def _latest(cwd: str) -> str | None:
@@ -151,14 +156,15 @@ def run_cli(argv: list, config: dict | None = None) -> int:
     rest = argv[1:]
 
     if sub == "create":
-        budget, success, verify, objparts = _parse_budget(rest)
+        budget, success, verify, protected, objparts = _parse_budget(rest)
         objective = " ".join(objparts).strip()
         if not objective:
             print('usage: drydock mission create "<objective>" [--target ">=70"] '
-                  '[--verify CMD] [--time-budget 48h] [--max-experiments N]')
+                  '[--verify CMD] [--protect GLOB]... [--time-budget 48h] [--max-experiments N]')
             return 1
         mconf = {"verify_cmd": verify, "model": config.get("model", ""),
-                 "base_url": config.get("base_url", ""), "provider": config.get("provider", "vllm")}
+                 "base_url": config.get("base_url", ""), "provider": config.get("provider", "vllm"),
+                 "protected_paths": protected}
         mid, store = M.create_mission(cwd, objective, success_criteria=success or None,
                                       budget=budget or None, config=mconf)
         initial_plan(store, mid, objective, verify)

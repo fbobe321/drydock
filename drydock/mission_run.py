@@ -12,6 +12,7 @@ import re
 import subprocess
 import time
 from collections.abc import Callable
+from fnmatch import fnmatch
 from dataclasses import dataclass, field
 
 from drydock import mission as M
@@ -68,6 +69,41 @@ def restore(repo: str, commit: str) -> bool:
         return ok
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+def changed_paths(repo: str, since_commit: str) -> set[str]:
+    """Repo-relative paths the worker touched this experiment: tracked diff vs the pre-worker
+    checkpoint plus new untracked files. Used to guard the measurement apparatus (§7.4)."""
+    if not (repo and since_commit):
+        return set()
+    out: set[str] = set()
+    try:
+        d = _git(["diff", "--name-only", since_commit], repo)
+        if d.returncode == 0:
+            out.update(p for p in d.stdout.splitlines() if p.strip())
+        u = _git(["ls-files", "--others", "--exclude-standard"], repo)
+        if u.returncode == 0:
+            out.update(p for p in u.stdout.splitlines() if p.strip())
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    return out
+
+
+def tampered_paths(changed: set[str], protected: list[str]) -> list[str]:
+    """Which changed paths fall under a protected glob (§7.4 evaluator integrity). Matches on
+    the full path and on any leading directory, so 'tests' guards 'tests/foo/bar_test.py'."""
+    if not protected:
+        return []
+    hits = []
+    for path in sorted(changed):
+        parts = path.split("/")
+        prefixes = ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
+        for pat in protected:
+            pat = pat.rstrip("/")
+            if any(fnmatch(path, pat) or fnmatch(pfx, pat) for pfx in prefixes):
+                hits.append(path)
+                break
+    return hits
 
 
 # ── default Worker (bounded agent.run) + Evaluator (project verifier) ─────────
@@ -184,6 +220,28 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
             restore(repo, cp)
         store.complete_task(tid, M.T_FAILED, {"error": wr.error})
         return TaskOutcome(tid, accept=False, metric_after=before, reverted=True, error=wr.error)
+
+    # Evaluator integrity (§7.4): a worker must not edit the measurement apparatus. If this
+    # experiment touched a protected path the metric is untrusted — reject WITHOUT running the
+    # (possibly rigged) verifier, revert, and remember the tamper as a failed approach (§16).
+    protected = (mission.get("config") or {}).get("protected_paths") or []
+    tamper = tampered_paths(changed_paths(repo, cp), protected) if (repo and cp) else []
+    if tamper:
+        if repo and cp:
+            restore(repo, cp)
+        store.add_usage(mid, experiments=1)
+        store.complete_task(tid, M.T_FAILED,
+                            {"summary": wr.summary, "decision": "REVERT", "reverted": True,
+                             "tampered": tamper})
+        store.event(mid, "tamper", task=tid, paths=tamper[:20])
+        store.event(mid, "experiment", task=tid, decision="REVERT", metric_before=before,
+                    metric_after=before, reason=f"protected paths modified: {tamper[:5]}")
+        store.add_knowledge(mid, M.K_NEGATIVE,
+                            f"REJECTED (measurement tamper): {task.get('objective', '')}. Modified "
+                            f"protected measurement paths {tamper[:5]} — result untrusted.",
+                            confidence=0.9, sources=[tid])
+        return TaskOutcome(tid, accept=False, metric_after=before, reverted=True,
+                           error=f"protected paths modified: {tamper[:5]}")
 
     ev = evaluator(task, mission, cwd, before)
     store.add_usage(mid, experiments=1)

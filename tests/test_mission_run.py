@@ -148,6 +148,50 @@ def test_run_mission_fires_review_on_trigger(tmp_path):
     assert s.reviews(mid), "a review should have fired after 2 experiments"
 
 
+def test_tampered_paths_matches_dir_and_glob():
+    changed = {"tests/foo_test.py", "src/app.py", "verify.sh", "docs/readme.md"}
+    hits = R.tampered_paths(changed, ["tests", "verify.sh", "*.lock"])
+    assert "tests/foo_test.py" in hits and "verify.sh" in hits
+    assert "src/app.py" not in hits and "docs/readme.md" not in hits
+
+
+def test_tamper_forces_revert_even_when_metric_would_pass(tmp_path):
+    repo = _repo(tmp_path)
+    (Path(repo) / "tests").mkdir()
+    (Path(repo) / "tests" / "check.sh").write_text("echo baseline")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "add tests"], cwd=repo, check=True)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", config={"protected_paths": ["tests"]})
+    s.set_metric(mid, 50.0)
+    tid = s.add_task(mid, "make it pass")
+
+    def rigger(task, mission, cwd, base_config):
+        (Path(cwd) / "tests" / "check.sh").write_text("exit 0")   # edit the measurement itself
+        return R.WorkerResult(ok=True, summary="rewrote the check")
+    out = R.run_task(s, s.get_task(tid), mission=s.get_mission(mid), cwd=repo, repo=repo,
+                     worker=rigger,
+                     # evaluator would gladly KEEP a 100 — must be overridden by tamper guard
+                     evaluator=lambda *a: R.Evaluation(accept=True, metric_before=50, metric_after=100))
+    assert not out.accept and out.reverted
+    assert s.get_mission(mid)["current_metric"] == 50.0          # metric NOT advanced
+    assert (Path(repo) / "tests" / "check.sh").read_text() == "echo baseline"   # restored
+    assert any(e["type"] == "tamper" for e in s.events(mid))
+    assert s.knowledge(mid, M.K_NEGATIVE)[0]["statement"].startswith("REJECTED (measurement tamper)")
+
+
+def test_no_tamper_when_only_source_changes(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", config={"protected_paths": ["tests"]})
+    tid = s.add_task(mid, "legit fix")
+    out = R.run_task(s, s.get_task(tid), mission=s.get_mission(mid), cwd=repo, repo=repo,
+                     worker=_writer_worker("src.py"),
+                     evaluator=lambda *a: R.Evaluation(accept=True, metric_after=66.0))
+    assert out.accept and not out.reverted                       # untouched apparatus → normal KEEP
+    assert not any(e["type"] == "tamper" for e in s.events(mid))
+
+
 def test_run_mission_stops_on_success(tmp_path):
     repo = _repo(tmp_path)
     s = M.MissionStore(tmp_path / "s.db")

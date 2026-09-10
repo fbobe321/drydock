@@ -1,7 +1,7 @@
 # Drydock Long-Horizon Autonomous Missions — PRD (condensed design-of-record)
 
 - **Feature:** Long-Horizon Autonomous Mission Execution
-- **Status:** Proposed → **MVP in progress** (Phase 1)
+- **Status:** Proposed → **Phase 1 + Phase 2 shipped**; Phase 3 in progress
 - **Version:** 1.0 · **Date:** 2026-09-10
 
 > **The principle (§50/§52):** *missions* run for hours/days; *agents* are disposable
@@ -73,8 +73,24 @@ gate-clean). `MissionStore` (SQLite, WAL, transactional, model-neutral):
 - **immutable event log** (§12); **budgets/usage** (§29/§30) with `budget_exhausted`;
 - workspace factory `.drydock/missions/<id>/state.db` (§40); **persists across reopen** (AT-2).
 
-**Next slices (Phase 1):** (2) mission CLI (`drydock mission create/list/status/resume/…`,
-§36) + generated `MISSION.md`/`CURRENT_STATE.md` views; (3) the controller loop (§41) — git
-checkpoint → single Worker (`agent.run`) → deterministic Evaluator → KEEP/REVERT → progress
-+ stagnation → budget stop; (4) a minimal Planner (objective → tasks) + baseline + experiment
-history; (5) `mission resume`. Then the AT-1..AT-10 acceptance run.
+**Slices 2–5 — Phase 1 complete: SHIPPED.** Controller loop (§41) — git checkpoint → single
+Worker (`agent.run`) → deterministic Evaluator → KEEP/REVERT → progress/stagnation → budget
+stop; mission CLI (§36, `create/list/status/tasks/logs/experiments/knowledge/run/resume/
+pause/stop`) + generated `MISSION.md`/`CURRENT_STATE.md`; minimal Planner (objective → tasks);
+immutable baseline (§9); `mission resume` (AT-2).
+
+**Phase 2 — Autonomous Improvement: SHIPPED.** Knowledge store (§15) + negative knowledge
+(§16, retrieval keyed on the *approach* so AT-8 fires; injected into the worker prompt via
+§13 context reconstruction); strategic reviews (§24, deterministic from durable state, with an
+optional model-backed reviewer hook for §32).
+
+**Evaluator integrity (§7.4) — HARDENED.** A mission may declare `protected_paths`
+(`--protect GLOB`) naming the measurement apparatus (verifier scripts, test files). Each
+experiment's git diff-since-checkpoint is checked; if a worker touched a protected path the
+result is **rejected without running the (possibly rigged) verifier**, reverted, and recorded
+as a `tamper` event + negative knowledge — closing the false-pass hole (cf. the eratchet
+false-pass bug). The metric is never advanced under a tampered apparatus.
+
+**Next (Phase 3):** escalation ladder (§23 / AT-7), *semantic* stagnation/loop detection
+(§22, beyond the current lexical baseline), metric-noise policy for KEEP/REVERT (§9/§20),
+fuller model routing (§32). Then the AT-1..AT-10 acceptance run.
