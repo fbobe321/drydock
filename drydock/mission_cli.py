@@ -189,6 +189,14 @@ def run_cli(argv: list, config: dict | None = None) -> int:
                 if e["type"] == "experiment":
                     print(f"{e.get('decision')}  {e.get('metric_before')}→{e.get('metric_after')}"
                           f"  {e.get('reason', '')}")
+        elif sub == "knowledge":
+            items = store.knowledge(mid)
+            if not items:
+                print("(no knowledge recorded yet)")
+            for k in items:
+                src = ",".join(str(s) for s in (k.get("sources") or []))
+                print(f"[{k['type']:15}] conf={k.get('confidence', 0):.2f}  {k['statement']}"
+                      + (f"  «{src}»" if src else ""))
         elif sub in ("stop", "pause"):
             store.set_status(mid, M.M_CANCELLED if sub == "stop" else M.M_PAUSED)
             print(f"{mid} → {'CANCELLED' if sub == 'stop' else 'PAUSED'}")

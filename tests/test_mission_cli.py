@@ -54,6 +54,17 @@ def test_cli_create_requires_objective(tmp_path):
     assert C.run_cli(["create"], {"cwd": str(tmp_path)}) == 1
 
 
+def test_cli_knowledge_view(tmp_path, capsys):
+    C.run_cli(["create", "obj here"], {"cwd": str(tmp_path)})
+    mid = M.list_missions(tmp_path)[0]
+    store = M.open_store(tmp_path, mid)
+    store.add_knowledge(mid, M.K_NEGATIVE, "raising retry limit increased loops",
+                        confidence=0.6, sources=["task-1"])
+    assert C.run_cli(["knowledge", mid], {"cwd": str(tmp_path)}) == 0
+    out = capsys.readouterr().out
+    assert "negative_result" in out and "raising retry limit" in out and "task-1" in out
+
+
 def test_iterate_planner_keeps_the_loop_going(tmp_path):
     repo = _repo(tmp_path)
     s = M.MissionStore(tmp_path / "s.db")
