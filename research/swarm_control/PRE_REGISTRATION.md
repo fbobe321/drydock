@@ -38,6 +38,20 @@ cheapest to build:
 > other Builders have already posted to the blackboard (§10/§31). One variable: whether an
 > agent sees what its peers found. Everything else — count, budget, tasks, server, verifier,
 > diversity injection — is identical.
+>
+> **CLEANEST APPARATUS (revised 2026-09-10): eratchet ± blackboard, same engine.** Rather
+> than compare two *different* engines (swarm vs eratchet), run **eratchet with `--share`
+> off vs on** — the identical loop, λ, generations, servers, verifier, and compute; the only
+> difference is whether each generation's variants are handed the prior generations' scored
+> attempts (`run_eratchet(share=...)`, grafting `_peer_notes_erx` into `_variant_prompt`).
+> eratchet's variants were **blind within/across generations** (they saw only pass counts +
+> a diversify nudge, plus diff-level crossover); `--share` makes generation *g* read
+> generations *1..g-1*'s attempts+scores, turning blind parallel search into coordinated
+> search. This is a tighter single-variable test than swarm-vs-eratchet and needs no separate
+> baseline engine. **Hypothesis (honest):** the prior says search isn't the ceiling-lever, so
+> the likeliest win is **compute efficiency** — the same result from fewer redundant variants
+> — not a higher solve ceiling. That still matters (throughput is the gate) and is what would
+> "revive" eratchet.
 
 Rounds 2+ (only if round 1 clears its kill rule) add critics, then dynamic reallocation, each
 as its own single-variable control.
@@ -103,10 +117,14 @@ more-diverse corpus lifts the base model more. Pre-registered separately when ro
 
 ## Status
 - Matched-compute accounting: **built + tested** (`run_swarm` metrics: total tokens/turns).
-- **Blackboard consumption (the single variable): BUILT + tested.** `run_swarm(share=...)` —
-  `share=True` runs in waves where later agents read peers' verified attempts (`_peer_notes`);
-  `share=False` is blind parallel = the **eratchet-equivalent baseline arm**. So the control's
-  one variable now exists as a flag, exactly as this pre-registration requires.
+- **Blackboard consumption (the single variable): BUILT + tested — in BOTH engines.**
+  - `run_swarm(share=...)` — waves where later agents read peers' verified attempts.
+  - **`run_eratchet(share=...)` / `drydock eratchet … --share`** — the cleaner apparatus:
+    the identical evolutionary loop with prior generations' scored attempts injected into each
+    variant's prompt (`_peer_notes_erx` → `_variant_prompt`). `--share` off = today's blind
+    eratchet = baseline; on = coordinated. One flag, one engine, exact matched compute.
+  So the control's one variable now exists as a flag in the very engine whose value is in
+  question, exactly as this pre-registration requires.
 - Predictions: registered to `predictions.json` before data. ✓
 - **NOT launched.** Remaining blocker:
   1. **Task set** — a flatline/gradient-split git-repo task set both tools run natively, kept

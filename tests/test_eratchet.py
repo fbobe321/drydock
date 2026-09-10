@@ -2,9 +2,11 @@
 variant EXECUTOR is injected, so the whole generation loop — selection, the QD
 archive, escalation, and the stop conditions — is driven deterministically with
 no subprocesses or network."""
+from drydock import eratchet as erx
 from drydock.eratchet import (
     VariantOutcome,
     _run_generation_parallel,
+    parse_eratchet,
     run_eratchet,
 )
 
@@ -183,3 +185,50 @@ def test_contrastive_pairs_from_captured_records():
     assert len(pairs) == 1                                # only the same-base pair
     assert pairs[0]["chosen"]["reward"] == 5 and pairs[0]["rejected"]["reward"] == 3
     assert pairs[0]["margin"] == 2
+
+
+# ── blackboard graft: eratchet variants read prior attempts (share=True) ─────
+def test_peer_notes_ranks_best_first_and_reads_summary():
+    log = [(1, 2, 8, "tried a hash map"), (1, 5, 8, "tried memoization"),
+           (2, 0, 8, "")]
+    notes = erx._peer_notes_erx(log)
+    lines = notes.splitlines()
+    assert "5/8" in lines[0] and "memoization" in lines[0]   # best score first
+    assert "(no summary)" in notes                            # empty summary handled
+    assert erx._last_msg([{"role": "user", "content": "x"},
+                          {"role": "assistant", "content": "did the thing\nline2"}]) == "did the thing"
+
+
+def test_variant_prompt_appends_peer_notes_only_when_present():
+    prog = {"passed": 2, "total": 8}
+    base = erx._variant_prompt("goal", {"mode": "continue"}, prog, None, "")
+    assert "WHAT OTHER VARIANTS" not in base
+    withn = erx._variant_prompt("goal", {"mode": "continue", "peer_notes": "- gen1 [3/8]: X"},
+                                prog, None, "")
+    assert "WHAT OTHER VARIANTS" in withn and "gen1 [3/8]: X" in withn
+
+
+def test_share_feeds_prior_attempts_into_later_generations():
+    seen = []
+
+    def runner(base, server, spec, xplan):
+        seen.append(spec.get("peer_notes"))
+        return VariantOutcome(spec, server, 2, 8, ref="r", descriptor=_desc(2),
+                              messages=[{"role": "assistant", "content": f"approach {server}"}])
+
+    seen.clear()
+    run_eratchet("goal", servers=["s1"], runner=runner, effort="high",
+                 max_generations=2, share=True)
+    # gen 1 is blind (no notes); a later generation must have received prior attempts' notes
+    assert seen[0] is None
+    assert any(n and "gen1" in n for n in seen), "later variants never saw the blackboard"
+
+    seen.clear()
+    run_eratchet("goal", servers=["s1"], runner=runner, effort="high",
+                 max_generations=2, share=False)
+    assert all(n is None for n in seen)   # baseline arm = blind (no notes ever)
+
+
+def test_parse_eratchet_share_flag():
+    assert parse_eratchet(["fix", "the", "bug", "--share"])["share"] is True
+    assert parse_eratchet(["fix", "the", "bug"])["share"] is False

@@ -106,6 +106,7 @@ def run_eratchet(
     on_event: Optional[Callable[[str, dict], None]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
     capture: Optional[Callable[[dict], None]] = None,
+    share: bool = False,
 ) -> EratchetResult:
     """Drive the parallel evolutionary ratchet. Pure control flow: every side
     effect (running an attempt, verifying, snapshotting) happens inside the
@@ -137,6 +138,7 @@ def run_eratchet(
     base_ref: Optional[str] = None
     prev_best = -1
     flat = 0
+    peer_log: list = []   # (generation, passed, total, summary) — the blackboard when share=True
 
     emit("start", goal=goal, effort=effort, generations=gens,
          fanout=policy.fanout, servers=list(servers))
@@ -154,6 +156,15 @@ def run_eratchet(
             if pairs:
                 xplan = plan_crossover(pairs[0][0], pairs[0][1], g)
 
+        # BLACKBOARD (§10): feed prior variants' attempts+scores into this generation's
+        # specs so its variants generate INFORMED rather than blind. share=False → today's
+        # blind eratchet (the baseline arm of the eratchet ± blackboard control).
+        if share and peer_log:
+            notes = _peer_notes_erx(peer_log)
+            for s in specs:
+                s["peer_notes"] = notes
+            emit("share", generation=g, prior_attempts=len(peer_log))
+
         emit("generation_start", generation=g, operator=op,
              variants=len(specs), modes=[s.get("mode") for s in specs])
 
@@ -169,6 +180,8 @@ def run_eratchet(
                 cost=float(g),
             )
             archive.consider(cand)
+            if share:
+                peer_log.append((g, oc.passed, oc.total, _last_msg(oc.messages)))
             if capture:
                 capture({
                     "goal": goal, "generation": g, "index": i,
@@ -251,21 +264,54 @@ def _git(args: list, cwd: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
 
 
+def _last_msg(messages) -> str:
+    """The variant's final assistant line — a one-line 'what it tried' for the blackboard."""
+    for m in reversed(messages or []):
+        if isinstance(m, dict) and m.get("role") == "assistant":
+            c = (m.get("content") or "").strip()
+            if c:
+                return c.splitlines()[0][:160]
+    return ""
+
+
+def _peer_notes_erx(log: list, limit: int = 8) -> str:
+    """Digest of what earlier variants already tried, best-scoring first (§10). Turns
+    eratchet's blind parallel search into a coordinated one: a new variant sees the prior
+    attempts' scores + approaches so it builds on the partials and skips the dead ends.
+    `log` items are (generation, passed, total, summary)."""
+    ranked = sorted(log, key=lambda r: ((r[1] / r[2]) if r[2] else 0.0, r[1]), reverse=True)
+    lines = []
+    for (g, p, t, summ) in ranked[:limit]:
+        score = f"{p}/{t}" if t else "unverified"
+        lines.append(f"- gen{g} [{score}]: {summ or '(no summary)'}")
+    return "\n".join(lines)
+
+
 def _variant_prompt(goal: str, spec: dict, progress: dict, xplan, donor_path: str) -> str:
     passed, total = progress.get("passed", 0), progress.get("total", 0)
     mode = spec.get("mode", "continue")
     if mode == "crossover" and xplan and donor_path:
         wants = ", ".join(xplan.get("wants", [])) or "the checks it passes that this tree fails"
-        return (
+        base = (
             f"{goal}\n\n[CROSSOVER — a COMPLEMENTARY solution is checked out at "
             f"{donor_path}. It passes: {wants}. Study how it does so and fold ONLY "
             f"those parts into THIS working tree, keeping everything that already "
             f"passes here. A verifier will score the result.]"
         )
-    op = _MODE_OP.get(mode, "exploit")
-    if op in ("diversify", "restart"):
-        return diversify_prompt(goal, passed, total, op)
-    return continuation_prompt(goal, passed, total)
+    else:
+        op = _MODE_OP.get(mode, "exploit")
+        if op in ("diversify", "restart"):
+            base = diversify_prompt(goal, passed, total, op)
+        else:
+            base = continuation_prompt(goal, passed, total)
+    # BLACKBOARD (§10): if the orchestrator attached peers' notes to this spec, the variant
+    # generates INFORMED instead of blind — this is what turns eratchet from redundant
+    # parallel search into coordinated search.
+    notes = spec.get("peer_notes")
+    if notes:
+        base += (f"\n\n[WHAT OTHER VARIANTS ALREADY TRIED on this SAME goal — build past the "
+                 f"highest partial below; do NOT repeat the failed approaches:\n{notes}]")
+    return base
 
 
 @dataclass
@@ -403,10 +449,15 @@ def parse_eratchet(tokens: list) -> dict:
     capture = ""
     servers: list = []
     fanout = generations = 0
+    share = False
     i, seen_flag = 0, False
     while i < len(tokens):
         t = tokens[i]
-        if t in ("--effort", "--verify", "--servers", "--fanout", "--generations",
+        if t == "--share":
+            # blackboard: later generations' variants read prior attempts' scores+approaches
+            share = True
+            seen_flag = True
+        elif t in ("--effort", "--verify", "--servers", "--fanout", "--generations",
                  "--model", "--provider", "--base-url", "--capture"):
             seen_flag = True
             i += 1
@@ -443,7 +494,7 @@ def parse_eratchet(tokens: list) -> dict:
     return {"goal": " ".join(goal), "effort": effort, "verify": verify,
             "servers": servers, "fanout": fanout, "generations": generations,
             "model": model, "provider": provider, "base_url": base_url,
-            "capture": capture}
+            "capture": capture, "share": share}
 
 
 def resolve_config(opts: dict, config: dict) -> "ExecConfig | str":
@@ -511,7 +562,8 @@ def run_cli(argv: list, config: dict | None = None) -> int:
     try:
         res = run_eratchet(cfg.goal, servers=servers, runner=make_variant_runner(cfg),
                            effort=opts["effort"], max_generations=opts["generations"],
-                           fanout=opts["fanout"], on_event=on_event, capture=capture)
+                           fanout=opts["fanout"], on_event=on_event, capture=capture,
+                           share=opts.get("share", False))
     finally:
         if cap_fh:
             cap_fh.close()
