@@ -19,6 +19,7 @@ Stdlib-only, provider-agnostic — consistent with the rest of Drydock.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -630,6 +631,56 @@ def judge(candidates: list[Candidate]) -> Candidate | None:
     if not real:
         return None
     return max(real, key=_evidence_key)
+
+
+# ── candidate-population diversity (write-back-corpus signal, §33/§34) ─────────
+# The swarm's likeliest value for the ratchet is NOT a better single solve but a more
+# DIVERSE set of verified diffs to self-distill on (this programme's lever is write-back,
+# not search). These measure that: how many DISTINCT verified solutions a run produced.
+def candidate_diff(repo: str | Path, commit: str, base_ref: str = "HEAD") -> str:
+    """The worker's change as a unified diff (base_ref..commit). '' on error. Works after
+    the worktree is torn down — the commit lives in the object store."""
+    if not commit:
+        return ""
+    try:
+        r = _git(["diff", f"{base_ref}..{commit}"], repo)
+        return r.stdout if r.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _norm_diff(diff: str) -> str:
+    """Drop diff headers/hunk markers + blank lines so cosmetically-different but
+    semantically-identical patches dedupe to the same fingerprint."""
+    keep = []
+    for ln in diff.splitlines():
+        if ln.startswith(("diff --git", "index ", "--- ", "+++ ", "@@ ")):
+            continue
+        s = ln.strip()
+        if s:
+            keep.append(s)
+    return "\n".join(keep)
+
+
+def candidate_diversity(repo: str | Path, candidates: list[Candidate], base_ref: str = "HEAD",
+                        verified_only: bool = True) -> dict:
+    """Diversity of the candidate population. `verified_only` restricts to candidates that
+    passed all their tests (the corpus a write-back run would actually train on). Returns
+    verified count, distinct-solution count (by normalized-diff fingerprint), and the ratio.
+    A swarm that produces N verified-but-identical diffs has diversity 1/N — no more
+    training signal than one ratchet solve."""
+    pool = [c for c in candidates if c.commit]
+    if verified_only:
+        pool = [c for c in pool if c.tests_total > 0 and c.tests_passed >= c.tests_total]
+    fingerprints = set()
+    for c in pool:
+        nd = _norm_diff(candidate_diff(repo, c.commit, base_ref))
+        if nd:
+            fingerprints.add(hashlib.sha256(nd.encode("utf-8")).hexdigest())
+    n_verified = len(pool)
+    n_distinct = len(fingerprints)
+    return {"verified": n_verified, "distinct": n_distinct,
+            "diversity_ratio": (n_distinct / n_verified) if n_verified else 0.0}
 
 
 @dataclass

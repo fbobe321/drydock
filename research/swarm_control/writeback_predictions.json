@@ -1,0 +1,29 @@
+[
+  {
+    "id": "p1",
+    "claim": "DIVERSITY GATE: at matched compute, a parallel swarm produces more DISTINCT verified solutions per task than a single eratchet lineage",
+    "expected": "on tasks both arms solve, swarm mean distinct-verified-solutions >= 1.5x eratchet, OR >= +1 distinct on at least half the shared-solved tasks, with arms within +/-20% total tokens",
+    "falsifier": "swarm distinct <= eratchet at matched compute => the swarm produces no richer corpus => write-back-via-swarm is dead; do NOT run stage B (no diversity-prompt retry)",
+    "observed": "",
+    "status": "open",
+    "note": "cheap gate; measured by drydock.swarm.candidate_diversity. Prior FAVORS this direction (write-back is the real lever), but the gate can still fail if the swarm makes N copies of one solve."
+  },
+  {
+    "id": "p2",
+    "claim": "DOWNSTREAM LIFT: self-distilling on the diverse swarm corpus beats the eratchet corpus at EQUAL corpus size on held-out tasks",
+    "expected": "swarm-corpus-distilled model solves more held-out tbench-2 tasks than the eratchet-corpus model, beyond the ratchet's known n=1 variance band, at equal example count",
+    "falsifier": "held-out lift within noise or not greater => diversity did not translate to model improvement => swarm write-back value unproven; do not claim a ratchet improvement",
+    "observed": "",
+    "status": "open",
+    "note": "equal corpus SIZE so diversity is the only variable. Only run if p1 holds."
+  },
+  {
+    "id": "p3",
+    "claim": "REAL DIVERSITY: the swarm's distinct-solution advantage is genuine approach diversity, not cosmetic variants",
+    "expected": "after semantic dedup (not just text-normalized diff), the swarm's distinct-solution advantage over eratchet survives",
+    "falsifier": "the advantage collapses under semantic dedup (it was whitespace/comment/format variants) => inflated diversity; fix dedup and re-gate before stage B",
+    "observed": "",
+    "status": "open",
+    "note": "guards against candidate_diversity overcounting cosmetic differences."
+  }
+]

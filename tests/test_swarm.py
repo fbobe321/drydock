@@ -167,6 +167,31 @@ def test_workers_are_isolated_from_each_other(tmp_path):
     assert "b.py" in s2 and "a.py" not in s2
 
 
+def test_candidate_diversity_counts_distinct_verified_solutions(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    bb = swarm.create_swarm(tmp_path / "state", "obj")
+    # two identical solutions + one different, all from the same base
+    swarm.run_worker(bb, repo, "HEAD", "a1", "obj", runner=_writer_runner("sol.py", "x = 1\n"))
+    swarm.run_worker(bb, repo, "HEAD", "a2", "obj", runner=_writer_runner("sol.py", "x = 1\n"))
+    swarm.run_worker(bb, repo, "HEAD", "a3", "obj", runner=_writer_runner("sol.py", "x = 2\n"))
+    for c in bb.candidates():
+        bb.update("candidates", c.id, tests_passed=1, tests_total=1)
+
+    div = swarm.candidate_diversity(repo, bb.candidates(), base_ref="HEAD")
+    assert div["verified"] == 3
+    assert div["distinct"] == 2          # a1==a2 dedupe; a3 distinct
+    assert abs(div["diversity_ratio"] - 2 / 3) < 1e-9
+
+
+def test_candidate_diversity_excludes_unverified(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    bb = swarm.create_swarm(tmp_path / "state", "obj")
+    swarm.run_worker(bb, repo, "HEAD", "a1", "obj", runner=_writer_runner("s.py", "x=1\n"))
+    # not marked verified → excluded from the write-back corpus count
+    div = swarm.candidate_diversity(repo, bb.candidates(), base_ref="HEAD")
+    assert div["verified"] == 0 and div["distinct"] == 0
+
+
 def test_repo_root_detection(tmp_path):
     repo = _init_repo(tmp_path / "repo")
     assert swarm.repo_root(repo) == str(Path(repo).resolve())
