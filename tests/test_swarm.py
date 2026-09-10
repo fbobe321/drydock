@@ -233,6 +233,23 @@ def test_run_swarm_end_to_end_converges(tmp_path):
                for c in losers if c.commit)
 
 
+def test_swarm_records_matched_compute(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+
+    # A runner that reports compute cost via RunResult (the default_agent_runner shape).
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        (Path(cwd) / "f.txt").write_text("x")
+        return swarm.RunResult(summary="did it", in_tokens=100, out_tokens=40, turns=3)
+
+    res = swarm.run_swarm(repo, "obj", agents=2, base_config={},
+                          verify_cmd="test -f f.txt", fitness="exitcode", runner=runner)
+    bb = swarm.open_swarm(repo, res.swarm_id)
+    m = bb.metrics()
+    assert m["total_in_tokens"] == 200 and m["total_out_tokens"] == 80  # summed over 2 agents
+    assert m["total_turns"] == 6
+    assert all(c.in_tokens == 100 and c.turns == 3 for c in res.candidates)
+
+
 def test_run_swarm_contains_a_crashing_worker(tmp_path):
     repo = _init_repo(tmp_path / "repo")
 

@@ -110,6 +110,11 @@ class Candidate:
     critic_findings: int = 0
     verifications: int = 0
     status: str = CAND_DRAFT
+    # Compute cost of producing this candidate — required to compare swarm vs eratchet at
+    # MATCHED compute (a win that just spent more inference is not a win). See §21/§33.
+    in_tokens: int = 0
+    out_tokens: int = 0
+    turns: int = 0
     ts: float = 0.0
 
 
@@ -195,10 +200,12 @@ class Blackboard:
 
     def add_candidate(self, agent: str, summary: str = "", hypothesis: str = "",
                       worktree: str = "", base_ref: str = "", commit: str = "",
-                      files_changed: int = 0, status: str = CAND_DRAFT) -> Candidate:
+                      files_changed: int = 0, status: str = CAND_DRAFT,
+                      in_tokens: int = 0, out_tokens: int = 0, turns: int = 0) -> Candidate:
         c = Candidate(id=self._next_id("c"), agent=agent, summary=summary,
                       hypothesis=hypothesis, worktree=worktree, base_ref=base_ref,
-                      commit=commit, files_changed=files_changed, status=status, ts=time.time())
+                      commit=commit, files_changed=files_changed, status=status,
+                      in_tokens=in_tokens, out_tokens=out_tokens, turns=turns, ts=time.time())
         self._append("candidates", c)
         self.emit("CANDIDATE_CREATED", id=c.id, agent=agent, commit=commit,
                   files_changed=files_changed, status=status)
@@ -364,8 +371,19 @@ def latest_swarm(cwd: str | Path) -> str | None:
 # runner is injectable so the worktree/snapshot/candidate plumbing is testable without a
 # live model, mirroring eratchet's injected `runner`.
 
-# runner(objective, cwd, base_config, system_prompt, allow, max_turns, max_tool_calls) -> summary
-AgentRunner = Callable[[str, str, dict, str, "list[str]", int, int], str]
+@dataclass
+class RunResult:
+    """A worker run's summary plus its compute cost (for matched-compute comparison).
+    A runner may return a plain summary string instead; run_worker normalizes either."""
+    summary: str
+    in_tokens: int = 0
+    out_tokens: int = 0
+    turns: int = 0
+
+
+# runner(objective, cwd, base_config, system_prompt, allow, max_turns, max_tool_calls)
+#   -> summary string OR RunResult (with compute cost).
+AgentRunner = Callable[[str, str, dict, str, "list[str]", int, int], "str | RunResult"]
 
 
 def _git(args: list[str], cwd: str | Path, timeout: int = 300) -> subprocess.CompletedProcess:
@@ -434,7 +452,7 @@ def snapshot_worktree(wt: str | Path) -> tuple[str, int]:
 
 
 def default_agent_runner(objective: str, cwd: str, base_config: dict, system_prompt: str,
-                         allow: list[str], max_turns: int, max_tool_calls: int) -> str:
+                         allow: list[str], max_turns: int, max_tool_calls: int) -> RunResult:
     """Run one in-process agent to completion in `cwd` and return its final summary.
 
     This is the Dispatch/_run_subagent recipe (drydock/tools/__init__.py): a fresh
@@ -455,9 +473,14 @@ def default_agent_runner(objective: str, cwd: str, base_config: dict, system_pro
     cfg["_abort"] = {}
     cfg.pop("_todo", None)
     cfg.pop("_plan_autocontinue", None)
+    turns = 0
     for ev in agent_run(objective, state, cfg, system_prompt):
-        _ = isinstance(ev, TurnDone)  # drain; per-turn hooks (loop detection) land here later
-    return _last_assistant(state)
+        if isinstance(ev, TurnDone):
+            turns += 1
+    return RunResult(summary=_last_assistant(state),
+                     in_tokens=int(getattr(state, "total_input_tokens", 0) or 0),
+                     out_tokens=int(getattr(state, "total_output_tokens", 0) or 0),
+                     turns=int(getattr(state, "turn_count", 0) or turns))
 
 
 def _last_assistant(state) -> str:
@@ -502,9 +525,12 @@ def run_worker(bb: Blackboard, repo: str, base_ref: str, agent_id: str, objectiv
         return WorkerOutcome(agent=agent_id, ok=False, error="worktree_create_failed")
 
     summary, error = "", ""
+    rr = RunResult(summary="")
     try:
-        summary = runner(objective, str(wt), base_config or {}, system_prompt,
-                         list(allow), max_turns, max_tool_calls)
+        res = runner(objective, str(wt), base_config or {}, system_prompt,
+                     list(allow), max_turns, max_tool_calls)
+        rr = res if isinstance(res, RunResult) else RunResult(summary=res or "")
+        summary = rr.summary
     except Exception as e:  # noqa: BLE001 — one worker's crash must not sink the swarm (§32)
         error = f"{type(e).__name__}: {e}"
         bb.emit("AGENT_FAILED", agent=agent_id, error=error)
@@ -512,9 +538,11 @@ def run_worker(bb: Blackboard, repo: str, base_ref: str, agent_id: str, objectiv
     commit, files_changed = snapshot_worktree(wt)
     cand = bb.add_candidate(agent=agent_id, summary=summary, worktree=str(wt),
                             base_ref=base_ref, commit=commit, files_changed=files_changed,
-                            status=CAND_DRAFT if commit else CAND_REJECTED)
+                            status=CAND_DRAFT if commit else CAND_REJECTED,
+                            in_tokens=rr.in_tokens, out_tokens=rr.out_tokens, turns=rr.turns)
     bb.emit("AGENT_TERMINATED", agent=agent_id, candidate=cand.id,
-            files_changed=files_changed, ok=bool(commit) and not error)
+            files_changed=files_changed, ok=bool(commit) and not error,
+            in_tokens=rr.in_tokens, out_tokens=rr.out_tokens, turns=rr.turns)
     return WorkerOutcome(agent=agent_id, ok=bool(commit) and not error, candidate_id=cand.id,
                          commit=commit, files_changed=files_changed, summary=summary, error=error)
 
@@ -693,6 +721,11 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
                     "candidates_with_patch": len([c for c in final if c.commit]),
                     "converged": converged,
                     "winner": winner.id if winner else "",
+                    # matched-compute ledger (§21/§33): the cost side of any swarm-vs-eratchet
+                    # comparison — a solve that spent 3x the tokens is not a fair win.
+                    "total_in_tokens": sum(c.in_tokens for c in final),
+                    "total_out_tokens": sum(c.out_tokens for c in final),
+                    "total_turns": sum(c.turns for c in final),
                     "ts": time.time()})
 
     # Tear down losers' scratch worktrees (§16) — their commits are durable in the object
