@@ -102,6 +102,12 @@ DEFAULTS: dict[str, object] = {
     # (docs/multi_agent_swarm_prd.md). On by default; set false to keep every request single-
     # agent unless the user runs /swarm explicitly.
     "swarm_auto_escalate": True,
+    # Swarm sizing: the harness caps agents at the inference server's real concurrency
+    # (drydock/capacity.py) — hammer an 8-GPU vLLM box, tone down a -np 2 laptop. Set
+    # swarm_concurrency to your server's parallel capacity to skip auto-detection (most
+    # reliable); 0 = auto-detect (llama.cpp /slots, else an empirical burst probe).
+    "swarm_concurrency": 0,
+    "swarm_concurrency_default": 4,
     # URL substrings the web tools refuse: WebSearch drops matching results,
     # WebFetch declines matching URLs (with a plain message, never an error).
     # Used to keep benchmark/solution sites out of harvested training runs.

@@ -1200,7 +1200,7 @@ class DrydockApp(App):
             self._info("Something is already running — stop it (Esc) before /swarm.")
             return
         parts = arg.split()
-        agents, obj = 4, []
+        agents, obj = "auto", []   # auto-size to the server's concurrency unless --agents given
         i = 0
         while i < len(parts):
             if parts[i] == "--agents" and i + 1 < len(parts):
@@ -1224,20 +1224,22 @@ class DrydockApp(App):
             return
         self._launch_swarm(cwd, objective, agents)
 
-    def _launch_swarm(self, cwd: str, objective: str, agents: int,
+    def _launch_swarm(self, cwd: str, objective: str, agents: "int | str",
                       verify_cmd: str | None = None, auto: bool = False) -> None:
         """Start an in-process swarm streaming into this session. `auto=True` is the
         harness escalating on its own (no user command); `verify_cmd` pins the checker
-        (e.g. the one the single agent kept failing)."""
+        (e.g. the one the single agent kept failing). agents="auto" sizes to the server's
+        detected concurrency (hammer a big box, tone down a small one)."""
         self._swarm = {"active": True}
         head = ("⚙ the harness is escalating to a parallel swarm" if auto
                 else f"⇶ /swarm launching: {objective!r}")
-        self._info(f"{head} — {agents} agents exploring in isolated worktrees "
+        count = f"{agents}" if isinstance(agents, int) else "auto-sized"
+        self._info(f"{head} — {count} agents exploring in isolated worktrees "
                    "(in-process, your working tree is left alone). Esc to stop.")
         self.run_worker(
             lambda: self._swarm_worker(cwd, objective, agents, verify_cmd), thread=True)
 
-    def _swarm_worker(self, cwd: str, objective: str, agents: int,
+    def _swarm_worker(self, cwd: str, objective: str, agents: "int | str",
                       verify_cmd: str | None = None) -> None:
         """Off-thread: drive run_swarm, streaming milestones into this session's transcript."""
         from drydock import swarm as swarmmod
@@ -2011,7 +2013,7 @@ class DrydockApp(App):
                             already_escalated=self._auto_swarmed)):
                     self._auto_swarmed = True
                     self._info(f"⚙ That check has failed {streak}× — escalating.")
-                    self._launch_swarm(cwd, goal, 4, verify_cmd=vcmd, auto=True)
+                    self._launch_swarm(cwd, goal, "auto", verify_cmd=vcmd, auto=True)
                 elif not self._offered_ratchet:
                     self._offered_ratchet = True
                     self._ratchet_offer = {"goal": goal, "verify": vcmd}

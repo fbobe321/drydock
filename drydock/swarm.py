@@ -733,7 +733,8 @@ class SwarmResult:
     candidates: list[Candidate]
 
 
-def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: dict | None = None,
+def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
+              base_config: dict | None = None,
               base_ref: str = "HEAD", verify_cmd: str | None = None, fitness: str = "auto",
               max_turns: int = 40, max_tool_calls: int = 40, max_workers: int | None = None,
               runner: AgentRunner = default_agent_runner, verify: VerifyFn | None = None,
@@ -751,11 +752,24 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
     if repo is None:
         raise ValueError("swarm needs a git repository (run `git init` first) for worktree "
                          "isolation")
-    n = max(1, agents)
+    bc = base_config or {}
+    # Auto-size to the server's real concurrency (§21/§22): hammer a big box, tone down a
+    # small one. N = min(hardware concurrency, task-demand, budget) — never maximized.
+    detected = 0
+    if isinstance(agents, str) and agents == "auto":
+        from drydock.capacity import detect_concurrency, swarm_size
+        detected = detect_concurrency(str(bc.get("base_url", "")),
+                                      provider=str(bc.get("provider", "vllm")),
+                                      model=str(bc.get("model", "")), config=bc)
+        n = swarm_size(detected)
+    else:
+        n = max(1, int(agents))
     bb = create_swarm(repo, objective, {"agents": n, "strategy": "parallel",
-                                        "verify_cmd": verify_cmd or "", "fitness": fitness},
+                                        "verify_cmd": verify_cmd or "", "fitness": fitness,
+                                        "concurrency_detected": detected},
                       swarm_id=swarm_id)
-    bb.emit("SWARM_START", agents=n, strategy="parallel", base_ref=base_ref)
+    bb.emit("SWARM_START", agents=n, strategy="parallel", base_ref=base_ref,
+            concurrency_detected=detected)
 
     def _ev(kind: str, **d) -> None:
         if on_event is not None:
