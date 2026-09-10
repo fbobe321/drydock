@@ -196,6 +196,22 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
     return TaskOutcome(tid, accept=ev.accept, metric_after=ev.metric_after, reverted=not ev.accept)
 
 
+def establish_baseline(store: M.MissionStore, mission_id: str, cwd: str,
+                       evaluator: EvaluatorFn) -> float | None:
+    """Measure the starting metric once and record it as the IMMUTABLE baseline (§9), before
+    any improvement — so later experiments compare against it and progress ≠ activity (§20).
+    No-op if a baseline already exists."""
+    m = store.get_mission(mission_id)
+    if not m or (m.get("baseline") or {}).get("metric") is not None:
+        return None
+    store.set_status(mission_id, M.M_BASELINING)
+    ev = evaluator({}, m, cwd, 0.0)
+    store.set_baseline(mission_id, {"metric": ev.metric_after, "passed": ev.passed})
+    store.set_metric(mission_id, ev.metric_after)
+    store.event(mission_id, "baseline_established", metric=ev.metric_after)
+    return ev.metric_after
+
+
 # ── the mission controller loop (§41) ─────────────────────────────────────────
 @dataclass
 class RunSummary:

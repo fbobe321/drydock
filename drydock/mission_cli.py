@@ -220,6 +220,10 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
             verify = ""
     evaluator = R.make_verifier_evaluator(verify) if verify else None
     base_config = dict(config)
+    if evaluator is not None:
+        b = R.establish_baseline(store, mid, cwd, evaluator)
+        if b is not None:
+            print(f"   baseline: {b:.1f}")
     print(f"⚓ Mission {mid} running (worker + evaluator loop). Ctrl-C to stop.\n"
           f"   objective: {m['objective']}\n   verify: {verify or '(none — cannot score; will idle)'}\n")
 

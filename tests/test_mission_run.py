@@ -102,6 +102,19 @@ def test_run_mission_stops_on_budget(tmp_path):
     assert summ.status == M.M_BUDGET_EXHAUSTED
 
 
+def test_establish_baseline_is_immutable(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")
+    b1 = R.establish_baseline(s, mid, repo, lambda *a: R.Evaluation(accept=True, metric_after=61.4))
+    assert b1 == 61.4
+    assert s.get_mission(mid)["baseline"]["metric"] == 61.4
+    assert s.get_mission(mid)["current_metric"] == 61.4
+    # second call is a no-op — the baseline is immutable mission history (§9)
+    assert R.establish_baseline(s, mid, repo, lambda *a: R.Evaluation(accept=True, metric_after=99.0)) is None
+    assert s.get_mission(mid)["baseline"]["metric"] == 61.4
+
+
 def test_verifier_evaluator_measures(tmp_path):
     repo = _repo(tmp_path)
     (Path(repo) / "answer.txt").write_text("PASS")
