@@ -694,6 +694,14 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: int = 4, base_config: 
                     "converged": converged,
                     "winner": winner.id if winner else "",
                     "ts": time.time()})
+
+    # Tear down losers' scratch worktrees (§16) — their commits are durable in the object
+    # store, so nothing is lost. Keep the winner's tree for inspection/integration.
+    for c in final:
+        if c.worktree and (winner is None or c.id != winner.id):
+            remove_worktree(repo, c.worktree)
+            bb.update("candidates", c.id, worktree="")
+
     # Re-read the winner so its ACCEPTED status is reflected in the returned object.
     if winner is not None:
         winner = next((c for c in bb.candidates() if c.id == winner.id), winner)

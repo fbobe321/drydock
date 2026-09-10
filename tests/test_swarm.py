@@ -225,6 +225,12 @@ def test_run_swarm_end_to_end_converges(tmp_path):
     assert len(res.candidates) == 4
     losers = [c for c in res.candidates if c.id != res.winner.id]
     assert all(c.status == swarm.CAND_REJECTED for c in losers)
+    # losers' scratch worktrees are torn down (durable commit remains); winner's is kept
+    assert all(not c.worktree or not Path(c.worktree).exists() for c in losers)
+    assert res.winner.worktree and Path(res.winner.worktree).exists()
+    # loser commits are still reachable in the object store despite worktree removal
+    assert all(_git(["cat-file", "-t", c.commit], repo).stdout.strip() == "commit"
+               for c in losers if c.commit)
 
 
 def test_run_swarm_contains_a_crashing_worker(tmp_path):
