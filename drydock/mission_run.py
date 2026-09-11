@@ -97,7 +97,7 @@ def changed_paths(repo: str, since_commit: str) -> set[str]:
     return out
 
 
-def tampered_paths(changed: set[str], protected: list[str]) -> list[str]:
+def tampered_paths(changed: "set[str] | list[str]", protected: list[str]) -> list[str]:
     """Which changed paths fall under a protected glob (§7.4 evaluator integrity). Matches on
     the full path and on any leading directory, so 'tests' guards 'tests/foo/bar_test.py'."""
     if not protected:

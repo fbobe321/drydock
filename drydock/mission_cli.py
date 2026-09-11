@@ -59,7 +59,8 @@ def failing_items(verify: str, cwd: str, cap: int = 8, timeout: int = 600) -> li
 def initial_plan(store: M.MissionStore, mission_id: str, objective: str, verify: str,
                  cwd: str = "") -> int:
     store.set_status(mission_id, M.M_PLANNING)
-    return decomposing_planner(objective, verify, cwd)(store, store.get_mission(mission_id))
+    mission = store.get_mission(mission_id) or {"id": mission_id}
+    return decomposing_planner(objective, verify, cwd)(store, mission)
 
 
 def iterate_planner(objective: str, verify: str):
