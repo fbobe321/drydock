@@ -153,3 +153,75 @@ def allocate(branches: list[tuple[str, float]], pool_tokens: int, *,
         top = weights[0][0]
         grants[top] = max(min_grant, grants[top] + drift)
     return Allocation(grants, terminated)
+
+
+# ── Planner: budget + intensity + hardware → population plan (§15/§16, §5/§9) ──
+# Diverse roles for solution-space coverage (§9/§10). Correlated agents waste compute.
+ROLES = [
+    "first-principles solver", "conventional solver", "skeptic", "debugger",
+    "security reviewer", "researcher", "minimalist", "adversarial critic",
+    "performance specialist", "alternative-architecture agent",
+]
+
+# Per-intensity search shape (§16): initial population, critic count, generation cap, and how
+# many branches survive each prune. Population is a SEARCH choice — independent of hardware.
+INTENSITY = {
+    "light":    {"population": 3,  "critics": 1, "generations": 2,  "keep": 2},
+    "standard": {"population": 8,  "critics": 2, "generations": 4,  "keep": 4},
+    "deep":     {"population": 16, "critics": 3, "generations": 6,  "keep": 6},
+    "extreme":  {"population": 24, "critics": 5, "generations": 10, "keep": 8},
+}
+
+
+@dataclass
+class SwarmPlan:
+    intensity: str
+    initial_population: int      # logical agents in the explore stage (§9)
+    max_concurrency: int         # simultaneous inference — HARDWARE bound (§5), != population
+    critics: int                 # judge/critic agents (§11)
+    generations: int             # generation cap (a convergence bound, §23)
+    keep: int                    # survivors promoted past each prune (§12)
+    roles: list[str]             # diversified assignments (§10)
+    estimated_logical: int       # rough total agents incl. spawned descendants (§13) — info only
+
+    @property
+    def queued_at_start(self) -> int:
+        """Logical agents that must wait because concurrency < population (§18)."""
+        return max(0, self.initial_population - self.max_concurrency)
+
+
+def choose_intensity(budget: Budget) -> str:
+    """Map a budget to a search intensity for `--swarm auto` (§16). Bigger budget → deeper
+    search. Falls back to 'standard' when the budget carries no size signal."""
+    if budget.wall_secs is not None:
+        s = budget.wall_secs
+        return "light" if s < 900 else "standard" if s < 3600 else "deep" if s < 14400 else "extreme"
+    if budget.tokens is not None:
+        t = budget.tokens
+        return ("light" if t < 1_000_000 else "standard" if t < 10_000_000
+                else "deep" if t < 50_000_000 else "extreme")
+    if budget.generations is not None:
+        g = budget.generations
+        return "light" if g <= 2 else "standard" if g <= 4 else "deep" if g <= 6 else "extreme"
+    return "standard"
+
+
+def plan(budget: Budget, concurrency: int, *, intensity: str = "auto") -> SwarmPlan:
+    """Turn a budget + measured hardware concurrency into a population plan (§15/§16).
+
+    KEY: logical population comes from the intensity (a search decision); `concurrency` only
+    caps how many run at once (§5). On a 1-GPU box a 16-agent 'deep' plan still has 16 logical
+    agents — the rest queue (§18); the penalty is wall-clock, not lost search capability. This
+    is the opposite of capacity.swarm_size(), which caps logical count AT concurrency."""
+    intensity = choose_intensity(budget) if intensity == "auto" else intensity
+    if intensity not in INTENSITY:
+        raise ValueError(f"unknown intensity {intensity!r} (light|standard|deep|extreme|auto)")
+    p = INTENSITY[intensity]
+    pop = p["population"]
+    roles = [ROLES[i % len(ROLES)] for i in range(pop)]
+    # estimate total logical agents: initial + ~one descendant per survivor per later generation
+    estimated = pop + p["keep"] * max(0, p["generations"] - 1)
+    return SwarmPlan(intensity=intensity, initial_population=pop,
+                     max_concurrency=max(1, concurrency), critics=p["critics"],
+                     generations=p["generations"], keep=p["keep"], roles=roles,
+                     estimated_logical=estimated)

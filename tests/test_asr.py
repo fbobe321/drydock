@@ -104,3 +104,37 @@ def test_allocate_min_grant_floor_for_kept_branches():
     alloc = asr.allocate(branches, 10_000, min_grant=200)
     assert alloc.grants["B"] >= 200                    # trailing-but-kept branch still probed
     assert alloc.grants["A"] > alloc.grants["B"]
+
+
+# ── Planner (§15/§16, §5/§18) ──────────────────────────────────────────────────
+def test_choose_intensity_scales_with_budget():
+    assert asr.choose_intensity(asr.Budget.parse("10m")) == "light"
+    assert asr.choose_intensity(asr.Budget.parse("45m")) == "standard"
+    assert asr.choose_intensity(asr.Budget.parse("2h")) == "deep"
+    assert asr.choose_intensity(asr.Budget.parse("8h")) == "extreme"
+    assert asr.choose_intensity(asr.Budget.parse("5M-tokens")) == "standard"
+
+
+def test_plan_decouples_logical_population_from_concurrency():
+    # THE core ASR property (§5/§18): a deep plan on a 1-slot box keeps all 16 logical agents;
+    # they queue, they aren't discarded down to concurrency (unlike capacity.swarm_size).
+    weak = asr.plan(asr.Budget.parse("2h"), concurrency=1, intensity="deep")
+    assert weak.initial_population == 16 and weak.max_concurrency == 1
+    assert weak.queued_at_start == 15
+    strong = asr.plan(asr.Budget.parse("2h"), concurrency=8, intensity="deep")
+    assert strong.initial_population == 16 and strong.max_concurrency == 8
+    assert strong.queued_at_start == 8          # same search, more parallelism → less queue
+
+
+def test_plan_auto_and_intensity_ladder():
+    auto = asr.plan(asr.Budget.parse("30m"), concurrency=4)   # auto -> standard
+    assert auto.intensity == "standard"
+    pops = [asr.plan(asr.Budget.parse("2h"), 4, intensity=i).initial_population
+            for i in ("light", "standard", "deep", "extreme")]
+    assert pops == sorted(pops) and pops[0] < pops[-1]        # deeper => bigger population
+    assert len(auto.roles) == auto.initial_population and len(set(auto.roles)) > 1  # diverse
+
+
+def test_plan_rejects_unknown_intensity():
+    with pytest.raises(ValueError):
+        asr.plan(asr.Budget.parse("1h"), 4, intensity="ludicrous")
