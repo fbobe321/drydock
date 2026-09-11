@@ -32,6 +32,16 @@ _ERRORS = re.compile(r"(\d+)\s+errors?\b", re.I)
 _TOTAL = re.compile(r"(\d+)\s+total", re.I)
 
 
+def _last_int(rx: "re.Pattern", text: str) -> int | None:
+    """Int from the LAST match of `rx`. Test runners print their summary line last, so a
+    last-match beats a first-match, which can grab a stray number out of a failure traceback
+    (e.g. verbose pytest output undercounting the total)."""
+    m = None
+    for m in rx.finditer(text):
+        pass
+    return int(m.group(1)) if m else None
+
+
 def score_output(output: str, mode: str, returncode: int) -> tuple[int, int]:
     """Map a verifier's output+exit code to (passed, total).
 
@@ -44,17 +54,12 @@ def score_output(output: str, mode: str, returncode: int) -> tuple[int, int]:
         return (1, 1) if returncode == 0 else (0, 1)
 
     if mode == "auto":
-        mp = _PASSED.search(output)
-        if mp:
-            passed = int(mp.group(1))
-            mt = _TOTAL.search(output)
-            if mt:
-                total = int(mt.group(1))
-            else:
-                mf = _FAILED.search(output)
-                me = _ERRORS.search(output)
-                failed = int(mf.group(1)) if mf else 0
-                errors = int(me.group(1)) if me else 0
+        passed = _last_int(_PASSED, output)
+        if passed is not None:
+            total = _last_int(_TOTAL, output)
+            if total is None:
+                failed = _last_int(_FAILED, output) or 0
+                errors = _last_int(_ERRORS, output) or 0
                 total = passed + failed + errors
             return passed, max(total, passed)
         # nothing recognizable → treat as all-or-nothing on the exit code

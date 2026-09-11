@@ -28,6 +28,19 @@ def test_score_auto(out, rc, exp):
     assert score_output(out, "auto", rc) == exp
 
 
+def test_score_auto_uses_summary_not_traceback_numbers():
+    # verbose pytest: tracebacks contain stray numbers; only the LAST line is the summary.
+    out = (
+        "F.F\n"
+        "E   assert helper returned 5 failed items\n"      # stray '5 failed' in a traceback
+        "E   assert 9 passed through the filter\n"          # stray '9 passed' in a traceback
+        "=== short test summary info ===\n"
+        "FAILED tests/test_toolkit.py::test_eval_expr\n"
+        "17 failed, 3 passed in 0.05s\n"                     # the real summary (last line)
+    )
+    assert score_output(out, "auto", 1) == (3, 20)
+
+
 def test_score_auto_falls_back_to_exitcode_when_unparseable():
     assert score_output("Build succeeded.", "auto", 0) == (1, 1)
     assert score_output("boom", "auto", 1) == (0, 1)

@@ -303,6 +303,31 @@ def test_establish_baseline_is_immutable(tmp_path):
     assert s.get_mission(mid)["baseline"]["metric"] == 61.4
 
 
+def test_checkpoint_excludes_mission_workspace(tmp_path):
+    repo = _repo(tmp_path)
+    ws = Path(repo) / ".drydock" / "missions" / "m1"
+    ws.mkdir(parents=True)
+    (ws / "state.db").write_text("MISSION STATE")
+    cp = R.checkpoint(repo)
+    assert cp
+    # the mission DB must NOT be tracked by the checkpoint (else a REVERT rolls back state)
+    tracked = subprocess.run(["git", "ls-files"], cwd=repo, capture_output=True, text=True).stdout
+    assert ".drydock" not in tracked
+
+
+def test_restore_preserves_mission_workspace(tmp_path):
+    repo = _repo(tmp_path)
+    ws = Path(repo) / ".drydock" / "missions" / "m1"
+    ws.mkdir(parents=True)
+    (ws / "state.db").write_text("STATE-V1")
+    cp = R.checkpoint(repo)                       # code checkpointed; .drydock excluded
+    (Path(repo) / "code.py").write_text("regression")   # a worker change to revert
+    (ws / "state.db").write_text("STATE-V2")            # live mission progress after checkpoint
+    assert R.restore(repo, cp) is True
+    assert not (Path(repo) / "code.py").exists()        # code reverted
+    assert (ws / "state.db").read_text() == "STATE-V2"  # mission state SURVIVES the revert
+
+
 def test_verify_passes_reflects_the_tree(tmp_path):
     repo = _repo(tmp_path)
     (Path(repo) / "answer.txt").write_text("PASS")

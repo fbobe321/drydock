@@ -48,10 +48,17 @@ def _git(args: list[str], cwd: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=120)
 
 
+# The mission's own state DB lives under .drydock/ inside the repo it checkpoints. It must
+# NEVER be swept into checkpoints or rolled back by a REVERT — else `git reset --hard` /
+# `git clean` would corrupt or erase live mission state. Every checkpoint/restore excludes it.
+_MISSION_WS = ".drydock"
+
+
 def checkpoint(repo: str) -> str:
-    """Commit the current tree as a checkpoint and return its sha ('' if not a repo)."""
+    """Commit the current tree (EXCEPT the mission workspace) and return its sha ('' if not a
+    repo). Excluding .drydock keeps the mission's durable state out of the code checkpoints."""
     try:
-        _git(["add", "-A"], repo)
+        _git(["add", "-A", "--", ".", f":(exclude){_MISSION_WS}"], repo)
         _git(["-c", "user.name=drydock-mission", "-c", "user.email=mission@drydock",
               "commit", "--allow-empty", "--no-verify", "-m", "mission checkpoint"], repo)
         r = _git(["rev-parse", "HEAD"], repo)
@@ -65,7 +72,8 @@ def restore(repo: str, commit: str) -> bool:
         return False
     try:
         ok = _git(["reset", "--hard", commit], repo).returncode == 0
-        _git(["clean", "-fd"], repo)   # reset --hard leaves untracked files; drop them too
+        # reset --hard leaves untracked files; drop them too — but NEVER the mission workspace.
+        _git(["clean", "-fd", "-e", _MISSION_WS], repo)
         return ok
     except (OSError, subprocess.SubprocessError):
         return False
