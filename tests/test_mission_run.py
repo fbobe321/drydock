@@ -256,6 +256,25 @@ def test_run_mission_awaiting_human_for_critical_mission(tmp_path):
     assert summ.status == M.M_AWAITING_HUMAN
 
 
+def test_negative_knowledge_is_discriminating_by_target(tmp_path):
+    repo = _repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")
+    s.set_metric(mid, 50.0)
+    # two distinct failed targets, recorded via the reason field the decomposing planner sets
+    for reason, fname in (("fix:tests::test_roman", "roman.py"), ("fix:tests::test_json", "json.py")):
+        tid = s.add_task(mid, f"work on {reason}", reason=reason)
+        R.run_task(s, s.get_task(tid), mission=s.get_mission(mid), cwd=repo, repo=repo,
+                   worker=_writer_worker(fname),
+                   evaluator=lambda *a: R.Evaluation(accept=False, metric_before=50, metric_after=50,
+                                                     reason="no gain"))
+    negs = s.knowledge(mid, M.K_NEGATIVE)
+    assert len(negs) == 2
+    # a proposal about roman must surface the roman failure, NOT the json one (§16/AT-8)
+    hit = s.similar_knowledge(mid, "fix:tests::test_roman", type=M.K_NEGATIVE, top=1)
+    assert hit and "test_roman" in hit[0]["statement"] and "roman.py" in hit[0]["statement"]
+
+
 def test_run_mission_stops_on_success(tmp_path):
     repo = _repo(tmp_path)
     s = M.MissionStore(tmp_path / "s.db")

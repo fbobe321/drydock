@@ -54,6 +54,49 @@ def test_cli_create_requires_objective(tmp_path):
     assert C.run_cli(["create"], {"cwd": str(tmp_path)}) == 1
 
 
+def _pytest_repo(tmp_path: Path) -> str:
+    """A repo with two failing tests, so the decomposing planner has real items to carve up."""
+    r = tmp_path / "proj"
+    (r / "tests").mkdir(parents=True)
+    (r / "src.py").write_text("def a():\n    return 0\n\ndef b():\n    return 0\n")
+    (r / "tests" / "test_it.py").write_text(
+        "from src import a, b\n"
+        "def test_a():\n    assert a() == 1\n"
+        "def test_b():\n    assert b() == 2\n")
+    (r / "conftest.py").write_text("")
+    subprocess.run(["git", "init", "-q"], cwd=r, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=r, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=r, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=r, check=True)
+    subprocess.run(["git", "commit", "-qm", "i"], cwd=r, check=True)
+    return str(r)
+
+
+def test_failing_items_parses_pytest_failures(tmp_path):
+    repo = _pytest_repo(tmp_path)
+    items = C.failing_items("python -m pytest -q", repo)
+    assert len(items) == 2 and all("::test_" in i for i in items)
+
+
+def test_decomposing_planner_one_task_per_failure(tmp_path):
+    repo = _pytest_repo(tmp_path)
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("fix the code so tests pass; only edit src.py")
+    added = C.decomposing_planner("fix the code", "python -m pytest -q", repo)(s, s.get_mission(mid))
+    assert added == 2                                        # a focused task per failing check
+    tasks = s.tasks(mid)
+    assert all(t["reason"].startswith("fix:") for t in tasks)
+    assert any("test_a" in t["objective"] for t in tasks)
+
+
+def test_decomposing_planner_falls_back_when_unparseable(tmp_path):
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")
+    # a verifier whose output has no FAILED lines → one generic task, loop never stalls
+    added = C.decomposing_planner("obj", "true", str(tmp_path))(s, s.get_mission(mid))
+    assert added == 1 and s.tasks(mid)[0]["reason"] == "iterate"
+
+
 def test_cli_create_persists_integrity_and_noise_flags(tmp_path):
     rc = C.run_cli(["create", "harden", "the", "loop", "--protect", "tests", "--protect",
                     "verify.sh", "--samples", "3", "--noise-band", "1.5"], {"cwd": str(tmp_path)})

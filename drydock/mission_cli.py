@@ -10,6 +10,8 @@ over the canonical SQLite state (§40).
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 import time
 
 from drydock import mission as M
@@ -24,20 +26,69 @@ def _improve_task_text(objective: str, verify: str) -> str:
             f"{verify or 'the project verifier'}. Keep the change minimal and reversible.")
 
 
-def initial_plan(store: M.MissionStore, mission_id: str, objective: str, verify: str) -> int:
+def _focused_task_text(objective: str, verify: str, item: str) -> str:
+    return (f"Make this currently-failing check pass: {item}\n"
+            f"Mission constraints: {objective}\n"
+            f"Read what {item} expects, make a minimal focused change to the SOURCE (never the "
+            f"tests), and confirm with: {verify or 'the project verifier'}.")
+
+
+# pytest -q short-summary lines: "FAILED path::test - reason" / "ERROR path::test".
+_FAIL_LINE = re.compile(r"^(?:FAILED|ERROR)\s+(\S+)", re.M)
+
+
+def failing_items(verify: str, cwd: str, cap: int = 8, timeout: int = 600) -> list[str]:
+    """Identifiers of the checks currently failing, parsed from the verifier's own output — the
+    basis for decomposing a vague objective into model-sized, one-per-failure tasks (§7.2).
+    Empty if the verifier can't be run or its output isn't recognizable (planner falls back)."""
+    if not verify:
+        return []
+    try:
+        r = subprocess.run(verify, cwd=cwd, shell=True, capture_output=True, text=True,
+                           timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    seen: list[str] = []
+    for m in _FAIL_LINE.finditer((r.stdout or "") + (r.stderr or "")):
+        item = m.group(1)
+        if item not in seen:
+            seen.append(item)
+    return seen[:cap]
+
+
+def initial_plan(store: M.MissionStore, mission_id: str, objective: str, verify: str,
+                 cwd: str = "") -> int:
     store.set_status(mission_id, M.M_PLANNING)
-    store.add_task(mission_id, _improve_task_text(objective, verify), reason="bootstrap",
-                   priority=5)
-    return 1
+    return decomposing_planner(objective, verify, cwd)(store, store.get_mission(mission_id))
 
 
 def iterate_planner(objective: str, verify: str):
-    """Replanner: adds one improvement task when the queue empties (bounded by the mission's
-    budget + stagnation detector, so it never loops forever, §30/§22)."""
+    """Trivial replanner (kept for callers/tests): one generic improvement task per empty queue."""
     def plan(store: M.MissionStore, mission: dict) -> int:
         store.add_task(mission["id"], _improve_task_text(objective, verify), reason="iterate",
                        priority=5)
         return 1
+    return plan
+
+
+def decomposing_planner(objective: str, verify: str, cwd: str):
+    """Decomposing Planner (§7.2): inspect the verifier, then create ONE focused task per
+    currently-failing check — a model-sized target ('make check X pass') instead of a vague
+    'improve the project'. This is the horizon-extender for a small model: it stays productive
+    far longer when every task is a concrete, one-shot-able piece. Falls back to a single generic
+    task when failures can't be parsed (non-pytest verifier), so the loop never stalls."""
+    def plan(store: M.MissionStore, mission: dict) -> int:
+        items = failing_items(verify, cwd)
+        if not items:
+            store.add_task(mission["id"], _improve_task_text(objective, verify), reason="iterate",
+                           priority=5)
+            return 1
+        added = 0
+        for item in items:
+            store.add_task(mission["id"], _focused_task_text(objective, verify, item),
+                           reason=f"fix:{item}", priority=5)
+            added += 1
+        return added
     return plan
 
 
@@ -203,7 +254,7 @@ def run_cli(argv: list, config: dict | None = None) -> int:
                  "protected_paths": protected, **eval_cfg}
         mid, store = M.create_mission(cwd, objective, success_criteria=success or None,
                                       budget=budget or None, config=mconf)
-        initial_plan(store, mid, objective, verify)
+        initial_plan(store, mid, objective, verify, cwd)
         write_views(store, mid, cwd)
         print(f"Mission {mid} created.\nObjective: {objective}")
         if success:
@@ -301,7 +352,7 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
         write_views(store, mid, cwd)
 
     R.run_mission(store, mid, cwd=cwd, repo=cwd, evaluator=evaluator,
-                  planner=iterate_planner(m["objective"], verify), base_config=base_config,
+                  planner=decomposing_planner(m["objective"], verify, cwd), base_config=base_config,
                   stagnation_limit=int(mconf.get("stagnation_limit") or 5),
                   max_escalations=int(mconf.get("max_escalations") or 3),
                   on_event=on_event)

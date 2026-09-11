@@ -280,8 +280,10 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
     cp = checkpoint(repo) if repo else ""
     store.event(mid, "task_started", task=tid, objective=task.get("objective", ""))
     # Context reconstruction (§13): surface known failed approaches so the worker doesn't
-    # repeat them (§16). Relevance by content-word overlap with this task.
-    neg = store.similar_knowledge(mid, task.get("objective", ""), type=M.K_NEGATIVE, top=3)
+    # repeat them (§16). Key the lookup on the SPECIFIC target (task reason, e.g. the failing
+    # check) when present — sharper than the boilerplate objective every task shares.
+    target = task.get("reason", "") or task.get("objective", "")[:120]
+    neg = store.similar_knowledge(mid, target, type=M.K_NEGATIVE, top=3)
     task = dict(task)
     task["negative_knowledge"] = [k["statement"] for k in neg]
     # §42 early-stop: let the worker check the project verifier so it can quit once it's done.
@@ -297,11 +299,14 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
         store.complete_task(tid, M.T_FAILED, {"error": wr.error})
         return TaskOutcome(tid, accept=False, metric_after=before, reverted=True, error=wr.error)
 
+    # What did this experiment touch? Used both for the integrity guard and to make the
+    # KEEP/REVERT knowledge discriminating (§16) — must be read BEFORE any restore().
+    changed = sorted(changed_paths(repo, cp)) if (repo and cp) else []
     # Evaluator integrity (§7.4): a worker must not edit the measurement apparatus. If this
     # experiment touched a protected path the metric is untrusted — reject WITHOUT running the
     # (possibly rigged) verifier, revert, and remember the tamper as a failed approach (§16).
     protected = (mission.get("config") or {}).get("protected_paths") or []
-    tamper = tampered_paths(changed_paths(repo, cp), protected) if (repo and cp) else []
+    tamper = tampered_paths(changed, protected)
     if tamper:
         if repo and cp:
             restore(repo, cp)
@@ -329,10 +334,10 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
                              "commit": end})
         store.event(mid, "experiment", task=tid, decision="KEEP",
                     metric_before=ev.metric_before, metric_after=ev.metric_after, commit=end)
-        if wr.summary:
-            store.add_knowledge(mid, M.K_FINDING,
-                                f"KEPT (metric {ev.metric_before:.1f}→{ev.metric_after:.1f}): "
-                                f"{wr.summary[:280]}", confidence=0.7, sources=[tid])
+        files = f" files={changed[:6]}" if changed else ""
+        store.add_knowledge(mid, M.K_FINDING,
+                            f"KEPT ({ev.metric_before:.1f}→{ev.metric_after:.1f}) {target}{files}: "
+                            f"{(wr.summary or '')[:220]}", confidence=0.7, sources=[tid])
     else:
         if repo and cp:
             restore(repo, cp)      # auto-revert the regression (§19)
@@ -341,13 +346,14 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
         # negative knowledge stays in history even though the code is reverted (§16/§19)
         store.event(mid, "experiment", task=tid, decision="REVERT",
                     metric_before=ev.metric_before, metric_after=ev.metric_after, reason=ev.reason)
-        # Key the statement on the *approach* (task objective) so a later proposal that
-        # resembles it is caught by similar_knowledge (§16/AT-8); the summary/reason add detail.
-        approach = task.get("objective", "")
-        detail = " ".join(x for x in (wr.summary, ev.reason) if x)[:280]
+        # Discriminating negative knowledge (§16/AT-8): key on the specific target + the files
+        # the worker actually changed + what it tried — NOT the boilerplate objective every task
+        # shares, which made all reverts look alike and defeated similarity retrieval.
+        files = f" files={changed[:6]}" if changed else ""
+        detail = " ".join(x for x in (wr.summary, ev.reason) if x)[:240]
         store.add_knowledge(mid, M.K_NEGATIVE,
-                            f"REVERTED (metric {ev.metric_before:.1f}→{ev.metric_after:.1f}, "
-                            f"no improvement): {approach}. {detail}", confidence=0.6, sources=[tid])
+                            f"REVERTED ({ev.metric_before:.1f}→{ev.metric_after:.1f}, no gain) "
+                            f"{target}{files}: {detail}", confidence=0.6, sources=[tid])
     return TaskOutcome(tid, accept=ev.accept, metric_after=ev.metric_after, reverted=not ev.accept)
 
 
