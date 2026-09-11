@@ -72,6 +72,33 @@ Tests: `tests/test_mission*.py`. Wired into `cli.py` argv-intercept like eratche
 - **Testbeds:** `/data3/mission_testbed` (solved) and `/data3/mission_endurance` (endurance).
   ⚠️ NEVER run git in a live mission's repo (checkpoints/reverts are the loop's; I once `git stash`-ed
   one — recovered). Remaining: semantic stagnation (§22), full model routing (§32), AT-1..AT-10 run.
+- **Released `v3.1.30`** (PyPI + public repo) — Missions + hardening.
+
+---
+## 🖥️ DEDICATED INFERENCE BOX + tbench MISSION PILOT — 2026-09-11
+
+- **`.129` = Windows box** (`ssh windows`, key `windows_key`), runs **gemma-4-31B via a Docker
+  Desktop llama.cpp container** `gemma4-server` (`http://192.168.50.129:8000/v1`). Dedicated for
+  Claude — no contention with the .20/.21/.22 ratchet. Compose:
+  `C:\Users\fbobe\Documents\claude_run\docker-compose.yml` (`.bak` = pre-fix backup).
+  **FIXED it to mirror the working .20 recipe:** added `--jinja --reasoning-budget 20000
+  --alias gemma4 --parallel 2` (was flailing without them). ⚠️ Recreate the container from the
+  **Windows** docker context (`ssh windows "docker compose -f <winpath> up -d"`), NOT WSL — WSL
+  resolves the `/c/...` bind mount wrong and the model file vanishes.
+- **Pilot** (`/data3/tbench_local/frontier/mission/`): `tbench_mission.py` runs a drydock **Mission
+  per unsolved tbench task**, driving the **real ddt TUI** in-container (TUI-only, no headless),
+  task's `tests/test.sh` as verifier, `docker commit` as checkpoint (via injectable
+  checkpoint_fn/restore_fn). `run_pilot.sh` = 10 tasks, 2 concurrent on .129. This is the §27
+  go/no-go: adaptive search vs single agent at equal compute. Reuses `tui_task_lib.sh` (ddt_up/verify/down).
+
+## 🧠 ADAPTIVE SWARM RUNTIME (ASR) — 2026-09-11 (Phase 1+3 shipped)
+Turn the swarm into an inference-time **search** system: budget in, Drydock decides agent count,
+compute allocation, concurrency, and when to stop. PRD + review + plan: **`docs/asr_prd.md`**.
+Code: **`drydock/asr.py`** (tests `tests/test_asr.py`, 16, pyright-clean). Shipped: `Budget` (§15),
+`Convergence` (§23 marginal-value stop), `allocate()` (§17 EV compute split + prune), `plan()`
+(§15/§16, logical population ≠ concurrency). **Build on the existing substrate** (capacity.py +
+swarm.py + missions) — do NOT make a 4th swarm stack. Pending: Phase 2 live `SwarmResourceManager`
+(mid-run concurrency + OOM), Phase 4 wire into `swarm.py`. Gated on the pilot result.
 
 ---
 ## 🏝️ WEEK-LONG SELF-DISTILLATION RUN — 2026-07-27 08:55 (operator on a 1-week trip)
