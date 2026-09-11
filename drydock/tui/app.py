@@ -1565,6 +1565,9 @@ class DrydockApp(App):
 
     def _ask_worker(self, question: str, inject: bool = False) -> None:
         from drydock import advisor
+        # Brief the advisor with the live transcript (same as the Consult tool) so /ask isn't
+        # a context-free question — the advisor sees the recent reasoning/errors.
+        self.config["_recent_messages"] = self.state.messages
         answer = advisor.consult(question, self.config)
         self.call_from_thread(self._deliver_advice, question, answer, inject)
 

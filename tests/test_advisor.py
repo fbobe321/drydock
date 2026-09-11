@@ -115,31 +115,33 @@ def test_recent_context_handles_multimodal_blocks():
     assert "look at this" in advisor.recent_context(msgs)
 
 
-def test_consult_tool_auto_attaches_recent_transcript(monkeypatch):
-    from drydock import tools as T
-    captured = {}
-    monkeypatch.setattr(advisor, "consult",
-                        lambda q, cfg, context="": captured.update(question=q, context=context) or "ok")
-    cfg = {
-        "advisor_base_url": "http://b/v1", "advisor_model": "m",
-        "_recent_messages": [
-            {"role": "tool", "content": "FAILED test_reconnect - state lost after reconnect"},
-            {"role": "assistant", "content": "Trying a lock around the queue."},
-        ],
-    }
-    # model passed only a bare question (thin context) — the fix must attach the transcript
-    T.tool_consult({"question": "why does reconnect lose state?"}, cfg)
-    assert "FAILED test_reconnect" in captured["context"]       # advisor now sees the error
-    assert "lock around the queue" in captured["context"]
-    assert "Recent activity" in captured["context"]
+def test_build_brief_combines_transcript_and_context():
+    cfg = {"_recent_messages": [
+        {"role": "tool", "content": "FAILED test_reconnect - state lost after reconnect"},
+        {"role": "assistant", "content": "Trying a lock around the queue."},
+    ]}
+    brief = advisor.build_brief(cfg, "my hand-written context")
+    assert "FAILED test_reconnect" in brief and "lock around the queue" in brief
+    assert "my hand-written context" in brief
+    assert "RECENT ACTIVITY" in brief and "CONTEXT" in brief
 
 
-def test_consult_tool_keeps_model_context_and_adds_recent(monkeypatch):
-    from drydock import tools as T
+def test_consult_briefs_advisor_from_transcript_even_with_no_context(monkeypatch):
+    # the whole point: a bare question still reaches the advisor WITH the recent transcript
     captured = {}
-    monkeypatch.setattr(advisor, "consult",
-                        lambda q, cfg, context="": captured.update(context=context) or "ok")
+    monkeypatch.setattr(advisor, "_call",
+                        lambda q, cfg, context="", **k: captured.update(q=q, context=context) or "ok")
     cfg = {"advisor_base_url": "http://b/v1", "advisor_model": "m",
-           "_recent_messages": [{"role": "tool", "content": "ERR: boom"}]}
-    T.tool_consult({"question": "help", "context": "my hand-written context"}, cfg)
-    assert "my hand-written context" in captured["context"] and "ERR: boom" in captured["context"]
+           "_recent_messages": [{"role": "tool", "content": "FAILED test_x - AssertionError"}]}
+    advisor.consult("why is this failing?", cfg)         # no context passed
+    assert "FAILED test_x" in captured["context"]         # transcript auto-attached
+    assert captured["q"] == "why is this failing?"
+
+
+def test_consult_tool_delegates_to_consult(monkeypatch):
+    from drydock import tools as T
+    captured = {}
+    monkeypatch.setattr(advisor, "consult",
+                        lambda q, cfg, context="": captured.update(q=q, context=context) or "ok")
+    T.tool_consult({"question": "help", "context": "hand-written"}, {"advisor_model": "m"})
+    assert captured["q"] == "help" and captured["context"] == "hand-written"

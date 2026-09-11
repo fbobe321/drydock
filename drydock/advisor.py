@@ -16,11 +16,14 @@ from __future__ import annotations
 
 _ADVISOR_SYSTEM = (
     "You are a senior engineering advisor consulted by another AI coding agent "
-    "(Drydock) running a smaller local model. Give concise, direct, expert advice "
-    "— the specific fix, the design trade-off, or the likely root cause. Prefer "
-    "concrete steps and short code over prose. If the question is under-specified, "
-    "state the key assumption and answer anyway. You cannot run tools; the calling "
-    "agent will act on your answer."
+    "(Drydock) running a smaller local model. You are given a BRIEF (recent activity, "
+    "errors, tool output, and any context the agent attached) followed by a QUESTION — "
+    "treat it like a task handed to you with its background. Answer FROM the brief: give "
+    "concise, direct, expert advice — the specific fix, the design trade-off, or the likely "
+    "root cause. Prefer concrete steps and short code over prose. If the brief is thin or the "
+    "question is under-specified, STATE your best assumption and answer anyway — do NOT reply "
+    "that you have no information to review. You cannot run tools; the calling agent acts on "
+    "your answer."
 )
 
 
@@ -82,9 +85,8 @@ def _call(question: str, config: dict, *, context: str = "",
     key = (config.get("advisor_api_key") or "").strip() or "dummy"
     messages: list[dict] = [{"role": "system", "content": _ADVISOR_SYSTEM}]
     if context.strip():
-        messages.append({"role": "user",
-                         "content": f"Context from the current task:\n{context.strip()}"})
-    messages.append({"role": "user", "content": question})
+        messages.append({"role": "user", "content": f"=== BRIEF ===\n{context.strip()}"})
+    messages.append({"role": "user", "content": f"=== QUESTION ===\n{question}"})
     kwargs = {"model": model, "messages": messages, "temperature": 0.3, "max_tokens": max_tokens}
     client = OpenAI(api_key=key, base_url=base, max_retries=1,
                     timeout=httpx.Timeout(timeout, connect=10.0))
@@ -92,16 +94,31 @@ def _call(question: str, config: dict, *, context: str = "",
     return (resp.choices[0].message.content or "").strip()
 
 
+def build_brief(config: dict, context: str = "") -> str:
+    """Assemble the advisor's brief (§ Consult): the recent transcript the agent stashed in
+    config PLUS any context the caller passed. Centralized here so BOTH the `Consult` tool and
+    the `/ask` command send a self-contained, sub-agent-style brief — not a bare question."""
+    parts = []
+    recent = recent_context(config.get("_recent_messages") or [])
+    if recent:
+        parts.append("RECENT ACTIVITY (agent's reasoning, tool output, errors):\n" + recent)
+    if (context or "").strip():
+        parts.append("CONTEXT:\n" + context.strip())
+    return "\n\n".join(parts)
+
+
 def consult(question: str, config: dict, *, context: str = "", timeout: float = 120.0) -> str:
     """Ask the configured advisor model and return its answer (or a clean error).
-    Never raises — a failed consult must not crash the turn."""
+    Never raises — a failed consult must not crash the turn. Auto-briefs the advisor with the
+    recent transcript so it's informed even when the caller passed no context."""
     question = (question or "").strip()
     if not question:
         return "Error: nothing to ask the advisor."
     if not is_configured(config):
         return not_configured_message()
+    brief = build_brief(config, context)
     try:
-        return _call(question, config, context=context, timeout=timeout) \
+        return _call(question, config, context=brief, timeout=timeout) \
             or "(the advisor model returned an empty response)"
     except Exception as e:  # noqa: BLE001 — never crash the caller
         return (f"Could not reach the advisor model ({config.get('advisor_model')}) at "
