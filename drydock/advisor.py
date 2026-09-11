@@ -24,6 +24,35 @@ _ADVISOR_SYSTEM = (
 )
 
 
+def _msg_text(content) -> str:
+    """Flatten a message's content (str or multimodal block list) to plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [str(b.get("text") or b.get("content") or "") if isinstance(b, dict) else str(b)
+                 for b in content]
+        return " ".join(p for p in parts if p)
+    return str(content or "")
+
+
+def recent_context(messages: list, *, max_msgs: int = 12, max_chars: int = 6000) -> str:
+    """Compact the tail of the transcript to brief the advisor (§ Consult). The calling model —
+    especially a small local one — often passes little/no `context`, leaving the advisor blind;
+    this auto-attaches the last few turns (assistant reasoning + tool results/errors) so it can
+    actually help. Keeps the MOST RECENT content when truncating."""
+    if not messages:
+        return ""
+    out = []
+    for m in messages[-max_msgs:]:
+        if not isinstance(m, dict) or m.get("role") == "system":
+            continue
+        txt = _msg_text(m.get("content")).strip()
+        if txt:
+            out.append(f"[{m.get('role', '?')}] {txt[:1200]}")
+    blob = "\n".join(out)
+    return ("…" + blob[-max_chars:]) if len(blob) > max_chars else blob
+
+
 def is_configured(config: dict) -> bool:
     """True when an advisor endpoint + model are set."""
     return bool((config.get("advisor_base_url") or "").strip()

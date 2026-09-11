@@ -88,3 +88,58 @@ def test_test_connection_timeout_says_reachable_but_slow(monkeypatch):
     monkeypatch.setattr(advisor, "_call", slow)
     out = advisor.test_connection({"advisor_base_url": "http://b/v1", "advisor_model": "m"})
     assert out.startswith("✗") and "REACHABLE but slow" in out and "/ask" in out
+
+
+# ── recent-context auto-enrichment (advisor gets info even w/ thin caller context) ──
+def test_recent_context_formats_and_keeps_newest():
+    msgs = [
+        {"role": "system", "content": "SYS should be skipped"},
+        {"role": "assistant", "content": "I'll run the tests."},
+        {"role": "tool", "content": "FAILED test_x - AssertionError: expected 42"},
+        {"role": "assistant", "content": "The assertion failed; investigating add()."},
+    ]
+    out = advisor.recent_context(msgs)
+    assert "SYS should be skipped" not in out              # system dropped
+    assert "FAILED test_x" in out and "investigating add()" in out
+    assert "[tool]" in out and "[assistant]" in out
+
+
+def test_recent_context_truncates_to_recent_chars():
+    msgs = [{"role": "assistant", "content": "x" * 500} for _ in range(40)]
+    out = advisor.recent_context(msgs, max_chars=1000)
+    assert len(out) <= 1001 and out.startswith("…")        # kept the tail
+
+
+def test_recent_context_handles_multimodal_blocks():
+    msgs = [{"role": "user", "content": [{"type": "text", "text": "look at this"}, {"type": "image"}]}]
+    assert "look at this" in advisor.recent_context(msgs)
+
+
+def test_consult_tool_auto_attaches_recent_transcript(monkeypatch):
+    from drydock import tools as T
+    captured = {}
+    monkeypatch.setattr(advisor, "consult",
+                        lambda q, cfg, context="": captured.update(question=q, context=context) or "ok")
+    cfg = {
+        "advisor_base_url": "http://b/v1", "advisor_model": "m",
+        "_recent_messages": [
+            {"role": "tool", "content": "FAILED test_reconnect - state lost after reconnect"},
+            {"role": "assistant", "content": "Trying a lock around the queue."},
+        ],
+    }
+    # model passed only a bare question (thin context) — the fix must attach the transcript
+    T.tool_consult({"question": "why does reconnect lose state?"}, cfg)
+    assert "FAILED test_reconnect" in captured["context"]       # advisor now sees the error
+    assert "lock around the queue" in captured["context"]
+    assert "Recent activity" in captured["context"]
+
+
+def test_consult_tool_keeps_model_context_and_adds_recent(monkeypatch):
+    from drydock import tools as T
+    captured = {}
+    monkeypatch.setattr(advisor, "consult",
+                        lambda q, cfg, context="": captured.update(context=context) or "ok")
+    cfg = {"advisor_base_url": "http://b/v1", "advisor_model": "m",
+           "_recent_messages": [{"role": "tool", "content": "ERR: boom"}]}
+    T.tool_consult({"question": "help", "context": "my hand-written context"}, cfg)
+    assert "my hand-written context" in captured["context"] and "ERR: boom" in captured["context"]

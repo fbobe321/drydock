@@ -670,6 +670,9 @@ def run(
                           canonical=canonical_name(tc["name"]),
                           effect=tool_effect_of(tc["name"], _ro).value,
                           input=str(tc.get("input"))[:200])
+                    # Expose the recent transcript so context-hungry tools (Consult) can brief
+                    # the advisor without relying on the model to hand-pass context.
+                    config["_recent_messages"] = state.messages
                     tool_result = execute_structured(tc["name"], tc["input"], config)
                     result = tool_result.text
             # Emit the completion event IMMEDIATELY after execution (before

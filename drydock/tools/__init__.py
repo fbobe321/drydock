@@ -2054,7 +2054,14 @@ def tool_consult(params: dict, config: dict) -> str:
     question = _as_str_arg(params.get("question") or params.get("prompt")).strip()
     if not question:
         return "Error: Consult needs a `question`."
-    return advisor.consult(question, config, context=params.get("context", "") or "")
+    ctx = _as_str_arg(params.get("context") or "").strip()
+    # Auto-enrich: the advisor is useless without knowing what's going on, and the calling
+    # model often passes thin/no context. Attach the recent transcript (errors + reasoning)
+    # that the agent stashed in config so the advisor always has real information to work with.
+    auto = advisor.recent_context(config.get("_recent_messages") or [])
+    if auto:
+        ctx = (ctx + "\n\n" if ctx else "") + "Recent activity (auto-attached):\n" + auto
+    return advisor.consult(question, config, context=ctx)
 
 
 # A sub-agent's whole job is to keep its investigation OUT of the main agent's
