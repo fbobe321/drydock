@@ -51,6 +51,29 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## 🚀 LONG-HORIZON AUTONOMOUS MISSIONS — 2026-09-10 (Phase 1+2 shipped, hardened)
+
+New feature: `drydock mission …` — a **durable, goal-oriented process** that runs for hours/days
+while **disposable bounded workers** do one task at a time against durable SQLite state. Missions
+run for days; agents don't. PRD + status: **`docs/mission_prd.md`**. Code: `drydock/mission.py`
+(store), `mission_run.py` (controller/worker/evaluator/checkpoints), `mission_cli.py` (CLI+planner).
+Tests: `tests/test_mission*.py`. Wired into `cli.py` argv-intercept like eratchet/swarm.
+
+- **Commands (§36):** `mission create/list/status/tasks/logs/experiments/knowledge/run/resume/pause/stop`.
+- **Loop:** baseline → git checkpoint → bounded worker (`agent.run`) → deterministic verifier →
+  KEEP/REVERT (auto-revert regressions) → knowledge + negative knowledge → strategic reviews →
+  stagnation → escalation ladder → stops on success/budget/BLOCKED/AWAITING_HUMAN.
+- **Hardened:** protected-path tamper guard (`--protect`), metric-noise policy (`--samples`,
+  `--noise-band`), bounded workers (`--worker-budget`), decomposing planner (one task per failing
+  check), discriminating negative knowledge, per-mission model (`--model`).
+- **Validated on gemma4:** solved a broken pytest suite 40%→100% honestly and auto-stopped (AT-10).
+  Endurance run showed the **small-model productivity ceiling** (climbs, then plateaus → escalation
+  STOPS it). Durability = days (solved); productivity = gated by breadth of climbable work.
+- **Testbeds:** `/data3/mission_testbed` (solved) and `/data3/mission_endurance` (endurance).
+  ⚠️ NEVER run git in a live mission's repo (checkpoints/reverts are the loop's; I once `git stash`-ed
+  one — recovered). Remaining: semantic stagnation (§22), full model routing (§32), AT-1..AT-10 run.
+
+---
 ## 🏝️ WEEK-LONG SELF-DISTILLATION RUN — 2026-07-27 08:55 (operator on a 1-week trip)
 
 Operator left for a week; asked for a **large unattended job that keeps running through SSH

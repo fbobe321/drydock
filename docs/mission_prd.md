@@ -105,7 +105,37 @@ stagnation must never be "solved" by unlimited iterations (§23), after `max_esc
 climbs — or when no alternative work can be produced — it stops: `AWAITING_HUMAN` for a
 `mission_critical` mission, else `BLOCKED`. Escalations are shown in `mission status`.
 
+**Bounded-worker enforcement (§42) — DONE.** `default_worker` stops at a per-task wall-clock cap
+(`--worker-budget S`) and short-circuits the moment the verifier already passes — a worker can't
+burn a contended model spinning after the work is done. `--stagnation-limit` / `--max-escalations`
+are also exposed for long runs. Per-mission model carry (`--model`/`--base-url`/`--provider`, §33).
+
+**Horizon extenders (small-model productivity) — DONE.** (1) **Decomposing Planner** (§7.2):
+inspect the verifier and create ONE focused task per currently-failing check ("make check X pass")
+instead of a vague whole-project task — model-sized targets keep a small model productive far
+longer; falls back to a generic task when failures can't be parsed. (2) **Discriminating negative
+knowledge** (§16/AT-8): key KEEP/REVERT knowledge on the specific target + files changed + what was
+tried, not the shared boilerplate objective, so similarity retrieval actually distinguishes prior
+failures.
+
+### Validated end-to-end on a real local model (gemma4), 2026-09-10
+- **AT-10 success:** `/data3/mission_testbed` (broken pytest suite, `tests/` protected) — gemma4
+  took it 40%→**100%**, KEEP + git checkpoint, auto-stopped on `>=100`. Full loop works on a real model.
+- **Endurance run** `/data3/mission_endurance` (harder toolkit, easy→hard tail) surfaced the
+  small-model **productivity ceiling**: with the trivial planner it climbed 15%→~30% then reverts
+  dominated (2 KEEP / 5 REVERT) — motivating the horizon extenders above.
+- **Two real bugs fixed while dogfooding:** `ratchet.score_output` miscounted verbose failures
+  (first-match grabbed a traceback number → 37.5% vs true 15%); the mission's own `.drydock/state.db`
+  was being swept into git checkpoints (a REVERT could roll it back). Both fixed + tested.
+
+**Verdict on days-long autonomy:** *durable execution* for days is solved (state/checkpoints/
+resume/bounded workers — no context exhaustion). *Productive* execution for days is gated by the
+WORK, not wall-clock: a small model stays productive on broad, decomposable, densely-verifiable
+backlogs (many model-sized tasks) and plateaus fast on narrow/hard problems — at which point the
+escalation ladder correctly STOPS it rather than spinning. Longer productive horizon ⇒ better
+decomposition (the new planner) + a rising model ceiling (self-distill write-back).
+
 **Next (Phase 3):** *semantic* stagnation/loop detection (§22, beyond the current lexical
-baseline); fuller model routing across roles (§32). Known wart: an empty queue with no
-planner leaves the mission `EXECUTING` (the CLI always supplies a planner, so it only bites
-programmatic callers). Then the AT-1..AT-10 acceptance run.
+baseline); fuller model routing across roles (§32). Known wart: an empty queue with no planner
+leaves the mission `EXECUTING` (the CLI always supplies a planner, so it only bites programmatic
+callers). Then the full AT-1..AT-10 acceptance run.
