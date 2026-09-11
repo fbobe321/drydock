@@ -270,14 +270,21 @@ class TaskOutcome:
 
 def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo: str,
              worker: WorkerFn, evaluator: EvaluatorFn, base_config: dict | None = None,
-             worker_id: str = "worker-1") -> TaskOutcome | None:
-    """Execute one leased task with checkpoint + KEEP/REVERT. None if the lease was lost."""
+             worker_id: str = "worker-1",
+             checkpoint_fn: "Callable[[str], str]" = checkpoint,
+             restore_fn: "Callable[[str, str], bool]" = restore) -> TaskOutcome | None:
+    """Execute one leased task with checkpoint + KEEP/REVERT. None if the lease was lost.
+
+    checkpoint_fn/restore_fn default to git (`repo` = a checkout dir), but are injectable so a
+    non-git target can plug in its own snapshot mechanism — e.g. `docker commit` for a task that
+    lives in a container (the tbench/ddt harness). `repo` is then just an opaque handle passed
+    to those callables; an empty `repo` disables checkpointing."""
     mid = mission["id"]
     tid = task["id"]
     if not store.claim_task(tid, worker_id):
         return None
     before = mission.get("current_metric") or 0.0
-    cp = checkpoint(repo) if repo else ""
+    cp = checkpoint_fn(repo) if repo else ""
     store.event(mid, "task_started", task=tid, objective=task.get("objective", ""))
     # Context reconstruction (§13): surface known failed approaches so the worker doesn't
     # repeat them (§16). Key the lookup on the SPECIFIC target (task reason, e.g. the failing
@@ -295,7 +302,7 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
     store.add_usage(mid, tokens=wr.in_tokens + wr.out_tokens, wall_s=time.monotonic() - t0)
     if not wr.ok:
         if repo and cp:
-            restore(repo, cp)
+            restore_fn(repo, cp)
         store.complete_task(tid, M.T_FAILED, {"error": wr.error})
         return TaskOutcome(tid, accept=False, metric_after=before, reverted=True, error=wr.error)
 
@@ -309,7 +316,7 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
     tamper = tampered_paths(changed, protected)
     if tamper:
         if repo and cp:
-            restore(repo, cp)
+            restore_fn(repo, cp)
         store.add_usage(mid, experiments=1)
         store.complete_task(tid, M.T_FAILED,
                             {"summary": wr.summary, "decision": "REVERT", "reverted": True,
@@ -327,7 +334,7 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
     ev = evaluator(task, mission, cwd, before)
     store.add_usage(mid, experiments=1)
     if ev.accept:
-        end = checkpoint(repo) if repo else ""
+        end = checkpoint_fn(repo) if repo else ""
         store.set_metric(mid, ev.metric_after)
         store.complete_task(tid, M.T_COMPLETED,
                             {"summary": wr.summary, "metric": ev.metric_after, "decision": "KEEP",
@@ -340,7 +347,7 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
                             f"{(wr.summary or '')[:220]}", confidence=0.7, sources=[tid])
     else:
         if repo and cp:
-            restore(repo, cp)      # auto-revert the regression (§19)
+            restore_fn(repo, cp)      # auto-revert the regression (§19)
         store.complete_task(tid, M.T_COMPLETED,
                             {"summary": wr.summary, "decision": "REVERT", "reverted": True})
         # negative knowledge stays in history even though the code is reverted (§16/§19)
@@ -505,6 +512,8 @@ def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str =
                 review_every_tasks: int = 10, review_every_secs: float = 3600.0,
                 reviewer: Callable[[M.MissionStore, dict, dict], dict] | None = None,
                 critic: Callable[[M.MissionStore, dict, dict], str] | None = None,
+                checkpoint_fn: "Callable[[str], str]" = checkpoint,
+                restore_fn: "Callable[[str, str], bool]" = restore,
                 on_event: Callable[[str, dict], None] | None = None) -> RunSummary:
     """Drive a mission to a stopping condition with a SINGLE worker (§41/§49). Stops on
     success (§30), budget (§30), stagnation (§22), or an empty queue (planner is a later
@@ -557,7 +566,8 @@ def run_mission(store: M.MissionStore, mission_id: str, *, cwd: str, repo: str =
         task = ready[0]
         out = run_task(store, task, mission=m, cwd=cwd, repo=repo, worker=worker,
                        evaluator=(evaluator or (lambda *_: Evaluation(accept=True))),
-                       base_config=base_config, worker_id=worker_id)
+                       base_config=base_config, worker_id=worker_id,
+                       checkpoint_fn=checkpoint_fn, restore_fn=restore_fn)
         progressed = bool(out and out.accept)
         _ev("task_done", task=task["id"], accepted=progressed,
             metric=out.metric_after if out else None)

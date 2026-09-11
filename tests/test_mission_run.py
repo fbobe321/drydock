@@ -347,6 +347,33 @@ def test_restore_preserves_mission_workspace(tmp_path):
     assert (ws / "state.db").read_text() == "STATE-V2"  # mission state SURVIVES the revert
 
 
+def test_injectable_checkpoint_restore(tmp_path):
+    # a non-git target (e.g. a container via `docker commit`) plugs in its own snapshot fns
+    snaps = {"made": [], "restored": []}
+
+    def cp_fn(handle):
+        ref = f"snap-{len(snaps['made'])}"
+        snaps["made"].append(ref)
+        return ref
+
+    def rs_fn(handle, ref):
+        snaps["restored"].append(ref)
+        return True
+
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj")
+    s.set_metric(mid, 50.0)
+    tid = s.add_task(mid, "risky")
+    out = R.run_task(s, s.get_task(tid), mission=s.get_mission(mid), cwd=".", repo="ctr:task",
+                     worker=lambda *a: R.WorkerResult(ok=True, summary="tried"),
+                     evaluator=lambda *a: R.Evaluation(accept=False, metric_before=50, metric_after=40,
+                                                       reason="worse"),
+                     checkpoint_fn=cp_fn, restore_fn=rs_fn)
+    assert out and out.reverted
+    assert snaps["made"] == ["snap-0"]           # checkpointed via the injected fn (not git)
+    assert snaps["restored"] == ["snap-0"]        # reverted via the injected fn
+
+
 def test_verify_passes_reflects_the_tree(tmp_path):
     repo = _repo(tmp_path)
     (Path(repo) / "answer.txt").write_text("PASS")
