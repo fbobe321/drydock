@@ -151,6 +151,12 @@ def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], dict, li
             except ValueError:
                 pass
             i += 2
+        elif a == "--worker-budget" and nxt:      # §42 per-task wall-clock cap (seconds; 30m -> 1800)
+            try:
+                eval_cfg["worker_time_budget_s"] = float(nxt.rstrip("sS"))
+            except ValueError:
+                pass
+            i += 2
         elif a == "--model" and nxt:              # mission carries its own model/endpoint (§33)
             eval_cfg["model"] = nxt
             i += 2

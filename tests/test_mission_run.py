@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 from drydock import mission as M
@@ -300,6 +301,68 @@ def test_establish_baseline_is_immutable(tmp_path):
     # second call is a no-op — the baseline is immutable mission history (§9)
     assert R.establish_baseline(s, mid, repo, lambda *a: R.Evaluation(accept=True, metric_after=99.0)) is None
     assert s.get_mission(mid)["baseline"]["metric"] == 61.4
+
+
+def test_verify_passes_reflects_the_tree(tmp_path):
+    repo = _repo(tmp_path)
+    (Path(repo) / "answer.txt").write_text("PASS")
+    assert R.verify_passes("grep -q PASS answer.txt", repo, fitness="exitcode") is True
+    assert R.verify_passes("grep -q NOPE answer.txt", repo, fitness="exitcode") is False
+
+
+def _fake_agent(monkeypatch, turns=30, per_turn_sleep=0.0):
+    """Replace the agent loop with `turns` no-op TurnDone events; count how many run."""
+    from drydock import agent as A
+    seen = {"turns": 0}
+
+    def fake_run(objective, state, cfg, system_prompt):
+        for _ in range(turns):
+            seen["turns"] += 1
+            if per_turn_sleep:
+                time.sleep(per_turn_sleep)
+            yield A.TurnDone.__new__(A.TurnDone)
+    monkeypatch.setattr(A, "run", fake_run)
+    return seen
+
+
+def test_worker_stops_early_when_verifier_passes(monkeypatch):
+    seen = _fake_agent(monkeypatch, turns=30)
+    task = {"objective": "x", "_verify_passes": lambda: True}   # already passing
+    wr = R.default_worker(task, {"config": {}}, ".", {})
+    assert wr.ok and seen["turns"] == 1                          # broke after the first turn
+    assert "verifier already passing" in wr.summary
+
+
+def test_worker_stops_at_time_budget(monkeypatch):
+    seen = _fake_agent(monkeypatch, turns=30, per_turn_sleep=0.01)
+    task = {"objective": "x", "worker_time_budget_s": 0.001}     # tiny wall-clock cap (§42)
+    wr = R.default_worker(task, {"config": {}}, ".", {})
+    assert wr.ok and seen["turns"] == 1                          # stopped at the budget, not 30 turns
+    assert "time budget" in wr.summary
+
+
+def test_worker_runs_all_turns_without_bounds(monkeypatch):
+    seen = _fake_agent(monkeypatch, turns=5)
+    wr = R.default_worker({"objective": "x"}, {"config": {}}, ".", {})
+    assert wr.ok and seen["turns"] == 5 and wr.summary == ""     # no early stop, no budget
+
+
+def test_run_task_injects_working_verify_probe(tmp_path):
+    repo = _repo(tmp_path)
+    (Path(repo) / "answer.txt").write_text("PASS")
+    s = M.MissionStore(tmp_path / "s.db")
+    mid = s.create_mission("obj", config={"verify_cmd": "grep -q PASS answer.txt"})
+    tid = s.add_task(mid, "work")
+    seen = {}
+
+    def spy(task, mission, cwd, base_config):
+        probe = task.get("_verify_passes")
+        seen["callable"] = callable(probe)
+        seen["passes"] = probe() if probe else None
+        return R.WorkerResult(ok=True, summary="ok")
+    R.run_task(s, s.get_task(tid), mission=s.get_mission(mid), cwd=repo, repo=repo,
+               worker=spy, evaluator=lambda *a: R.Evaluation(accept=True, metric_after=100.0))
+    assert seen["callable"] and seen["passes"] is True           # probe reflects the live tree
 
 
 def test_noise_band_rejects_within_band_gains(tmp_path):

@@ -106,9 +106,27 @@ def tampered_paths(changed: set[str], protected: list[str]) -> list[str]:
     return hits
 
 
+def verify_passes(verify_cmd: str, cwd: str, fitness: str = "auto", timeout: int = 600) -> bool:
+    """True if the project's own check currently passes fully. A cheap single run used to
+    short-circuit a worker that has already solved the task (§42) — never the builder's word."""
+    from drydock.ratchet import score_output
+    try:
+        r = subprocess.run(verify_cmd, cwd=cwd, shell=True, capture_output=True,
+                           text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    passed, total = score_output((r.stdout or "") + (r.stderr or ""), fitness, r.returncode)
+    return total > 0 and passed >= total
+
+
 # ── default Worker (bounded agent.run) + Evaluator (project verifier) ─────────
 def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> WorkerResult:
-    """Run one bounded task via the in-process agent loop (the disposable Worker, §7.3)."""
+    """Run one bounded task via the in-process agent loop (the disposable Worker, §7.3).
+
+    Bounded per §42: the loop stops at `max_turns`, at a per-task WALL-CLOCK budget
+    (`worker_time_budget_s`), or as soon as the verifier already passes — so a worker can't
+    burn a contended model spinning after the work is done. Budgets/short-circuit are checked
+    at turn boundaries; a stop is graceful (the tree keeps whatever the worker changed)."""
     from drydock.agent import AgentState, TurnDone
     from drydock.agent import run as agent_run
 
@@ -128,9 +146,29 @@ def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> Wo
     if neg:
         system_prompt += ("\n\nKNOWN FAILED APPROACHES on this mission — do NOT repeat them "
                           "without new evidence:\n" + "\n".join(f"- {n}" for n in neg))
+    mconf = mission.get("config") or {}
+    budget_s = float(task.get("worker_time_budget_s") or mconf.get("worker_time_budget_s") or 0)
+    deadline = (time.monotonic() + budget_s) if budget_s > 0 else None
+    stop_check = task.get("_verify_passes")     # callable()->bool, injected by run_task
+    check_every = 20.0
+    last_check = 0.0
+    stop_reason = ""
     try:
         for ev in agent_run(objective, state, cfg, system_prompt):
-            _ = isinstance(ev, TurnDone)
+            if not isinstance(ev, TurnDone):
+                continue
+            now = time.monotonic()
+            if deadline is not None and now >= deadline:
+                stop_reason = f"worker time budget ({int(budget_s)}s) reached"
+                break
+            if stop_check is not None and (now - last_check) >= check_every:
+                last_check = now
+                try:
+                    if stop_check():
+                        stop_reason = "verifier already passing — stopping early"
+                        break
+                except Exception:  # noqa: BLE001 — an early-stop probe never crashes the worker
+                    pass
     except Exception as e:  # noqa: BLE001 — a worker crash is contained by the loop (§32)
         return WorkerResult(ok=False, error=f"{type(e).__name__}: {e}")
     summ = ""
@@ -138,6 +176,8 @@ def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> Wo
         if isinstance(msg, dict) and msg.get("role") == "assistant" and (msg.get("content") or "").strip():
             summ = str(msg["content"]).strip()[:2000]
             break
+    if stop_reason:
+        summ = f"[{stop_reason}] {summ}".strip()
     return WorkerResult(ok=True, summary=summ,
                         in_tokens=int(getattr(state, "total_input_tokens", 0) or 0),
                         out_tokens=int(getattr(state, "total_output_tokens", 0) or 0))
@@ -236,6 +276,10 @@ def run_task(store: M.MissionStore, task: dict, *, mission: dict, cwd: str, repo
     neg = store.similar_knowledge(mid, task.get("objective", ""), type=M.K_NEGATIVE, top=3)
     task = dict(task)
     task["negative_knowledge"] = [k["statement"] for k in neg]
+    # §42 early-stop: let the worker check the project verifier so it can quit once it's done.
+    verify_cmd = (mission.get("config") or {}).get("verify_cmd") or ""
+    if verify_cmd:
+        task["_verify_passes"] = lambda: verify_passes(verify_cmd, cwd)
     t0 = time.monotonic()
     wr = worker(task, mission, cwd, base_config or {})
     store.add_usage(mid, tokens=wr.in_tokens + wr.out_tokens, wall_s=time.monotonic() - t0)
