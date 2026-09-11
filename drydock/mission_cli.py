@@ -157,6 +157,12 @@ def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], dict, li
             except ValueError:
                 pass
             i += 2
+        elif a == "--stagnation-limit" and nxt:   # consecutive non-progress tasks before escalating
+            eval_cfg["stagnation_limit"] = int(nxt) if nxt.isdigit() else 5
+            i += 2
+        elif a == "--max-escalations" and nxt:    # ladder climbs before BLOCKED/AWAITING_HUMAN (§23)
+            eval_cfg["max_escalations"] = int(nxt) if nxt.isdigit() else 3
+            i += 2
         elif a == "--model" and nxt:              # mission carries its own model/endpoint (§33)
             eval_cfg["model"] = nxt
             i += 2
@@ -296,6 +302,8 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
 
     R.run_mission(store, mid, cwd=cwd, repo=cwd, evaluator=evaluator,
                   planner=iterate_planner(m["objective"], verify), base_config=base_config,
+                  stagnation_limit=int(mconf.get("stagnation_limit") or 5),
+                  max_escalations=int(mconf.get("max_escalations") or 3),
                   on_event=on_event)
     write_views(store, mid, cwd)
     print("\n" + render_status(store, mid))
