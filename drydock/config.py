@@ -27,6 +27,12 @@ DEFAULTS: dict[str, object] = {
     # default invisibly, which left base_url absent from the file. For a non-vllm
     # provider, override base_url (or use --base-url / the first-run prompt).
     "base_url": "http://localhost:8000/v1",
+    # API key for the MAIN model endpoint, sent as `Authorization: Bearer <key>`.
+    # Leave "" for a local server that needs no auth (llama.cpp/Ollama/LM Studio);
+    # set it for a hosted OpenAI-compatible endpoint (e.g. a vLLM behind a gateway,
+    # OpenRouter, Together). Mirrors `advisor_api_key`. Can also come from the
+    # provider's api_key_env (e.g. OPENAI_API_KEY); the config value wins.
+    "api_key": "",
     "max_tokens": 8192,  # 4096 truncated large file writes mid-JSON (→ _raw fail)
     "temperature": 0.2,
     # The model server's context window (llama.cpp -c / vLLM --max-model-len).
