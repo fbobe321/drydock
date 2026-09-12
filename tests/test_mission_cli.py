@@ -107,6 +107,25 @@ def test_cli_create_persists_integrity_and_noise_flags(tmp_path):
     assert cfg["eval_samples"] == 3 and cfg["noise_band"] == 1.5
 
 
+def test_cli_swarm_flag_persists_and_selects_swarm_worker(tmp_path, monkeypatch):
+    rc = C.run_cli(["create", "fix", "it", "--swarm-agents", "5", "--verify", "true"],
+                   {"cwd": str(tmp_path)})
+    assert rc == 0
+    mid = M.list_missions(tmp_path)[0]
+    cfg = M.open_store(tmp_path, mid).get_mission(mid)["config"]
+    assert cfg["swarm"] is True and cfg["swarm_agents"] == 5      # persisted to mission config
+
+    # _run must pick make_swarm_worker (not default_worker) when swarm is set
+    captured = {}
+    monkeypatch.setattr(R, "make_swarm_worker",
+                        lambda **kw: captured.update(kw) or (lambda *a: R.WorkerResult(ok=True)))
+    monkeypatch.setattr(R, "run_mission", lambda *a, **kw: captured.update(worker_set=True) or
+                        R.RunSummary(mission_id=mid, status="COMPLETED", cycles=0, final_metric=100.0))
+    monkeypatch.setattr(R, "establish_baseline", lambda *a, **k: None)
+    C.run_cli(["run", mid], {"cwd": str(tmp_path)})
+    assert captured.get("agents") == 5 and captured.get("share") is True   # swarm worker built with N=5
+
+
 def test_cli_knowledge_view(tmp_path, capsys):
     C.run_cli(["create", "obj here"], {"cwd": str(tmp_path)})
     mid = M.list_missions(tmp_path)[0]

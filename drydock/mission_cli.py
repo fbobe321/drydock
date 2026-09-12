@@ -215,6 +215,13 @@ def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], dict, li
         elif a == "--max-escalations" and nxt:    # ladder climbs before BLOCKED/AWAITING_HUMAN (§23)
             eval_cfg["max_escalations"] = int(nxt) if nxt.isdigit() else 3
             i += 2
+        elif a == "--swarm":                      # solve each task with a SWARM, not one agent
+            eval_cfg["swarm"] = True
+            i += 1
+        elif a == "--swarm-agents" and nxt:       # agents per task's swarm (implies --swarm)
+            eval_cfg["swarm"] = True
+            eval_cfg["swarm_agents"] = int(nxt) if nxt.isdigit() else 4
+            i += 2
         elif a == "--model" and nxt:              # mission carries its own model/endpoint (§33)
             eval_cfg["model"] = nxt
             i += 2
@@ -248,7 +255,7 @@ def run_cli(argv: list, config: dict | None = None) -> int:
         if not objective:
             print('usage: drydock mission create "<objective>" [--target ">=70"] '
                   '[--verify CMD] [--protect GLOB]... [--samples N] [--noise-band F] '
-                  '[--time-budget 48h] [--max-experiments N]')
+                  '[--swarm | --swarm-agents N] [--time-budget 48h] [--max-experiments N]')
             return 1
         mconf = {"verify_cmd": verify, "model": config.get("model", ""),
                  "base_url": config.get("base_url", ""), "provider": config.get("provider", "vllm"),
@@ -337,6 +344,14 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
         if mconf.get(key):
             base_config[key] = mconf[key]
     print(f"   model: {base_config.get('model')} @ {base_config.get('base_url')}")
+    # Worker: one bounded agent per task (default), OR a swarm per task (--swarm) — parallel
+    # diversified agents + blackboard cross-pollination, KEEP/REVERT on the swarm winner (§Phase-4).
+    if mconf.get("swarm"):
+        n = int(mconf.get("swarm_agents") or 4)
+        worker = R.make_swarm_worker(agents=n, share=True, waves=2)
+        print(f"   worker: SWARM ({n} agents/task, shared blackboard)")
+    else:
+        worker = R.default_worker
     if evaluator is not None:
         b = R.establish_baseline(store, mid, cwd, evaluator)
         if b is not None:
@@ -352,7 +367,7 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
             print(f"  ⚑ {kind}: {d}")
         write_views(store, mid, cwd)
 
-    R.run_mission(store, mid, cwd=cwd, repo=cwd, evaluator=evaluator,
+    R.run_mission(store, mid, cwd=cwd, repo=cwd, worker=worker, evaluator=evaluator,
                   planner=decomposing_planner(m["objective"], verify, cwd), base_config=base_config,
                   stagnation_limit=int(mconf.get("stagnation_limit") or 5),
                   max_escalations=int(mconf.get("max_escalations") or 3),
