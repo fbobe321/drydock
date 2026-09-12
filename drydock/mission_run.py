@@ -191,6 +191,36 @@ def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> Wo
                         out_tokens=int(getattr(state, "total_output_tokens", 0) or 0))
 
 
+def make_swarm_worker(agents: "int | str" = 4, share: bool = True, waves: int = 2,
+                      max_turns: int = 30, runner=None) -> WorkerFn:
+    """A WorkerFn that solves each mission task with a SWARM (parallel diversified agents +
+    blackboard cross-pollination) instead of a single agent — the long-horizon mission dispatches
+    a swarm per task (ASR Phase-4: durable depth × parallel breadth). The winning candidate's
+    commit is checked out into the mission's working tree (no commit of its own — the mission's
+    KEEP/REVERT handles that), so the mission evaluator scores the swarm's best result."""
+    def worker(task: dict, mission: dict, cwd: str, base_config: dict) -> WorkerResult:
+        from drydock import swarm as S
+        objective = task.get("objective", "")
+        verify_cmd = (mission.get("config") or {}).get("verify_cmd") or None
+        kw: dict = dict(agents=agents, base_config=base_config or {}, base_ref="HEAD",
+                        verify_cmd=verify_cmd, share=share, waves=waves, max_turns=max_turns)
+        if runner is not None:
+            kw["runner"] = runner
+        try:
+            res = S.run_swarm(cwd, objective, **kw)
+        except Exception as e:  # noqa: BLE001 — a swarm crash is contained like any worker (§32)
+            return WorkerResult(ok=False, error=f"swarm failed: {type(e).__name__}: {e}")
+        w = res.winner
+        if w is not None and w.commit:
+            # bring the winner's tree into the mission's working dir; the mission's checkpoint
+            # (KEEP) or restore (REVERT) commits/discards it, so no extra commit here.
+            _git(["checkout", w.commit, "--", "."], cwd)
+            return WorkerResult(ok=True, summary=(f"swarm winner {w.agent} "
+                                f"{w.tests_passed}/{w.tests_total}: {(w.summary or '')[:200]}"))
+        return WorkerResult(ok=True, summary="swarm produced no winning candidate")
+    return worker
+
+
 def _median(xs: list[float]) -> float:
     s = sorted(xs)
     n = len(s)

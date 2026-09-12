@@ -275,6 +275,30 @@ def test_negative_knowledge_is_discriminating_by_target(tmp_path):
     assert hit and "test_roman" in hit[0]["statement"] and "roman.py" in hit[0]["statement"]
 
 
+def test_swarm_worker_applies_winner_to_mission_tree(tmp_path):
+    """ASR Phase-4: a mission task solved by a SWARM; the winning candidate lands in the
+    mission's working tree so KEEP/REVERT scores it. Injected runner — no model."""
+    from drydock import swarm as S
+    repo = tmp_path / "proj"
+    (repo / "tests").mkdir(parents=True)
+    (repo / "toolkit.py").write_text("def add(a, b):\n    raise NotImplementedError\n")
+    (repo / "tests" / "test_it.py").write_text("from toolkit import add\ndef test_add(): assert add(2,3)==5\n")
+    (repo / "conftest.py").write_text("")
+    for c in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+              ["git", "config", "user.name", "t"], ["git", "add", "-A"], ["git", "commit", "-qm", "base"]):
+        subprocess.run(c, cwd=repo, check=True)
+
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        (Path(cwd) / "toolkit.py").write_text("def add(a, b):\n    return a + b\n")   # the fix
+        return S.RunResult(summary="implemented add", in_tokens=1, out_tokens=1, turns=1)
+
+    worker = R.make_swarm_worker(agents=2, share=False, runner=runner)
+    wr = worker({"objective": "make add() work"},
+                {"config": {"verify_cmd": "python -m pytest -q"}}, str(repo), {})
+    assert wr.ok and "winner" in wr.summary                          # swarm found + reported a winner
+    assert "return a + b" in (repo / "toolkit.py").read_text()       # winner applied to the mission tree
+
+
 def test_run_mission_stops_on_success(tmp_path):
     repo = _repo(tmp_path)
     s = M.MissionStore(tmp_path / "s.db")
