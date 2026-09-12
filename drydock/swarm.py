@@ -971,6 +971,11 @@ def run_cli(argv: list, config: dict | None = None) -> int:
     p.add_argument("--max-turns", type=int, default=40)
     p.add_argument("--max-tool-calls", type=int, default=40)
     p.add_argument("--max-workers", type=int, default=None, help="max concurrent workers")
+    p.add_argument("--share", action="store_true",
+                   help="blackboard cross-pollination: run in waves; later agents read peers' "
+                        "verified attempts and build on partials instead of repeating failures")
+    p.add_argument("--waves", type=int, default=2,
+                   help="number of waves when --share is set (wave 0 explores blind; default 2)")
     try:
         args = p.parse_args(argv)
     except SystemExit as e:
@@ -986,12 +991,27 @@ def run_cli(argv: list, config: dict | None = None) -> int:
         return 1
 
     print(f"⚓ Drydock swarm — {args.agents} agents on: {objective}")
-    print("   (isolated git worktrees, independent verification, evidence-based judging)\n")
+    print("   (isolated git worktrees, independent verification, evidence-based judging)"
+          + (f"\n   🔗 shared communication ON — {args.waves} waves, peers' notes cross the "
+             "blackboard\n" if args.share else "\n"))
+
+    def _on(kind: str, d: dict) -> None:
+        if kind == "share":
+            print(f"  🔗 wave {d.get('wave')}: {d.get('agents')} agent(s) reading peers' notes")
+        elif kind == "worker_done":
+            print(f"  · {d.get('agent')}: {'ok' if d.get('ok') else 'failed'}"
+                  + (f" ({d.get('files')} files)" if d.get('files') else ""))
+        elif kind == "verified":
+            print(f"  ✓ {d.get('candidate')}: {d.get('passed')}/{d.get('total')} ({d.get('status')})")
+        elif kind == "judge":
+            print(f"  ⚖ winner={d.get('agent') or '—'} converged={d.get('converged')}")
+
     try:
         res = run_swarm(cwd, objective, agents=args.agents, base_config=config,
                         base_ref=args.base_ref, verify_cmd=args.verify, fitness=args.fitness,
                         max_turns=args.max_turns, max_tool_calls=args.max_tool_calls,
-                        max_workers=args.max_workers)
+                        max_workers=args.max_workers, share=args.share, waves=args.waves,
+                        on_event=_on)
     except ValueError as e:
         print(f"Error: {e}")
         return 1

@@ -398,6 +398,30 @@ def test_cli_solve_requires_git_repo(tmp_path, capsys):
     assert "git" in capsys.readouterr().out.lower()
 
 
+def test_cli_share_flag_reaches_run_swarm(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path / "repo")
+    captured = {}
+
+    def fake_run_swarm(cwd, objective, **kw):
+        captured.update(objective=objective, **kw)
+        return swarm.SwarmResult(swarm_id="s", objective=objective, root="r",
+                                 converged=False, winner=None, candidates=[])
+    monkeypatch.setattr(swarm, "run_swarm", fake_run_swarm)
+    rc = swarm.run_cli(["fix the bug", "--agents", "4", "--share", "--waves", "3"], {"cwd": repo})
+    assert rc == 0
+    assert captured["share"] is True and captured["waves"] == 3   # cross-pollination reachable via CLI
+
+
+def test_cli_default_is_blind_parallel(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path / "repo")
+    captured = {}
+    monkeypatch.setattr(swarm, "run_swarm",
+                        lambda cwd, objective, **kw: captured.update(kw) or
+                        swarm.SwarmResult("s", objective, "r", False, None, []))
+    swarm.run_cli(["fix it"], {"cwd": repo})
+    assert captured["share"] is False                             # default unchanged (blind parallel)
+
+
 def test_cli_solve_empty_objective(tmp_path):
     repo = _init_repo(tmp_path / "repo")
     assert swarm.run_cli([], {"cwd": repo}) == 1
