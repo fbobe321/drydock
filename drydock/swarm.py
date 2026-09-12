@@ -693,17 +693,18 @@ def _peer_notes(candidates: list[Candidate], limit: int = 8) -> str:
     each attempt's verdict + verified score + one-line summary, so a reader builds on the
     partials and avoids repeating the failures. Only summaries cross between agents, never
     full transcripts (§8 — preserve independence while still comparing notes)."""
+    # Rank strongest-first so the reader sees the best partial at the top, and explicitly flag
+    # it as the base to EXTEND — the actionable core of cross-pollination (§14): don't restart
+    # from scratch, continue the leading partial (and skip the failed approaches below it).
+    ranked = sorted(candidates, key=lambda c: (c.tests_passed, c.tests_total), reverse=True)[:limit]
     lines = []
-    for c in candidates[:limit]:
+    for i, c in enumerate(ranked):
         score = f"{c.tests_passed}/{c.tests_total}" if c.tests_total else "unverified"
-        if c.tests_total and c.tests_passed >= c.tests_total:
-            verdict = "SOLVED"
-        elif c.tests_passed:
-            verdict = "partial"
-        else:
-            verdict = "failed"
+        solved = bool(c.tests_total and c.tests_passed >= c.tests_total)
+        verdict = "SOLVED" if solved else ("partial" if c.tests_passed else "failed")
         summ = (c.summary or "").strip().splitlines()[0][:160] if c.summary else "(no summary)"
-        lines.append(f"- {c.agent} [{verdict} {score}]: {summ}")
+        tag = "  ⟵ STRONGEST partial — EXTEND this approach" if (i == 0 and c.tests_passed and not solved) else ""
+        lines.append(f"- {c.agent} [{verdict} {score}]{tag}: {summ}")
     return "\n".join(lines)
 
 

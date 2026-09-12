@@ -313,6 +313,26 @@ def test_share_injects_peer_notes_into_later_waves(tmp_path):
     assert any("agent-1" in s and "SOLVED" in s for s in seen)
 
 
+def test_peer_notes_rank_and_flag_strongest_partial():
+    from drydock.swarm import Candidate, _peer_notes
+    cands = [
+        Candidate(id="c1", agent="agent-1", summary="tried A", tests_passed=1, tests_total=6),
+        Candidate(id="c2", agent="agent-2", summary="tried B", tests_passed=4, tests_total=6),
+        Candidate(id="c3", agent="agent-3", summary="tried C", tests_passed=0, tests_total=6),
+    ]
+    notes = _peer_notes(cands)
+    first_line = notes.splitlines()[0]
+    assert "agent-2" in first_line and "EXTEND this approach" in first_line   # strongest partial, ranked first + flagged
+    assert notes.index("agent-2") < notes.index("agent-1") < notes.index("agent-3")  # ranked by score
+    assert "EXTEND" not in notes.split("agent-1")[1].split("\n")[0]           # only the leader is flagged
+
+
+def test_peer_notes_no_flag_when_already_solved():
+    from drydock.swarm import Candidate, _peer_notes
+    notes = _peer_notes([Candidate(id="c1", agent="a1", summary="done", tests_passed=6, tests_total=6)])
+    assert "SOLVED" in notes and "EXTEND" not in notes    # nothing to extend if it's fully solved
+
+
 def test_no_share_means_no_peer_notes(tmp_path):
     import threading
     repo = _init_repo(tmp_path / "repo")
