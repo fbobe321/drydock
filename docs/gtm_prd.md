@@ -166,3 +166,26 @@ The §1b thesis, turned into a small content series that IS the marketing (not a
   vanity? (This PRD assumes: pursue the niche. Revisit if the answer is "research-only.")
 - Whether to keep the repo private→public flip timing aligned with W1 (README must be repositioned
   *before* it gets traffic).
+
+## 7. Execution log
+
+- **2026-09-13 — FIAR removed** from the shipped codebase (see §6). Committed.
+- **2026-09-14 — W1 (repositioning) DONE (first pass, subject to owner copy review):**
+  - `web/index.html` — hero, `<title>`/meta/OG, animated terminal demo (now a live STIG→POA&M
+    assess flow), stats band, capabilities lead ("…and a full coding agent underneath"), and the
+    skills section ("Built for NIST compliance") all repositioned around the air-gapped-NIST wedge.
+  - `README.md` — intro + "Why" rewritten around air-gapped NIST compliance + the governable-agent
+    (§1b) angle; general-agent story kept as the proof point.
+- **2026-09-14 — W2 (frictionless quickstart) DONE (code + docs; not yet live-tested end-to-end):**
+  - `scripts/quickstart.sh` — one-command bootstrap: installs drydock-cli, then LOCAL (download
+    Qwen2.5-Coder-32B GGUF + serve via llama.cpp, air-gapped) or FRONTIER (keyed OpenAI-compatible,
+    no GPU) path; syntax-checked (`bash -n`), safe (set -euo pipefail, no sudo/destructive ops).
+  - `README.md` — "Quickstart" section documenting the one-liner + both backends + manual wiring,
+    using the REAL flags (`--provider {vllm,openai,…}` / `--base-url` / `--model`; key via
+    `OPENAI_API_KEY` or config `api_key` — there is no `--api-key` flag).
+  - **W6 folded in:** Qwen2.5-Coder-32B is the featured local default (a strong coder model so a
+    first run doesn't stall on gemma4's ceiling). Owner did not override the recommendation.
+- **STILL PENDING (not blockers):** live end-to-end test of `quickstart.sh` on a GPU box (the GGUF
+  download + llama.cpp serve path is written but untested here); a hosted asciinema/GIF for the
+  landing + README (needs hosting); owner review of the repositioned copy. Then W3 (flagship
+  offline STIG→POA&M proof-of-work), W4/W5 (distribution + social proof), W7 (thought-leadership).

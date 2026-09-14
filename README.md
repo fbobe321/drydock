@@ -1,10 +1,15 @@
 # ⚓ Drydock
 
-A local-first, provider-agnostic **terminal coding agent** for your own LLM.
-No accounts, no telemetry, no cloud — the only outbound calls are to the model
-endpoint you configure and (optionally) the web-search tools you invoke.
-Primary target: **dense Gemma-4-31B** (QAT, 64K) served by llama.cpp on a
-single workstation.
+**The air-gapped terminal coding agent that automates your NIST compliance** —
+RMF (800-53), CSF 2.0, AI RMF, and DISA STIG — running entirely on your own
+hardware against a local LLM. No accounts, no telemetry, no cloud: your code,
+controls, and CUI never leave the box.
+
+Under the compliance skills it's a full agentic coding harness — the same
+air-gapped agent whether you're assessing a control or shipping a feature. The
+only outbound calls are to the model endpoint you configure and (optionally) the
+web-search tools you invoke. Primary target: **dense Gemma-4-31B** (QAT, 64K)
+served by llama.cpp on a single workstation.
 
 > **v3 — clean-room rebuild.** Drydock is being rebuilt as an original,
 > Apache-2.0 codebase owned end to end (no upstream fork). Every release is
@@ -14,10 +19,14 @@ single workstation.
 
 ## Why
 
-A coding agent should build real projects from your machine without sending
-your code or credentials anywhere. Drydock runs entirely against a local
-model, feels like a first-class terminal agent, and keeps its data plane on
-your box.
+Regulated and air-gapped environments — federal, defense, critical-infrastructure,
+and any org adopting NIST CSF 2.0 — can't send code, controls, or CUI to a cloud
+agent, yet still need real automation. Drydock runs entirely against a local model,
+feels like a first-class terminal agent, ingests the NIST 800-53 catalog and DISA
+STIG benchmarks to assess / remediate / export POA&Ms **offline**, and keeps its
+data plane on your box. It's a governable agent by design: a deterministic control
+loop, a verification gate on "done", and a durable, tamper-evident event trace —
+the audit record for what an autonomous agent did in your environment.
 
 ## Status
 
@@ -27,6 +36,36 @@ tool cards, collapsible reasoning ("thinking") cards, a live nautical activity
 line, and a multi-line prompt. The agent loop, OpenAI-compatible provider,
 two-tier compaction, and the full agentic toolset (below) are in, with Gemma
 reliability hardening verified hands-on.
+
+## Quickstart
+
+**One command** — installs Drydock, then either serves a strong local model or points
+at a keyed endpoint, and launches you into the agent:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fbobe321/drydock/main/scripts/quickstart.sh | bash
+```
+
+It offers two backends:
+
+- **Local (air-gapped)** — downloads **Qwen2.5-Coder-32B** (one time) and serves it with
+  `llama.cpp`, then runs entirely offline. Needs a GPU box with `llama-server` on `PATH`.
+- **Frontier (no GPU)** — try it in a minute against a keyed OpenAI-compatible endpoint;
+  only that call leaves the box:
+  ```bash
+  OPENAI_API_KEY=sk-... DRYDOCK_QUICKSTART_MODE=frontier \
+    curl -fsSL https://raw.githubusercontent.com/fbobe321/drydock/main/scripts/quickstart.sh | bash
+  ```
+
+Prefer to wire it up by hand?
+
+```bash
+pip install drydock-cli
+# point at any OpenAI-compatible server (llama.cpp / vLLM / Ollama / LM Studio):
+drydock --provider vllm --base-url http://localhost:8000/v1 --model <served-model-name>
+# or a keyed frontier model (key via OPENAI_API_KEY or config `api_key`):
+OPENAI_API_KEY=sk-... drydock --provider openai --base-url https://api.openai.com/v1 --model gpt-4o
+```
 
 ## Capabilities
 

@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Drydock — a local-first terminal coding agent</title>
-<meta name="description" content="Drydock is an open-source, provider-agnostic terminal coding agent for your own local LLM. No accounts, no telemetry, no cloud. Web search, GraphRAG, git tools, multi-agent, MCP, vision, ML & NIST RMF/CSF skills. Runs on Windows, macOS, Linux.">
-<meta property="og:title" content="Drydock — a local-first terminal coding agent">
-<meta property="og:description" content="A clean-room, provider-agnostic terminal coding agent for your own local LLM. No accounts, no telemetry, no cloud.">
+<title>Drydock — the air-gapped coding agent for NIST compliance</title>
+<meta name="description" content="Drydock is an open-source, air-gapped terminal coding agent for your own local LLM that automates NIST compliance — CSF 2.0, 800-53, RMF, AI RMF, STIG. No accounts, no telemetry, no cloud: code, controls, and CUI never leave the box. Also a full offline coding agent. Windows, macOS, Linux.">
+<meta property="og:title" content="Drydock — the air-gapped coding agent for NIST compliance">
+<meta property="og:description" content="An air-gapped terminal coding agent for your own local LLM that automates NIST compliance (CSF 2.0, 800-53, RMF, STIG). No accounts, no telemetry, no cloud.">
 <meta property="og:type" content="website">
 <style>
   :root{
@@ -172,12 +172,12 @@
     <div class="wrap">
       <div class="anchor">⚓</div>
       <h1><span class="grad">Drydock</span></h1>
-      <p class="tag">A local-first, provider-agnostic <b>terminal coding agent</b> for your own LLM.</p>
-      <p class="sub">No accounts, no telemetry, no cloud — your code and credentials never leave your machine.</p>
+      <p class="tag">The <b>air-gapped</b> coding agent that automates your <b>NIST compliance</b> — CSF 2.0, 800-53, RMF, AI RMF, STIG.</p>
+      <p class="sub">Runs entirely on your own hardware against a local LLM. No accounts, no telemetry, no cloud — your code, controls, and CUI never leave the box.</p>
       <div class="badges">
+        <span class="badge">100% <b>air-gapped</b></span>
+        <span class="badge">NIST <b>RMF · CSF · STIG</b></span>
         <span class="badge"><b>Apache-2.0</b> · clean-room</span>
-        <span class="badge">100% <b>local</b></span>
-        <span class="badge">Windows · macOS · Linux</span>
         <span class="badge">pip · <b>drydock-cli</b></span>
       </div>
 
@@ -185,16 +185,16 @@
       <div class="term" id="term" role="img" aria-label="Example Drydock terminal session">
         <div class="term-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="term-title">drydock — gemma4 @ localhost</span>
+          <span class="term-title">drydock — air-gapped · gemma4 @ localhost</span>
         </div>
         <div class="term-body" id="termbody">
-          <div class="row"><span class="p">❯</span> <span class="u">fix the failing auth test</span></div>
-          <div class="row t">  ▸ <span class="g">Bash</span> · pytest tests/test_auth.py -q &nbsp;<span class="d">✗ 1 failed</span></div>
-          <div class="row t">  ▸ <span class="g">Read</span> · src/auth.py</div>
-          <div class="row t">  ▸ <span class="g">Edit</span> · src/auth.py &nbsp;<span class="d">token-expiry check was inverted</span></div>
-          <div class="row t">  ▸ <span class="g">Bash</span> · pytest tests/test_auth.py -q &nbsp;<span class="ok">✓ 4 passed</span></div>
-          <div class="row"><span class="ok">✓ verified</span> <span class="u">— expiry comparison was flipped; fixed and the tests pass.</span></div>
-          <div class="row d" style="margin-top:6px">⚓ ready · gemma4 · verify-gate ✓ · ctx 12k/64k<span class="cursor"></span></div>
+          <div class="row"><span class="p">❯</span> <span class="u">assess this host against the Application STIG and export a POA&amp;M</span></div>
+          <div class="row t">  ▸ <span class="g">StigRules</span> · app.ckl &nbsp;<span class="d">286 rules loaded (offline)</span></div>
+          <div class="row t">  ▸ <span class="g">Bash</span> · checking SV-900010 — TLS config</div>
+          <div class="row t">  ▸ <span class="g">StigSet</span> · SV-900010 → <span class="d">open · finding recorded</span></div>
+          <div class="row t">  ▸ <span class="g">/stig poam</span> app.ckl &nbsp;<span class="d">12 open → eMASS CSV</span></div>
+          <div class="row"><span class="ok">✓ done</span> <span class="u">— 286 rules assessed offline; POA&amp;M written to poam.csv, mapped to NIST 800-53.</span></div>
+          <div class="row d" style="margin-top:6px">⚓ air-gapped · gemma4 · verify-gate ✓ · 0 telemetry<span class="cursor"></span></div>
         </div>
       </div>
 
@@ -207,10 +207,10 @@
 
       <!-- stats -->
       <div class="stats reveal">
-        <div class="stat"><div class="n grad">19+</div><div class="l">built-in tools</div></div>
-        <div class="stat"><div class="n grad">14</div><div class="l">bundled skills</div></div>
+        <div class="stat"><div class="n grad">RMF</div><div class="l">800-53 · CSF · STIG</div></div>
         <div class="stat"><div class="n grad">0</div><div class="l">telemetry calls</div></div>
-        <div class="stat"><div class="n grad">100%</div><div class="l">on your machine</div></div>
+        <div class="stat"><div class="n grad">100%</div><div class="l">air-gapped</div></div>
+        <div class="stat"><div class="n grad">Apache-2.0</div><div class="l">clean-room, own IP</div></div>
       </div>
     </div>
   </header>
@@ -221,10 +221,12 @@
   <section style="background:var(--bg2)">
     <div class="wrap">
       <div class="center reveal">
-        <h2>Everything an agent needs — <span class="em">on your machine</span></h2>
-        <p class="lead">A full agentic CLI harness in a Textual TUI: scrolling transcript, collapsible tool &amp;
-          reasoning cards, a live activity line. The model drives every tool below autonomously — all clean-room,
-          dependency-free (nothing beyond <code class="k">openai</code> + <code class="k">textual</code>).</p>
+        <h2>...and a full <span class="em">coding agent</span> underneath</h2>
+        <p class="lead">The compliance skills ride on a complete agentic CLI harness in a Textual TUI: scrolling
+          transcript, collapsible tool &amp; reasoning cards, a live activity line. The model drives every tool
+          below autonomously — all clean-room, dependency-free (nothing beyond <code class="k">openai</code>
+          + <code class="k">textual</code>). Same air-gapped agent, whether you're remediating a control or
+          shipping a feature.</p>
       </div>
       <div class="grid">
         <div class="card reveal"><span class="ico">🗂️</span><h3>Files &amp; shell</h3><p>Read (with a structure index for huge files), Write, Edit, Bash, Glob, Grep — with advisory write guards.</p></div>
@@ -263,8 +265,10 @@
   <!-- SKILLS -->
   <section class="wrap">
     <div class="center reveal">
-      <h2>Bundled <span class="em">skills</span></h2>
-      <p class="lead">Reusable <code class="k">/&lt;name&gt;</code> commands — author your own as markdown, or use the built-in families for compliance and ML engineering.</p>
+      <h2>Built for <span class="em">NIST compliance</span></h2>
+      <p class="lead">Reusable <code class="k">/&lt;name&gt;</code> commands. The built-in families ingest the NIST 800-53
+        catalog and DISA STIG benchmarks, assess controls, remediate, and export POA&amp;Ms — <b>entirely
+        offline, so CUI never leaves the box</b>. Author your own as markdown.</p>
     </div>
     <div class="grid">
       <div class="card kb reveal"><span class="ico">⚖️</span><h3>NIST governance</h3><p>Defensive, clean-room skills for AI &amp; cyber risk management.</p>
