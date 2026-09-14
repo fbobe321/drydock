@@ -51,6 +51,51 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## 🧭 GO-TO-MARKET PIVOT + OFFICIAL TBENCH BASELINE — 2026-09-13
+
+**Two things happened.** (1) We ran a REAL, submittable terminal-bench score, and (2) decided the
+growth strategy off the back of it.
+
+**Official tbench baseline (internal only, NOT publishing).** Drydock + gemma4 on the official
+`terminal-bench` harness (tb 0.2.18, `terminal-bench-core==0.1.1`, 80 tasks, default timeouts,
+drydock-cli 3.1.35) = **pass@1 = 21.25% (17/80)**. Setup at `/data3/tbench_official/` (adapter
+`drydock_agent/drydock_agent.py` = `DrydockAgent(AbstractInstalledAgent)`; run `runs/full_gemma4/`).
+Clean, ~18h, no harness tampering → legit but **model-bound** (gemma4 = 31B Q4 general model). DECISION:
+do NOT publish — 21% near the bottom of a frontier-dominated board markets Drydock with its weakest
+number. Filed as reproducible internal baseline + proof the adapter conforms end-to-end. Any future
+*publishable* number = same model-agnostic adapter (`--agent-kwarg base_url/model`) in front of a
+STRONGER model (code-specialized open-weight like Qwen2.5-Coder-32B, or frontier), NOT gemma4. The
+scaffold is not the bottleneck — the model is (confirmed by the earlier capability-wall pilot).
+
+**GTM decision → new PRD `docs/gtm_prd.md`.** Compared Drydock vs OpenCode (sst/opencode, ~207k★,
+TS/MIT, 75+ providers, desktop+IDE, mature) honestly: we lose the *general coding agent* race and
+won't run it. Drydock's moat is what nobody with stars does — **air-gapped + NIST compliance
+automation (CSF 2.0 / 800-53 / AI RMF / STIG)** + long-horizon missions/ratchet. **FIAR is OUT of the
+public positioning** (too narrow + too close to owner's professional domain — IP/conflict). Durable
+thesis (§1b) = **"NIST 2.0 for the LLM/agent era"**: cyber compliance was built for deterministic
+systems + human operators; LLMs/harnesses break that, so frameworks must pivot — and Drydock is BOTH
+the tool that automates NIST work AND a reference for a *governable* agent (air-gapped = data-plane
+control, deterministic loop + verification gates, durable tamper-evident event trace = audit record,
+advisory-not-blocking safety). The unmet frontier: a control model for "an autonomous agent operating
+in your environment" (model/prompt/tool supply chain, non-deterministic assurance, cATO, data-flow
+containment) — the thought-leadership lane. Plan (7 workstreams, sequenced): W1 reposition README +
+`web/index.html` around the NIST wedge → W2 frictionless quickstart (one-command install + model
+bootstrap + easy keyed-frontier trial path) → W3 flagship offline STIG/800-53→POA&M proof-of-work demo
+→ W4 distribution in niche channels (r/NISTControls, GovCon, GRC, local-LLM showcases — NOT HN) → W5
+social-proof/cold-start → W6 first-impression model default (don't let a gemma4 flub kill trials) →
+W7 thought-leadership content series (the §1b thesis = the marketing). Success = 10–20 committed niche
+users + 100 trial installs + 1 proof-of-work in 90d; stars secondary (credibility, not the goal).
+**NEXT: execute W1 + W2 first.** FIAR REMOVAL (2026-09-13, owner chose full removal): excised
+`drydock/fiar.py`, 4 `fiar-*` skills, all 6 `Fiar*` tools (schemas+funcs+registration in
+`drydock/tools/__init__.py`), `tests/test_fiar.py`, the README section + PRD refs; `test_skills.py`
+expectation updated; import + `test_skills` verified clean (the 2 collection errors are a pre-existing
+`textual` missing dep, not FIAR). The historical FIAR entries in this file's dev-log below (2026-07-23
+blocks) were also scrubbed/redacted 2026-09-13 for IP/domain separation (recoverable via git history).
+NOT yet committed. Remaining GTM open decision: quickstart default model (Qwen2.5-Coder-32B leading). ⚠️ `.129` box: if Docker
+wedges, relaunch Docker Desktop via an interactive scheduled task — NEVER `wsl --shutdown`/kill (can't
+relaunch a GUI over ssh); full gotcha in memory `project_asr_and_129box`.
+
+---
 ## 🚀 LONG-HORIZON AUTONOMOUS MISSIONS — 2026-09-10 (Phase 1+2 shipped, hardened)
 
 New feature: `drydock mission …` — a **durable, goal-oriented process** that runs for hours/days
@@ -201,7 +246,7 @@ operator.** Full guide + running log: **`/data3/tbench_local/frontier/selfdistil
 >   enforced it between manual checks (~4h GPU wasted). **A pre-registered rule is worth only what
 >   enforces it — it belongs in the training loop, not the operator's head.**
 > - **🧭 FIRST-PRINCIPLES LOOP (operator's design) — built as THREE artifacts + control LAUNCHED.**
->   Step 9 (iterate) is the ratchet and is validated; steps 1/3/10 partially exist; `fiar.py` proves
+>   Step 9 (iterate) is the ratchet and is validated; steps 1/3/10 partially exist; `stig.py` proves
 >   drydock can carry a typed artifact machine. **Steps 2, 4, 5, 6, 8 + the bottleneck step were
 >   absent.** **NOT built as a prompt — that form is measured dead** (§17.1: regressions when
 >   always-on, beaten by plain retry on-failure, LONGER variant did worse — followed less, 3/8 vs 7/8).
@@ -1298,14 +1343,14 @@ non-recoverability check). Clean pip-install verified ships it all; 867 tests gr
 security 0 HIGH. Real-doc tested: War and Peace (~1132pg, 12k blocks) + 30MB PDF dictionary (67k blocks).
 
 **OWED (in progress this session):** live **TUI shakedown** of the canvas (drive DocOpen→…→DocCommit
-through the real tmux TUI with the model — the non-negotiable rule) and of **FIAR** (built + unit-tested
-but never TUI-driven). Follow-ups (tasks #9/#11 + backlog): FIAR **KSD package building**, PDF
-regeneration/OCR/binary redaction, the dedicated 4-pane canvas TUI screen, semantic search.
+through the real tmux TUI with the model — the non-negotiable rule). Follow-ups (tasks #9/#11 +
+backlog): PDF regeneration/OCR/binary redaction, the dedicated 4-pane canvas TUI screen, semantic
+search. *(A financial-audit vertical built this session was removed 2026-09-13 — see the top block.)*
 
 **Design basis:** operator's two-part spec (paste-cache `3962…`/`9b27…`) reviewed; verdict = build the
 md/txt engine native (stdlib, ships in wheel), heavy-format adapters later (MCP server isolates deps).
 
-**tbench self-distillation is PAUSED** (both boxes) to free the servers for canvas/FIAR TUI testing —
+**tbench self-distillation is PAUSED** (both boxes) to free the servers for canvas TUI testing —
 see the tbench section below + `/data3/compass/RESUME.md`. Resume: relaunch `frontier_collect_n3.sh`
 N=15 streams (`/data3/tbench_local/frontier/xN_s{0..3}.txt`). Verdict-so-far: 0 AMBER across ~13 tasks
 at budget 20000 → pure self-distill likely can't bust tbench; stronger-teacher (Devstral-24B, local) is
@@ -1318,9 +1363,9 @@ Read this block first; detail is in the dated entries below + `NIGHT_SHIFT_LOG.m
 **DONE this session**
 - **Published `drydock-cli 3.1.2` to PyPI** (https://pypi.org/project/drydock-cli/3.1.2/) and
   pushed `main` + tags `v3.1.0`, `v3.1.2` to GitHub `fbobe321/drydock`. Security gate passed
-  (0 HIGH). Verified: a clean `pip install drydock-cli==3.1.2` ships the FIAR skills + tools.
-- **FIAR audit-readiness vertical** (`drydock/fiar.py`, 5 tools, 4 skills, evidence-chain
-  validator). See the dated entry below.
+  (0 HIGH). Verified: a clean `pip install drydock-cli==3.1.2` install.
+- *(A gov-compliance financial-audit vertical shipped this session in 3.1.2; it was removed from the
+  codebase 2026-09-13 for IP/domain separation — see the top block. Historical entry redacted.)*
 - Feal seed solved → LoRA trained (`/data3/Models/frontier-feal-lora.gguf`).
 
 **FIRST ACTIONS next session (you'll be launched from /data3/drydock-v3)**
@@ -1341,34 +1386,20 @@ Read this block first; detail is in the dated entries below + `NIGHT_SHIFT_LOG.m
    out a harness cause (budget-8000 over-think, TUI not converging) vs a genuine finetune miss.
 
 **OWED / open**
-- **FIAR TUI shakedown** — built + 25 unit tests + install-verified, but NOT yet driven through
-  a live TUI (servers were busy). Non-negotiable rule needs it before "tested".
 - **Rotate the GitHub token** — it's embedded in the git remote URL and was printed this session.
 - **Restore reasoning-budget to 20000** on main `:8000` before any harvest resumes (it's at 8000
   for the variant test).
 - Version convention: **patch bumps** (next = 3.1.3), not minor-per-feature.
 
 ---
-## ⭐ 2026-07-23 (later) — FIAR audit-readiness vertical (v3.1.2); variant test two-box
+## ⭐ 2026-07-23 (later) — [redacted vertical] (v3.1.2); variant test two-box
 
-**FIAR vertical shipped** (tag `v3.1.2`, commit aeb0b49) — DoD/War-Dept Financial Improvement
-and Audit Readiness, grounded in the real April 2017 FIAR Guidance
-(`/data3/drydock/tests/fiar_guidance.pdf`, extracted + built against it). New gov-compliance
-vertical beside RMF/STIG:
-- `drydock/fiar.py` — stdlib engine; an "engagement" (one JSON, like a STIG .ckl) holds a
-  seeded key-control-objective matrix (FBWT, P2P, PP&E, INV, CIVPAY, REIM, FR, ITGC), NFRs,
-  CAPs. Models the 5 distinct FS assertions, Four Waves, FROs, numbered Key Tasks, KSDs,
-  ITGCs, A-123 sustainment. CLI `python -m drydock.fiar …`.
-- 5 tools (FiarControls/Control/Assess/Finding/Reconcile). 4 skills (fiar-assess, fiar-evidence,
-  fiar-readiness, fiar-cap).
-- **Differentiator: a deterministic EVIDENCE-CHAIN VALIDATOR** — FiarAssess REFUSES to mark a
-  control effective on an incomplete chain (population→sample→source txn→authorization→
-  supporting doc→system posting→GL effect→assertion). Evidence-review harness, not a checklist.
-- 25 tests; 834 pass, ruff+pyright clean. **⚠️ NOT yet TUI-driven** (servers busy) — owes a
-  hands-on tmux shakedown per the non-negotiable rule.
+*(A gov-compliance financial-audit vertical shipped here as v3.1.2 and was fully removed from the
+codebase on 2026-09-13 for IP/domain separation — see the top block. Detail redacted; recoverable via
+git history if ever needed.)*
 
 **🚨 Version convention:** patch increments (3.1.3, 3.1.4, …), NOT minor-per-feature. I
-over-bumped (3.1.0 hardening rollup, then FIAR→3.2.0); operator corrected FIAR to **v3.1.2**.
+over-bumped (3.1.0 hardening rollup, then a feature→3.2.0); operator corrected it to **v3.1.2**.
 See memory `feedback_version_bump_patch_increments`.
 
 ## ⭐ 2026-07-23 — v3.1.0 released; feal variant-transfer experiment underway

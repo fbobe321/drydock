@@ -3,6 +3,11 @@
 Status: SHIPPING (v3.1.8, on PyPI + GitHub). Supersedes the v2 line.
 Owner: Frank Bobe III. License: Apache-2.0 (own copyright).
 
+> **Adoption / go-to-market is tracked separately in [`docs/gtm_prd.md`](gtm_prd.md)** (2026-09-13).
+> Thesis: don't compete as a general coding agent (unwinnable vs OpenCode ~207k★); lead with the moat
+> — **air-gapped + NIST compliance automation (CSF 2.0 / 800-53 / AI RMF / STIG)**. This PRD =
+> features; the GTM PRD = users.
+
 > **Positioning (2026-08-23) — the product thesis is SEARCH-AS-CAPABILITY-SUBSTITUTION.** Two external data
 > points reframed the goal. DeepSeek's harness (open-sourced, ~2472 TS files) shows the agent-infrastructure
 > layer has *converged*: their package set (compaction, guard, jobs, skill, todo, plan, subagent, mcp,
