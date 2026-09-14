@@ -743,7 +743,7 @@ Learn → Iterate loop, and later added the highest-leverage missing step: **bet
 Hypothesise, identify the bottleneck** — "once a complex system is decomposed, solving the actual
 limiting factor often matters far more than optimising everything else." **Gap analysis against
 what drydock already had:** step 9 (iterate) is the ratchet and is validated; steps 1/3/10 are
-partially covered (`task.objective`, `todo`/plan, completion gate); `fiar.py` already proves
+partially covered (`task.objective`, `todo`/plan, completion gate); `stig.py` already proves
 drydock can carry a typed phase machine with artifacts. **Steps 2, 4, 5, 6, 8 and the
 bottleneck step were entirely absent.**
 - **NOT BUILT AS A PROMPT — that form is measured dead** (§17.1): the checklist regressed tasks
@@ -779,7 +779,7 @@ bottleneck step were entirely absent.**
   its Amdahl ceiling — the search-quality trap). Verified end-to-end: fed throughput vs
   search-quality, it names throughput and flags search as capped at its 10% ceiling.
 - All three are advisory by contract (never raise, never block, degrade on bad input, survive a
-  corrupt state file), persist as JSON like `fiar.py`, and are covered by 16+13 tests asserting the
+  corrupt state file), persist as JSON like `stig.py`, and are covered by 16+13 tests asserting the
   RANKING and the never-raise contract. ruff ✓ · pyright 0 ✓ · **1029 tests pass**.
 - **Exposed via the single `Ledger` tool** (actions add/next/verify/refute/show + component/lever)
   — one surface for the whole loop, no new tool slot (so the keyword-gating bug that hid the
