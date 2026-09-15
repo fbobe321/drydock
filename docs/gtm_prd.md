@@ -185,7 +185,13 @@ The §1b thesis, turned into a small content series that IS the marketing (not a
     `OPENAI_API_KEY` or config `api_key` — there is no `--api-key` flag).
   - **W6 folded in:** Qwen2.5-Coder-32B is the featured local default (a strong coder model so a
     first run doesn't stall on gemma4's ceiling). Owner did not override the recommendation.
-- **STILL PENDING (not blockers):** live end-to-end test of `quickstart.sh` on a GPU box (the GGUF
-  download + llama.cpp serve path is written but untested here); a hosted asciinema/GIF for the
-  landing + README (needs hosting); owner review of the repositioned copy. Then W3 (flagship
-  offline STIG→POA&M proof-of-work), W4/W5 (distribution + social proof), W7 (thought-leadership).
+- **2026-09-14 — W3 (flagship proof-of-work) reproducible substrate DONE:** `examples/stig-poam/`
+  — a self-contained, offline, deterministic run: sample DISA STIG XCCDF → assessed `.ckl` →
+  eMASS POA&M CSV mapped to NIST 800-53 (AC-10 / IA-5 / SC-13), no network / no LLM / no GPU.
+  `run.py` verified end-to-end; inputs + outputs committed; `README.md` explains why it's ungameable
+  and CUI-safe. This is the reviewable/CI-able artifact behind the landing demo. **Still owed for W3:**
+  the ~60s recorded terminal cast of the interactive `/stig-*` flow (needs a display + live model).
+- **STILL PENDING (not blockers):** the W3 screen recording (above); live end-to-end test of
+  `quickstart.sh` on a GPU box (GGUF download + llama.cpp serve written but untested here); a hosted
+  asciinema/GIF for the landing + README; owner review of the repositioned copy. Then W4/W5
+  (distribution + social proof) and W7 (NIST-2.0-for-agents thought-leadership).

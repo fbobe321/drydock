@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<Benchmark xmlns="http://checklists.nist.gov/xccdf/1.1" id="ASD_STIG_SAMPLE">
+  <title>Application Security and Development STIG (sample excerpt)</title>
+  <version>6</version>
+  <plain-text id="release-info">Release: 1 Benchmark Date: 24 Jan 2024</plain-text>
+
+  <Group id="V-222387">
+    <title>SRG-APP-000001</title>
+    <Rule id="SV-222387r879511_rule" severity="medium" weight="10.0">
+      <version>APSC-DV-000010</version>
+      <title>The application must limit the number of concurrent sessions to an organization-defined number.</title>
+      <description>&lt;VulnDiscussion&gt;Application management includes limiting the number of concurrent sessions; unlimited sessions raise the risk of denial of service and session abuse.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;</description>
+      <ident system="http://cyber.mil/cci">CCI-000054</ident>
+      <fixtext fixref="F-1">Configure the application to limit the number of concurrent sessions per account.</fixtext>
+      <check system="C-1"><check-content>Review the application configuration for a concurrent-session limit. If none is enforced, this is a finding.</check-content></check>
+    </Rule>
+  </Group>
+
+  <Group id="V-222388">
+    <title>SRG-APP-000172</title>
+    <Rule id="SV-222388r879589_rule" severity="high" weight="10.0">
+      <version>APSC-DV-001620</version>
+      <title>The application must transmit only encrypted representations of passwords.</title>
+      <description>&lt;VulnDiscussion&gt;Passwords sent in the clear can be intercepted. All password transmission must be over an encrypted channel.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;</description>
+      <ident system="http://cyber.mil/cci">CCI-000197</ident>
+      <fixtext fixref="F-2">Configure the application to transmit passwords only over TLS.</fixtext>
+      <check system="C-2"><check-content>Capture an authentication request. If credentials are transmitted without TLS, this is a finding.</check-content></check>
+    </Rule>
+  </Group>
+
+  <Group id="V-222389">
+    <title>SRG-APP-000068</title>
+    <Rule id="SV-222389r879530_rule" severity="low" weight="10.0">
+      <version>APSC-DV-000640</version>
+      <title>The application must display the Standard Mandatory DoD Notice and Consent Banner before granting access.</title>
+      <description>&lt;VulnDiscussion&gt;Display of the DoD-approved use notification before logon is a legal prerequisite for monitoring.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;</description>
+      <ident system="http://cyber.mil/cci">CCI-000048</ident>
+      <fixtext fixref="F-3">Configure the application to present the Standard Mandatory DoD Notice and Consent Banner at logon.</fixtext>
+      <check system="C-3"><check-content>Access the logon page. If the DoD consent banner is not displayed, this is a finding.</check-content></check>
+    </Rule>
+  </Group>
+
+  <Group id="V-222390">
+    <title>SRG-APP-000514</title>
+    <Rule id="SV-222390r879887_rule" severity="medium" weight="10.0">
+      <version>APSC-DV-002890</version>
+      <title>The application must use FIPS-validated cryptographic modules for all cryptographic operations.</title>
+      <description>&lt;VulnDiscussion&gt;Non-FIPS-validated cryptography provides no assurance of correct implementation and is prohibited for protecting DoD information.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;</description>
+      <ident system="http://cyber.mil/cci">CCI-002450</ident>
+      <fixtext fixref="F-4">Configure the application to use only FIPS-validated cryptographic modules and cipher suites.</fixtext>
+      <check system="C-4"><check-content>Enumerate the cryptographic modules/cipher suites in use. If any are not FIPS-validated, this is a finding.</check-content></check>
+    </Rule>
+  </Group>
+</Benchmark>

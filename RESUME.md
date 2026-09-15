@@ -89,8 +89,11 @@ users + 100 trial installs + 1 proof-of-work in 90d; stars secondary (credibilit
 (hero, title/meta, terminal demo → STIG→POA&M, stats, skills → "Built for NIST compliance") around the
 air-gapped-NIST wedge; W2 added `scripts/quickstart.sh` (one-command bootstrap: LOCAL Qwen2.5-Coder-32B
 via llama.cpp / FRONTIER keyed OpenAI-compatible) + a README Quickstart section (real flags only). W6
-folded in (Qwen2.5-Coder-32B = featured default). **NEXT: owner copy review; live-test quickstart.sh on
-a GPU box; then W3 (flagship offline STIG→POA&M proof-of-work), W4/W5 (distribution/social proof), W7
+folded in (Qwen2.5-Coder-32B = featured default). **W3 substrate DONE 2026-09-14:**
+`examples/stig-poam/` — offline deterministic XCCDF→assessed .ckl→eMASS POA&M (800-53-mapped:
+AC-10/IA-5/SC-13), verified end-to-end, inputs+outputs committed (the reviewable artifact behind the
+landing demo). **NEXT: owner copy review; the ~60s recorded /stig-* cast (needs display+model);
+live-test quickstart.sh on a GPU box; then W4/W5 (distribution/social proof), W7
 (NIST-2.0-for-agents content).** See `docs/gtm_prd.md` §7 execution log.
 FIAR REMOVAL (2026-09-13, owner chose full removal): excised
 `drydock/fiar.py`, 4 `fiar-*` skills, all 6 `Fiar*` tools (schemas+funcs+registration in
