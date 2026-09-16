@@ -589,21 +589,21 @@ VerifyFn = Callable[["Candidate"], "tuple[int, int]"]
 
 
 def make_shell_verifier(verify_cmd: str, fitness: str = "auto",
-                        timeout: int = 1800) -> VerifyFn:
+                        timeout: int = 600) -> VerifyFn:
     """A verifier that runs `verify_cmd` in the candidate's worktree and scores the output
     with drydock.ratchet.score_output — the same scorer the ratchet/eratchet use, so a
     candidate is judged by a real test run, never by the builder's self-report (§18/§20)."""
-    from drydock.ratchet import score_output
+    from drydock.ratchet import run_shell_bounded, score_output
 
     def verify(cand: Candidate) -> tuple[int, int]:
         if not cand.worktree or not Path(cand.worktree).exists():
             return 0, 0
         try:
-            r = subprocess.run(verify_cmd, cwd=cand.worktree, shell=True,
-                               capture_output=True, text=True, timeout=timeout)
+            out, rc, _ = run_shell_bounded(verify_cmd, cand.worktree, timeout)
         except (OSError, subprocess.SubprocessError):
             return 0, 1
-        return score_output((r.stdout or "") + (r.stderr or ""), fitness, r.returncode)
+        # a hung candidate (killed at the timeout) scores whatever finished before the kill
+        return score_output(out, fitness, rc)
 
     return verify
 

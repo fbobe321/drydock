@@ -496,3 +496,17 @@ def test_run_swarm_cancel_stops_queued_waves_and_verification(tmp_path):
     assert verified == []                         # verification skipped on cancel
     assert "cancelled" in events and "judge" in events
     assert len([c for c in res.candidates if c.commit]) == 1
+
+
+def test_shell_verifier_timeout_kills_hung_child(tmp_path):
+    import time
+
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    cand = swarm.Candidate(id="c-1", agent="a", commit="x", worktree=str(wt))
+    # the shell spawns a child that outlives the shell's own kill and holds the pipes open
+    verify = swarm.make_shell_verifier("sleep 30 & sleep 30; echo done", timeout=1)
+    t0 = time.monotonic()
+    passed, _total = verify(cand)
+    assert time.monotonic() - t0 < 10
+    assert passed == 0

@@ -87,6 +87,30 @@ class VerifyResult:
         return self.total > 0 and self.passed >= self.total
 
 
+def run_shell_bounded(command: str, cwd: str | None, timeout: float) -> tuple[str, int, bool]:
+    """Run a shell command with a timeout that actually holds: the command runs in its
+    own process group and the whole group is killed on timeout. (subprocess.run with
+    shell=True only kills /bin/sh; a hung child — e.g. pytest stuck in an infinite loop —
+    keeps the output pipes open and the call blocks far past the timeout.)
+    Returns (combined output, returncode, timed_out)."""
+    import signal
+
+    proc = subprocess.Popen(command, shell=True, cwd=cwd, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        timed_out = False
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+        out, err = proc.communicate()
+        timed_out = True
+    text = (out or "") + ("\n" + err if err else "")
+    return text, (124 if timed_out else proc.returncode), timed_out
+
+
 @dataclass
 class Verifier:
     """Runs a shell command and scores it. The command is the ground truth the
@@ -99,15 +123,11 @@ class Verifier:
 
     def run(self) -> VerifyResult:
         try:
-            proc = subprocess.run(
-                self.command, shell=True, cwd=self.cwd,
-                capture_output=True, text=True, timeout=self.timeout,
-            )
-            out = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
-            rc = proc.returncode
-        except subprocess.TimeoutExpired as e:
-            out = (e.output or "") + "\n[verifier timed out]"
-            rc = 124
+            out, rc, timed_out = run_shell_bounded(self.command, self.cwd, self.timeout)
+        except OSError as e:
+            out, rc, timed_out = f"[verifier failed to start: {e}]", 127, False
+        if timed_out:
+            out += "\n[verifier timed out]"
         p, t = score_output(out, self.mode, rc)
         return VerifyResult(p, t, rc, out)
 
