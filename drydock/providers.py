@@ -39,7 +39,9 @@ class RepetitionDetected(StallRetry):
     re-issue would just loop again, so the agent goes straight to decisive mode."""
 
 from drydock.loop_detect import runaway_repetition_len
-from drydock.tuning import extract_thinking, strip_leaked_tool_calls, strip_thinking_tokens, use_streaming
+from drydock.tuning import (
+    extract_thinking, split_think_tags, strip_leaked_tool_calls, strip_thinking_tokens, use_streaming,
+)
 
 # ── Provider registry ─────────────────────────────────────────────────────
 
@@ -430,6 +432,31 @@ def _image_url_block(path: str) -> dict | None:
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
 
 
+# (base_url, model) pairs whose server rejected image input as text-only. Process-wide
+# so every later request (and turn) sends plain text instead of re-hitting the 400.
+_TEXT_ONLY: set[tuple[str, str]] = set()
+
+
+def _vision_key(config: dict) -> tuple[str, str]:
+    prov = PROVIDERS.get(config.get("provider", "vllm"), PROVIDERS["vllm"])
+    base_url = config.get("base_url") or prov.get("base_url", "http://localhost:8000/v1")
+    return (str(base_url).rstrip("/"), str(config.get("model") or ""))
+
+
+def mark_text_only(config: dict) -> bool:
+    """Record that this endpoint's model can't take images. Returns True if newly marked."""
+    key = _vision_key(config)
+    if key in _TEXT_ONLY:
+        return False
+    _TEXT_ONLY.add(key)
+    return True
+
+
+def vision_enabled(config: dict) -> bool:
+    """False when vision is disabled in config or the server proved text-only."""
+    return config.get("vision", True) is not False and _vision_key(config) not in _TEXT_ONLY
+
+
 def _content_with_images(content):
     """Turn text that references on-disk image paths into a multimodal content
     list ([text, image_url…]); text without resolvable images passes through
@@ -451,15 +478,17 @@ def _content_with_images(content):
 _user_content_with_images = _content_with_images
 
 
-def messages_to_openai(messages: list, system: str) -> list:
-    """Convert neutral messages to OpenAI API format."""
+def messages_to_openai(messages: list, system: str, vision: bool = True) -> list:
+    """Convert neutral messages to OpenAI API format. vision=False sends image
+    references as plain text (text-only model)."""
     # value type is mixed (str content, multimodal list content, tool_calls list)
     result: list[dict] = [{"role": "system", "content": system}]
     for m in messages:
         role = m["role"]
         if role == "user":
             result.append({"role": "user",
-                           "content": _user_content_with_images(m["content"])})
+                           "content": (_user_content_with_images(m["content"])
+                                       if vision else m["content"])})
         elif role == "assistant":
             msg = {"role": "assistant", "content": m.get("content") or None}
             tcs = m.get("tool_calls", [])
@@ -482,7 +511,7 @@ def messages_to_openai(messages: list, system: str) -> list:
             # to look at — attach it so the model SEES it (servers read images
             # from tool messages too, verified). Only ViewImage, so an unrelated
             # tool mentioning a .png path never balloons the request.
-            if m.get("name") == "ViewImage" and isinstance(content, str):
+            if vision and m.get("name") == "ViewImage" and isinstance(content, str):
                 content = _content_with_images(content)
             result.append({
                 "role": "tool",
@@ -559,7 +588,7 @@ def stream(
     # dict(config) shallow-copy) so the TUI's STOP can reach this exact client.
     config.setdefault("_abort", {})["client"] = client
 
-    oai_messages = messages_to_openai(messages, system)
+    oai_messages = messages_to_openai(messages, system, vision=vision_enabled(config))
 
     has_tools = bool(tool_schemas)
     # Gemma (and any local server whose model name we can't trust) corrupts
@@ -647,6 +676,9 @@ def stream(
         if delta.content:
             # Strip any leaked thinking-token markers (best-effort per chunk).
             chunk_text = strip_thinking_tokens(delta.content)
+            # <think>/</think> tags usually arrive as whole tokens; keep them in the
+            # buffer (split off at the end) but don't display the bare markers.
+            shown = chunk_text.replace("<think>", "").replace("</think>", "")
             # Keep ANY non-empty chunk — including whitespace-only ones. A
             # `.strip()` guard here used to DROP newline-only chunks (the blank
             # line a model streams between markdown blocks arrives as its own
@@ -654,7 +686,8 @@ def stream(
             # skips chunks that stripping emptied (e.g. a lone thinking marker).
             if chunk_text:
                 text += chunk_text
-                yield TextChunk(chunk_text)
+                if shown:
+                    yield TextChunk(shown)
                 # Throttled: only scan once text is long enough and every ~200
                 # new chars, so the common path pays almost nothing.
                 if len(text) - _rep_checked_at >= 200:
@@ -705,6 +738,9 @@ def stream(
             "input": inp,
         })
 
+    # A template-opened <think> leaves "reasoning…</think>answer" in the content —
+    # keep only the answer in the recorded turn (it was already shown while streaming).
+    _, text = split_think_tags(text)
     yield AssistantTurn(text, tool_calls, in_tok, out_tok)
 
 

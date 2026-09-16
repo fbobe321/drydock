@@ -515,7 +515,7 @@ class DrydockApp(App):
         # actual attach happens at the API boundary in providers).
         from drydock import providers
         imgs = providers.detect_image_paths(text)
-        if imgs:
+        if imgs and providers.vision_enabled(self.config):
             import os as _os
             names = ", ".join(_os.path.basename(p) for p in imgs)
             self._info(f"📎 attached {len(imgs)} image(s) for the model to see: {names}")

@@ -150,3 +150,14 @@ def test_extract_thinking_noop_when_no_marker():
     thinking, text = extract_thinking(raw)
     assert thinking == ""
     assert text == raw
+
+
+def test_split_think_tags_template_opened():
+    from drydock.tuning import split_think_tags
+    assert split_think_tags("plan it\n</think>\n74 done") == ("plan it", "74 done")
+    assert split_think_tags("<think>x</think>ok") == ("x", "ok")
+    assert split_think_tags("no tags") == ("", "no tags")
+
+
+def test_extract_thinking_handles_think_tags():
+    assert extract_thinking("reason</think>answer") == ("reason", "answer")

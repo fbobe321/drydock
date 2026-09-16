@@ -507,6 +507,15 @@ def main():
     # the PRD" content fought the system prompt and risked turning a plain
     # greeting into a runaway build. The TUI reads this from config; CLI modes
     # call load_project_instructions directly (see run_interactive/run_oneshot).
+    # A context_limit above the server's real window overflows it mid-task and the
+    # ctx gauge lies. Unless the user pinned --context-limit, ask the server once and
+    # adopt its window when smaller (never grow past config). Best-effort, short timeout.
+    if not args.context_limit and config.get("base_url"):
+        from drydock.providers import probe_server_context
+        n_ctx = probe_server_context(config["base_url"], timeout=2.0)
+        if n_ctx and n_ctx < int(config.get("context_limit") or 65536):
+            config["context_limit"] = n_ctx
+
     config["project_instructions"] = load_project_instructions()
     # In a git project, drop a discoverable per-project prompt template at
     # <project>/.drydock/system_prompt.md (inert until edited). Then load the

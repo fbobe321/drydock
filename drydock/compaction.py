@@ -51,6 +51,19 @@ def extract_server_n_ctx(err: str) -> int | None:
     return None
 
 
+def is_text_only_model_error(err: str) -> bool:
+    """Whether a provider 400 says the MODEL can't take images at all (a text-only
+    model, e.g. vLLM "X is not a multimodal model", llama.cpp "image input is not
+    supported" when no --mmproj is loaded). Distinct from a bad image: the fix is to
+    drop attachments and retry, not to ask the user for a different file."""
+    e = (err or "").lower()
+    return (
+        "not a multimodal model" in e
+        or "image input is not supported" in e
+        or ("does not support" in e and ("image" in e or "multimodal" in e or "vision" in e))
+    )
+
+
 def is_image_load_error(err: str) -> bool:
     """Whether a provider 400 is the server failing to decode an attached image
     (corrupt / truncated / unsupported), so the agent ends the turn with a clean

@@ -157,13 +157,31 @@ def is_gemma(model: str | None) -> bool:
     return bool(model) and "gemma" in model.lower()
 
 
+def split_think_tags(text: str) -> tuple[str, str]:
+    """Split <think>…</think> reasoning (Qwen/Nemotron/DeepSeek style) off the answer.
+
+    Chat templates often open <think> in the PROMPT, so the completion carries only
+    the closing tag: everything before the last </think> is reasoning. Returns
+    ("", text) when there is no closing tag."""
+    if not text or "</think>" not in text:
+        return "", text
+    thinking, answer = text.rsplit("</think>", 1)
+    thinking = thinking.replace("<think>", "").strip()
+    return thinking, answer.lstrip()
+
+
 def extract_thinking(text: str) -> tuple[str, str]:
     """Return (thinking_content, cleaned_text).
 
-    Extracts the content of Gemma's <|channel>…<channel|> blocks so callers
-    can surface it in the UI, then strips the markers from the returned text.
-    Returns ("", text) when no thinking block is present.
+    Extracts the content of Gemma's <|channel>…<channel|> blocks (or a
+    <think>…</think> span) so callers can surface it in the UI, then strips the
+    markers from the returned text. Returns ("", text) when no thinking block is
+    present.
     """
+    if text and "</think>" in text:
+        thinking, answer = split_think_tags(text)
+        inner, answer = extract_thinking(answer)
+        return "\n\n".join(t for t in (thinking, inner) if t), answer
     if not text or "<|channel>" not in text:
         return "", text
     spans = _THINKING_RE.findall(text)

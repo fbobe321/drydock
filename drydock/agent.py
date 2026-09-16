@@ -47,6 +47,7 @@ from drydock.tools import register_all
 register_all()
 from drydock.compaction import (
     maybe_compact, emergency_compact, is_context_length_error, is_image_load_error,
+    is_text_only_model_error,
     extract_server_n_ctx,
 )
 from drydock.loop_detect import LoopTracker, degenerate_argument
@@ -409,6 +410,17 @@ def run(
                     if retries >= 2:
                         raise
                     yield TextChunk("\n[context limit hit — compacting and retrying...]\n")
+                elif is_text_only_model_error(err):
+                    # The model can't take images at all. Stop attaching them for this
+                    # endpoint and retry the step as text — a vision-less model can
+                    # still do the task (read the file with tools), it just can't SEE it.
+                    from drydock.providers import mark_text_only
+                    if not mark_text_only(config):
+                        raise
+                    yield TextChunk(
+                        "\n[This model is text-only — sending image references as plain "
+                        "text from now on and retrying...]\n"
+                    )
                 elif is_image_load_error(err):
                     # Corrupt/truncated/unsupported image the server couldn't decode —
                     # end the turn cleanly rather than dumping the raw 400.
