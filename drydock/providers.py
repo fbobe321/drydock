@@ -17,7 +17,10 @@ from typing import Generator
 # HTTP client does NOT interrupt an in-flight blocking read, so instead we wait
 # on a future and, when the user cancels, return immediately and let the
 # orphaned request finish (and be discarded) in the background.
-_LLM_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="llm")
+# Sized for in-process swarms: every in-flight request holds a thread (a streamed one holds
+# a second for its reader), and abandoned requests keep theirs until they finish — 8 threads
+# made an 8-agent swarm in one TUI queue behind itself.
+_LLM_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=64, thread_name_prefix="llm")
 
 
 class _StopRequested(Exception):
@@ -139,19 +142,57 @@ def _friendly_timeout(base_url: str, timeout_s: float) -> str:
     )
 
 
+def _friendly_connect_timeout(base_url: str) -> str:
+    return (
+        f"Could not open a connection to the model server at {base_url} in time "
+        f"(connect timeout, retried). The server may be overloaded or the network slow.\n"
+        f"  Your last message was not lost — just send it again."
+    )
+
+
+def _is_connect_timeout(e: BaseException) -> bool:
+    """An SDK APITimeoutError covers BOTH connect and read timeouts; tell them apart."""
+    import httpx
+
+    cur: BaseException | None = e
+    for _ in range(5):
+        if cur is None:
+            break
+        if isinstance(cur, (httpx.ConnectTimeout, httpx.PoolTimeout)):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
+
+
+_CONNECT_RETRIES = 2          # transient connect timeouts (busy server / slow port proxy)
+_CONNECT_BACKOFF_S = (2.0, 5.0)
+
+
+def _timeout_error(e: BaseException, base_url: str, timeout_s: float) -> "LLMUnreachable":
+    if _is_connect_timeout(e):
+        return LLMUnreachable(_friendly_connect_timeout(base_url))
+    return LLMUnreachable(_friendly_timeout(base_url, timeout_s))
+
+
 def _safe_create(client, kwargs: dict, base_url: str, provider: str, timeout_s: float = 600.0):
     """Call chat.completions.create, mapping a connection failure to a clean
     LLMUnreachable instead of a raw traceback / 12-minute hang."""
     import openai
 
-    try:
-        return client.chat.completions.create(**kwargs)
-    # APITimeoutError subclasses APIConnectionError — catch it FIRST so a slow
-    # (but alive) server gets the accurate "timed out" message, not "down".
-    except openai.APITimeoutError as e:
-        raise LLMUnreachable(_friendly_timeout(base_url, timeout_s)) from e
-    except openai.APIConnectionError as e:
-        raise LLMUnreachable(_friendly_unreachable(base_url, provider)) from e
+    import time as _time
+
+    for attempt in range(_CONNECT_RETRIES + 1):
+        try:
+            return client.chat.completions.create(**kwargs)
+        # APITimeoutError subclasses APIConnectionError — catch it FIRST so a slow
+        # (but alive) server gets the accurate "timed out" message, not "down".
+        except openai.APITimeoutError as e:
+            if _is_connect_timeout(e) and attempt < _CONNECT_RETRIES:
+                _time.sleep(_CONNECT_BACKOFF_S[attempt])
+                continue
+            raise _timeout_error(e, base_url, timeout_s) from e
+        except openai.APIConnectionError as e:
+            raise LLMUnreachable(_friendly_unreachable(base_url, provider)) from e
 
 
 def _create_abortable(client, kwargs: dict, base_url: str, provider: str, cancel,
@@ -167,6 +208,7 @@ def _create_abortable(client, kwargs: dict, base_url: str, provider: str, cancel
 
     fut = _LLM_POOL.submit(client.chat.completions.create, **kwargs)
     start = _time.monotonic()
+    connect_retries = 0
     while True:
         try:
             return fut.result(timeout=0.2)
@@ -177,7 +219,17 @@ def _create_abortable(client, kwargs: dict, base_url: str, provider: str, cancel
                 raise StallRetry(stall_secs)  # orphan the wedged request; caller retries
         # APITimeoutError subclasses APIConnectionError — catch it FIRST.
         except openai.APITimeoutError as e:
-            raise LLMUnreachable(_friendly_timeout(base_url, timeout_s)) from e
+            if _is_connect_timeout(e) and connect_retries < _CONNECT_RETRIES:
+                # transient: the server/proxy was slow to ACCEPT — re-issue (cancellable wait)
+                wait_until = _time.monotonic() + _CONNECT_BACKOFF_S[connect_retries]
+                connect_retries += 1
+                while _time.monotonic() < wait_until:
+                    if cancel is not None and cancel.is_set():
+                        raise _StopRequested
+                    _time.sleep(0.1)
+                fut = _LLM_POOL.submit(client.chat.completions.create, **kwargs)
+                continue
+            raise _timeout_error(e, base_url, timeout_s) from e
         except openai.APIConnectionError as e:
             raise LLMUnreachable(_friendly_unreachable(base_url, provider)) from e
 
@@ -246,6 +298,7 @@ class AssistantTurn:
     input_tokens: int
     output_tokens: int
     had_leaked_call: bool = False  # model emitted a tool call as text, not a call
+    truncated: bool = False  # generation stopped at max_tokens (finish_reason == "length")
 
 
 # ── Tool-call argument parsing ────────────────────────────────────────────
@@ -650,6 +703,7 @@ def stream(
         return
 
     text = ""
+    truncated = False
     tool_buf: dict = {}  # index → {id, name, args}
     in_tok = out_tok = 0
     # Runaway-repetition guard: a weak model can collapse into streaming one
@@ -672,6 +726,8 @@ def stream(
 
         choice = chunk.choices[0]
         delta = choice.delta
+        if getattr(choice, "finish_reason", None) == "length":
+            truncated = True
 
         if delta.content:
             # Strip any leaked thinking-token markers (best-effort per chunk).
@@ -741,7 +797,7 @@ def stream(
     # A template-opened <think> leaves "reasoning…</think>answer" in the content —
     # keep only the answer in the recorded turn (it was already shown while streaming).
     _, text = split_think_tags(text)
-    yield AssistantTurn(text, tool_calls, in_tok, out_tok)
+    yield AssistantTurn(text, tool_calls, in_tok, out_tok, truncated=truncated)
 
 
 def _complete_nonstreaming(
@@ -795,4 +851,5 @@ def _complete_nonstreaming(
     yield AssistantTurn(
         text, tool_calls, in_tok, out_tok,
         had_leaked_call=had_leak and not tool_calls,
+        truncated=getattr(choice, "finish_reason", None) == "length",
     )

@@ -217,6 +217,7 @@ def run(
     leaked_call_retries = 0
     plan_continue_nudges = 0  # consecutive "you stopped mid-plan" nudges
     empty_response_nudges = 0  # consecutive "you returned nothing" nudges
+    truncated_nudges = 0  # "you hit the output limit without acting" nudges
     # Safety valve for a degenerate loop: the SAME tool call run over and over
     # with the SAME result — success OR failure (seen failing a Write 160×, and
     # re-running an identical passing `pytest` 92× for 25 min). The advisory
@@ -436,10 +437,15 @@ def run(
         if assistant_turn is None:
             break
 
-        # Record assistant message
+        # Record assistant message. A turn cut off at max_tokens with no tool call is
+        # (almost always) runaway planning — keep only its tail so it doesn't eat the
+        # context window on every later request.
+        _content = assistant_turn.text
+        if assistant_turn.truncated and not assistant_turn.tool_calls and len(_content) > 2000:
+            _content = "[…long planning cut off at the output limit…]\n" + _content[-1500:]
         state.messages.append({
             "role": "assistant",
-            "content": assistant_turn.text,
+            "content": _content,
             "tool_calls": assistant_turn.tool_calls,
         })
 
@@ -456,6 +462,22 @@ def run(
         # case nudge it to use the real function interface and retry, instead
         # of ending the turn with nothing done. Capped so it can never spin.
         if not assistant_turn.tool_calls:
+            # Hit the output-token limit before acting (long planning / a whole-file write
+            # that didn't fit). That is not "done" — nudge it to act in smaller steps.
+            if assistant_turn.truncated and truncated_nudges < 3:
+                truncated_nudges += 1
+                _emit(state, "truncated_turn", nudge=truncated_nudges)
+                yield TextChunk("\n[output limit reached before any action — nudging to act in smaller steps]\n")
+                state.messages.append({
+                    "role": "user",
+                    "content": (
+                        "[SYSTEM] Your reply hit the output-length limit before you took any "
+                        "action, so nothing was done. Do not re-plan. Act NOW with one tool "
+                        "call, and keep each call small: implement or edit ONE function or "
+                        "section at a time (Edit), then continue with the next."
+                    ),
+                })
+                continue
             if assistant_turn.had_leaked_call and leaked_call_retries < 2:
                 leaked_call_retries += 1
                 state.messages.append({
@@ -930,6 +952,7 @@ def run(
         # bounds back-to-back stalls).
         plan_continue_nudges = 0
         empty_response_nudges = 0
+        truncated_nudges = 0
 
         # Nudge: if past 15 tool calls without any edits, inject gentle guidance
         if tool_call_count == 15 and not session_has_edited and config.get("force_first_tool"):

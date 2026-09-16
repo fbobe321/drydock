@@ -181,9 +181,15 @@ class DrydockApp(App):
         if self._erx is not None:
             self._erx["cancel"].set()
             self._erx = None
+        swarm_cancel = (self._swarm or {}).get("cancel")
+        swarm_active = swarm_cancel is not None
+        if swarm_cancel is not None:
+            swarm_cancel.set()
         if not self._busy:
             if erx_active:
                 self._info("⏹ eratchet stopping…")
+            if swarm_active:
+                self._info("⏹ swarm stopping — agents finish their current step…")
             return
         self._cancel.set()
         self._abort_inflight()
@@ -414,9 +420,11 @@ class DrydockApp(App):
         used = self._ctx_tokens
         pct = min(100, round(used / limit * 100)) if limit else 0
         ctx = f"ctx {used:,}/{limit // 1000}k ({pct}%)"
-        flag = "⚓ working" if self._busy else "⚓ ready"
+        # A swarm / eratchet runs off-thread without setting _busy — still show it as running.
+        bg = "swarm" if self._swarm else ("eratchet" if self._erx else "")
+        flag = "⚓ working" if self._busy else (f"⚓ {bg} running" if bg else "⚓ ready")
         # Busy → show the interrupt keys; idle → the quit hint.
-        keys = "Esc/Ctrl+C stop" if self._busy else "Ctrl+C×2 quit"
+        keys = "Esc/Ctrl+C stop" if (self._busy or bg) else "Ctrl+C×2 quit"
         # Show the task phase once it's past the default (understand).
         ph = getattr(self.state, "task", None)
         phase = f"  ·  {ph.phase}" if (ph and ph.is_set() and ph.phase != "understand") else ""
@@ -1230,17 +1238,21 @@ class DrydockApp(App):
         harness escalating on its own (no user command); `verify_cmd` pins the checker
         (e.g. the one the single agent kept failing). agents="auto" sizes to the server's
         detected concurrency (hammer a big box, tone down a small one)."""
-        self._swarm = {"active": True}
+        import threading
+
+        cancel = threading.Event()
+        self._swarm = {"active": True, "cancel": cancel}
+        self._refresh_status()
         head = ("⚙ the harness is escalating to a parallel swarm" if auto
                 else f"⇶ /swarm launching: {objective!r}")
         count = f"{agents}" if isinstance(agents, int) else "auto-sized"
         self._info(f"{head} — {count} agents exploring in isolated worktrees "
                    "(in-process, your working tree is left alone). Esc to stop.")
         self.run_worker(
-            lambda: self._swarm_worker(cwd, objective, agents, verify_cmd), thread=True)
+            lambda: self._swarm_worker(cwd, objective, agents, verify_cmd, cancel), thread=True)
 
     def _swarm_worker(self, cwd: str, objective: str, agents: "int | str",
-                      verify_cmd: str | None = None) -> None:
+                      verify_cmd: str | None = None, cancel=None) -> None:
         """Off-thread: drive run_swarm, streaming milestones into this session's transcript."""
         from drydock import swarm as swarmmod
 
@@ -1267,7 +1279,8 @@ class DrydockApp(App):
             # share=True: later-wave agents read peers' verified attempts off the blackboard
             # and compare notes, instead of exploring fully blind (§10).
             res = swarmmod.run_swarm(cwd, objective, agents=agents, base_config=self.config,
-                                     verify_cmd=verify_cmd, on_event=on_event, share=True)
+                                     verify_cmd=verify_cmd, on_event=on_event, share=True,
+                                     cancel=cancel)
             if res.converged and res.winner is not None:
                 tail = (f"\nApply it:  git cherry-pick {res.winner.commit}")
             elif res.winner is not None:

@@ -328,10 +328,11 @@ def _shell_env_note() -> str:
     )
 
 
-def system_prompt_for_model(model: str | None) -> str:
-    """Return the system prompt best suited to the model."""
+def system_prompt_for_model(model: str | None, *, worker: bool = False) -> str:
+    """Return the system prompt best suited to the model. worker=True drops the
+    user-facing slash-command help (a background swarm worker never talks to the user)."""
     base = _GEMMA_SYSTEM_PROMPT if is_gemma(model) else _DEFAULT_SYSTEM_PROMPT
-    return base + _DRYDOCK_COMMANDS_HELP + _shell_env_note()
+    return base + ("" if worker else _DRYDOCK_COMMANDS_HELP) + _shell_env_note()
 
 
 def thinking_level_for_turn(turn_count: int, is_user_turn: bool) -> str:

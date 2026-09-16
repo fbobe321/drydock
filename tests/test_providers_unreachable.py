@@ -93,3 +93,54 @@ def test_friendly_timeout_renders_minutes_and_remediation():
     assert "30 min" in msg
     assert "request_timeout" in msg     # how to raise the limit
     assert "reasoning budget" in msg    # how to shorten turns
+
+
+# ── Connect timeouts: retried, and reported as connect (not read) timeouts ──
+class _ConnectTimeoutClient:
+    def __init__(self, fail_times):
+        self.fail_times = fail_times
+        self.calls = 0
+        outer = self
+
+        class _Completions:
+            @staticmethod
+            def create(**kwargs):
+                outer.calls += 1
+                if outer.calls <= outer.fail_times:
+                    req = httpx.Request("POST", "http://localhost:8000/v1")
+                    try:
+                        raise httpx.ConnectTimeout("connect timed out", request=req)
+                    except httpx.ConnectTimeout as e:
+                        raise openai.APITimeoutError(request=req) from e
+                return "OK"
+
+        class _Chat:
+            completions = _Completions
+
+        self.chat = _Chat
+
+
+def _fast_backoff(monkeypatch):
+    from drydock import providers
+    monkeypatch.setattr(providers, "_CONNECT_BACKOFF_S", (0.01, 0.01))
+
+
+def test_connect_timeout_is_retried(monkeypatch):
+    _fast_backoff(monkeypatch)
+    c = _ConnectTimeoutClient(fail_times=2)
+    assert _safe_create(c, {}, "http://localhost:8000/v1", "vllm", 1800.0) == "OK"
+    c2 = _ConnectTimeoutClient(fail_times=2)
+    assert _create_abortable(c2, {}, "http://localhost:8000/v1", "vllm", None, 1800.0) == "OK"
+    assert c.calls == 3 and c2.calls == 3
+
+
+def test_persistent_connect_timeout_says_connect_not_read(monkeypatch):
+    _fast_backoff(monkeypatch)
+    for call in (lambda c: _safe_create(c, {}, "http://x:8000/v1", "vllm", 1800.0),
+                 lambda c: _create_abortable(c, {}, "http://x:8000/v1", "vllm", None, 1800.0)):
+        c = _ConnectTimeoutClient(fail_times=99)
+        with pytest.raises(LLMUnreachable) as ei:
+            call(c)
+        assert "connect timeout" in str(ei.value)
+        assert "read timeout" not in str(ei.value)
+        assert c.calls == 3

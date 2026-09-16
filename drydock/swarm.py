@@ -764,12 +764,14 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
               runner: AgentRunner = default_agent_runner, verify: VerifyFn | None = None,
               on_event: "Callable[[str, dict], None] | None" = None,
               share: bool = False, waves: int = 2,
-              swarm_id: str | None = None) -> SwarmResult:
+              swarm_id: str | None = None, cancel=None) -> SwarmResult:
     """Coordinate a parallel-strategy swarm end to end (§24 Parallel, the MVP default):
     decompose into N diversity-injected Builders (§15), fan them out concurrently over one
     shared inference server (§22), verify each candidate independently (§18), and converge on
     the best by evidence (§20). Never raises on an individual worker — failures are contained
-    (§32). `runner`/`verify` are injectable for testing without a live model."""
+    (§32). `runner`/`verify` are injectable for testing without a live model. `cancel` (a
+    threading.Event) stops the swarm: running agents end their turn loop, queued ones never
+    start, and verification is skipped — whatever was produced is still judged."""
     from concurrent.futures import ThreadPoolExecutor
 
     repo = repo_root(cwd)
@@ -777,6 +779,12 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
         raise ValueError("swarm needs a git repository (run `git init` first) for worktree "
                          "isolation")
     bc = base_config or {}
+    if cancel is not None:
+        # workers inherit this as their agent-loop stop signal (agent.run checks _cancel)
+        base_config = bc = {**bc, "_cancel": cancel}
+
+    def _cancelled() -> bool:
+        return cancel is not None and cancel.is_set()
     # Auto-size to the server's real concurrency (§21/§22): hammer a big box, tone down a
     # small one. N = min(hardware concurrency, task-demand, budget) — never maximized.
     detected = 0
@@ -830,10 +838,19 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
 
     # 2. fan out workers over the shared server (§22). Each is isolated + safe. `extra_sys`
     # carries peers' notes (blackboard consumption, §10) for waves after the first.
+    # Workers are full coding agents: give them drydock's own coding prompt (tool use,
+    # verify-before-done, act-don't-plan), then the swarm role + diversity angle on top.
+    # Without it a worker got only the 3-line role text and tended to plan until it ran
+    # out of output tokens instead of editing.
+    from drydock.tuning import system_prompt_for_model
+    base_sys = system_prompt_for_model(str(bc.get("model") or ""), worker=True) + "\n\n"
+
     def _spawn(i: int, extra_sys: str) -> WorkerOutcome:
+        if _cancelled():
+            return WorkerOutcome(agent=f"agent-{i + 1}", ok=False, error="cancelled")
         angle, sysprompt = angles[i]
         out = run_worker(bb, repo, base_ref, f"agent-{i + 1}", objective,
-                         role="builder", system_prompt=sysprompt + extra_sys,
+                         role="builder", system_prompt=base_sys + sysprompt + extra_sys,
                          base_config=base_config, max_turns=max_turns,
                          max_tool_calls=max_tool_calls, runner=runner)
         _ev("worker_done", agent=out.agent, ok=out.ok, files=out.files_changed,
@@ -842,7 +859,7 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
 
     def _verify_unscored() -> None:
         """Independently score any candidate not yet verified (§18)."""
-        if verify is None:
+        if verify is None or _cancelled():
             return
         for c in bb.candidates():
             if c.commit and c.tests_total == 0:
@@ -858,7 +875,7 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
         # notes the next wave reads are already scored.
         per = -(-n // max(2, waves))  # ceil(n / waves)
         i0, w = 0, 0
-        while i0 < n:
+        while i0 < n and not _cancelled():
             idxs = list(range(i0, min(i0 + per, n)))
             i0 += per
             notes = _peer_notes(bb.candidates()) if w > 0 else ""
@@ -878,6 +895,9 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
     _verify_unscored()
 
     # 4. judge on evidence (§20) and check convergence (§19).
+    if _cancelled():
+        bb.emit("SWARM_CANCELLED")
+        _ev("cancelled")
     final = bb.candidates()
     winner = judge(final)
     converged = bool(winner and winner.tests_total > 0 and winner.tests_passed == winner.tests_total)

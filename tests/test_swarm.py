@@ -468,3 +468,31 @@ def test_cli_solve_dispatches_to_run_swarm(tmp_path, capsys, monkeypatch):
     assert seen == {"objective": "fix the bug", "agents": 3, "verify_cmd": "pytest -q"}
     out = capsys.readouterr().out
     assert "SWARM CONVERGED" in out and "cherry-pick abc123" in out
+
+
+def test_run_swarm_cancel_stops_queued_waves_and_verification(tmp_path):
+    import threading
+
+    repo = _init_repo(tmp_path / "repo")
+    cancel = threading.Event()
+    seen_cancel, verified = [], []
+
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        seen_cancel.append(base_config.get("_cancel") is cancel)
+        (Path(cwd) / "answer.txt").write_text("x")
+        cancel.set()          # user hits Esc while the first wave is running
+        return "wrote"
+
+    def verify(cand):
+        verified.append(cand.id)
+        return (1, 1)
+
+    events = []
+    res = swarm.run_swarm(repo, "obj", agents=4, base_config={}, runner=runner,
+                          verify=verify, share=True, waves=2, max_workers=1,
+                          cancel=cancel, on_event=lambda k, d: events.append(k))
+    assert seen_cancel and all(seen_cancel)      # workers get the swarm's stop signal
+    assert len(seen_cancel) == 1                  # queued agents never started
+    assert verified == []                         # verification skipped on cancel
+    assert "cancelled" in events and "judge" in events
+    assert len([c for c in res.candidates if c.commit]) == 1
