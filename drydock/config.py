@@ -33,6 +33,12 @@ DEFAULTS: dict[str, object] = {
     # OpenRouter, Together). Mirrors `advisor_api_key`. Can also come from the
     # provider's api_key_env (e.g. OPENAI_API_KEY); the config value wins.
     "api_key": "",
+    # Auto-swarm (opt-in): when true, one-shot `-p` tasks that look like a substantial,
+    # self-contained implementation (swarm.looks_substantial) are solved by a competitive
+    # swarm of `auto_swarm_agents` parallel agents (winner applied), instead of one agent.
+    # Trivial edits/questions/reads always stay single-agent. Off by default.
+    "auto_swarm": False,
+    "auto_swarm_agents": 4,
     "max_tokens": 8192,  # 4096 truncated large file writes mid-JSON (→ _raw fail)
     "temperature": 0.2,
     # The model server's context window (llama.cpp -c / vLLM --max-model-len).

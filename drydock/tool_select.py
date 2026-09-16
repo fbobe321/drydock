@@ -44,6 +44,13 @@ _FAMILIES: list[tuple[frozenset[str], tuple[str, ...]]] = [
     (frozenset({"Jobs"}),
      ("job", "background", "training", "still running", "long-running", "long running",
       "status of", "check on", "how is the", "how's the", "in the background")),
+    # Multi-agent delegation/parallelism: surface Swarm (competitive parallel agents),
+    # Worker (delegate a subtask), and Dispatch (parallel investigation) when the task is
+    # a substantial implementation/refactor where parallel attempts or delegation help.
+    (frozenset({"Swarm", "Worker", "Dispatch"}),
+     ("implement", "module", "feature", "refactor", "rewrite", "build the", "all functions",
+      "each function", "tests pass", "make the tests", "parallel", "swarm", "several",
+      "whole", "entire", "port ", "migrate")),
 ]
 
 # External/mutating tools deprioritised while merely exploring (PRD F1.4: read &

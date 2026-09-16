@@ -473,6 +473,38 @@ SCHEMAS = [
         },
     },
     {
+        "name": "Swarm",
+        "description": (
+            "Spin up a competitive SWARM of parallel agents on ONE self-contained objective. "
+            "N independent Builder agents each solve it in an isolated git worktree, are verified "
+            "independently, share findings via a blackboard, and the STRONGEST (most tests passing) "
+            "is applied to your working tree. PREFER THIS over solving a substantial, self-contained "
+            "implementation yourself step-by-step — parallel attempts + picking the verified winner "
+            "beats one sequential pass, especially for a whole module/feature with a test or check to "
+            "score against (e.g. 'implement all functions in lib.py so pytest passes'). Give a clear "
+            "objective and, when possible, a `verify` command so winners are scored on real tests. "
+            "Returns a summary; the winner's file changes are applied in place — review and verify after."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "objective": {
+                    "type": "string",
+                    "description": "The self-contained implementation objective for the swarm to solve.",
+                },
+                "agents": {
+                    "type": "integer",
+                    "description": "Number of parallel worker agents (2-8, default 4).",
+                },
+                "verify": {
+                    "type": "string",
+                    "description": "Optional test/verify command to score candidates (e.g. 'python -m pytest -q'); auto-detected if omitted.",
+                },
+            },
+            "required": ["objective"],
+        },
+    },
+    {
         "name": "GitStatus",
         "description": (
             "Show the current branch and a concise list of changed/staged/"
@@ -2050,6 +2082,48 @@ def tool_worker(params: dict, config: dict) -> str:
                          max_turns=40, max_tool_calls=40, read_only=False)
 
 
+def tool_swarm(params: dict, config: dict) -> str:
+    """Spin up a competitive SWARM of parallel agents on one self-contained objective:
+    N independent Builder agents each attempt it in an isolated git worktree, are verified
+    independently, cross-pollinate via a blackboard, and the strongest (most tests passing)
+    is applied to your working tree. Use it for a substantial, self-contained implementation
+    where several parallel attempts + picking the winner beats one sequential pass. Returns a
+    summary; the winner's changes are applied in place (review + verify after)."""
+    objective = _as_text(params.get("objective") or params.get("prompt") or params.get("task")).strip()
+    if not objective:
+        return ("Error: `Swarm` needs an `objective` — a self-contained implementation goal "
+                "(e.g. 'implement all functions in parser.py so its tests pass').")
+    try:
+        agents = max(2, min(8, int(params.get("agents", 4))))
+    except (TypeError, ValueError):
+        agents = 4
+    verify_cmd = _as_text(params.get("verify") or "").strip() or None
+    cwd = config.get("cwd") or os.getcwd()
+    try:
+        from drydock import swarm as _swarm
+        res = _swarm.run_swarm(cwd, objective, agents=agents, base_config=config,
+                               verify_cmd=verify_cmd, share=True, waves=2)
+    except Exception as e:  # noqa: BLE001
+        return f"Swarm could not run: {e}"
+    n = len(res.candidates)
+    if not res.converged or res.winner is None:
+        return (f"Swarm ran {agents} agents ({n} candidate(s)) but none converged/passed — "
+                f"no changes applied. Do it directly, or refine the objective / verify command.")
+    w = res.winner
+    try:
+        r = subprocess.run(["git", "checkout", w.commit, "--", "."], cwd=cwd,
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            return (f"Swarm converged (winner {w.commit[:12]} by {w.agent}, "
+                    f"{w.tests_passed}/{w.tests_total} tests) but applying it failed: "
+                    f"{r.stderr.strip()}. Apply manually: git checkout {w.commit} -- .")
+    except Exception as e:  # noqa: BLE001
+        return f"Swarm converged but applying the winner errored: {e}"
+    return (f"✓ Swarm of {agents} agents converged and applied the winner (by {w.agent}): "
+            f"{w.tests_passed}/{w.tests_total} tests, status {w.status}, {w.files_changed} file(s) "
+            f"changed (commit {w.commit[:12]}). {n} candidate(s) total. Review the changes and verify.")
+
+
 def _git_cwd(config: dict) -> str:
     return config.get("cwd") or os.getcwd()
 
@@ -2763,6 +2837,7 @@ _TOOLS = [
     ("task", tool_task, True),
     ("Dispatch", tool_dispatch, True),
     ("Worker", tool_worker, False),
+    ("Swarm", tool_swarm, False),
     ("Knowledge", tool_knowledge, True),
     ("BuildKnowledge", tool_build_knowledge, False),
     ("GraphQuery", tool_graphquery, True),
@@ -2798,7 +2873,7 @@ def register_all():
             "Write": tool_write, "Edit": tool_edit,
             "Bash": tool_bash, "Jobs": tool_jobs, "Glob": tool_glob, "Grep": tool_grep,
             "todo": tool_todo, "task": tool_task, "Dispatch": tool_dispatch,
-            "Worker": tool_worker,
+            "Worker": tool_worker, "Swarm": tool_swarm,
             "Consult": tool_consult, "Knowledge": tool_knowledge,
             "Ledger": tool_ledger,
             "BuildKnowledge": tool_build_knowledge,

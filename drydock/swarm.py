@@ -734,6 +734,29 @@ class SwarmResult:
     candidates: list[Candidate]
 
 
+# Auto-swarm triviality gate: route a task to the swarm only when it looks like a
+# substantial, self-contained implementation — never a one-line fix, question, or read.
+_SUBSTANTIAL = ("implement", "build the", "build a", "refactor", "rewrite", "create the",
+                "all functions", "each function", "whole module", "entire", "feature",
+                "make the tests", "tests pass", "test suite", "port ", "migrate",
+                "add support", "write the", "flesh out", "scaffold", "from scratch")
+_TRIVIAL = ("typo", "rename", "one line", "one-line", "single line", "the comment",
+            "what is", "what's", "explain", "why ", "show me", "read ", "print the",
+            "list the", "how do", "how does", "?")
+
+
+def looks_substantial(task: str) -> bool:
+    """Heuristic gate for auto-swarm (config `auto_swarm`): True only when the task is a
+    substantial, self-contained implementation worth parallel attempts — not a trivial edit,
+    a question, or a read. Conservative: unsure → False (single agent stays the default)."""
+    t = (task or "").lower().strip()
+    if len(t.split()) < 4:
+        return False
+    if any(x in t for x in _TRIVIAL):
+        return False
+    return any(x in t for x in _SUBSTANTIAL)
+
+
 def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
               base_config: dict | None = None,
               base_ref: str = "HEAD", verify_cmd: str | None = None, fitness: str = "auto",

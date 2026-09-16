@@ -149,6 +149,42 @@ def run_oneshot(prompt: str, config: dict) -> None:
         sys.exit(2)
 
 
+def run_oneshot_swarm(prompt: str, config: dict) -> None:
+    """One-shot via a competitive SWARM (config `auto_swarm` / --swarm): N agents attempt the
+    task in parallel in isolated worktrees, the verified winner is applied to the working tree.
+    Falls back to a single agent if the swarm can't run or converge."""
+    import subprocess
+    from drydock.swarm import run_swarm
+    cwd = config.get("cwd") or os.getcwd()
+    try:
+        agents = max(2, min(8, int(config.get("auto_swarm_agents", 4) or 4)))
+    except (TypeError, ValueError):
+        agents = 4
+    print(f"⚓ auto-swarm: {agents} parallel agents on: {prompt}", file=sys.stderr, flush=True)
+    try:
+        res = run_swarm(cwd, prompt, agents=agents, base_config=config, share=True, waves=2)
+    except Exception as e:  # noqa: BLE001
+        print(f"(swarm couldn't run: {e} — falling back to single agent)", file=sys.stderr, flush=True)
+        return run_oneshot(prompt, config)
+    if not res.converged or res.winner is None:
+        print(f"(swarm ran {agents} agents, {len(res.candidates)} candidate(s), none converged "
+              f"— falling back to single agent)", file=sys.stderr, flush=True)
+        return run_oneshot(prompt, config)
+    w = res.winner
+    try:
+        r = subprocess.run(["git", "checkout", w.commit, "--", "."], cwd=cwd,
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f"Swarm winner {w.commit[:12]} not auto-applied ({r.stderr.strip()}). "
+                  f"Apply: git checkout {w.commit} -- .", file=sys.stderr, flush=True)
+            return
+    except Exception as e:  # noqa: BLE001
+        print(f"Swarm converged but apply errored: {e}", file=sys.stderr, flush=True)
+        return
+    print(f"✓ swarm converged: winner by {w.agent}, {w.tests_passed}/{w.tests_total} tests, "
+          f"{w.files_changed} file(s) changed, applied {w.commit[:12]}.", flush=True)
+
+
 def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
     """Handle slash commands. Returns True if handled."""
     raw = cmd.strip()  # case-preserved (paths/args must not be lowercased)
@@ -414,6 +450,10 @@ def main():
                         help="Write the full run transcript (system + messages) here — for harvesting training data")
     parser.add_argument("--force-first-tool", action="store_true", help="Force tool_choice=required on first turn")
     parser.add_argument("--cli", action="store_true", help="Plain readline mode instead of the TUI")
+    parser.add_argument("--swarm", action="store_true", dest="swarm",
+                        help="One-shot: solve the task with a competitive parallel swarm (winner applied)")
+    parser.add_argument("--no-swarm", action="store_true", dest="no_swarm",
+                        help="One-shot: force a single agent even if auto_swarm is on")
     parser.add_argument(
         "--dangerously-skip-permissions",
         dest="dangerously_skip_permissions",
@@ -481,7 +521,19 @@ def main():
     _connect_mcp(config)
 
     if args.prompt:
-        run_oneshot(args.prompt, config)
+        # Route to the swarm when forced (--swarm) or when auto_swarm is on AND the task
+        # looks substantial; --no-swarm and the triviality gate keep single-agent the default.
+        from drydock.swarm import looks_substantial
+        if getattr(args, "no_swarm", False):
+            use_swarm = False
+        elif getattr(args, "swarm", False):
+            use_swarm = True
+        else:
+            use_swarm = bool(config.get("auto_swarm")) and looks_substantial(args.prompt)
+        if use_swarm:
+            run_oneshot_swarm(args.prompt, config)
+        else:
+            run_oneshot(args.prompt, config)
     elif args.cli:
         run_interactive(config)
     else:
