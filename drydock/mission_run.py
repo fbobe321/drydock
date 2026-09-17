@@ -117,13 +117,12 @@ def tampered_paths(changed: "set[str] | list[str]", protected: list[str]) -> lis
 def verify_passes(verify_cmd: str, cwd: str, fitness: str = "auto", timeout: int = 600) -> bool:
     """True if the project's own check currently passes fully. A cheap single run used to
     short-circuit a worker that has already solved the task (§42) — never the builder's word."""
-    from drydock.ratchet import score_output
+    from drydock.ratchet import run_shell_bounded, score_output
     try:
-        r = subprocess.run(verify_cmd, cwd=cwd, shell=True, capture_output=True,
-                           text=True, timeout=timeout)
+        out, rc, _ = run_shell_bounded(verify_cmd, cwd, timeout)
     except (OSError, subprocess.SubprocessError):
         return False
-    passed, total = score_output((r.stdout or "") + (r.stderr or ""), fitness, r.returncode)
+    passed, total = score_output(out, fitness, rc)
     return total > 0 and passed >= total
 
 
@@ -237,20 +236,19 @@ def make_verifier_evaluator(verify_cmd: str, fitness: str = "auto", timeout: int
     band = no meaningful change → not accepted (the code is reverted to the known-good tree),
     so a variance-driven blip is never locked in as a 'win'. The baseline is measured by the
     same evaluator, so baseline and experiments use identical sampling."""
-    from drydock.ratchet import score_output
+    from drydock.ratchet import run_shell_bounded, score_output
     n = max(1, int(samples))
 
     def evaluate(task: dict, mission: dict, cwd: str, before: float) -> Evaluation:
         runs: list[tuple[float, int, int]] = []
         for _ in range(n):
             try:
-                r = subprocess.run(verify_cmd, cwd=cwd, shell=True, capture_output=True,
-                                   text=True, timeout=timeout)
+                out, rc, _ = run_shell_bounded(verify_cmd, cwd, timeout)
             except (OSError, subprocess.SubprocessError):
                 return Evaluation(accept=False, metric_before=before,
                                   reason="verifier failed to run")
-            passed, total = score_output((r.stdout or "") + (r.stderr or ""), fitness, r.returncode)
-            score = 100.0 * passed / total if total else (100.0 if r.returncode == 0 else 0.0)
+            passed, total = score_output(out, fitness, rc)
+            score = 100.0 * passed / total if total else (100.0 if rc == 0 else 0.0)
             runs.append((score, passed, total))
         metrics = [x[0] for x in runs]
         after = _median(metrics)

@@ -26,10 +26,12 @@ from dataclasses import dataclass, field
 
 # Generic token scan handles pytest ("5 passed, 1 failed"), cargo
 # ("test result: ok. 5 passed; 0 failed"), jest ("4 passed, 5 total"), etc.
-_PASSED = re.compile(r"(\d+)\s+passed", re.I)
-_FAILED = re.compile(r"(\d+)\s+failed", re.I)
-_ERRORS = re.compile(r"(\d+)\s+errors?\b", re.I)
-_TOTAL = re.compile(r"(\d+)\s+total", re.I)
+# Horizontal whitespace only: `\s` spanned newlines, so traceback source such as
+# "i = 0\n    total = 0" read as "0 total" and a 28-passed/45-failed run scored 28/28.
+_PASSED = re.compile(r"(\d+)[ \t]+passed", re.I)
+_FAILED = re.compile(r"(\d+)[ \t]+failed", re.I)
+_ERRORS = re.compile(r"(\d+)[ \t]+errors?\b", re.I)
+_TOTAL = re.compile(r"(\d+)[ \t]+total", re.I)
 
 
 def _last_int(rx: "re.Pattern", text: str) -> int | None:
@@ -54,12 +56,15 @@ def score_output(output: str, mode: str, returncode: int) -> tuple[int, int]:
         return (1, 1) if returncode == 0 else (0, 1)
 
     if mode == "auto":
-        passed = _last_int(_PASSED, output)
+        # Parse counts from the runner's SUMMARY line (the last line mentioning "passed"),
+        # never from counts scattered through failure output.
+        summary = next((ln for ln in reversed(output.splitlines()) if _PASSED.search(ln)), "")
+        passed = _last_int(_PASSED, summary)
         if passed is not None:
-            total = _last_int(_TOTAL, output)
-            if total is None:
-                failed = _last_int(_FAILED, output) or 0
-                errors = _last_int(_ERRORS, output) or 0
+            failed = _last_int(_FAILED, summary) or 0
+            errors = _last_int(_ERRORS, summary) or 0
+            total = _last_int(_TOTAL, summary)
+            if total is None or total < passed + failed + errors:
                 total = passed + failed + errors
             return passed, max(total, passed)
         # nothing recognizable → treat as all-or-nothing on the exit code

@@ -41,6 +41,20 @@ def test_score_auto_uses_summary_not_traceback_numbers():
     assert score_output(out, "auto", 1) == (3, 20)
 
 
+def test_score_auto_ignores_total_spanning_lines_in_traceback():
+    # regression: a traceback source listing "i = 0\n    total = 0" was read as "0 total",
+    # so a 28-passed / 45-failed run scored 28/28 and a swarm falsely CONVERGED.
+    out = (
+        "    def cron_next(expr, t):\n"
+        "        i = 0\n"
+        "        total = 0\n"
+        "E       NotImplementedError\n"
+        "FAILED tests/test_toolkit.py::test_cron_invalid[a * * * *] - NotImplementedError\n"
+        "45 failed, 28 passed in 0.56s\n"
+    )
+    assert score_output(out, "auto", 1) == (28, 73)
+
+
 def test_score_auto_falls_back_to_exitcode_when_unparseable():
     assert score_output("Build succeeded.", "auto", 0) == (1, 1)
     assert score_output("boom", "auto", 1) == (0, 1)
