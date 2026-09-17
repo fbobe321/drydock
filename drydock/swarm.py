@@ -867,7 +867,9 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
                 _ev("verified", candidate=vc.id, passed=vc.tests_passed,
                     total=vc.tests_total, status=vc.status)
 
-    workers = max_workers or min(n, 8)
+    # Concurrency cap: the inference server batches (and queues past its own limit), so let
+    # big swarms actually run wide; 32 keeps the thread/connection count sane.
+    workers = max_workers or min(n, 32)
     if share and waves > 1 and n >= 2:
         # BLACKBOARD CONSUMPTION (§10): run in waves. Wave 0 explores blind (independence,
         # §8); each later wave READS peers' verified attempts, so agents compare notes and

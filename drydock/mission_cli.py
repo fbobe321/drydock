@@ -248,6 +248,15 @@ def run_cli(argv: list, config: dict | None = None) -> int:
     argv = list(argv or [])
     sub = argv[0] if argv else "help"
     rest = argv[1:]
+    if rest and rest[0] in ("--help", "-h", "help"):
+        # `mission create --help` used to CREATE a mission whose objective was "--help"
+        print('usage: drydock mission create "<objective>" [--target ">=70"] [--verify CMD] '
+              '[--protect GLOB]... [--samples N] [--noise-band F] [--swarm | --swarm-agents N] '
+              '[--time-budget 48h] [--max-experiments N] [--worker-budget SECS] '
+              '[--model M] [--base-url URL] [--provider P]\n'
+              '       drydock mission <list|status|tasks|logs|experiments|knowledge|run|resume|'
+              'pause|stop> [mission-id]')
+        return 0
 
     if sub == "create":
         budget, success, verify, protected, eval_cfg, objparts = _parse_budget(rest)

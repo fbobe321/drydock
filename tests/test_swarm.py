@@ -510,3 +510,11 @@ def test_shell_verifier_timeout_kills_hung_child(tmp_path):
     passed, _total = verify(cand)
     assert time.monotonic() - t0 < 10
     assert passed == 0
+
+
+def test_mission_create_help_does_not_create(tmp_path, capsys):
+    from drydock import mission as M
+    from drydock.mission_cli import run_cli
+    assert run_cli(["create", "--help"], {"cwd": str(tmp_path)}) == 0
+    assert "usage" in capsys.readouterr().out
+    assert M.list_missions(str(tmp_path)) == []

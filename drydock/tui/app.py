@@ -1213,7 +1213,7 @@ class DrydockApp(App):
         while i < len(parts):
             if parts[i] == "--agents" and i + 1 < len(parts):
                 try:
-                    agents = max(2, min(8, int(parts[i + 1])))
+                    agents = max(2, min(64, int(parts[i + 1])))
                 except ValueError:
                     pass
                 i += 2
