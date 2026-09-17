@@ -1209,6 +1209,7 @@ class DrydockApp(App):
             return
         parts = arg.split()
         agents, obj = "auto", []   # auto-size to the server's concurrency unless --agents given
+        servers = None
         i = 0
         while i < len(parts):
             if parts[i] == "--agents" and i + 1 < len(parts):
@@ -1217,12 +1218,15 @@ class DrydockApp(App):
                 except ValueError:
                     pass
                 i += 2
+            elif parts[i] == "--servers" and i + 1 < len(parts):
+                servers = parts[i + 1]      # url[#concurrency],url[#c],...
+                i += 2
             else:
                 obj.append(parts[i])
                 i += 1
         objective = " ".join(obj).strip()
         if not objective:
-            self._info('usage: /swarm <objective> [--agents N]   '
+            self._info('usage: /swarm <objective> [--agents N] [--servers url#c,url#c]   '
                        '(e.g. /swarm "fix the failing auth tests" --agents 4)')
             return
         cwd = self.config.get("cwd") or "."
@@ -1230,10 +1234,11 @@ class DrydockApp(App):
             self._info("swarm needs a git repository here (for per-agent worktree isolation) — "
                        "run `git init` first.")
             return
-        self._launch_swarm(cwd, objective, agents)
+        self._launch_swarm(cwd, objective, agents, servers=servers)
 
     def _launch_swarm(self, cwd: str, objective: str, agents: "int | str",
-                      verify_cmd: str | None = None, auto: bool = False) -> None:
+                      verify_cmd: str | None = None, auto: bool = False,
+                      servers: str | None = None) -> None:
         """Start an in-process swarm streaming into this session. `auto=True` is the
         harness escalating on its own (no user command); `verify_cmd` pins the checker
         (e.g. the one the single agent kept failing). agents="auto" sizes to the server's
@@ -1249,16 +1254,20 @@ class DrydockApp(App):
         self._info(f"{head} — {count} agents exploring in isolated worktrees "
                    "(in-process, your working tree is left alone). Esc to stop.")
         self.run_worker(
-            lambda: self._swarm_worker(cwd, objective, agents, verify_cmd, cancel), thread=True)
+            lambda: self._swarm_worker(cwd, objective, agents, verify_cmd, cancel, servers),
+            thread=True)
 
     def _swarm_worker(self, cwd: str, objective: str, agents: "int | str",
-                      verify_cmd: str | None = None, cancel=None) -> None:
+                      verify_cmd: str | None = None, cancel=None,
+                      servers: str | None = None) -> None:
         """Off-thread: drive run_swarm, streaming milestones into this session's transcript."""
         from drydock import swarm as swarmmod
 
         def on_event(kind: str, d: dict) -> None:
             if kind == "start":
-                msg = f"⇶ swarm: {d.get('agents')} agents exploring…"
+                srv = d.get("servers") or []
+                where = f" across {len(srv)} servers" if len(srv) > 1 else ""
+                msg = f"⇶ swarm: {d.get('agents')} agents exploring{where}…"
             elif kind == "worker_done":
                 patch = f"patch {d['commit'][:8]}" if d.get("commit") else "no patch"
                 err = f" ⚠ {d['error']}" if d.get("error") else ""
@@ -1280,7 +1289,7 @@ class DrydockApp(App):
             # and compare notes, instead of exploring fully blind (§10).
             res = swarmmod.run_swarm(cwd, objective, agents=agents, base_config=self.config,
                                      verify_cmd=verify_cmd, on_event=on_event, share=True,
-                                     cancel=cancel)
+                                     cancel=cancel, servers=servers)
             if res.converged and res.winner is not None:
                 tail = (f"\nApply it:  git cherry-pick {res.winner.commit}")
             elif res.winner is not None:

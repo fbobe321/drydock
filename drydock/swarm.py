@@ -518,7 +518,8 @@ def run_worker(bb: Blackboard, repo: str, base_ref: str, agent_id: str, objectiv
     Robust by construction (§32): a worker that raises is caught and recorded as a failed
     outcome; it never takes down the swarm. The worktree is left in place for the verifier
     (§18) — the coordinator cleans up losers and keeps/integrates the winner."""
-    bb.emit("AGENT_STARTED", agent=agent_id, role=role, objective=objective)
+    bb.emit("AGENT_STARTED", agent=agent_id, role=role, objective=objective,
+            server=str((base_config or {}).get("base_url", "")))
     # Worktrees live OUTSIDE the repo (eratchet pattern): nesting one inside the repo's
     # own working tree breaks git and pollutes the main status. The durable artifact is
     # the snapshot commit in the object store, not this scratch tree. `wt` is a not-yet-
@@ -757,6 +758,46 @@ def looks_substantial(task: str) -> bool:
     return any(x in t for x in _SUBSTANTIAL)
 
 
+def plan_servers(spec, config: dict | None = None) -> "list[tuple[str, int]]":
+    """Parse a multi-server pool: a list or comma-separated string of `url` or
+    `url#concurrency`. Concurrency is detected (llama.cpp /slots, probe) when not given.
+    Empty/None -> [] (single-server mode, the swarm uses base_config's base_url)."""
+    if not spec:
+        return []
+    items = spec.split(",") if isinstance(spec, str) else list(spec)
+    out: list[tuple[str, int]] = []
+    for it in items:
+        it = str(it).strip()
+        if not it:
+            continue
+        url, _, conc = it.partition("#")
+        c = int(conc) if conc.strip().isdigit() else 0
+        if c <= 0:
+            from drydock.capacity import detect_concurrency
+            cfg = config or {}
+            c = detect_concurrency(url, provider=str(cfg.get("provider", "vllm")),
+                                   model=str(cfg.get("model", "")), config=cfg)
+        out.append((url.rstrip("/"), max(1, c)))
+    return out
+
+
+def _assign_servers(pool: "list[tuple[str, int]]", n: int) -> "list[str]":
+    """Weighted round-robin: agent i -> server, in proportion to concurrency, interleaved
+    so each wave (a prefix of the agents) is spread across all servers."""
+    if not pool:
+        return []
+    total = sum(c for _, c in pool)
+    credit = {u: 0.0 for u, _ in pool}
+    out = []
+    for _ in range(n):
+        for u, c in pool:
+            credit[u] += c / total
+        best = max(pool, key=lambda uc: credit[uc[0]])[0]
+        credit[best] -= 1.0
+        out.append(best)
+    return out
+
+
 def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
               base_config: dict | None = None,
               base_ref: str = "HEAD", verify_cmd: str | None = None, fitness: str = "auto",
@@ -764,14 +805,18 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
               runner: AgentRunner = default_agent_runner, verify: VerifyFn | None = None,
               on_event: "Callable[[str, dict], None] | None" = None,
               share: bool = False, waves: int = 2,
-              swarm_id: str | None = None, cancel=None) -> SwarmResult:
+              swarm_id: str | None = None, cancel=None,
+              servers: "list[str] | str | None" = None) -> SwarmResult:
     """Coordinate a parallel-strategy swarm end to end (§24 Parallel, the MVP default):
     decompose into N diversity-injected Builders (§15), fan them out concurrently over one
     shared inference server (§22), verify each candidate independently (§18), and converge on
     the best by evidence (§20). Never raises on an individual worker — failures are contained
     (§32). `runner`/`verify` are injectable for testing without a live model. `cancel` (a
     threading.Event) stops the swarm: running agents end their turn loop, queued ones never
-    start, and verification is skipped — whatever was produced is still judged."""
+    start, and verification is skipped — whatever was produced is still judged. `servers`
+    (or config `swarm_servers`) spreads agents over several inference servers — see
+    plan_servers()."""
+    import threading
     from concurrent.futures import ThreadPoolExecutor
 
     repo = repo_root(cwd)
@@ -785,10 +830,15 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
 
     def _cancelled() -> bool:
         return cancel is not None and cancel.is_set()
+    pool = plan_servers(servers if servers is not None else bc.get("swarm_servers"), bc)
     # Auto-size to the server's real concurrency (§21/§22): hammer a big box, tone down a
     # small one. N = min(hardware concurrency, task-demand, budget) — never maximized.
     detected = 0
-    if isinstance(agents, str) and agents == "auto":
+    if pool and isinstance(agents, str) and agents == "auto":
+        from drydock.capacity import swarm_size
+        detected = sum(c for _, c in pool)
+        n = swarm_size(detected)
+    elif isinstance(agents, str) and agents == "auto":
         from drydock.capacity import detect_concurrency, swarm_size
         detected = detect_concurrency(str(bc.get("base_url", "")),
                                       provider=str(bc.get("provider", "vllm")),
@@ -801,7 +851,11 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
                                         "concurrency_detected": detected},
                       swarm_id=swarm_id)
     bb.emit("SWARM_START", agents=n, strategy="parallel", base_ref=base_ref,
-            concurrency_detected=detected)
+            concurrency_detected=detected, servers=[f"{u}#{c}" for u, c in pool])
+    # agent i -> server, proportional to each server's concurrency; a per-server semaphore
+    # keeps a small box from being flooded while a big one has spare slots.
+    assign = _assign_servers(pool, n)
+    gates = {u: threading.BoundedSemaphore(c) for u, c in pool}
 
     def _ev(kind: str, **d) -> None:
         if on_event is not None:
@@ -810,7 +864,7 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
             except Exception:  # noqa: BLE001 — a UI callback must never break the swarm
                 pass
 
-    _ev("start", agents=n, objective=objective)
+    _ev("start", agents=n, objective=objective, servers=[u for u, _ in pool])
 
     # Resolve the verifier once (auto-detect if not given) so scoring is identical per arm.
     if verify is None:
@@ -849,10 +903,22 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
         if _cancelled():
             return WorkerOutcome(agent=f"agent-{i + 1}", ok=False, error="cancelled")
         angle, sysprompt = angles[i]
-        out = run_worker(bb, repo, base_ref, f"agent-{i + 1}", objective,
-                         role="builder", system_prompt=base_sys + sysprompt + extra_sys,
-                         base_config=base_config, max_turns=max_turns,
-                         max_tool_calls=max_tool_calls, runner=runner)
+        cfg_i, gate = base_config, None
+        if assign:
+            url = assign[i]
+            cfg_i, gate = {**bc, "base_url": url}, gates[url]
+        if gate is not None:
+            gate.acquire()
+        try:
+            if _cancelled():
+                return WorkerOutcome(agent=f"agent-{i + 1}", ok=False, error="cancelled")
+            out = run_worker(bb, repo, base_ref, f"agent-{i + 1}", objective,
+                             role="builder", system_prompt=base_sys + sysprompt + extra_sys,
+                             base_config=cfg_i, max_turns=max_turns,
+                             max_tool_calls=max_tool_calls, runner=runner)
+        finally:
+            if gate is not None:
+                gate.release()
         _ev("worker_done", agent=out.agent, ok=out.ok, files=out.files_changed,
             commit=out.commit, error=out.error)
         return out
@@ -869,7 +935,7 @@ def run_swarm(cwd: str | Path, objective: str, *, agents: "int | str" = 4,
 
     # Concurrency cap: the inference server batches (and queues past its own limit), so let
     # big swarms actually run wide; 32 keeps the thread/connection count sane.
-    workers = max_workers or min(n, 32)
+    workers = max_workers or min(n, max(32, sum(c for _, c in pool)), 64)
     if share and waves > 1 and n >= 2:
         # BLACKBOARD CONSUMPTION (§10): run in waves. Wave 0 explores blind (independence,
         # §8); each later wave READS peers' verified attempts, so agents compare notes and
@@ -1017,6 +1083,8 @@ def run_cli(argv: list, config: dict | None = None) -> int:
     p.add_argument("--max-turns", type=int, default=40)
     p.add_argument("--max-tool-calls", type=int, default=40)
     p.add_argument("--max-workers", type=int, default=None, help="max concurrent workers")
+    p.add_argument("--servers", default=None,
+                   help="spread agents over several servers: url[#concurrency],url[#c],...")
     p.add_argument("--share", action="store_true",
                    help="blackboard cross-pollination: run in waves; later agents read peers' "
                         "verified attempts and build on partials instead of repeating failures")
@@ -1057,7 +1125,7 @@ def run_cli(argv: list, config: dict | None = None) -> int:
                         base_ref=args.base_ref, verify_cmd=args.verify, fitness=args.fitness,
                         max_turns=args.max_turns, max_tool_calls=args.max_tool_calls,
                         max_workers=args.max_workers, share=args.share, waves=args.waves,
-                        on_event=_on)
+                        on_event=_on, servers=args.servers)
     except ValueError as e:
         print(f"Error: {e}")
         return 1

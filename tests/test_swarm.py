@@ -518,3 +518,42 @@ def test_mission_create_help_does_not_create(tmp_path, capsys):
     assert run_cli(["create", "--help"], {"cwd": str(tmp_path)}) == 0
     assert "usage" in capsys.readouterr().out
     assert M.list_missions(str(tmp_path)) == []
+
+
+def test_plan_servers_and_weighted_assignment():
+    pool = swarm.plan_servers("http://a:8000/v1#12, http://b:8000/v1/#4")
+    assert pool == [("http://a:8000/v1", 12), ("http://b:8000/v1", 4)]
+    assert swarm.plan_servers(None) == [] and swarm.plan_servers("") == []
+    assign = swarm._assign_servers(pool, 16)
+    assert assign.count("http://a:8000/v1") == 12 and assign.count("http://b:8000/v1") == 4
+    # every wave-sized prefix touches both servers (interleaved, not blocked)
+    assert set(assign[:8]) == {"http://a:8000/v1", "http://b:8000/v1"}
+
+
+def test_run_swarm_spreads_agents_and_bounds_per_server(tmp_path):
+    import threading
+    import time
+
+    repo = _init_repo(tmp_path / "repo")
+    lock = threading.Lock()
+    live, peak, used = {}, {}, []
+
+    def runner(objective, cwd, base_config, system_prompt, allow, mt, mtc):
+        url = base_config["base_url"]
+        with lock:
+            used.append(url)
+            live[url] = live.get(url, 0) + 1
+            peak[url] = max(peak.get(url, 0), live[url])
+        time.sleep(0.05)
+        (Path(cwd) / "answer.txt").write_text("x")
+        with lock:
+            live[url] -= 1
+        return "ok"
+
+    res = swarm.run_swarm(repo, "obj", agents=9, base_config={"base_url": "http://unused/v1"},
+                          runner=runner, verify=lambda c: (1, 1),
+                          servers=["http://a/v1#2", "http://b/v1#1"])
+    assert len(res.candidates) == 9
+    assert used.count("http://a/v1") == 6 and used.count("http://b/v1") == 3
+    assert peak["http://a/v1"] <= 2 and peak["http://b/v1"] <= 1
+    assert "http://unused/v1" not in used
