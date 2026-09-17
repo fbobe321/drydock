@@ -9,6 +9,7 @@ from drydock.eratchet import (
     parse_eratchet,
     run_eratchet,
 )
+from tests.fixtures.repos import git, init_repo
 
 
 def _desc(k):
@@ -73,21 +74,9 @@ def test_cancellation_stops_between_generations():
 
 # ── real executor plumbing (fake `drydock`, real git worktree + verifier) ────
 
-def _init_repo(tmp_path):
-    import subprocess
-    r = tmp_path / "repo"
-    r.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=r, check=True)
-    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t",
-                    "commit", "-q", "--allow-empty", "-m", "init"], cwd=r, check=True)
-    return str(r)
-
-
 def test_exec_variant_isolates_scores_and_cleans_up(tmp_path):
-    import subprocess
-
     from drydock.eratchet import ExecConfig, exec_variant
-    repo = _init_repo(tmp_path)
+    repo = init_repo(tmp_path / "repo")
     # a fake "drydock" that just writes a file into the worktree (the "fix")
     cfg = ExecConfig(
         repo=repo, goal="make the file", verify_cmd="test -f made.txt",
@@ -100,13 +89,13 @@ def test_exec_variant_isolates_scores_and_cleans_up(tmp_path):
     # the change lived ONLY in the throwaway worktree — main repo is untouched…
     assert not (tmp_path / "repo" / "made.txt").exists()
     # …and no worktrees leaked.
-    wl = subprocess.run(["git", "worktree", "list"], cwd=repo, capture_output=True, text=True)
+    wl = git(["worktree", "list"], repo)
     assert wl.stdout.count("\n") == 1                              # only the main tree
 
 
 def test_exec_variant_reports_failure_without_the_fix(tmp_path):
     from drydock.eratchet import ExecConfig, exec_variant
-    repo = _init_repo(tmp_path)
+    repo = init_repo(tmp_path / "repo")
     cfg = ExecConfig(repo=repo, goal="g", verify_cmd="test -f made.txt",
                      fitness="exitcode", drydock_argv=("bash", "-c", "true"))
     out = exec_variant(cfg, None, "http://s1", {"mode": "continue"}, None)
@@ -141,7 +130,7 @@ def test_format_event_lines():
 
 def test_run_cli_drives_the_loop_and_returns_exit_code(tmp_path, monkeypatch, capsys):
     import drydock.eratchet as erx
-    repo = _init_repo(tmp_path)
+    repo = init_repo(tmp_path / "repo")
     # patch the executor so no real drydock/subprocess runs
     def fake_exec(cfg, base, server, spec, xplan):
         p = 6 if base is not None else 3

@@ -1,7 +1,5 @@
 """Ratchet primitive: fitness scoring, the pawl decision logic, git checkpoint
 round-trip, and arg parsing. Pure/stdlib — no TUI needed."""
-import subprocess
-
 import pytest
 
 from drydock.ratchet import (
@@ -13,6 +11,7 @@ from drydock.ratchet import (
     parse_ratchet_args,
     score_output,
 )
+from tests.fixtures.repos import git
 
 
 # ───────────────────────── fitness scoring ─────────────────────────
@@ -117,8 +116,7 @@ def test_continuation_prompt_mentions_state_and_preservation():
 # ───────────────────────── git checkpoint round-trip ─────────────────────────
 
 def _git(args, cwd):
-    subprocess.run(["git", *args], cwd=cwd, check=True,
-                   capture_output=True, text=True)
+    git(args, cwd, check=True)
 
 
 def test_git_checkpoint_snapshot_restore(tmp_path):

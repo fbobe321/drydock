@@ -6,25 +6,11 @@ resume/re-open, and that the §27 event stream is persisted.
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 from drydock import swarm
-
-
-def _git(args, cwd):
-    return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True)
-
-
-def _init_repo(path: Path) -> str:
-    path.mkdir(parents=True, exist_ok=True)
-    _git(["init", "-q"], path)
-    _git(["config", "user.name", "t"], path)
-    _git(["config", "user.email", "t@t"], path)
-    (path / "README.md").write_text("hello\n")
-    _git(["add", "-A"], path)
-    _git(["commit", "-qm", "init"], path)
-    return str(path)
+from tests.fixtures.repos import git as _git
+from tests.fixtures.repos import init_repo as _init_repo
 
 
 def _writer_runner(filename: str, content: str):

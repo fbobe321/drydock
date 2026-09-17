@@ -2,18 +2,17 @@
 git for the agent. Tests run in isolated temp repos."""
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 
 from drydock import gittools
 from drydock.tools import (
     tool_gitstatus, tool_gitdiff, tool_gitlog, tool_gitcommit,
 )
+from tests.fixtures.repos import git
 
 
 def _git(args, cwd):
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+    git(args, cwd, check=True)
 
 
 @pytest.fixture
