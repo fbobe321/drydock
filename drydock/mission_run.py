@@ -160,6 +160,7 @@ def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> Wo
     check_every = 20.0
     last_check = 0.0
     stop_reason = ""
+    t0 = time.time()
     try:
         for ev in agent_run(objective, state, cfg, system_prompt):
             if not isinstance(ev, TurnDone):
@@ -178,6 +179,9 @@ def default_worker(task: dict, mission: dict, cwd: str, base_config: dict) -> Wo
                     pass
     except Exception as e:  # noqa: BLE001 — a worker crash is contained by the loop (§32)
         return WorkerResult(ok=False, error=f"{type(e).__name__}: {e}")
+    finally:
+        from drydock import jobs
+        jobs.stop_jobs_started(cwd, t0, adopted_only=True)   # a hung, auto-backgrounded command dies with the task
     summ = ""
     for msg in reversed(getattr(state, "messages", []) or []):
         if isinstance(msg, dict) and msg.get("role") == "assistant" and (msg.get("content") or "").strip():

@@ -480,9 +480,14 @@ def default_agent_runner(objective: str, cwd: str, base_config: dict, system_pro
     cfg.pop("resume_path", None)
     cfg.pop("event_log_path", None)
     turns = 0
-    for ev in agent_run(objective, state, cfg, system_prompt):
-        if isinstance(ev, TurnDone):
-            turns += 1
+    t0 = time.time()
+    try:
+        for ev in agent_run(objective, state, cfg, system_prompt):
+            if isinstance(ev, TurnDone):
+                turns += 1
+    finally:
+        from drydock import jobs
+        jobs.stop_jobs_started(cwd, t0)   # the worker is ephemeral; so are its jobs
     return RunResult(summary=_last_assistant(state),
                      in_tokens=int(getattr(state, "total_input_tokens", 0) or 0),
                      out_tokens=int(getattr(state, "total_output_tokens", 0) or 0),

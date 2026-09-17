@@ -219,3 +219,24 @@ def stop(jid: str) -> str:
     except OSError as e:
         return f"Job {jid}: could not stop ({e})."
     return f"Sent SIGTERM to job {jid}: {meta['command'][:80]}"
+
+
+def stop_jobs_started(cwd: str, since: float, *, adopted_only: bool = False) -> list:
+    """Stop still-running jobs started at/after `since` from inside `cwd` (or below it).
+    Ephemeral workers (swarm agents, mission tasks) call this when they end, so a command
+    their Bash tool auto-promoted to a background job doesn't outlive them — one hung
+    `pytest` kept a CPU core busy for 7 hours after its mission worker had finished."""
+    root = os.path.realpath(cwd) if cwd else ""
+    stopped = []
+    for s in list_jobs():
+        if s.get("state") != "running" or float(s.get("start") or 0) < since - 1:
+            continue
+        if adopted_only and s.get("mode") != "adopted":
+            continue   # a deliberate background job (background=true) may be meant to outlive the task
+        jcwd = os.path.realpath(s.get("cwd") or "")
+        if root and not (jcwd == root or jcwd.startswith(root + os.sep)):
+            continue
+        stop(s["id"])
+        stopped.append(s["id"])
+    return stopped
+
