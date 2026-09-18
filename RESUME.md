@@ -116,6 +116,18 @@ fleet were left running untouched.
 - **NEXT: run the prefix-cache probe BEFORE Phase 2 paging** (Appendix A.1 risk) — measure
   cache-hit vs recomputed tokens for head-eviction vs tail-only eviction on the vLLM fleet. If
   head-eviction thrashes the KV cache, the paging design must be tail-mutating only.
+  Probe = `research/mcr/prefix_cache_probe.py` (stdlib; reads OpenAI
+  `usage.prompt_tokens_details.cached_tokens`). Each mutation runs prime→prime_check→mutate; a
+  prime_check <90% means the reading is INVALID (blocks evicted, not prefix invalidated).
+- **🖥️ .21 (DELDES21, 2× RTX 4060 Ti 16GB) freed by operator 2026-09-18 and enlisted:** vLLM in
+  docker (`vllm21`, image `vllm/vllm-openai:v0.26.0`) serving nemotron AWQ with the SAME config as
+  the fleet (TP=2, EP, 32k, max-num-seqs 4, gpu-util .88) so numbers transfer. It is the IDLE box —
+  use it for cache/latency measurement, never the contended ones.
+- **⚠️ INCIDENTAL FINDING (probe run on contended .20):** an identical prompt re-sent after a few
+  other 15k-token requests returned **0% cached** (vs 100% when re-sent immediately). Concurrent
+  agents EVICT each other's KV prefix blocks — so wide swarms cost materially more than their token
+  counts imply, and any prefix-cache benefit is fragile under fan-out. Relevant to BOTH PRDs
+  (scaling §8/§10 compute accounting, MCR Appendix A.1).
 
 **Both PRDs' §0 hold the compliance line:** building runtime/instrumentation/controller = fine; the
 comparative experiments run as operator-driven TUI runs with OFFLINE analysis — never an automated
