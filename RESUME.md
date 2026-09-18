@@ -113,12 +113,18 @@ fleet were left running untouched.
   it, so it landed without touching the agent loop.
 - **Token sizing reuses `compaction.estimate_tokens`** on purpose — if MCR sized modules
   differently from the compactor the pager and compactor would fight over "how full is context".
-- **NEXT: run the prefix-cache probe BEFORE Phase 2 paging** (Appendix A.1 risk) — measure
-  cache-hit vs recomputed tokens for head-eviction vs tail-only eviction on the vLLM fleet. If
-  head-eviction thrashes the KV cache, the paging design must be tail-mutating only.
-  Probe = `research/mcr/prefix_cache_probe.py` (stdlib; reads OpenAI
-  `usage.prompt_tokens_details.cached_tokens`). Each mutation runs prime→prime_check→mutate; a
-  prime_check <90% means the reading is INVALID (blocks evicted, not prefix invalidated).
+- **✅ PREFIX-CACHE PROBE DONE — Appendix A.1 CONFIRMED** (`research/mcr/prefix_cache_probe.py`,
+  result `research/mcr/prefix_cache_21.json`). On idle .21, 8×900-tok modules (~20k prompt),
+  re-prefill cost vs a cold prefill: identical **0.06×**, tail **0.24×**, middle **0.59×**, head
+  **0.98×** → **a head mutation costs 4.2× a tail mutation** and equals a full re-prefill.
+  **BINDING DESIGN RULE for Phase 2:** Context View ordered pinned → shared → task → volatile so
+  residency changes only ever mutate the TAIL; "prefix-stable tokens" is a scheduler objective
+  alongside the token budget; CTE must count re-prefill tokens.
+  ⚠️ Probe gotchas learned the hard way: (1) vLLM v0.26.0 + AWQ/MoE defaults
+  `enable_prefix_caching=False` — pass it explicitly; (2) v0.26.0 does NOT report
+  `cached_tokens`, so the probe falls back to latency; (3) ratios must be taken against the COLD
+  run (comparing two already-cached requests reads as "no reuse"); (4) the base prompt needs a
+  run-unique `--salt` or the next run's "cold" is served from the last run's cache.
 - **🖥️ .21 (DELDES21, 2× RTX 4060 Ti 16GB) freed by operator 2026-09-18 and enlisted:** vLLM in
   docker (`vllm21`, image `vllm/vllm-openai:v0.26.0`) serving nemotron AWQ with the SAME config as
   the fleet (TP=2, EP, 32k, max-num-seqs 4, gpu-util .88) so numbers transfer. It is the IDLE box —

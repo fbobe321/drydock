@@ -1,0 +1,66 @@
+{
+  "rows": [
+    {
+      "scenario": "cold",
+      "prompt_tokens": 20164,
+      "cached_tokens": null,
+      "cache_hit_pct": null,
+      "latency_s": 4.782
+    },
+    {
+      "scenario": "tail_mutate:prime_check",
+      "prompt_tokens": 20164,
+      "cached_tokens": null,
+      "cache_hit_pct": null,
+      "latency_s": 0.28
+    },
+    {
+      "scenario": "tail_mutate",
+      "prompt_tokens": 20173,
+      "cached_tokens": null,
+      "cache_hit_pct": null,
+      "latency_s": 1.126,
+      "prime_check_pct": null,
+      "cold_latency_s": 4.782,
+      "prime_check_ratio": 0.059,
+      "valid": true
+    },
+    {
+      "scenario": "middle_mutate:prime_check",
+      "prompt_tokens": 20164,
+      "cached_tokens": null,
+      "cache_hit_pct": null,
+      "latency_s": 0.23
+    },
+    {
+      "scenario": "middle_mutate",
+      "prompt_tokens": 20173,
+      "cached_tokens": null,
+      "cache_hit_pct": null,
+      "latency_s": 2.812,
+      "prime_check_pct": null,
+      "cold_latency_s": 4.782,
+      "prime_check_ratio": 0.048,
+      "valid": true
+    },
+    {
+      "scenario": "head_mutate:prime_check",
+      "prompt_tokens": 20164,
+      "cached_tokens": null,
+      "cache_hit_pct": null,
+      "latency_s": 0.276
+    },
+    {
+      "scenario": "head_mutate",
+      "prompt_tokens": 20173,
+      "cached_tokens": null,
+      "cache_hit_pct": null,
+      "latency_s": 4.709,
+      "prime_check_pct": null,
+      "cold_latency_s": 4.782,
+      "prime_check_ratio": 0.058,
+      "valid": true
+    }
+  ],
+  "verdict": "CONFIRMED by latency (Appendix A.1): re-prefill cost scales with how EARLY the mutation is \u2014 tail=0.24\u00d7, middle=0.59\u00d7, head=0.98\u00d7 of a cold prefill (head costs 4.2\u00d7 a tail mutation). MCR's Context View MUST be ordered pinned \u2192 shared \u2192 task \u2192 volatile so residency changes only ever mutate the TAIL; and CTE must count re-prefill tokens or it will flatter the pager."
+}

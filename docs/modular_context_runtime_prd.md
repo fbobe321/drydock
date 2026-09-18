@@ -547,12 +547,44 @@ That distinction is the central research idea.
 
 ## Appendix A — Implementation constraints not in the original draft
 
-**A.1 KV-cache / prefix-cache invalidation is a first-class cost.** The virtual-memory analogy breaks
-in one important place: unmounting or reordering a module that sits **early** in the prompt
-invalidates the server's prefix KV cache from that point on, forcing a full re-prefill of everything
-after it. Append-only transcripts are cache-friendly *precisely because* the prefix is stable. A naive
-scheduler that re-packs the working set each turn can therefore be **slower and more expensive** than
-the append-only baseline it is trying to beat, even while reporting a smaller resident context.
+**A.1 KV-cache / prefix-cache invalidation is a first-class cost. — ✅ MEASURED AND CONFIRMED
+(2026-09-18).** The virtual-memory analogy breaks in one important place: unmounting or reordering a
+module that sits **early** in the prompt invalidates the server's prefix KV cache from that point on,
+forcing a full re-prefill of everything after it. Append-only transcripts are cache-friendly
+*precisely because* the prefix is stable. A naive scheduler that re-packs the working set each turn
+can therefore be **slower and more expensive** than the append-only baseline it is trying to beat,
+even while reporting a smaller resident context.
+
+Measured with `research/mcr/prefix_cache_probe.py` on an **idle** box (.21: 2× RTX 4060 Ti,
+vLLM v0.26.0, nemotron-30B AWQ, TP=2, `--enable-prefix-caching`), 8 modules × ~900 tokens
+(~20k-token prompt), `max_tokens=1` so latency ≈ prefill cost:
+
+| what changed | re-prefill cost (× a cold prefill) |
+|---|---|
+| nothing (identical resend) | **0.06×** |
+| the **last** module (tail) | **0.24×** |
+| a **middle** module (4 of 8) | **0.59×** |
+| the **first** module (head) | **0.98×** |
+
+Cost scales monotonically with how *early* the mutation is; **a head mutation costs 4.2× a tail
+mutation** and is indistinguishable from a cold prefill. Therefore, as binding design rules:
+
+- The Context View **MUST** have a stable ordering discipline: pinned → shared → task → volatile
+  working/retrieved, so mounts and evictions only ever mutate the **tail** of the prompt.
+- Treat "prefix-stable tokens" as a scheduler objective alongside `Tokens(W_t) ≤ B` (§7). Evicting a
+  pinned/shared module to save `B` can cost ~4× more than it saves.
+- §25's `CTE` (verified progress / **total processed** tokens) **must count re-prefill tokens**, or
+  it will flatter MCR relative to append-only. `CE` alone can be gamed by evicting aggressively.
+
+Two further empirical notes from the same work:
+- **Prefix caching is not uniformly on.** vLLM v0.26.0 with this AWQ/MoE config defaults to
+  `enable_prefix_caching=False`; it must be passed explicitly. A fleet box with it off re-prefills
+  every turn (~3.5 s per 15k-token turn, per agent) — check this before measuring anything.
+- **Concurrency evicts the cache.** On a contended box, an *identical* prompt re-sent a few requests
+  later returned 0% cached (vs 100% when re-sent immediately): parallel agents evict each other's
+  prefix blocks. So wide swarms cost more than their token counts imply — relevant to
+  `docs/compute_optimal_agent_scaling_prd.md` §8/§10 — and cache measurements are only meaningful on
+  an idle server.
 
 Design implications:
 - The Context View must have a **stable ordering discipline**: pinned/shared modules first (rarely

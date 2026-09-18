@@ -95,7 +95,8 @@ def _measure(base_url: str, model: str, mods: list, label: str) -> dict:
     return row
 
 
-def run(base_url: str, model: str, n_modules: int, module_tokens: int) -> list:
+def run(base_url: str, model: str, n_modules: int, module_tokens: int,
+        salt: str = "a") -> list:
     """Each mutation is measured as prime → prime_check → mutate.
 
     The prime_check (re-sending the identical base) is load-bearing: on a CONTENDED
@@ -105,14 +106,21 @@ def run(base_url: str, model: str, n_modules: int, module_tokens: int) -> list:
     rather than draw a conclusion from it. (Observed on a contended .20: an identical
     re-send returned 0% cached.)
     """
-    base = [_module_text(i, module_tokens) for i in range(n_modules)]
+    # `salt` makes the base prompt unique per run, so "cold" is genuinely cold —
+    # a re-run with the same text would hit the cache left by the previous run.
+    base = [_module_text(i, module_tokens, salt=salt) for i in range(n_modules)]
 
     def mutate(pos: int) -> list:
         out = list(base)
-        out[pos] = _module_text(pos, module_tokens, salt="Z")   # same size, different content
+        out[pos] = _module_text(pos, module_tokens, salt=salt + "Z")  # same size, new content
         return out
 
-    rows = [_measure(base_url, model, base, "cold")]
+    cold = _measure(base_url, model, base, "cold")
+    # The COLD run is the only genuinely uncached full prefill, so it is the baseline
+    # for every ratio below. (Comparing a cached `prime` against a cached `prime_check`
+    # gives ~1.0 and looks like "no reuse" even when caching is working perfectly.)
+    cold_lat = cold["latency_s"] or 0.0
+    rows = [cold]
     for name, pos in (("tail_mutate", n_modules - 1),
                       ("middle_mutate", n_modules // 2),
                       ("head_mutate", 0)):
@@ -120,28 +128,62 @@ def run(base_url: str, model: str, n_modules: int, module_tokens: int) -> list:
         check = _measure(base_url, model, base, f"{name}:prime_check")
         test = _measure(base_url, model, mutate(pos), name)
         hit = check.get("cache_hit_pct")
+        # Two independent reuse signals. cached_tokens is exact but not every build
+        # reports it (v0.26.0 does not); latency is always available and is what we
+        # actually care about — re-prefill cost.
+        ratio = (check["latency_s"] / cold_lat) if cold_lat else 1.0
+        by_tokens = hit is not None and hit >= 90
+        by_latency = ratio <= 0.5            # identical resend far cheaper than a cold prefill
         test["prime_check_pct"] = hit
-        test["valid"] = bool(hit is not None and hit >= 90)
+        test["cold_latency_s"] = cold_lat
+        test["prime_check_ratio"] = round(ratio, 3)
+        test["valid"] = bool(by_tokens or by_latency)
         if not test["valid"]:
-            print(f"    ⚠ {name}: prime_check only {hit}% cached — cache did not survive "
-                  "between requests (contended box?); reading INVALID", flush=True)
+            print(f"    ⚠ {name}: identical resend was NOT cheaper than a cold prefill "
+                  f"(hit={hit}%, latency ratio={ratio:.2f}) — no prefix reuse detected; "
+                  "reading INVALID (caching off, or blocks evicted by contention)", flush=True)
+        else:
+            print(f"    · {name}: re-prefill cost {test['latency_s'] / cold_lat:.2f}× a cold "
+                  f"prefill (identical resend was {ratio:.2f}×)", flush=True)
         rows.extend([check, test])
     return rows
+
+
+def _latency_verdict(head: dict, tail: dict, mid: "dict | None" = None) -> str:
+    """Fallback when cached_tokens is unreported: compare re-prefill COST directly,
+    against the cold (genuinely uncached) prefill as the 1.0 baseline."""
+    full = tail.get("cold_latency_s") or head.get("cold_latency_s") or 0.0
+    if not full:
+        return "INCONCLUSIVE — no baseline latency captured."
+    mid_txt = ""
+    if mid and mid.get("latency_s"):
+        mid_txt = f" middle={mid['latency_s'] / full:.2f}×,"
+    t = tail["latency_s"] / full
+    h = head["latency_s"] / full
+    if h - t >= 0.25:
+        return (f"CONFIRMED by latency (Appendix A.1): re-prefill cost scales with how EARLY the "
+                f"mutation is — tail={t:.2f}×,{mid_txt} head={h:.2f}× of a cold prefill "
+                f"(head costs {h / t:.1f}× a tail mutation). MCR's Context View MUST be ordered "
+                "pinned → shared → task → volatile so residency changes only ever mutate the "
+                "TAIL; and CTE must count re-prefill tokens or it will flatter the pager.")
+    return (f"NOT CONFIRMED by latency — tail={t:.2f}× vs head={h:.2f}× of a cold prefill; "
+            "head and tail mutation cost about the same, so prefix position does not matter "
+            "on this engine/config. Re-check before designing around it.")
 
 
 def verdict(rows: list) -> str:
     by = {r["scenario"]: r for r in rows}
     head, tail = by.get("head_mutate"), by.get("tail_mutate")
-    if not (head and tail) or head.get("cache_hit_pct") is None:
-        return ("INCONCLUSIVE — server did not report cached_tokens; fall back to comparing "
-                "latency_s (head_mutate ≈ cold would still indicate prefix invalidation).")
+    if not (head and tail):
+        return "INCONCLUSIVE — scenarios missing."
     if not (head.get("valid") and tail.get("valid")):
-        return ("INVALID — the prefix cache did not survive between requests "
-                f"(prime_check: tail={tail.get('prime_check_pct')}%, "
-                f"head={head.get('prime_check_pct')}%). The server is too contended to "
-                "measure prefix invalidation; re-run on an IDLE box. Note this is itself a "
-                "finding: concurrent agents evict each other's prefix cache, so wide swarms "
-                "cost more than their token counts imply.")
+        return ("INVALID — no prefix reuse detected even for an IDENTICAL resend "
+                f"(tail prime_check ratio={tail.get('prime_check_ratio')}, "
+                f"head={head.get('prime_check_ratio')}). Either prefix caching is disabled on "
+                "this server (check `enable_prefix_caching` in the engine config) or the blocks "
+                "are being evicted by contention. Fix that, then re-run.")
+    if head.get("cache_hit_pct") is None:
+        return _latency_verdict(head, tail, by.get("middle_mutate"))
     if tail["cache_hit_pct"] - head["cache_hit_pct"] >= 25:
         return ("CONFIRMED (Appendix A.1): mutating the prompt HEAD destroys the prefix cache "
                 f"({head['cache_hit_pct']}% hit) while mutating the TAIL preserves it "
@@ -159,13 +201,15 @@ def main() -> int:
     ap.add_argument("--model", default="nemotron")
     ap.add_argument("--modules", type=int, default=8)
     ap.add_argument("--module-tokens", type=int, default=900)
+    ap.add_argument("--salt", default="", help="run id; default = timestamp (keeps 'cold' cold)")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
 
     print(f"prefix-cache probe → {a.base_url} model={a.model} "
           f"({a.modules} modules × ~{a.module_tokens} tok)")
     try:
-        rows = run(a.base_url, a.model, a.modules, a.module_tokens)
+        rows = run(a.base_url, a.model, a.modules, a.module_tokens,
+                   salt=a.salt or f"s{int(time.time())}")
     except (urllib.error.URLError, TimeoutError) as e:
         print(f"ERROR: could not reach the server: {e}")
         return 1
