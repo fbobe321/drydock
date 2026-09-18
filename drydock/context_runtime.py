@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -193,6 +194,18 @@ class ContextStore:
             if r.get("context_id") == context_id:
                 found = r
         return ContextModule.from_dict(found) if found else None
+
+    def get_version(self, context_id: str, version: int) -> Optional[ContextModule]:
+        """A specific historical version. The log is append-only, so every superseded
+        state is still recoverable — this is what makes context rollback possible."""
+        for r in self._rows():
+            if r.get("context_id") == context_id and r.get("version") == version:
+                return ContextModule.from_dict(r)
+        return None
+
+    def versions(self) -> dict:
+        """context_id -> current version, for every live module."""
+        return {m.context_id: m.version for m in self.all()}
 
     def by_residency(self, *residency: str) -> list:
         want = set(residency)
@@ -444,3 +457,172 @@ def prefix_reuse(previous: "ContextView | None", current: ContextView) -> dict:
         "reuse_pct": round(100.0 * reused / total, 1) if total else 0.0,
         "diverged_at": idx,
     }
+
+
+# ── §10/§11/§12 — Ratchet integration: context checkpoints & the knowledge invariant ──
+
+@dataclass
+class Conflict:
+    """A newly committed claim contradicts previously VERIFIED knowledge (§12).
+
+    Recorded rather than resolved: the old module is left standing and a conflict
+    module is mounted so the disagreement is visible and must be reconciled by
+    evidence — the opposite of a silent overwrite.
+    """
+    context_id: str
+    existing_body: str
+    incoming_body: str
+    reason: str = "incoming claim contradicts verified knowledge"
+
+    def render(self) -> str:
+        return ("CONFLICT — verified knowledge contradicted; reconcile by verification.\n"
+                f"Module: {self.context_id}\n"
+                f"Reason: {self.reason}\n"
+                f"OLD (verified): {self.existing_body}\n"
+                f"NEW (observed): {self.incoming_body}")
+
+
+def conflict_id(context_id: str) -> str:
+    return "ctx://conflict/" + context_id[len(CTX_SCHEME):].replace("/", ".")
+
+
+def commit_knowledge(store: ContextStore, module: ContextModule,
+                     *, resolve: bool = False) -> "tuple[Optional[ContextModule], Optional[Conflict]]":
+    """Commit knowledge under the §12 context-ratchet invariant.
+
+    For code the ratchet guarantees F(t+1) >= F(t). The knowledge equivalent is weaker
+    but sharper: *newly committed knowledge must not silently invalidate previously
+    verified knowledge*. So overwriting a VERIFIED module with a different body does
+    not win by being newer — it raises a Conflict, mounts it for reconciliation, and
+    leaves the old module intact. Pass resolve=True once evidence settles it.
+
+    Returns (stored_module, conflict); exactly one is non-None.
+    """
+    existing = store.get(module.context_id)
+    contradicts = (existing is not None and existing.verified
+                   and existing.body != module.body)
+    if contradicts and not resolve:
+        c = Conflict(context_id=module.context_id,
+                     existing_body=existing.body, incoming_body=module.body)
+        store.put(ContextModule(
+            context_id=conflict_id(module.context_id),
+            body=c.render(), type="conflict", residency=WORKING,
+            scope=existing.scope, created_from=module.context_id,
+            dependencies=[module.context_id], verified=False,
+        ))
+        return None, c
+    return store.put(module), None
+
+
+class ContextCheckpoint:
+    """Snapshot/restore of the whole context store, mirroring ratchet.GitCheckpoint's
+    shape (available/snapshot/restore) so a Ratchet tooth can checkpoint CODE and
+    KNOWLEDGE together (§11).
+
+    A snapshot is just the {context_id: version} map — cheap, because the store is
+    append-only and every superseded version is still on disk. Restore re-appends the
+    snapshot's content as new versions (never rewriting history) and archives modules
+    created after the snapshot, so rollback is itself lossless (§2).
+    """
+
+    def __init__(self, store: ContextStore):
+        self.store = store
+        self.path = store.dir / "checkpoints.jsonl"
+
+    def available(self) -> bool:
+        return self.store.dir.exists()
+
+    def _all(self) -> list:
+        out: list = []
+        try:
+            with self.path.open(encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            out.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+        except OSError:
+            pass
+        return out
+
+    def snapshot(self, label: str = "", *, git_ref: str = "",
+                 fitness: "float | None" = None) -> str:
+        """Record the current context state. `git_ref`/`fitness` tie this tooth to the
+        repo snapshot and verifier score that justified it (§11)."""
+        rec = {
+            "id": f"ckpt-{len(self._all()) + 1:04d}",
+            "label": label,
+            "git_ref": git_ref,
+            "fitness": fitness,
+            "versions": self.store.versions(),
+            "ts": time.time(),
+        }
+        try:
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, default=str, ensure_ascii=False) + "\n")
+        except (OSError, TypeError, ValueError):
+            pass
+        return rec["id"]
+
+    def get(self, checkpoint_id: str) -> Optional[dict]:
+        for r in self._all():
+            if r.get("id") == checkpoint_id:
+                return r
+        return None
+
+    def restore(self, checkpoint_id: str) -> bool:
+        """Roll the context store back to a checkpoint. Modules created since are
+        ARCHIVED (not deleted); modules changed since are re-appended at their
+        checkpoint content."""
+        rec = self.get(checkpoint_id)
+        if rec is None:
+            return False
+        want = {k: int(v) for k, v in (rec.get("versions") or {}).items()}
+        for m in self.store.all():
+            cid = m.context_id
+            if cid not in want:
+                self.store.set_residency(cid, ARCHIVED)      # born after the checkpoint
+                continue
+            if m.version != want[cid]:
+                old = self.store.get_version(cid, want[cid])
+                if old is not None:
+                    self.store.put(old)                      # re-append old content as a new version
+        return True
+
+
+class _Txn:
+    """Handle yielded by context_transaction()."""
+
+    def __init__(self, checkpoint_id: str):
+        self.checkpoint_id = checkpoint_id
+        self.committed = False
+
+    def commit(self) -> None:
+        self.committed = True
+
+
+@contextmanager
+def context_transaction(store: ContextStore, label: str = ""):
+    """Transactional context change (§10): BEGIN -> work -> verify -> COMMIT, else
+    ROLLBACK. A speculative branch cannot silently contaminate shared knowledge — if
+    the block raises, or exits without commit(), the store is rolled back to the
+    checkpoint taken on entry.
+
+        with context_transaction(store, "try regex parser") as tx:
+            ...explore, write modules...
+            if verifier_improved:
+                tx.commit()
+        # no commit -> rolled back; tombstone the attempt if it is worth remembering
+    """
+    ckpt = ContextCheckpoint(store)
+    cid = ckpt.snapshot(label=label or "txn")
+    tx = _Txn(cid)
+    try:
+        yield tx
+    except Exception:
+        ckpt.restore(cid)
+        raise
+    if not tx.committed:
+        ckpt.restore(cid)

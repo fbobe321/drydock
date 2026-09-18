@@ -126,6 +126,16 @@ fleet were left running untouched.
   model-authored claim, so `verified=bool(evidence)` — an UNEVIDENCED tombstone cannot pass BRANCH
   on the §18 ladder and therefore can never durably suppress an approach project-wide; an
   evidence-backed one can. Tombstones sit before WORKING in VIEW_ORDER (they change less often).
+- **MCR Phase 3 SHIPPED (Ratchet integration):** `ContextCheckpoint` mirrors `GitCheckpoint`'s
+  shape (available/snapshot/restore) so a ratchet tooth can checkpoint CODE + KNOWLEDGE together —
+  `snapshot(label, git_ref=…, fitness=…)` ties the context state to the repo ref and verifier score
+  (§11). Snapshot = the cheap {context_id: version} map; restore re-appends old content as NEW
+  versions and archives modules born after, so **rollback is itself lossless**.
+  **§12 invariant enforced:** `commit_knowledge()` — overwriting a VERIFIED module with a different
+  body does NOT win by being newer; it raises a `Conflict`, mounts a `ctx://conflict/…` module for
+  reconciliation, and leaves the old fact standing (`resolve=True` once evidence settles it).
+  `context_transaction()` gives §10 BEGIN→work→verify→COMMIT/ROLLBACK, so an abandoned speculative
+  fork cannot contaminate shared knowledge. 66 tests.
 - **Token sizing reuses `compaction.estimate_tokens`** on purpose — if MCR sized modules
   differently from the compactor the pager and compactor would fight over "how full is context".
 - **✅ PREFIX-CACHE PROBE DONE — Appendix A.1 CONFIRMED** (`research/mcr/prefix_cache_probe.py`,

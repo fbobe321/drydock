@@ -430,3 +430,155 @@ def test_tombstone_sits_before_working_in_the_view(tmp_path):
     tombstone(s, "ctx://branch/dead", approach="dead end")
     ids = build_view(s, budget=100_000).ids()
     assert ids.index("ctx://tombstone/branch.dead") < ids.index("ctx://w/now")
+
+
+# ═════════════ Phase 3: Ratchet integration (§10 txn, §11 checkpoint, §12 invariant) ═════════════
+
+import pytest as _pytest  # noqa: E402
+
+from drydock.context_runtime import (  # noqa: E402
+    Conflict,
+    ContextCheckpoint,
+    commit_knowledge,
+    conflict_id,
+    context_transaction,
+)
+
+
+# ── §11 ContextCheckpoint mirrors GitCheckpoint ──────────────────────────────
+
+def test_checkpoint_api_mirrors_gitcheckpoint(tmp_path):
+    """A ratchet tooth should be able to checkpoint code and knowledge the same way."""
+    from drydock.ratchet import GitCheckpoint
+    s = ContextStore(root=str(tmp_path))
+    cp = ContextCheckpoint(s)
+    assert cp.available() is True
+    for name in ("available", "snapshot", "restore"):
+        assert hasattr(cp, name) and hasattr(GitCheckpoint, name)
+
+
+def test_checkpoint_records_the_tooth_git_ref_and_fitness(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/one")
+    cid = ContextCheckpoint(s).snapshot("tooth 14/22", git_ref="abc1234", fitness=0.636)
+    rec = ContextCheckpoint(s).get(cid)
+    assert rec["git_ref"] == "abc1234" and rec["fitness"] == 0.636
+    assert rec["label"] == "tooth 14/22" and rec["versions"]["ctx://a/one"] == 1
+
+
+def test_restore_reverts_a_changed_module(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/one", body="GOOD")
+    cp = ContextCheckpoint(s)
+    cid = cp.snapshot("before")
+    _m(s, "ctx://a/one", body="REGRESSED")
+    assert s.get("ctx://a/one").body == "REGRESSED"
+    assert cp.restore(cid) is True
+    assert s.get("ctx://a/one").body == "GOOD"
+
+
+def test_restore_archives_modules_born_after_the_checkpoint(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/one")
+    cp = ContextCheckpoint(s)
+    cid = cp.snapshot()
+    _m(s, "ctx://a/two")
+    cp.restore(cid)
+    assert s.get("ctx://a/two").residency == ARCHIVED     # evicted, not destroyed (§2)
+    assert s.get("ctx://a/two").body != ""
+
+
+def test_rollback_is_itself_lossless(tmp_path):
+    """Restoring must append, never rewrite history — the regressed version stays."""
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/one", body="GOOD")
+    cp = ContextCheckpoint(s)
+    cid = cp.snapshot()
+    _m(s, "ctx://a/one", body="REGRESSED")
+    cp.restore(cid)
+    assert s.get_version("ctx://a/one", 2).body == "REGRESSED"
+    assert s.get("ctx://a/one").version == 3               # restore appended a new version
+
+
+def test_restore_unknown_checkpoint_is_false(tmp_path):
+    assert ContextCheckpoint(ContextStore(root=str(tmp_path))).restore("ckpt-9999") is False
+
+
+# ── §12 the context-ratchet invariant ────────────────────────────────────────
+
+def test_unverified_knowledge_is_overwritten_normally(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    s.put(ContextModule(context_id="ctx://k/api", body="needs X", verified=False))
+    stored, conflict = commit_knowledge(s, ContextModule(context_id="ctx://k/api",
+                                                         body="does not need X"))
+    assert conflict is None and stored.body == "does not need X"
+
+
+def test_contradicting_verified_knowledge_raises_a_conflict(tmp_path):
+    """§12 — the new observation must NOT silently replace a verified fact."""
+    s = ContextStore(root=str(tmp_path))
+    s.put(ContextModule(context_id="ctx://k/api", body="API requires parameter X",
+                        verified=True))
+    stored, conflict = commit_knowledge(
+        s, ContextModule(context_id="ctx://k/api", body="API appears not to require X"))
+    assert stored is None and isinstance(conflict, Conflict)
+    assert s.get("ctx://k/api").body == "API requires parameter X"   # old one stands
+    c = s.get(conflict_id("ctx://k/api"))
+    assert c is not None and c.residency == WORKING and c.verified is False
+    assert "OLD (verified): API requires parameter X" in c.body
+    assert "NEW (observed): API appears not to require X" in c.body
+
+
+def test_identical_recommit_of_verified_knowledge_is_not_a_conflict(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    s.put(ContextModule(context_id="ctx://k/api", body="requires X", verified=True))
+    stored, conflict = commit_knowledge(s, ContextModule(context_id="ctx://k/api",
+                                                         body="requires X"))
+    assert conflict is None and stored is not None
+
+
+def test_resolve_allows_the_overwrite_once_evidence_settles_it(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    s.put(ContextModule(context_id="ctx://k/api", body="requires X", verified=True))
+    stored, conflict = commit_knowledge(
+        s, ContextModule(context_id="ctx://k/api", body="does not require X", verified=True),
+        resolve=True)
+    assert conflict is None and s.get("ctx://k/api").body == "does not require X"
+
+
+# ── §10 transactional context changes ────────────────────────────────────────
+
+def test_transaction_commit_keeps_the_work(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    with context_transaction(s, "try regex parser") as tx:
+        _m(s, "ctx://branch/regex", body="WORK")
+        tx.commit()
+    assert s.get("ctx://branch/regex").residency == WORKING
+
+
+def test_transaction_without_commit_rolls_back(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    with context_transaction(s) as tx:      # noqa: F841 — deliberately never committed
+        _m(s, "ctx://branch/regex", body="SPECULATIVE")
+    assert s.get("ctx://branch/regex").residency == ARCHIVED
+
+
+def test_transaction_rolls_back_on_exception_and_reraises(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/one", body="GOOD")
+    with _pytest.raises(RuntimeError):
+        with context_transaction(s) as tx:
+            _m(s, "ctx://a/one", body="CLOBBERED")
+            tx.commit()                      # even a commit cannot survive the raise
+            raise RuntimeError("boom")
+    assert s.get("ctx://a/one").body == "GOOD"
+
+
+def test_speculative_branch_cannot_contaminate_shared_knowledge(tmp_path):
+    """The §10 point: an abandoned fork leaves shared knowledge untouched."""
+    s = ContextStore(root=str(tmp_path))
+    s.put(ContextModule(context_id="ctx://s/repo", body="TRUTH",
+                        residency=SHARED, verified=True))
+    with context_transaction(s) as tx:       # noqa: F841 — abandoned on purpose
+        commit_knowledge(s, ContextModule(context_id="ctx://s/repo", body="HALLUCINATION"))
+    assert s.get("ctx://s/repo").body == "TRUTH"
