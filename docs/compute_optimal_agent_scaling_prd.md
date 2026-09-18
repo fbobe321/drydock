@@ -26,6 +26,19 @@ The scaling-law *analysis* (curve fitting, response surfaces) is offline post-pr
 
 **Relationship to existing docs:** this PRD supersedes and expands the swarm PRD's `docs/multi_agent_swarm_prd.md` §41 ("Swarm-Width Scaling Law / Productive-N") — §41 is the seed; this is the full program. It also builds on §33 (Marginal Agent Utility) and §34 (Benchmarking, incl. the same TUI-driven constraint).
 
+**Architectural position (operator, 2026-09-18) — this PRD sits ON TOP of the Modular Context
+Runtime.** The layering is:
+
+> **Modular Context Runtime → Ratchet → Compute/Context Governor → parallel execution/agents**
+
+See `docs/modular_context_runtime_prd.md` (MCR). MCR makes *context* the primitive and agents one
+execution topology over it. Consequently this PRD's `(N*, G*, D*)` is best understood as a
+**projection onto the agent axis** of a larger allocation problem that also includes `B` (resident
+context budget) and `M` (model selection): `max Verified Progress / Inference Compute`. The
+breadth/depth experiments below remain valid and should be run — they measure one axis of that
+surface — but the adaptive controller (Phase 7 / Output 4) should ultimately be the *unified*
+compute/context governor described in MCR §28 phase 8, not an agent-count-only controller.
+
 ---
 
 ## 1. Executive Summary

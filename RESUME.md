@@ -84,6 +84,27 @@ cap config-driven (`swarm_max_agents` / `DRYDOCK_SWARM_MAX_AGENTS`, default 64) 
 (2) emit Productive-N fields into `metrics.json`; (3) compliant TUI-driven N∈{8,32,64,128} sweep on
 low-p tasks (needs multi-box + likely the container-verifier bridge — its own design pass first).
 
+**TWO RESEARCH PRDs ADDED (2026-09-18, operator-authored):**
+- `docs/compute_optimal_agent_scaling_prd.md` — Compute-Optimal Agent Scaling (breadth N × depth G ×
+  diversity D under fixed compute C). Priority: **Phase 1 instrumentation + the 64-attempt
+  breadth/depth matrix (§7)**. Phase-1 slice SHIPPED: `drydock/research_telemetry.py`
+  (AttemptRecord/§20 + JSONL + lineage/§21, 8 tests). **Wiring into ratchet/eratchet is the next
+  slice** (thread runtime/tokens through `VariantOutcome`+`exec_variant`, emit at the existing
+  `capture` seam in `run_eratchet`).
+- `docs/modular_context_runtime_prd.md` — **Modular Context Runtime (MCR)**: context as managed
+  virtual memory (mount/unmount/pin/fork/tombstone; lossless storage, selective residency).
+  **Layering: MCR → Ratchet → Compute/Context Governor → agents.** MCR sits UNDERNEATH the scaling
+  PRD; agent count becomes one scheduler variable alongside resident-context budget B and model M.
+  Builds on existing `compaction.py` / `graphrag.py` / `doccanvas.py` / `events.py` / `resume.py`.
+  ⚠️ **Appendix A.1 = the key risk: KV/prefix-cache invalidation.** Evicting from the prompt HEAD
+  forces full re-prefill, so a naive pager can be SLOWER than append-only while reporting less
+  resident context. Order the Context View pinned→task→volatile so only the TAIL mutates, and count
+  re-prefill tokens in CTE or the §24 experiment will flatter MCR.
+
+**Both PRDs' §0 hold the compliance line:** building runtime/instrumentation/controller = fine; the
+comparative experiments run as operator-driven TUI runs with OFFLINE analysis — never an automated
+batch runner (standing HARD BAN covers "even pexpect-driven TUI ones").
+
 **Drive swarms via the real `/swarm` TUI** (tmux send-keys + capture-pane), NEVER programmatic
 `run_swarm`/batch drivers (that's the banned eval-harness shape). Dedicated tmux session only; never
 broad-kill drydock. Cosmetic bug noted: TUI banner shows `v3.0.92` (stale `.dist-info` metadata) while
