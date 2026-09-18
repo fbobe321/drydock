@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import time
+import traceback
 
 from drydock.context_runtime import (
     ContextCheckpoint,
@@ -54,6 +55,11 @@ class ContextRatchet:
         self.store = ContextStore(root=cwd, name=self.run_id)
         self.checkpoint = ContextCheckpoint(self.store)
         self.goal = goal
+        try:
+            from drydock.context_inject import register
+            register(cwd, self.store)          # makes this run's store injectable
+        except Exception:  # noqa: BLE001
+            pass
         if goal:
             try:
                 # the objective is PINNED: it is never the thing we evict (§6)
@@ -109,9 +115,20 @@ class ContextRatchet:
                               "failed": failed},
                 )
                 out["tombstone"] = t.context_id if t else ""
-        except Exception:  # noqa: BLE001 — never break the ratchet
-            pass
+        except Exception as e:  # noqa: BLE001 — never break the ratchet…
+            self._log_error(f"on_round(round={round_no}, action={action})", e)
         return out
+
+    def _log_error(self, where: str, exc: Exception) -> None:
+        """…but never swallow SILENTLY either. A recorder that fails invisibly is
+        indistinguishable from one that works, which has already cost this project two
+        debugging cycles. Errors land next to the data they should have produced."""
+        try:
+            with (self.store.dir / "errors.log").open("a", encoding="utf-8") as f:
+                f.write(f"{time.time():.0f} {where}: {type(exc).__name__}: {exc}\n")
+                f.write(traceback.format_exc() + "\n")
+        except OSError:
+            pass
 
     def summary(self) -> dict:
         """What the run accumulated — for a status line or /context."""

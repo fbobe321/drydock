@@ -645,6 +645,10 @@ def stream(
     # Prefix-difference telemetry (cache-aware MCR spec §32 item 2): record how much
     # of this prompt is identical to the previous one. No-op unless explicitly
     # enabled; measures the payload that actually reaches the model.
+    # MCR (docs/cache_aware_mcr_spec.md §16): append the carried-forward context
+    # packet as the LAST message so the stable prefix survives. No-op unless enabled.
+    from drydock.context_inject import inject
+    oai_messages = inject(config, oai_messages)
     from drydock.prefix_telemetry import record_for
     record_for(config, oai_messages, model=str(model))
 
