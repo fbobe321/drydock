@@ -176,6 +176,7 @@ def test_resolve_skips_dangling_reference(tmp_path):
 from drydock.context_runtime import (  # noqa: E402
     SHARED,
     VIEW_ORDER,
+    ContextView,
     build_view,
     prefix_reuse,
 )
@@ -687,3 +688,59 @@ def test_changing_resolution_breaks_the_prefix(tmp_path):
     small = build_view(s, budget=60)                  # parser degraded
     r = prefix_reuse(big, small)
     assert r["diverged_at"] == 0 and r["reused_tokens"] == 0
+
+
+# ═══════ Cache-aware spec §7/§8/§9: serialization-keyed identity ═══════
+
+def test_fingerprint_follows_serialized_text_not_identity(tmp_path):
+    a = ContextModule(context_id="ctx://a/one", body="same text")
+    b = ContextModule(context_id="ctx://b/two", body="same text")
+    c = ContextModule(context_id="ctx://a/one", body="different")
+    assert a.fingerprint == b.fingerprint      # identical bytes -> identical cache identity
+    assert a.fingerprint != c.fingerprint      # same id, different bytes -> different
+
+
+def test_fingerprint_changes_with_resolution(tmp_path):
+    m = ContextModule(context_id="ctx://r/p", resolutions={0: "ptr", 1: "a longer summary"})
+    assert m.at_level(0).fingerprint != m.at_level(1).fingerprint
+
+
+def test_same_bytes_under_different_ids_still_reuses_the_prefix(tmp_path):
+    """The bug semantic keying caused: renaming a module without changing its text
+    does not invalidate the server's cache, so we must not report divergence."""
+    v1 = ContextView(modules=[ContextModule(context_id="ctx://a/x", body="hello",
+                                            residency=PINNED)], budget=99)
+    v2 = ContextView(modules=[ContextModule(context_id="ctx://b/y", body="hello",
+                                            residency=PINNED)], budget=99)
+    assert prefix_reuse(v1, v2)["reuse_pct"] == 100.0
+
+
+def test_same_version_but_edited_text_counts_as_divergence(tmp_path):
+    """And the converse: identical id+version with different bytes must NOT claim reuse."""
+    a = ContextModule(context_id="ctx://a/x", body="one", residency=PINNED)
+    b = ContextModule(context_id="ctx://a/x", body="two", residency=PINNED)
+    a.version = b.version = 7
+    r = prefix_reuse(ContextView(modules=[a]), ContextView(modules=[b]))
+    assert r["diverged_at"] == 0 and r["reused_tokens"] == 0
+
+
+def test_manifest_shape_and_cache_classes(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED)
+    _m(s, "ctx://s/repo", residency=SHARED)
+    _m(s, "ctx://w/now", residency=WORKING)
+    man = build_view(s, budget=10_000).manifest()
+    assert [x["cache_class"] for x in man["modules"]] == ["immutable", "stable", "volatile"]
+    assert man["token_count"] == 300 and man["stable_prefix_tokens"] == 200
+    assert all(len(x["fingerprint"]) == 16 for x in man["modules"])
+
+
+def test_prefix_fingerprints_are_cumulative_and_diverge_at_the_change(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED)
+    _m(s, "ctx://s/repo", residency=SHARED, body="A" * 300)
+    before = build_view(s, budget=10_000).prefix_fingerprints()
+    _m(s, "ctx://s/repo", residency=SHARED, body="B" * 300)
+    after = build_view(s, budget=10_000).prefix_fingerprints()
+    assert before[0] == after[0]        # kernel prefix unchanged
+    assert before[1] != after[1]        # …and everything from the edit on differs

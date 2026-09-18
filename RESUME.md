@@ -185,6 +185,22 @@ verifier said* and can never climb to PROJECT unaided. **Asymmetry is deliberate
 failures. Mitigations (1) holdout verifier and (2) restore-tests-and-reverify are STILL UNBUILT
 (they change the ratchet's contract — operator call).
 
+**📐 THIRD SPEC ADDED: `docs/cache_aware_mcr_spec.md` (Cache-Aware MCR).** Designs KV-cache
+compatibility INTO MCR: zones 0–5, deterministic module fingerprints, context manifests, cache-reuse
+scoring, multi-objective selection (αR+βC+γQ−δT), effective mount cost, capability-tiered cache
+adapter (L0 none / L1 auto-prefix / L2 explicit), prefix-sharing context forks, ECC metric. It has a
+§0 status map of what MCR already implements. Two things it changes:
+- **§8 caught a live bug in shipped code:** `prefix_reuse()` keyed on `(id, version, level)` —
+  *semantic* identity. Cache identity is the SERIALIZED BYTES. Now `ContextModule.fingerprint` =
+  sha256 of the rendered text, and `prefix_reuse` compares fingerprints ONLY (not ids): same bytes
+  under different ids DOES reuse; same id+version with edited bytes does NOT. Added `ContextView.
+  manifest()` (§7) and `prefix_fingerprints()` (§9). 100 MCR tests.
+- **§18 partially reverses the width finding:** wide swarms were measured as ~10× tokens for no
+  gain, but that is a property of how forks are CONSTRUCTED. Deliberately shared prefixes move
+  4×(80K+5K)=340K toward 80K+4×5K=100K. Re-test width once prefix-sharing forks exist.
+Its §32 priority order (manifests+deterministic serialization → prefix-diff telemetry → ordering →
+mounting → checkpoints → forks → scheduler) notes we built 3/4/5 BEFORE 1/2; item 1 is now done.
+
 **Both PRDs' §0 hold the compliance line:** building runtime/instrumentation/controller = fine; the
 comparative experiments run as operator-driven TUI runs with OFFLINE analysis — never an automated
 batch runner (standing HARD BAN covers "even pexpect-driven TUI ones").

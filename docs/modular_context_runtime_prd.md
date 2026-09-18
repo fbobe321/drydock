@@ -545,6 +545,16 @@ That distinction is the central research idea.
 
 ---
 
+## Related spec
+
+`docs/cache_aware_mcr_spec.md` — **Cache-Aware Modular Context Runtime**. Takes Appendix A.1 from a
+measured constraint to a full subsystem design: context zones, deterministic module fingerprints,
+context manifests, cache-reuse scoring, multi-objective selection, effective mount cost, a
+capability-tiered cache adapter, prefix-sharing context forks, and the Effective Context Cost metric.
+Read it before building the scheduler (§19) or forks (§28 phase 7).
+
+---
+
 ## Appendix A — Implementation constraints not in the original draft
 
 **A.1 KV-cache / prefix-cache invalidation is a first-class cost. — ✅ MEASURED AND CONFIRMED

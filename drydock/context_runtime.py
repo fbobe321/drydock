@@ -27,6 +27,7 @@ about how full the context is and fight each other.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -155,6 +156,20 @@ class ContextModule:
         m = ContextModule(**d)
         m.version = self.version
         return m
+
+    @property
+    def fingerprint(self) -> str:
+        """Deterministic hash of the SERIALIZED representation (cache-aware spec §8).
+
+        Cache identity must follow the bytes that reach the model, not the semantic id:
+        two modules can share an id/version and serialize differently, or differ
+        semantically and serialize identically. We hash the exact text rather than the
+        token ids because Drydock must not depend on a tokenizer here — and for a
+        deterministic tokenizer identical text implies identical tokens, which is the
+        direction we need. (Different text that happens to tokenize identically is
+        merely reported as a divergence we could have reused: conservative, never
+        optimistic.)"""
+        return hashlib.sha256(self.current_text.encode("utf-8", "replace")).hexdigest()[:16]
 
     @property
     def token_size(self) -> int:
@@ -386,6 +401,37 @@ class ContextView:
     def ids(self) -> list:
         return [m.context_id for m in self.modules]
 
+    def cache_class(self, m: "ContextModule") -> str:
+        """Coarse stability label for the manifest (spec §7). Derived from residency,
+        which is what VIEW_ORDER already sorts on."""
+        return {PINNED: "immutable", SHARED: "stable", TOMBSTONED: "checkpoint",
+                WORKING: "volatile"}.get(m.residency, "pageable")
+
+    def manifest(self) -> dict:
+        """The per-request context manifest (spec §7) — also the telemetry record."""
+        return {
+            "modules": [
+                {"id": m.context_id, "version": m.version, "level": m.level,
+                 "tokens": m.token_size, "fingerprint": m.fingerprint,
+                 "cache_class": self.cache_class(m)}
+                for m in self.modules
+            ],
+            "token_count": self.total_tokens,
+            "stable_prefix_tokens": self.stable_prefix_tokens,
+            "budget": self.budget,
+            "evicted": list(self.evicted),
+            "degraded": dict(self.degraded),
+        }
+
+    def prefix_fingerprints(self) -> list:
+        """Cumulative prefix hashes P_i = H(M_1 || … || M_i) (spec §9). Two views share
+        reusable prefix state up to the last index where these agree."""
+        out, acc = [], hashlib.sha256()
+        for m in self.modules:
+            acc.update(m.fingerprint.encode("ascii"))
+            out.append(acc.hexdigest()[:16])
+        return out
+
 
 def build_view(store: ContextStore, budget: int, *,
                include: "list | None" = None,
@@ -562,8 +608,11 @@ def prefix_reuse(previous: "ContextView | None", current: ContextView) -> dict:
     idx = 0
     for idx in range(min(len(prev), len(cur))):
         a, b = prev[idx], cur[idx]
-        if (a.context_id != b.context_id or a.version != b.version
-                or a.level != b.level):
+        # Compare ONLY what the model actually sees (spec §8/§9). Not the id: two
+        # different modules with identical text render identical prompt bytes and the
+        # server WILL reuse that prefix, so keying on semantic identity would
+        # under-report reuse just as surely as it over-reported it before.
+        if a.fingerprint != b.fingerprint:
             break
         reused += b.token_size
     else:
