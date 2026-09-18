@@ -225,3 +225,131 @@ class ContextStore:
     def total_tokens(self, *residency: str) -> int:
         mods = self.by_residency(*residency) if residency else self.all()
         return sum(m.token_size for m in mods)
+
+    # ── §28 phase 2: explicit mount / unmount between inference calls ─────────
+    def mount(self, context_id: str) -> Optional[ContextModule]:
+        """Make a module part of the current working set."""
+        return self.set_residency(context_id, WORKING)
+
+    def unmount(self, context_id: str) -> Optional[ContextModule]:
+        """Evict from the context window — the body is RETAINED (§2), so this is a
+        residency change, not a deletion; it can be paged back in with mount()."""
+        return self.set_residency(context_id, ARCHIVED)
+
+    def pin(self, context_id: str) -> Optional[ContextModule]:
+        return self.set_residency(context_id, PINNED)
+
+
+# ── §7 working set / Context View ────────────────────────────────────────────
+
+# Prompt order, most-stable first. This is NOT cosmetic: measured on an idle vLLM
+# box (research/mcr/prefix_cache_probe.py, PRD Appendix A.1), re-prefill cost scales
+# with how EARLY in the prompt a change lands — tail 0.24x, middle 0.59x, head 0.98x
+# of a cold prefill, i.e. a head mutation costs ~4.2x a tail mutation. Ordering by
+# how often a class changes keeps mutations in the TAIL so the cached prefix survives.
+VIEW_ORDER = (PINNED, SHARED, TOMBSTONED, WORKING)
+
+
+@dataclass
+class ContextView:
+    """The concrete working set handed to one inference call (§7/§8). `modules` is in
+    prompt order; `evicted` are ids that did not fit the budget."""
+    modules: list = field(default_factory=list)
+    budget: int = 0
+    evicted: list = field(default_factory=list)
+    order: tuple = VIEW_ORDER
+
+    @property
+    def total_tokens(self) -> int:
+        return sum(m.token_size for m in self.modules)
+
+    @property
+    def over_budget(self) -> bool:
+        return self.total_tokens > self.budget
+
+    @property
+    def stable_prefix_tokens(self) -> int:
+        """Tokens in the classes that should NOT change between turns (pinned+shared).
+        This is the span whose KV cache we are trying to preserve."""
+        return sum(m.token_size for m in self.modules
+                   if m.residency in (PINNED, SHARED))
+
+    def render(self) -> str:
+        return "\n\n".join(m.body for m in self.modules if m.body)
+
+    def ids(self) -> list:
+        return [m.context_id for m in self.modules]
+
+
+def build_view(store: ContextStore, budget: int, *,
+               include: "list | None" = None,
+               order: tuple = VIEW_ORDER) -> ContextView:
+    """Assemble a Context View under a token budget (§7: Tokens(W_t) <= B).
+
+    SELECTION and ORDERING are deliberately separate concerns:
+      * selection — what earns a place, by `priority` (highest first), fitting the
+        budget. PINNED is exempt: it is always resident by definition (§6).
+      * ordering  — the surviving modules are then laid out most-stable-first
+        (VIEW_ORDER), so that turn-to-turn changes land in the prompt TAIL and the
+        cached prefix survives (Appendix A.1, measured).
+
+    `include` optionally restricts consideration to specific ids (pinned modules are
+    always included regardless). ARCHIVED/unknown residencies are never mounted.
+    """
+    mods = [m for m in store.all() if m.residency in order]
+    if include is not None:
+        want = set(include)
+        mods = [m for m in mods if m.context_id in want or m.residency == PINNED]
+
+    pinned = [m for m in mods if m.residency == PINNED]
+    rest = [m for m in mods if m.residency != PINNED]
+    # selection: priority desc, then cheaper first so a big low-value module cannot
+    # crowd out several small useful ones
+    rest.sort(key=lambda m: (-m.priority, m.token_size))
+
+    used = sum(m.token_size for m in pinned)
+    kept: list = []
+    evicted: list = []
+    for m in rest:
+        if used + m.token_size <= budget:
+            kept.append(m)
+            used += m.token_size
+        else:
+            evicted.append(m.context_id)
+
+    selected = pinned + kept
+    # ordering: stable sort keeps the priority order within each residency class
+    selected.sort(key=lambda m: order.index(m.residency))
+    return ContextView(modules=selected, budget=budget, evicted=evicted, order=order)
+
+
+def prefix_reuse(previous: "ContextView | None", current: ContextView) -> dict:
+    """How much of `previous`'s prompt prefix `current` can reuse from the KV cache.
+
+    Walks both views in prompt order and stops at the first module that differs by id
+    OR by version (a same-id module whose body changed invalidates from there on, just
+    like a replacement). Returns reused/reprefill token counts — the cheap, offline
+    predictor of what Appendix A.1 measured, so a scheduler can see the cost of a
+    mounting decision BEFORE paying it.
+    """
+    cur = current.modules
+    total = sum(m.token_size for m in cur)
+    if not previous or not previous.modules:
+        return {"reused_tokens": 0, "reprefill_tokens": total,
+                "reuse_pct": 0.0, "diverged_at": 0}
+    prev = previous.modules
+    reused = 0
+    idx = 0
+    for idx in range(min(len(prev), len(cur))):
+        a, b = prev[idx], cur[idx]
+        if a.context_id != b.context_id or a.version != b.version:
+            break
+        reused += b.token_size
+    else:
+        idx = min(len(prev), len(cur))          # no divergence within the common span
+    return {
+        "reused_tokens": reused,
+        "reprefill_tokens": total - reused,
+        "reuse_pct": round(100.0 * reused / total, 1) if total else 0.0,
+        "diverged_at": idx,
+    }

@@ -169,3 +169,154 @@ def test_resolve_skips_dangling_reference(tmp_path):
     s = ContextStore(root=str(tmp_path))
     s.put(ContextModule(context_id="ctx://a/one", dependencies=["ctx://gone/x"]))
     assert [m.context_id for m in s.resolve("ctx://a/one")] == ["ctx://a/one"]
+
+
+# ══════════════════════ Phase 2: paging / Context View ══════════════════════
+
+from drydock.context_runtime import (  # noqa: E402
+    SHARED,
+    VIEW_ORDER,
+    build_view,
+    prefix_reuse,
+)
+
+
+def _m(store, cid, residency=WORKING, body="x" * 300, priority=0.0, **kw):
+    return store.put(ContextModule(context_id=cid, residency=residency, body=body,
+                                   priority=priority, **kw))
+
+
+def test_mount_unmount_are_residency_changes_not_deletions(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://r/cli", body="help output")
+    s.unmount("ctx://r/cli")
+    assert s.get("ctx://r/cli").residency == ARCHIVED
+    assert s.get("ctx://r/cli").body == "help output"     # §2 lossless
+    s.mount("ctx://r/cli")
+    assert s.get("ctx://r/cli").residency == WORKING
+
+
+def test_archived_modules_are_never_in_the_view(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/live")
+    _m(s, "ctx://a/gone", residency=ARCHIVED)
+    assert build_view(s, budget=10_000).ids() == ["ctx://a/live"]
+
+
+def test_view_is_ordered_most_stable_first(tmp_path):
+    """The measured Appendix A.1 rule: pinned -> shared -> tombstoned -> working."""
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://w/now", residency=WORKING)
+    _m(s, "ctx://t/dead", residency=TOMBSTONED)
+    _m(s, "ctx://s/repo", residency=SHARED)
+    _m(s, "ctx://p/sys", residency=PINNED)
+    assert build_view(s, budget=10_000).ids() == [
+        "ctx://p/sys", "ctx://s/repo", "ctx://t/dead", "ctx://w/now"]
+    assert VIEW_ORDER == (PINNED, SHARED, TOMBSTONED, WORKING)
+
+
+def test_budget_evicts_lowest_priority_first(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/hi", priority=0.9)      # 100 tok each
+    _m(s, "ctx://a/mid", priority=0.5)
+    _m(s, "ctx://a/lo", priority=0.1)
+    v = build_view(s, budget=200)
+    assert sorted(v.ids()) == ["ctx://a/hi", "ctx://a/mid"]
+    assert v.evicted == ["ctx://a/lo"]
+    assert v.total_tokens == 200 and not v.over_budget
+
+
+def test_pinned_is_exempt_from_the_budget(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED, body="y" * 900)   # 300 tok
+    _m(s, "ctx://w/now", residency=WORKING)
+    v = build_view(s, budget=100)
+    assert "ctx://p/sys" in v.ids()          # pinned always resident (§6)
+    assert v.over_budget and v.evicted == ["ctx://w/now"]
+
+
+def test_selection_prefers_cheaper_module_on_equal_priority(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/big", body="z" * 900, priority=0.5)   # 300 tok
+    _m(s, "ctx://a/small", body="z" * 150, priority=0.5)  # 50 tok
+    v = build_view(s, budget=100)
+    assert v.ids() == ["ctx://a/small"]
+
+
+def test_include_restricts_but_pinned_still_mounts(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED)
+    _m(s, "ctx://a/one")
+    _m(s, "ctx://a/two")
+    v = build_view(s, budget=10_000, include=["ctx://a/two"])
+    assert sorted(v.ids()) == ["ctx://a/two", "ctx://p/sys"]
+
+
+def test_stable_prefix_tokens_counts_pinned_and_shared_only(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED)      # 100
+    _m(s, "ctx://s/repo", residency=SHARED)     # 100
+    _m(s, "ctx://w/now", residency=WORKING)     # 100
+    v = build_view(s, budget=10_000)
+    assert v.stable_prefix_tokens == 200 and v.total_tokens == 300
+
+
+def test_render_joins_bodies_in_prompt_order(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://w/now", residency=WORKING, body="WORK")
+    _m(s, "ctx://p/sys", residency=PINNED, body="SYS")
+    assert build_view(s, budget=10_000).render() == "SYS\n\nWORK"
+
+
+# ── prefix_reuse: the offline predictor of Appendix A.1 re-prefill cost ──────
+
+def test_prefix_reuse_no_previous_view_is_full_reprefill(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://a/one")
+    r = prefix_reuse(None, build_view(s, budget=10_000))
+    assert r["reused_tokens"] == 0 and r["reuse_pct"] == 0.0
+
+
+def test_prefix_reuse_identical_view_is_total(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED)
+    _m(s, "ctx://w/now", residency=WORKING)
+    v = build_view(s, budget=10_000)
+    r = prefix_reuse(v, build_view(s, budget=10_000))
+    assert r["reuse_pct"] == 100.0 and r["reprefill_tokens"] == 0
+
+
+def test_tail_change_preserves_the_prefix(tmp_path):
+    """Changing a WORKING module (the tail) must keep the pinned+shared prefix."""
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED)
+    _m(s, "ctx://s/repo", residency=SHARED)
+    before = build_view(s, budget=10_000)
+    _m(s, "ctx://w/now", residency=WORKING)          # new tail module
+    r = prefix_reuse(before, build_view(s, budget=10_000))
+    assert r["reused_tokens"] == 200 and r["reprefill_tokens"] == 100
+
+
+def test_head_change_destroys_the_whole_prefix(tmp_path):
+    """Mutating a PINNED (head) module invalidates everything after it — the 0.98x
+    case the probe measured."""
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED, body="A" * 300)
+    _m(s, "ctx://s/repo", residency=SHARED)
+    _m(s, "ctx://w/now", residency=WORKING)
+    before = build_view(s, budget=10_000)
+    _m(s, "ctx://p/sys", residency=PINNED, body="B" * 300)   # same id, new version
+    r = prefix_reuse(before, build_view(s, budget=10_000))
+    assert r["diverged_at"] == 0 and r["reused_tokens"] == 0
+    assert r["reprefill_tokens"] == 300
+
+
+def test_middle_change_reuses_only_up_to_it(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://p/sys", residency=PINNED)
+    _m(s, "ctx://s/repo", residency=SHARED, body="A" * 300)
+    _m(s, "ctx://w/now", residency=WORKING)
+    before = build_view(s, budget=10_000)
+    _m(s, "ctx://s/repo", residency=SHARED, body="B" * 300)
+    r = prefix_reuse(before, build_view(s, budget=10_000))
+    assert r["diverged_at"] == 1 and r["reused_tokens"] == 100

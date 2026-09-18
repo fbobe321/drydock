@@ -111,6 +111,14 @@ fleet were left running untouched.
   append-only last-write-wins store (lossless across residency changes, §2), and cycle-safe
   dependency resolution. 27 tests. Deliberately NO paging/scheduler yet — nothing else depends on
   it, so it landed without touching the agent loop.
+- **MCR Phase 2 SHIPPED (manual paging):** `mount()`/`unmount()`/`pin()` as residency changes
+  (lossless), `build_view(store, budget)` → `ContextView`, and `prefix_reuse(prev, cur)`.
+  KEY DESIGN: **selection and ordering are separate concerns** — selection by `priority` to fit
+  budget B (PINNED exempt, §6), then ordering by `VIEW_ORDER = pinned → shared → tombstoned →
+  working` so turn-to-turn changes land in the prompt TAIL (the measured Appendix A.1 rule).
+  `prefix_reuse()` is the offline predictor of re-prefill cost: it walks two views and stops at the
+  first module differing by id OR version, so a scheduler can price a mounting decision BEFORE
+  paying for it. 41 tests total in `tests/test_context_runtime.py`.
 - **Token sizing reuses `compaction.estimate_tokens`** on purpose — if MCR sized modules
   differently from the compactor the pager and compactor would fight over "how full is context".
 - **✅ PREFIX-CACHE PROBE DONE — Appendix A.1 CONFIRMED** (`research/mcr/prefix_cache_probe.py`,
