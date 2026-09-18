@@ -201,6 +201,19 @@ adapter (L0 none / L1 auto-prefix / L2 explicit), prefix-sharing context forks, 
 Its §32 priority order (manifests+deterministic serialization → prefix-diff telemetry → ordering →
 mounting → checkpoints → forks → scheduler) notes we built 3/4/5 BEFORE 1/2; item 1 is now done.
 
+**📊 MEASURED (§32 item 2): DRYDOCK IS ALREADY CACHE-FRIENDLY — ~95% steady-state prefix reuse.**
+Live /ratchet on .21 w/ `DRYDOCK_PREFIX_TELEMETRY=1`, 7 calls: 29,161 prompt tok, **19% uncached /
+81% reusable**, reuse 96.1/96.7/93.8/95.6% on turns 4-7. `diverged_at_message` == previous message
+count EVERY turn ⇒ the loop is a **pure append**, nothing early is rewritten. **This inverts the MCR
+value case:** paging is not fixing a broken baseline, it is RISKING a good one — any pager must
+clear ~95% or it is a net loss. ⚠️ **Compaction never fired** (7 turns, 5.5K tok vs 32K limit) and
+that is the decisive unmeasured case: compaction rewrites history ⇒ `diverged@msg≈0` ⇒ full
+re-prefill, which is exactly where §13/§24 surgical compaction would win. **Measure a
+compaction-triggering long run + §17/§18 fork prefix-sharing BEFORE building the scheduler.**
+⚠️ Telemetry bug found+fixed first (`2d6b675`): recorder lived on the config dict (shallow-copied per
+call) so every row read seq=1/reuse 0.0 — it would have "measured" zero reuse forever. Now keyed on
+(thread, cwd).
+
 **Both PRDs' §0 hold the compliance line:** building runtime/instrumentation/controller = fine; the
 comparative experiments run as operator-driven TUI runs with OFFLINE analysis — never an automated
 batch runner (standing HARD BAN covers "even pexpect-driven TUI ones").

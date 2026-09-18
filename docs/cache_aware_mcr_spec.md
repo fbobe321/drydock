@@ -41,6 +41,35 @@ bytes/tokens, so the current predictor can report reuse that the server will not
 version, different serialization) *and* report divergence where bytes are identical. Per §32 this is
 item 1 and should be fixed before anything else is built on top.
 
+**MEASURED BASELINE (§32 item 2, 2026-09-18) — Drydock is already cache-friendly.** A live
+`/ratchet` on nemotron/.21 with `DRYDOCK_PREFIX_TELEMETRY=1`, 7 inference calls:
+
+| seq | msgs | prompt tok (est) | reuse % | uncached | diverged@msg |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 2 | 1,637 | 0.0 | 1,637 | 0 |
+| 2 | 4 | 2,242 | 73.0 | 605 | 2 |
+| 3 | 6 | 4,629 | 48.4 | 2,387 | 4 |
+| 4 | 8 | 4,815 | 96.1 | 187 | 6 |
+| 5 | 10 | 4,979 | 96.7 | 164 | 8 |
+| 6 | 12 | 5,306 | 93.8 | 327 | 10 |
+| 7 | 14 | 5,553 | 95.6 | 247 | 12 |
+
+Totals: 29,161 prompt tokens, **19.0% uncached / 81.0% reusable**, ~95% in steady state.
+`diverged_at_message` equals the previous message count on EVERY turn — the agent loop is a pure
+append; nothing early is rewritten. The low early percentages are small-prompt artefacts, not
+rewrites.
+
+**This reframes the subsystem.** Cache-aware paging is not rescuing a broken baseline; it is risking
+a good one. Appendix A.1 warned a naive pager can lose to append-only — the bar it must clear is now
+quantified at **~95% steady-state reuse**, and §29's Modular vs Cache-Aware Modular comparison is
+really asking whether layout recovers what paging spends.
+
+**Unmeasured, and it is the decisive case: compaction never fired** (7 turns, ~5.5K tokens against a
+32K limit). Compaction rewrites history, which should appear as `diverged_at_message ≈ 0` and a full
+re-prefill — exactly where §13/§24 surgical compaction would win. Until a long-horizon run triggers
+`compact()`, the value case for MCR rests on that plus §17/§18 fork prefix-sharing, neither yet
+measured. Do not build the scheduler on the assumption that paging pays; measure those two first.
+
 **Empirical note supporting §22/§23:** backends already observed to differ. `.20` reports
 `usage.prompt_tokens_details.cached_tokens` and hit 100% on an identical resend; `.21`
 (vLLM v0.26.0 + AWQ/MoE) defaulted to `enable_prefix_caching=False` and reported no
