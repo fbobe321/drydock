@@ -136,6 +136,14 @@ fleet were left running untouched.
   reconciliation, and leaves the old fact standing (`resolve=True` once evidence settles it).
   `context_transaction()` gives §10 BEGIN→work→verify→COMMIT/ROLLBACK, so an abandoned speculative
   fork cannot contaminate shared knowledge. 66 tests.
+- **MCR Phase 5 SHIPPED (multi-resolution, §14):** `ContextModule.resolutions = {level: text}`
+  (L0 pointer → L4 full) + `level`, `text_at()`, `at_level()`; `token_size` follows the selected
+  level. **`build_view` now DEGRADES instead of evicting** — a tight budget drops a module to a
+  cheaper representation (recorded in `view.degraded`) rather than removing it, because a 20-token
+  pointer still tells the model the thing exists while an eviction tells it nothing. `degrade=False`
+  restores the old evict-only behaviour. Fully backwards compatible: a module with no `resolutions`
+  behaves exactly as before. ⚠️ `prefix_reuse` compares **id + version + LEVEL** — a same-version
+  module at a different resolution is different text and must count as prefix divergence. 77 tests.
 - **Token sizing reuses `compaction.estimate_tokens`** on purpose — if MCR sized modules
   differently from the compactor the pager and compactor would fight over "how full is context".
 - **✅ PREFIX-CACHE PROBE DONE — Appendix A.1 CONFIRMED** (`research/mcr/prefix_cache_probe.py`,

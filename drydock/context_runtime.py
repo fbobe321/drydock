@@ -1,13 +1,21 @@
-"""Modular Context Runtime (MCR) — Phase 1: addressable context objects + store.
+"""Modular Context Runtime (MCR) — addressable context objects, paging, and the
+context ratchet.
 
-See docs/modular_context_runtime_prd.md: §5 (address space), §6 (residency classes),
-§18 (scopes / promotion), §28 phase 1.
+See docs/modular_context_runtime_prd.md. Implemented here:
+  * §5/§6/§18  — ctx:// address space, residency classes, scope-promotion ladder
+  * §7/§28-2   — working-set construction under a token budget (build_view)
+  * §10/§11/§12— ContextCheckpoint beside GitCheckpoint, the knowledge invariant
+                 (commit_knowledge / Conflict), transactional context changes
+  * §6/§28-4   — tombstones: retire a dead branch to a compact record, losslessly
+  * §14        — multi-resolution modules, so the view can DEGRADE instead of evict
 
-Phase 1 introduces the OBJECTS and their PERSISTENCE only. Paging/working-set
-construction (§7), the tombstone machinery (§6), multi-resolution bodies (§14) and
-the Context Scheduler (§19) are later phases and are deliberately absent here — the
-point of this slice is a durable, addressable context space that nothing else depends
-on yet, so it can land without touching the agent loop.
+Still to come: the automatic Context Scheduler (§19/§28-6), context forks (§28-7) and
+the unified compute/context governor (§28-8). Nothing here touches the agent loop yet.
+
+ORDERING IS LOAD-BEARING, not cosmetic: re-prefill cost was measured to scale with how
+EARLY in the prompt a change lands (Appendix A.1 — tail 0.24x, head 0.98x of a cold
+prefill). VIEW_ORDER keeps mutations in the tail; prefix_reuse() prices a change before
+it is paid for.
 
 Idioms follow the rest of Drydock: stdlib-only, append-only JSONL with last-write-wins
 per id (the swarm Blackboard pattern), and swallow-all-errors I/O — context bookkeeping
@@ -81,6 +89,10 @@ class ContextModule:
     priority: float = 0.0
     version: int = 0
     ts: float = field(default_factory=time.time)
+    # §14 multi-resolution: {level -> text}, higher level = more detail
+    # (L0 pointer ~20 tok · L1 summary ~200 · L2 detailed ~1.5k · L3 evidence ~8k · L4 full)
+    resolutions: dict = field(default_factory=dict)
+    level: Optional[int] = None          # currently selected level; None = plain `body`
 
     def __post_init__(self):
         if not valid_context_id(self.context_id):
@@ -89,10 +101,57 @@ class ContextModule:
             raise ValueError(f"unknown residency: {self.residency!r}")
         if self.scope not in SCOPES:
             raise ValueError(f"unknown scope: {self.scope!r}")
+        # JSON round-trips dict keys to strings; normalise so int and str both work
+        if self.resolutions:
+            self.resolutions = {str(k): v for k, v in self.resolutions.items()}
+            if self.level is None:
+                self.level = self.available_levels()[-1]      # default to most detailed
+        if self.level is not None:
+            self.level = int(self.level)
+
+    # ── §14 resolution accessors ─────────────────────────────────────────────
+    def available_levels(self) -> list:
+        out = []
+        for k in self.resolutions:
+            try:
+                out.append(int(k))
+            except (TypeError, ValueError):
+                continue
+        return sorted(out)
+
+    def text_at(self, level: "int | None") -> str:
+        """Text at `level`, degrading gracefully: exact match, else the nearest
+        available level BELOW it (never silently upgrade to something bigger than
+        asked for), else the smallest available, else the plain body."""
+        if not self.resolutions or level is None:
+            return self.body
+        levels = self.available_levels()
+        if not levels:
+            return self.body
+        exact = self.resolutions.get(str(level))
+        if exact is not None:
+            return exact
+        lower = [x for x in levels if x < level]
+        pick = lower[-1] if lower else levels[0]
+        return self.resolutions.get(str(pick), self.body)
+
+    @property
+    def current_text(self) -> str:
+        """The representation this module currently contributes to a Context View."""
+        return self.text_at(self.level) if self.resolutions else self.body
+
+    def at_level(self, level: int) -> "ContextModule":
+        """A copy of this module rendered at `level` — used to price/insert a degraded
+        representation without mutating the stored module."""
+        d = asdict(self)
+        d["level"] = level
+        m = ContextModule(**d)
+        m.version = self.version
+        return m
 
     @property
     def token_size(self) -> int:
-        return estimate_body_tokens(self.body)
+        return estimate_body_tokens(self.current_text)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -271,6 +330,7 @@ class ContextView:
     budget: int = 0
     evicted: list = field(default_factory=list)
     order: tuple = VIEW_ORDER
+    degraded: dict = field(default_factory=dict)   # context_id -> level it was dropped to (§14)
 
     @property
     def total_tokens(self) -> int:
@@ -288,7 +348,7 @@ class ContextView:
                    if m.residency in (PINNED, SHARED))
 
     def render(self) -> str:
-        return "\n\n".join(m.body for m in self.modules if m.body)
+        return "\n\n".join(m.current_text for m in self.modules if m.current_text)
 
     def ids(self) -> list:
         return [m.context_id for m in self.modules]
@@ -296,7 +356,8 @@ class ContextView:
 
 def build_view(store: ContextStore, budget: int, *,
                include: "list | None" = None,
-               order: tuple = VIEW_ORDER) -> ContextView:
+               order: tuple = VIEW_ORDER,
+               degrade: bool = True) -> ContextView:
     """Assemble a Context View under a token budget (§7: Tokens(W_t) <= B).
 
     SELECTION and ORDERING are deliberately separate concerns:
@@ -323,17 +384,32 @@ def build_view(store: ContextStore, budget: int, *,
     used = sum(m.token_size for m in pinned)
     kept: list = []
     evicted: list = []
+    degraded: dict = {}
     for m in rest:
-        if used + m.token_size <= budget:
-            kept.append(m)
-            used += m.token_size
-        else:
+        # §14 memory hierarchy: prefer DEGRADING a module to a cheaper representation
+        # over dropping it entirely — a 20-token pointer still tells the model the
+        # thing exists and can be paged back up, where an eviction tells it nothing.
+        placed = False
+        candidates = [m]
+        if degrade and m.resolutions and m.level is not None:
+            candidates += [m.at_level(lvl)
+                           for lvl in reversed(m.available_levels()) if lvl < m.level]
+        for cand in candidates:
+            if used + cand.token_size <= budget:
+                kept.append(cand)
+                used += cand.token_size
+                if cand.level != m.level:
+                    degraded[m.context_id] = cand.level
+                placed = True
+                break
+        if not placed:
             evicted.append(m.context_id)
 
     selected = pinned + kept
     # ordering: stable sort keeps the priority order within each residency class
     selected.sort(key=lambda m: order.index(m.residency))
-    return ContextView(modules=selected, budget=budget, evicted=evicted, order=order)
+    return ContextView(modules=selected, budget=budget, evicted=evicted, order=order,
+                       degraded=degraded)
 
 
 # ── §6 / §28 phase 4: tombstones ─────────────────────────────────────────────
@@ -446,7 +522,8 @@ def prefix_reuse(previous: "ContextView | None", current: ContextView) -> dict:
     idx = 0
     for idx in range(min(len(prev), len(cur))):
         a, b = prev[idx], cur[idx]
-        if a.context_id != b.context_id or a.version != b.version:
+        if (a.context_id != b.context_id or a.version != b.version
+                or a.level != b.level):
             break
         reused += b.token_size
     else:

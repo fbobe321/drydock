@@ -582,3 +582,108 @@ def test_speculative_branch_cannot_contaminate_shared_knowledge(tmp_path):
     with context_transaction(s) as tx:       # noqa: F841 — abandoned on purpose
         commit_knowledge(s, ContextModule(context_id="ctx://s/repo", body="HALLUCINATION"))
     assert s.get("ctx://s/repo").body == "TRUTH"
+
+
+# ══════════════════ Phase 5: multi-resolution modules (§14) ══════════════════
+
+L = {0: "ptr", 1: "a short summary " * 5, 2: "a detailed summary " * 40,
+     3: "selected evidence " * 300}
+
+
+def _multi(store, cid="ctx://repo/parser", **kw):
+    return store.put(ContextModule(context_id=cid, resolutions=dict(L), **kw))
+
+
+def test_defaults_to_the_most_detailed_level(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    m = _multi(s)
+    assert m.available_levels() == [0, 1, 2, 3] and m.level == 3
+    assert m.current_text == L[3]
+
+
+def test_text_at_exact_and_degrades_to_nearest_lower(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    m = _multi(s)
+    assert m.text_at(1) == L[1]
+    assert m.text_at(9) == L[3]      # nothing above 3 → nearest below
+    m2 = store_module_without(s, {0, 1})
+    assert m2.text_at(1) == L[2]     # no 0/1 → smallest available (never upgrade past ask)
+
+
+def store_module_without(store, drop):
+    res = {k: v for k, v in L.items() if k not in drop}
+    return store.put(ContextModule(context_id="ctx://repo/partial", resolutions=res))
+
+
+def test_token_size_follows_the_selected_level(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    m = _multi(s)
+    assert m.at_level(0).token_size < m.at_level(1).token_size < m.at_level(3).token_size
+
+
+def test_at_level_is_a_copy_and_keeps_version(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    m = _multi(s)
+    low = m.at_level(0)
+    assert low.level == 0 and m.level == 3          # original untouched
+    assert low.version == m.version and low.context_id == m.context_id
+
+
+def test_resolutions_survive_the_store_roundtrip(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _multi(s)
+    back = s.get("ctx://repo/parser")
+    assert back.available_levels() == [0, 1, 2, 3] and back.level == 3
+    assert back.current_text == L[3]
+
+
+def test_view_degrades_instead_of_evicting(tmp_path):
+    """§14 — a 20-token pointer still tells the model the thing exists; an eviction
+    tells it nothing."""
+    s = ContextStore(root=str(tmp_path))
+    _multi(s, priority=0.5)
+    v = build_view(s, budget=60)
+    assert v.ids() == ["ctx://repo/parser"]          # kept, not evicted
+    assert v.evicted == []
+    assert v.degraded["ctx://repo/parser"] in (0, 1)
+    assert v.total_tokens <= 60
+
+
+def test_degrade_false_evicts_instead(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _multi(s, priority=0.5)
+    v = build_view(s, budget=60, degrade=False)
+    assert v.ids() == [] and v.evicted == ["ctx://repo/parser"]
+
+
+def test_degrades_only_as_far_as_needed(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _multi(s, priority=0.5)
+    full = ContextModule(context_id="ctx://x/y", resolutions=dict(L))
+    v = build_view(s, budget=full.at_level(2).token_size + 5)
+    assert v.degraded["ctx://repo/parser"] == 2      # not all the way down to 0
+
+
+def test_module_without_resolutions_is_unaffected(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://plain/one", body="z" * 3000, priority=0.5)
+    v = build_view(s, budget=60)
+    assert v.ids() == [] and v.evicted == ["ctx://plain/one"] and v.degraded == {}
+
+
+def test_render_uses_the_selected_resolution(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _multi(s, priority=0.5)
+    assert build_view(s, budget=60).render() in (L[0], L[1])
+
+
+def test_changing_resolution_breaks_the_prefix(tmp_path):
+    """A same-id, same-version module at a DIFFERENT level is different text, so the
+    cached prefix cannot survive it — prefix_reuse must not report reuse."""
+    s = ContextStore(root=str(tmp_path))
+    _multi(s, cid="ctx://repo/parser", priority=0.5, residency=SHARED)
+    _m(s, "ctx://w/now", residency=WORKING, priority=0.1)
+    big = build_view(s, budget=100_000)               # parser at L3
+    small = build_view(s, budget=60)                  # parser degraded
+    r = prefix_reuse(big, small)
+    assert r["diverged_at"] == 0 and r["reused_tokens"] == 0
