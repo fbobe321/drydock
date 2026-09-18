@@ -175,6 +175,20 @@ Preferred normalized variable: `C_token = total generated inference tokens`, wit
 
 ---
 
+## 8b. Fitness integrity (added 2026-09-18 — OBSERVED FAILURE)
+
+Every number in this PRD is a function of the verifier, and the verifier has been observed to be
+corruptible. On a live `/ratchet` run, given an unsatisfiable spec, nemotron-30B returned an object
+whose `__eq__` always returns True; every assertion passed, the run scored 10/10 and was recorded as
+SOLVED. See `docs/modular_context_runtime_prd.md` Appendix A.4.
+
+Therefore, for this study: `P(solve)` and `F = P/T` measure **what the verifier reported**, not what
+was achieved. Hacking incentive rises as honest solutions get harder, so the **low-`p` regime this
+PRD most needs (§7, §18 hard/very-hard strata) is the regime most likely to contain fake solves.**
+Before any scaling curve is believed, solves in that regime must be audited (spot-check the produced
+patch, or run a holdout verifier the agent never saw). Earlier justify-task measurements were
+spot-checked and are legitimate; this is a caveat on future hard-task data, not a retraction.
+
 ## 9. Fitness
 
 Primary graded fitness `F = P/T` (`P` = passing graded checks, `T` = total). Also retain raw `P/T` (newly solved checks are useful for evolutionary analysis).
