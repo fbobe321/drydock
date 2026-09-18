@@ -85,7 +85,14 @@ class ContextModule:
     owner: str = ""
     created_from: Optional[str] = None               # lineage (§5 created_from)
     dependencies: list = field(default_factory=list)  # other context_ids (§5)
+    # Two DIFFERENT strengths of claim (Appendix A.4 — the verifier is corruptible):
+    #   verifier_passed — "the verifier command reported success". Weak: a live run
+    #                     produced `class _AlwaysEq: __eq__ -> True` and scored 10/10.
+    #   verified        — independently corroborated. Only this unlocks §18 promotion
+    #                     above BRANCH; see corroborate().
     verified: bool = False
+    verifier_passed: bool = False
+    corroborated_by: str = ""            # what justified `verified` (holdout, human, …)
     priority: float = 0.0
     version: int = 0
     ts: float = field(default_factory=time.time)
@@ -167,7 +174,11 @@ class ContextModule:
 def _promotable(frm: str, to: str, verified: bool) -> bool:
     """§18: promotion moves UP the ladder only, and anything above BRANCH requires
     evidence. This is what stops a speculative agent's hallucination from becoming
-    durable PROJECT knowledge."""
+    durable PROJECT knowledge.
+
+    NOTE the gate is `verified`, never `verifier_passed` (Appendix A.4): a passing
+    verifier is not corroboration, because a passing verifier is exactly what a
+    reward-hacked patch manufactures."""
     if frm not in SCOPES or to not in SCOPES:
         return False
     if SCOPES.index(to) <= SCOPES.index(frm):
@@ -210,6 +221,28 @@ class ContextStore:
         if m is None or residency not in RESIDENCY:
             return None
         m.residency = residency
+        return self.put(m)
+
+    def record_verifier_pass(self, context_id: str, passed: bool = True) -> Optional[ContextModule]:
+        """Record what the VERIFIER said — the weak claim. Deliberately does not touch
+        `verified`, so a passing verifier alone can never buy promotion (Appendix A.4)."""
+        m = self.get(context_id)
+        if m is None:
+            return None
+        m.verifier_passed = bool(passed)
+        return self.put(m)
+
+    def corroborate(self, context_id: str, by: str) -> Optional[ContextModule]:
+        """Promote the weak claim to the strong one: something INDEPENDENT of the
+        verifier under test agreed (a holdout command the agent never saw, a human, a
+        second differing implementation). `by` records what did the corroborating, so a
+        later reader can judge whether it was worth anything. This is the only route to
+        `verified`, and therefore the only route past BRANCH scope."""
+        m = self.get(context_id)
+        if m is None or not by:
+            return None
+        m.verified = True
+        m.corroborated_by = by
         return self.put(m)
 
     def promote(self, context_id: str, to_scope: str) -> Optional[ContextModule]:
@@ -460,6 +493,13 @@ def tombstone(store: ContextStore, context_id: str, *, approach: str,
     Returns the new tombstone module, or None if `context_id` is unknown. The original
     is only moved to ARCHIVED — never deleted — so the complete trace stays retrievable
     (§2, §13: "Dead A 24K -> 300-token tombstone", with the 24K still on disk).
+
+    On `verified` and Appendix A.4: evidence here is a claim that something FAILED, and
+    that is asymmetric with a claim that something PASSED. Reward hacking manufactures
+    passes — the incentive to fabricate a *failure* report is absent — so a tombstone
+    naming the checks the verifier saw fail is treated as corroborating evidence, while
+    a passing verifier is only ever `verifier_passed`. An unevidenced tombstone remains
+    unverified and cannot pass BRANCH, per §18/A.3.
     """
     original = store.get(context_id)
     if original is None:

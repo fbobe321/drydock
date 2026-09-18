@@ -70,13 +70,26 @@ class ContextRatchet:
 
         `action` is RatchetState.record()'s return: 'solved' | 'pawl' | 'rollback'.
         Returns a small summary dict (never raises)."""
-        out = {"action": action, "checkpoint": "", "tombstone": ""}
+        out = {"action": action, "checkpoint": "", "tombstone": "", "claim": ""}
         try:
             fitness = (passed / total) if total else 0.0
             if action in ("pawl", "solved"):
                 out["checkpoint"] = self.checkpoint.snapshot(
                     f"round {round_no} {passed}/{total}",
                     git_ref=git_ref, fitness=fitness)
+                # Record the CLAIM, at the weak strength only. A passing verifier is
+                # exactly what a reward-hacked patch manufactures (PRD Appendix A.4 —
+                # observed: `class _AlwaysEq: __eq__ -> True` scored 10/10), so this is
+                # verifier_passed, NOT verified, and therefore cannot climb past BRANCH
+                # until something independent corroborates it.
+                self.store.put(ContextModule(
+                    context_id=f"ctx://result/r{round_no}",
+                    body=(f"round {round_no}: verifier reported {passed}/{total} "
+                          f"(fitness {fitness:.3f}) at {git_ref[:12] or 'unknown ref'}"),
+                    type="decision", residency="working", scope="branch",
+                    verifier_passed=True, verified=False,
+                ))
+                out["claim"] = f"ctx://result/r{round_no}"
             elif action == "rollback":
                 attempt_id = f"ctx://attempt/r{round_no}"
                 self.store.put(ContextModule(

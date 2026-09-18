@@ -43,13 +43,13 @@ def failing_items(verify: str, cwd: str, cap: int = 8, timeout: int = 600) -> li
     Empty if the verifier can't be run or its output isn't recognizable (planner falls back)."""
     if not verify:
         return []
+    from drydock.ratchet import run_shell_bounded
     try:
-        r = subprocess.run(verify, cwd=cwd, shell=True, capture_output=True, text=True,
-                           timeout=timeout)
+        out, _rc, _ = run_shell_bounded(verify, cwd, timeout)
     except (OSError, subprocess.SubprocessError):
         return []
     seen: list[str] = []
-    for m in _FAIL_LINE.finditer((r.stdout or "") + (r.stderr or "")):
+    for m in _FAIL_LINE.finditer(out):
         item = m.group(1)
         if item not in seen:
             seen.append(item)
@@ -60,7 +60,43 @@ def initial_plan(store: M.MissionStore, mission_id: str, objective: str, verify:
                  cwd: str = "") -> int:
     store.set_status(mission_id, M.M_PLANNING)
     mission = store.get_mission(mission_id) or {"id": mission_id}
-    return decomposing_planner(objective, verify, cwd)(store, mission)
+    return make_planner(mission, objective, verify, cwd)(store, mission)
+
+
+def make_planner(mission: dict, objective: str, verify: str, cwd: str):
+    """Planner chosen by the mission's config: 'holistic' for one hard problem worked on as a
+    whole; otherwise the default decomposing planner (one task per failing check)."""
+    if ((mission.get("config") or {}).get("planner") or "") == "holistic":
+        return holistic_planner(objective, verify, cwd)
+    return decomposing_planner(objective, verify, cwd)
+
+
+def _holistic_task_text(objective: str, verify: str, score, failing: list[str]) -> str:
+    sample = "\n".join(f"  - {f}" for f in failing[:6])
+    now = f"Current score: {score:.1f}%." if isinstance(score, (int, float)) else ""
+    return (f"You are working on ONE hard problem over many iterations:\n{objective}\n\n"
+            f"{now} Scored by: {verify or 'the project verifier'}.\n"
+            + (f"Some checks still failing:\n{sample}\n" if sample else "")
+            + "Pick the most promising NEXT improvement to the solution as a whole — an "
+              "algorithmic idea, a performance fix, or a correctness fix — implement it, and "
+              "measure it with the scorer. A bold idea is fine: if it doesn't raise the score "
+              "it will be reverted and recorded, so learn from earlier failed approaches instead "
+              "of repeating them. Never edit the tests or the scoring.")
+
+
+def holistic_planner(objective: str, verify: str, cwd: str):
+    """Planner for a single hard problem: each task is 'improve the whole solution' with the
+    current score and a sample of what still fails — not a queue of per-check chores, so the
+    agent can take tangents (reverted if unproductive) and return to the main line."""
+    def plan(store: M.MissionStore, mission: dict) -> int:
+        fresh = store.get_mission(mission["id"]) or mission
+        score = fresh.get("current_metric")
+        store.add_task(mission["id"],
+                       _holistic_task_text(objective, verify, score,
+                                           failing_items(verify, cwd, cap=6)),
+                       reason="improve", priority=5)
+        return 1
+    return plan
 
 
 def iterate_planner(objective: str, verify: str):
@@ -215,6 +251,9 @@ def _parse_budget(argv: list[str]) -> tuple[dict, dict, str, list[str], dict, li
         elif a == "--max-escalations" and nxt:    # ladder climbs before BLOCKED/AWAITING_HUMAN (§23)
             eval_cfg["max_escalations"] = int(nxt) if nxt.isdigit() else 3
             i += 2
+        elif a == "--planner" and nxt:            # holistic (one hard problem) | decompose
+            eval_cfg["planner"] = nxt
+            i += 2
         elif a == "--swarm":                      # solve each task with a SWARM, not one agent
             eval_cfg["swarm"] = True
             i += 1
@@ -253,6 +292,7 @@ def run_cli(argv: list, config: dict | None = None) -> int:
         print('usage: drydock mission create "<objective>" [--target ">=70"] [--verify CMD] '
               '[--protect GLOB]... [--samples N] [--noise-band F] [--swarm | --swarm-agents N] '
               '[--time-budget 48h] [--max-experiments N] [--worker-budget SECS] '
+              '[--planner holistic|decompose] '
               '[--model M] [--base-url URL] [--provider P]\n'
               '       drydock mission <list|status|tasks|logs|experiments|knowledge|run|resume|'
               'pause|stop> [mission-id]')
@@ -377,7 +417,7 @@ def _run(store: M.MissionStore, mid: str, cwd: str, config: dict, *, resume: boo
         write_views(store, mid, cwd)
 
     R.run_mission(store, mid, cwd=cwd, repo=cwd, worker=worker, evaluator=evaluator,
-                  planner=decomposing_planner(m["objective"], verify, cwd), base_config=base_config,
+                  planner=make_planner(m, m["objective"], verify, cwd), base_config=base_config,
                   stagnation_limit=int(mconf.get("stagnation_limit") or 5),
                   max_escalations=int(mconf.get("max_escalations") or 3),
                   on_event=on_event)

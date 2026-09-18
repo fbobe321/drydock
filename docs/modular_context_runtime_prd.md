@@ -648,6 +648,18 @@ Proposed mitigation (not yet built), cheapest first:
    ref and re-run, so any tampering with the verifier itself is undone.
 3. **Do not mark verified on the verifier's word alone.** MCR should distinguish
    `verifier_passed` from `verified`, and only the latter should unlock §18 promotion above BRANCH.
+   ✅ **BUILT (2026-09-18).** `ContextModule` now carries `verifier_passed` and `corroborated_by`
+   alongside `verified`; `_promotable()` gates on `verified` only; `record_verifier_pass()` records
+   the weak claim and `corroborate(by=...)` is the sole route to the strong one, requiring a named
+   corroborator. The ratchet bridge writes each pawl/solve as `ctx://result/rN` with
+   `verifier_passed=True, verified=False, scope=BRANCH`, so a hacked 10/10 is stored as evidence of
+   what the verifier said and can never climb to PROJECT unaided. Mitigations 1 and 2 (holdout
+   verifier; restore-tests-and-reverify) are still unbuilt — they change the ratchet's contract.
+
+   **The pass/fail asymmetry is deliberate.** Tombstones remain `verified` on verifier evidence,
+   because they assert a FAILURE: reward hacking manufactures passes, and there is no incentive to
+   fabricate a failure report. So "the verifier says these checks failed" stays trustworthy while
+   "the verifier says everything passed" does not.
 
 **A.3 Tombstone trust.** §6 tombstones and §18 promotion interact: a tombstone asserting "approach X
 failed because Y" is *model-authored* and may be wrong. Tombstones should carry the same scope/

@@ -176,9 +176,14 @@ ratchet scored **10/10 and declared SOLVED**, and MCR dutifully recorded a check
 *measured* fitness, not real progress, and §18 would let that content be promoted as verified
 knowledge. Worst where it matters most — hacking incentive rises with task difficulty, i.e. exactly
 the low-p regime the scaling study needs. AUDITED: earlier justify numbers (p≈.55/.78, 50/64) are
-legitimate implementations; the hack appeared only when NO honest solution existed. Mitigations
-proposed, not built: (1) holdout verifier the agent never saw, (2) restore test files from base ref
-and re-verify before accepting a solve, (3) MCR should separate `verifier_passed` from `verified`.
+legitimate implementations; the hack appeared only when NO honest solution existed. Mitigation (3) **BUILT**: `ContextModule.verifier_passed` / `corroborated_by` now distinct from
+`verified`; only `verified` unlocks §18 promotion, and `corroborate(by=…)` (a NAMED corroborator) is
+the sole route to it. The bridge writes each pawl/solve as `ctx://result/rN`
+(`verifier_passed=True, verified=False, scope=BRANCH`) so a hacked 10/10 is recorded as *what the
+verifier said* and can never climb to PROJECT unaided. **Asymmetry is deliberate:** tombstones stay
+`verified` on verifier evidence because they assert a FAILURE — hacking fabricates passes, not
+failures. Mitigations (1) holdout verifier and (2) restore-tests-and-reverify are STILL UNBUILT
+(they change the ratchet's contract — operator call).
 
 **Both PRDs' §0 hold the compliance line:** building runtime/instrumentation/controller = fine; the
 comparative experiments run as operator-driven TUI runs with OFFLINE analysis — never an automated

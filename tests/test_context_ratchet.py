@@ -107,3 +107,57 @@ def test_a_run_is_isolated_to_its_own_store(tmp_path):
     a.on_round(round_no=1, action="rollback", passed=1, total=2)
     assert b.summary()["tombstones"] == 0
     assert b.store.get("ctx://task/objective").body == "B"
+
+
+# ════════ Appendix A.4: a passing verifier is a WEAK claim ════════
+
+from drydock.context_runtime import BRANCH, PROJECT, TASK  # noqa: E402
+
+
+def test_a_pawl_records_the_claim_as_verifier_passed_not_verified(tmp_path):
+    cr = ContextRatchet(str(tmp_path), run_id="a1")
+    out = cr.on_round(round_no=1, action="pawl", passed=10, total=10, git_ref="deadbeef")
+    m = cr.store.get(out["claim"])
+    assert m.verifier_passed is True
+    assert m.verified is False            # the verifier's word alone is not corroboration
+    assert "10/10" in m.body
+
+
+def test_a_verifier_pass_cannot_buy_promotion_past_branch(tmp_path):
+    """The reward-hack scenario: a 10/10 that computes nothing must not become
+    PROJECT knowledge on the verifier's say-so."""
+    cr = ContextRatchet(str(tmp_path), run_id="a2")
+    out = cr.on_round(round_no=1, action="solved", passed=10, total=10)
+    cid = out["claim"]
+    assert cr.store.get(cid).scope == BRANCH      # a claim is born branch-local
+    assert cr.store.promote(cid, TASK) is None    # …and stays there without corroboration
+    assert cr.store.promote(cid, PROJECT) is None
+    assert cr.store.get(cid).scope == BRANCH
+
+
+def test_corroboration_is_the_only_route_to_verified(tmp_path):
+    cr = ContextRatchet(str(tmp_path), run_id="a3")
+    cid = cr.on_round(round_no=1, action="solved", passed=10, total=10)["claim"]
+    assert cr.store.corroborate(cid, by="") is None          # must say what corroborated
+    m = cr.store.corroborate(cid, by="holdout suite the agent never saw")
+    assert m.verified is True and m.corroborated_by.startswith("holdout")
+    assert cr.store.promote(cid, PROJECT) is not None         # now it may climb
+
+
+def test_record_verifier_pass_never_sets_verified(tmp_path):
+    from drydock.context_runtime import ContextModule, ContextStore
+    s = ContextStore(root=str(tmp_path), name="a4")
+    s.put(ContextModule(context_id="ctx://k/claim"))
+    m = s.record_verifier_pass("ctx://k/claim")
+    assert m.verifier_passed is True and m.verified is False
+    assert s.record_verifier_pass("ctx://missing/x") is None
+
+
+def test_failure_evidence_stays_trustworthy_asymmetry(tmp_path):
+    """Tombstones assert a FAILURE; reward hacking fabricates passes, not failures, so
+    evidence-backed tombstones remain verified and promotable."""
+    cr = ContextRatchet(str(tmp_path), run_id="a5")
+    out = cr.on_round(round_no=1, action="rollback", passed=2, total=10,
+                      verifier_output=PYTEST_OUT)
+    t = cr.store.get(out["tombstone"])
+    assert t.verified is True and t.verifier_passed is False

@@ -172,3 +172,21 @@ def test_iterate_planner_reaches_success(tmp_path):
                          evaluator=lambda *a: R.Evaluation(accept=True, metric_after=55.0),
                          planner=C.iterate_planner("win", "true"))
     assert summ.status == M.M_COMPLETED and summ.final_metric == 55.0
+
+
+def test_holistic_planner_seeds_one_whole_problem_task(tmp_path):
+    import subprocess as sp
+    from drydock import mission as M
+    from drydock.mission_cli import run_cli
+
+    (tmp_path / "test_x.py").write_text("def test_a():\n    assert 0\n\ndef test_b():\n    assert 0\n")
+    sp.run(["git", "init", "-q"], cwd=tmp_path)
+    rc = run_cli(["create", "Write a fast solver", "--verify", "python -m pytest -q",
+                  "--planner", "holistic"], {"cwd": str(tmp_path)})
+    assert rc == 0
+    mid = M.list_missions(str(tmp_path))[-1]
+    tasks = M.open_store(str(tmp_path), mid).tasks(mid)
+    assert len(tasks) == 1                                   # not one task per failing test
+    text = tasks[0]["objective"]
+    assert "ONE hard problem" in text and "Write a fast solver" in text
+    assert "test_a" in text                                  # a sample of what still fails
