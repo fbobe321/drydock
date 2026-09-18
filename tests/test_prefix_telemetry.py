@@ -9,6 +9,7 @@ from drydock.prefix_telemetry import (
     enabled,
     message_divergence,
     record_for,
+    reset_registry,
 )
 
 SYS = {"role": "system", "content": "you are drydock"}
@@ -108,10 +109,21 @@ def test_record_never_raises_on_unserialisable(tmp_path):
     assert t.record([{"role": "user", "content": object()}]) is not None
 
 
-def test_record_for_keeps_one_recorder_per_config(tmp_path):
-    cfg = {"cwd": str(tmp_path), "prefix_telemetry": True}
-    record_for(cfg, [SYS, U1])
-    row = record_for(cfg, [SYS, U1, A1])
-    assert row["seq"] == 2                      # same recorder, sequence continues
-    other = {"cwd": str(tmp_path), "prefix_telemetry": True}
-    assert record_for(other, [SYS, U1])["seq"] == 1   # a separate run starts fresh
+def test_recorder_follows_the_run_not_the_config_object(tmp_path):
+    """Regression: the recorder used to live on the config dict, which is shallow-copied
+    per call — so every inference built a NEW recorder and every row read seq=1 /
+    reuse 0.0. It must persist across calls within a run even when the config is a
+    fresh object each time."""
+    reset_registry()
+    record_for({"cwd": str(tmp_path), "prefix_telemetry": True}, [SYS, U1])
+    row = record_for({"cwd": str(tmp_path), "prefix_telemetry": True}, [SYS, U1, A1])
+    assert row["seq"] == 2                       # different dict, same run -> continues
+    assert row["reuse_pct"] > 0.0                # and therefore has something to compare
+
+
+def test_separate_working_dirs_are_separate_runs(tmp_path):
+    reset_registry()
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir(); b.mkdir()
+    record_for({"cwd": str(a), "prefix_telemetry": True}, [SYS, U1])
+    assert record_for({"cwd": str(b), "prefix_telemetry": True}, [SYS, U1])["seq"] == 1

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -113,18 +114,34 @@ class PrefixTelemetry:
         return row
 
 
+# Recorders are held HERE, not on the config dict. The config is shallow-copied per
+# call, so a recorder stashed on it is rebuilt every time — which silently produces one
+# row per file, seq=1, reuse 0.0, i.e. telemetry that measures nothing. (Observed on the
+# first live run.) Keying on (thread, cwd) follows the actual agent run instead: the TUI
+# runs its agent in one worker thread, and each swarm worker has its own thread, so
+# concurrent runs stay separated without depending on config plumbing.
+_REGISTRY: "dict[tuple, PrefixTelemetry]" = {}
+_LOCK = threading.Lock()
+
+
+def reset_registry() -> None:
+    """Drop all recorders (tests, or starting a fresh measurement)."""
+    with _LOCK:
+        _REGISTRY.clear()
+
+
 def record_for(config: dict | None, oai_messages: list, model: str = "") -> dict:
-    """Hook used by the provider. No-op unless explicitly enabled. The recorder lives in
-    the config's shared mutable holder, so each agent run (including each swarm worker,
-    which gets its own config copy) tracks its own prompt sequence."""
+    """Hook used by the provider. No-op unless explicitly enabled."""
     if not enabled(config):
         return {}
     try:
-        holder = config.setdefault("_prefix_tel", {})
-        rec = holder.get("recorder")
-        if rec is None:
-            rec = PrefixTelemetry(root=str(config.get("cwd") or "."))
-            holder["recorder"] = rec
+        cwd = str((config or {}).get("cwd") or ".")
+        key = (threading.get_ident(), cwd)
+        with _LOCK:
+            rec = _REGISTRY.get(key)
+            if rec is None:
+                rec = PrefixTelemetry(root=cwd)
+                _REGISTRY[key] = rec
         return rec.record(oai_messages, model=model)
     except Exception:  # noqa: BLE001
         return {}
