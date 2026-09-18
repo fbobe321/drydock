@@ -101,6 +101,22 @@ low-p tasks (needs multi-box + likely the container-verifier bridge — its own 
   resident context. Order the Context View pinned→task→volatile so only the TAIL mutates, and count
   re-prefill tokens in CTE or the §24 experiment will flatter MCR.
 
+**🔴 DIRECTION CHANGE (operator, 2026-09-18): ALL other work PAUSED — building MCR.** The
+agent-scaling thread is parked (telemetry module shipped; its ratchet/eratchet wiring and the §7
+breadth/depth matrix are NOT being pursued for now). Operator's own `ratchet_evolve` loops on the
+fleet were left running untouched.
+- **MCR Phase 1 SHIPPED:** `drydock/context_runtime.py` — addressable `ctx://ns/path` modules
+  (§5) with metadata/references, the five residency classes (§6), the §18 scope-promotion ladder
+  (unverified knowledge cannot pass BRANCH → stops hallucinations becoming PROJECT knowledge),
+  append-only last-write-wins store (lossless across residency changes, §2), and cycle-safe
+  dependency resolution. 27 tests. Deliberately NO paging/scheduler yet — nothing else depends on
+  it, so it landed without touching the agent loop.
+- **Token sizing reuses `compaction.estimate_tokens`** on purpose — if MCR sized modules
+  differently from the compactor the pager and compactor would fight over "how full is context".
+- **NEXT: run the prefix-cache probe BEFORE Phase 2 paging** (Appendix A.1 risk) — measure
+  cache-hit vs recomputed tokens for head-eviction vs tail-only eviction on the vLLM fleet. If
+  head-eviction thrashes the KV cache, the paging design must be tail-mutating only.
+
 **Both PRDs' §0 hold the compliance line:** building runtime/instrumentation/controller = fine; the
 comparative experiments run as operator-driven TUI runs with OFFLINE analysis — never an automated
 batch runner (standing HARD BAN covers "even pexpect-driven TUI ones").
