@@ -51,6 +51,45 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## 🐝 SWARM SCALING + VERIFIER BUG FIX + SWARM-WIDTH LAW SPEC — 2026-09-18
+
+**Fleet = nemotron-30B on `.20`/`.22`/`.129` (vLLM, `--max-num-seqs 4` each).** Two ratchet_evolve
+loops were running throughout on `.22`/`.129`.
+
+**SHIPPED (pushed to `fbobe321/drydock` main):**
+- `4c22e0f` **fix(verify) v3.1.42** — `detect_verifier()` emitted bare `pytest -q`, which does NOT
+  put the repo root on `sys.path`; on the common `src/`+`tests/` layout every candidate hit a
+  collection error → scored `0/1` → **`/swarm` and `/ratchet` could never converge on auto-detect.**
+  Now emits `python -m pytest -q` (prepend import mode). **Found ONLY by driving `/swarm` through the
+  real TUI** (headless runs had passed `--verify` explicitly, masking it). Proven via TUI: `0/1`→`25/25
+  ✓ CONVERGED`. Test `test_detect_verifier_python` updated.
+- `daa39a8` **test:** shared git-repo scaffolding → `tests/fixtures/repos.py` (`git`, `init_repo`),
+  de-duped across `test_swarm/ratchet/eratchet/gittools`.
+
+**Largest-swarm record (see memory `project_swarm_size_record`):** first real 64-agent, 3-server
+swarm CONVERGED (38/64 solved, 47 min, 6.24M tok). **Width sweep 8/16/32/64 → 64 does NOT beat 16 on
+solvable tasks:** all converged; single-shot p≈0.55 so convergence saturates by N≈8; 64 = ~10× tokens
+for the same result, no diversity synergy. Scratch repos `/data3/swarm_record`, `/data3/swarm_width`.
+
+**Key finding — what limits agents (measured):** orchestrator is I/O-bound (host ~2% CPU, 251 GB free);
+**GPUs pegged 98%, VRAM ~88%.** So the wall is inference throughput (Σ per-server `max-num-seqs`), NOT
+CPU/RAM and NOT the agent count. `HARD_MAX=64` is a *diversity heuristic*, not a resource wall — you can
+queue far more, spread over boxes.
+
+**SPEC ADDED — PRD `docs/multi_agent_swarm_prd.md` §41 "Swarm-Width Scaling Law (Productive-N)":** the
+Chinchilla-analog for swarm width. `P(converge)=1−(1−p)^N`, marginal Nth agent `= p(1−p)^(N-1)`,
+productive `N*≈ln ε/ln(1−p)`; stronger model → *smaller* productive swarm (until the capability floor);
+non-i.i.d. caveat → measure per strategy (blind vs `--share` waves). **TODO from §41:** (1) make the
+cap config-driven (`swarm_max_agents` / `DRYDOCK_SWARM_MAX_AGENTS`, default 64) instead of magic 64;
+(2) emit Productive-N fields into `metrics.json`; (3) compliant TUI-driven N∈{8,32,64,128} sweep on
+low-p tasks (needs multi-box + likely the container-verifier bridge — its own design pass first).
+
+**Drive swarms via the real `/swarm` TUI** (tmux send-keys + capture-pane), NEVER programmatic
+`run_swarm`/batch drivers (that's the banned eval-harness shape). Dedicated tmux session only; never
+broad-kill drydock. Cosmetic bug noted: TUI banner shows `v3.0.92` (stale `.dist-info` metadata) while
+loaded code is current.
+
+---
 ## 🧭 GO-TO-MARKET PIVOT + OFFICIAL TBENCH BASELINE — 2026-09-13
 
 **Two things happened.** (1) We ran a REAL, submittable terminal-bench score, and (2) decided the

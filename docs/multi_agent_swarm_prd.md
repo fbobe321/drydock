@@ -428,6 +428,72 @@ evidence exists to declare success. The user stops managing agents and starts **
 compute toward a problem**: give Drydock a problem, resources, and success criteria; Drydock
 organizes the intelligence to solve it.
 
+## 41. Swarm-Width Scaling Law (Productive-N)
+
+**Question.** Like Chinchilla fixes the compute-optimal token budget for a model size, we want
+the **compute-optimal swarm width** for a *(model, task-difficulty)* pair: how many agents are
+*productive* before the marginal agent stops earning its inference cost? This makes §33's
+"Marginal Agent Utility" a first-class, measurable law rather than a metric.
+
+**What actually limits N (measured, 2026-09-18, nemotron-30B fleet).** The orchestrator is
+I/O-bound — a 64-agent run cost the host ~2% of one core and negligible RAM (251 GB free), while
+both GPUs sat pegged at ~98% util and ~88% VRAM. So the ceiling is **inference throughput**
+(tokens/sec × KV-cache-bounded concurrent sequences = each server's `--max-num-seqs`), **not**
+host CPU/RAM and **not** the agent count. Consequences:
+- Agents beyond the concurrent-slot budget **queue** (at the swarm's per-server semaphore, §22;
+  or inside vLLM if a gate over-subscribes `max-num-seqs`) — they *serialize*, they don't fail.
+- **`HARD_MAX = 64` (`capacity.py`) is a heuristic, not a resource wall.** It descends from
+  `DEFAULT_TASK_DEMAND` ("distinct approaches before agents duplicate"), i.e. a *diversity* guess.
+- Real parallelism ceiling = **Σ per-server `max-num-seqs`** across the fleet; raise it by adding
+  boxes (§29 Level 2/3) or by `max-num-seqs` where VRAM allows — not by raising the agent cap.
+
+**The model (blind-parallel = repeated sampling).** With per-attempt solve probability `p`,
+`P(converge) = 1 − (1−p)^N`; the marginal value of the Nth agent is `p(1−p)^(N-1)` — a
+**geometric decay**. Productive width to reach success `1−ε` is `N* ≈ ln ε / ln(1−p)`:
+
+| per-attempt p | N* (90%) | N* (99%) |
+|---:|---:|---:|
+| 0.50 | ~4 | ~7 |
+| 0.10 | ~22 | ~44 |
+| 0.05 | ~45 | ~90 |
+| 0.02 | ~114 | ~230 |
+
+So width is *keyed to p*: 64 is right only near p≈0.07; easy tasks saturate by N≈8 (empirically
+confirmed — a p≈0.55 task converged identically at 8/16/32/64, at up to 10× the tokens); hard
+(low-p) tasks genuinely want **> 64, spread over boxes** — the user's intuition.
+
+**Counterintuitive model-size relationship.** `p = f(capability, difficulty)`, so a *stronger*
+model needs a *smaller* swarm (higher p → saturates sooner); swarm width buys back a *weaker*
+model's per-attempt weakness — until the **capability floor** (p→0, task beyond the model) where
+no N helps (cf. eratchet `abort_flat`). Mirrors *Large Language Monkeys* (Brown et al. 2024):
+coverage rises ~log-linearly in samples; weaker models close much of the gap, not the floor.
+
+**Caveat — agents are not i.i.d. (ties to §39).** Shared model/prompt/temperature ⇒ correlated
+failures, so effective independent samples < N and the real curve plateaus *before* `(1−p)^N`.
+Diversity injection (§15), the QD archive, temperature, and especially **`--share` waves** (later
+agents build on verified partials — cumulative, ratchet-like) push the plateau out. The scaling
+law must therefore be measured **per strategy** (blind-parallel vs shared/waves), not once.
+
+**Spec — deliverables.**
+1. **Config-driven cap.** Replace the magic `HARD_MAX = 64` with a resolved config value
+   (`swarm_max_agents`, env `DRYDOCK_SWARM_MAX_AGENTS`), default 64 (back-compatible), clamped to
+   a sane hard ceiling. `/swarm` and `capacity.swarm_size` read it. No behavior change at default.
+2. **Productive-N metric.** Emit per-run into `metrics.json`: N, per-server concurrency, wave
+   count, converged, best pass-count, full-solve count, tokens, wall-clock — enough to fit `N*(p)`
+   and compute Marginal Agent Utility (§33) offline from the swarm's own records.
+3. **The sweep (compliant).** Drive a handful of widths (e.g. N∈{8,32,64,128}) on 2–3 genuinely
+   hard (low-p) tasks **through the real `/swarm` TUI command** (tmux-driven, like an operator) —
+   NOT a headless batch runner (§34 repo constraint; the no-eval-harness rule). Accept noisy p
+   estimates; repetitions are runs, not a judge pipeline. High-N points require deliverable (1)
+   and, to be meaningful, multi-box throughput (§29).
+4. **Output.** A per-model curve — "nemotron-30B is productive to ~N agents at difficulty p" — and
+   a default-width recommendation `/swarm` can suggest from a quick p-probe (a few blind attempts)
+   before committing full width.
+
+**Open dependency.** The interesting (low-p) regime for a strong 30B is the hard *benchmark*
+tasks, which live in containers; wiring swarm worktrees to a container verifier brushes the
+no-headless-harness rule and needs its own design pass before the sweep can cover that regime.
+
 ---
 
 ## Implementation Plan (Drydock-grounded, MVP-first)
