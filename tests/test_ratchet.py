@@ -229,7 +229,9 @@ def test_effort_unknown_defaults_high():
 
 def test_detect_verifier_python(tmp_path):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
-    assert detect_verifier(str(tmp_path)) == ("pytest -q", "auto")
+    # `python -m pytest` (module form) not bare `pytest`: the module form puts the repo
+    # root on sys.path so a tests/ suite importing a local package still collects.
+    assert detect_verifier(str(tmp_path)) == ("python -m pytest -q", "auto")
 
 
 def test_detect_verifier_rust_beats_python(tmp_path):

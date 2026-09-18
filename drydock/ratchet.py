@@ -282,7 +282,12 @@ def detect_verifier(cwd: str) -> tuple[str, str] | None:
     if here("go.mod"):
         return "go test ./...", "exitcode"          # go output isn't counted → all-or-nothing
     if here("pytest.ini", "pyproject.toml", "setup.cfg", "tox.ini", "setup.py", "tests", "test"):
-        return "pytest -q", "auto"
+        # `python -m pytest`, NOT bare `pytest`: the module form prepends the repo root to
+        # sys.path (pytest's rootdir/prepend import), so a `tests/` suite that does
+        # `from src.foo import ...` on a repo with no install / no __init__.py / no
+        # pythonpath config still collects. Bare `pytest` doesn't, so every candidate would
+        # hit a collection error and score 0 — which silently breaks /swarm and /ratchet.
+        return "python -m pytest -q", "auto"
     pkg = os.path.join(cwd, "package.json")
     if os.path.exists(pkg):
         try:
