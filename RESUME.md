@@ -119,6 +119,13 @@ fleet were left running untouched.
   `prefix_reuse()` is the offline predictor of re-prefill cost: it walks two views and stops at the
   first module differing by id OR version, so a scheduler can price a mounting decision BEFORE
   paying for it. 41 tests total in `tests/test_context_runtime.py`.
+- **MCR Phase 4 SHIPPED (tombstones):** `tombstone(store, cid, approach=…, evidence=…)` archives
+  the FULL body and leaves a compact §6 record in its place (a ~4000-tok dead branch became <1/10
+  of the view; original still on disk, §2). `revive()` is the safety valve — accepts either id,
+  remounts the original and retires the tombstone. **Appendix A.3 designed in:** a tombstone is a
+  model-authored claim, so `verified=bool(evidence)` — an UNEVIDENCED tombstone cannot pass BRANCH
+  on the §18 ladder and therefore can never durably suppress an approach project-wide; an
+  evidence-backed one can. Tombstones sit before WORKING in VIEW_ORDER (they change less often).
 - **Token sizing reuses `compaction.estimate_tokens`** on purpose — if MCR sized modules
   differently from the compactor the pager and compactor would fight over "how full is context".
 - **✅ PREFIX-CACHE PROBE DONE — Appendix A.1 CONFIRMED** (`research/mcr/prefix_cache_probe.py`,

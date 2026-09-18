@@ -323,6 +323,97 @@ def build_view(store: ContextStore, budget: int, *,
     return ContextView(modules=selected, budget=budget, evicted=evicted, order=order)
 
 
+# ── §6 / §28 phase 4: tombstones ─────────────────────────────────────────────
+
+@dataclass
+class Tombstone:
+    """The compact record left behind when a line of work is abandoned (§6). It exists
+    so the model stops paying the token cost of a dead branch WITHOUT losing the fact
+    that the branch was tried and why.
+
+    `evidence` is load-bearing (Appendix A.3): a tombstone is a model-authored claim
+    that something failed, and a wrong one durably suppresses an approach that would
+    have worked. A tombstone with verifier evidence is marked verified and may be
+    promoted up the §18 ladder; one without stays unverified and therefore cannot pass
+    BRANCH scope — it can guide the branch that made it, never the whole project.
+    """
+    approach: str
+    result: str = ""
+    reason: str = ""
+    revisit_if: str = ""
+    evidence: dict = field(default_factory=dict)   # e.g. {"tests_failed": [14, 17]}
+    source: str = ""                               # ctx:// id of the full archived trace
+
+    def render(self) -> str:
+        lines = [f"Approach: {self.approach}"]
+        if self.result:
+            lines.append(f"Result: {self.result}")
+        if self.reason:
+            lines.append(f"Reason: {self.reason}")
+        if self.evidence:
+            lines.append(f"Evidence: {json.dumps(self.evidence, sort_keys=True, default=str)}")
+        lines.append(f"Revisit only if: {self.revisit_if or 'new evidence appears'}")
+        if self.source:
+            lines.append(f"Source: {self.source}")
+        return "\n".join(lines)
+
+
+def tombstone_id(context_id: str) -> str:
+    """ctx://branch/parser-fix-03 -> ctx://tombstone/branch.parser-fix-03"""
+    return "ctx://tombstone/" + context_id[len(CTX_SCHEME):].replace("/", ".")
+
+
+def tombstone(store: ContextStore, context_id: str, *, approach: str,
+              result: str = "", reason: str = "", revisit_if: str = "",
+              evidence: "dict | None" = None) -> Optional[ContextModule]:
+    """Retire a module: archive the FULL body and leave a compact tombstone in its place.
+
+    Returns the new tombstone module, or None if `context_id` is unknown. The original
+    is only moved to ARCHIVED — never deleted — so the complete trace stays retrievable
+    (§2, §13: "Dead A 24K -> 300-token tombstone", with the 24K still on disk).
+    """
+    original = store.get(context_id)
+    if original is None:
+        return None
+    store.set_residency(context_id, ARCHIVED)
+    ts = Tombstone(approach=approach, result=result, reason=reason,
+                   revisit_if=revisit_if, evidence=dict(evidence or {}),
+                   source=context_id)
+    return store.put(ContextModule(
+        context_id=tombstone_id(context_id),
+        body=ts.render(),
+        type="failure",
+        residency=TOMBSTONED,
+        scope=original.scope,               # inherits, then must EARN promotion (§18)
+        owner=original.owner,
+        created_from=context_id,
+        dependencies=[context_id],
+        verified=bool(evidence),            # unevidenced claims cannot pass BRANCH
+    ))
+
+
+def revive(store: ContextStore, context_id: str) -> Optional[ContextModule]:
+    """Undo a tombstone: page the original body back into the working set and retire
+    the tombstone itself.
+
+    This is the safety valve for Appendix A.3 — tombstones are model-authored and can
+    be wrong, so "this was ruled out" must always be reversible. Accepts either the
+    tombstone's id or the original's id.
+    """
+    m = store.get(context_id)
+    if m is None:
+        return None
+    if m.residency == TOMBSTONED:
+        original_id = m.created_from or ""
+        store.set_residency(m.context_id, ARCHIVED)     # stop suppressing; keep the record
+    else:
+        original_id = context_id
+        t = store.get(tombstone_id(context_id))
+        if t is not None and t.residency == TOMBSTONED:
+            store.set_residency(t.context_id, ARCHIVED)
+    return store.mount(original_id) if original_id else None
+
+
 def prefix_reuse(previous: "ContextView | None", current: ContextView) -> dict:
     """How much of `previous`'s prompt prefix `current` can reuse from the KV cache.
 

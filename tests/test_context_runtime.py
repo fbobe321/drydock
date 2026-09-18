@@ -320,3 +320,113 @@ def test_middle_change_reuses_only_up_to_it(tmp_path):
     _m(s, "ctx://s/repo", residency=SHARED, body="B" * 300)
     r = prefix_reuse(before, build_view(s, budget=10_000))
     assert r["diverged_at"] == 1 and r["reused_tokens"] == 100
+
+
+# ══════════════════════ Phase 4: tombstones (§6, Appendix A.3) ══════════════════════
+
+from drydock.context_runtime import (  # noqa: E402
+    Tombstone,
+    revive,
+    tombstone,
+    tombstone_id,
+)
+
+
+def test_tombstone_id_is_derived_and_valid():
+    tid = tombstone_id("ctx://branch/parser-fix-03")
+    assert tid == "ctx://tombstone/branch.parser-fix-03" and valid_context_id(tid)
+
+
+def test_tombstone_renders_the_prd_shape():
+    body = Tombstone(
+        approach="Replace parser with regex implementation",
+        result="Failed tests 14, 17, and 19.",
+        reason="Nested syntax cannot be represented by the proposed regex.",
+        revisit_if="Grammar requirements change or nested syntax is removed.",
+        source="ctx://branch/parser-fix-03",
+    ).render()
+    assert "Approach: Replace parser with regex" in body
+    assert "Revisit only if: Grammar requirements change" in body
+    assert "Source: ctx://branch/parser-fix-03" in body
+
+
+def test_tombstone_archives_the_full_body_and_shrinks_the_view(tmp_path):
+    """§13: a fat dead branch becomes a small record, and the full trace survives."""
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://branch/regex", body="TRACE " * 4000)        # ~4000 tok
+    fat = build_view(s, budget=100_000).total_tokens
+    t = tombstone(s, "ctx://branch/regex", approach="regex parser",
+                  result="failed 14,17,19", reason="nested syntax")
+    lean = build_view(s, budget=100_000).total_tokens
+    assert lean < fat / 10                                    # compact record replaced the branch
+    assert s.get("ctx://branch/regex").residency == ARCHIVED
+    assert s.get("ctx://branch/regex").body.startswith("TRACE ")   # §2 lossless
+    assert t.residency == TOMBSTONED and t.created_from == "ctx://branch/regex"
+
+
+def test_tombstone_of_unknown_module_is_none(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    assert tombstone(s, "ctx://nope/x", approach="a") is None
+
+
+def test_unevidenced_tombstone_cannot_become_project_knowledge(tmp_path):
+    """Appendix A.3 — a model-authored 'this failed' claim with no verifier evidence
+    must not durably suppress the approach project-wide."""
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://branch/hunch", scope=PRIVATE)
+    t = tombstone(s, "ctx://branch/hunch", approach="a hunch", reason="felt wrong")
+    assert t.verified is False
+    assert s.promote(t.context_id, BRANCH) is not None
+    assert s.promote(t.context_id, PROJECT) is None
+
+
+def test_evidenced_tombstone_is_verified_and_promotable(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://branch/regex", scope=PRIVATE)
+    t = tombstone(s, "ctx://branch/regex", approach="regex parser",
+                  evidence={"tests_failed": [14, 17, 19], "fitness": 0.63})
+    assert t.verified is True
+    assert "Evidence:" in t.body and "tests_failed" in t.body
+    assert s.promote(t.context_id, PROJECT) is not None
+
+
+def test_tombstone_inherits_scope_and_owner(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://branch/x", scope=BRANCH, owner="ratchet-run-182")
+    t = tombstone(s, "ctx://branch/x", approach="a")
+    assert t.scope == BRANCH and t.owner == "ratchet-run-182"
+
+
+def test_revive_by_tombstone_id_restores_the_original(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://branch/regex", body="THE WORK")
+    t = tombstone(s, "ctx://branch/regex", approach="regex parser")
+    back = revive(s, t.context_id)
+    assert back.context_id == "ctx://branch/regex" and back.residency == WORKING
+    assert back.body == "THE WORK"
+    assert s.get(t.context_id).residency == ARCHIVED       # record kept, stops suppressing
+
+
+def test_revive_by_original_id_also_works(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://branch/regex", body="THE WORK")
+    t = tombstone(s, "ctx://branch/regex", approach="regex parser")
+    back = revive(s, "ctx://branch/regex")
+    assert back.residency == WORKING
+    assert s.get(t.context_id).residency == ARCHIVED
+
+
+def test_revive_unknown_is_none(tmp_path):
+    s = ContextStore(root=str(tmp_path))
+    assert revive(s, "ctx://nope/x") is None
+
+
+def test_tombstone_sits_before_working_in_the_view(tmp_path):
+    """Tombstones change less often than the current working set, so they belong
+    earlier in the prompt (keeps volatile churn in the tail)."""
+    s = ContextStore(root=str(tmp_path))
+    _m(s, "ctx://w/now", residency=WORKING)
+    _m(s, "ctx://branch/dead")
+    tombstone(s, "ctx://branch/dead", approach="dead end")
+    ids = build_view(s, budget=100_000).ids()
+    assert ids.index("ctx://tombstone/branch.dead") < ids.index("ctx://w/now")
