@@ -1,0 +1,115 @@
+"""Bridge between a Ratchet round and the Modular Context Runtime (PRD §11).
+
+The ratchet already decides, every round, whether work was verified progress
+(`pawl`/`solved`) or a dead end (`rollback`). Those are exactly the two events the
+context runtime cares about:
+
+  * pawl/solved → a ContextCheckpoint taken alongside the GitCheckpoint, tagged with
+    the git ref and the verifier score that justified it. Ratchet stops being a git
+    rollback mechanism and becomes cumulative selection over CODE *and* KNOWLEDGE.
+  * rollback    → the attempt is tombstoned with the verifier's own evidence (score
+    plus the specific failing checks), so the next round inherits "this was tried and
+    why it failed" as ~a few hundred tokens instead of the whole dead transcript.
+
+Pure/stdlib, no TUI imports (so it is unit-testable), and every public method swallows
+its own errors: context bookkeeping must never break a ratchet run.
+"""
+from __future__ import annotations
+
+import re
+import time
+
+from drydock.context_runtime import (
+    ContextCheckpoint,
+    ContextModule,
+    ContextStore,
+    tombstone,
+)
+
+# pytest-style failure lines: "FAILED tests/test_x.py::test_y - reason" / "ERROR ..."
+_FAILED = re.compile(r"^(?:FAILED|ERROR)\s+(\S+)", re.M)
+
+
+def failed_checks(output: str, limit: int = 20) -> list:
+    """The specific checks a verifier reported failing. This is what makes a tombstone
+    *evidence-backed* rather than a model-authored hunch (PRD Appendix A.3)."""
+    if not output:
+        return []
+    seen: list = []
+    for m in _FAILED.finditer(output):
+        name = m.group(1)
+        if name not in seen:
+            seen.append(name)
+        if len(seen) >= limit:
+            break
+    return seen
+
+
+class ContextRatchet:
+    """Records a ratchet run's rounds into a ContextStore. Construct once per run;
+    call on_round() after each round's verify+record."""
+
+    def __init__(self, cwd: str, run_id: str = "", goal: str = ""):
+        self.run_id = run_id or f"ratchet-{int(time.time())}"
+        self.store = ContextStore(root=cwd, name=self.run_id)
+        self.checkpoint = ContextCheckpoint(self.store)
+        self.goal = goal
+        if goal:
+            try:
+                # the objective is PINNED: it is never the thing we evict (§6)
+                self.store.put(ContextModule(
+                    context_id="ctx://task/objective", body=goal, type="task",
+                    residency="pinned", scope="task", verified=True))
+            except Exception:  # noqa: BLE001 — bookkeeping must never break a run
+                pass
+
+    def on_round(self, *, round_no: int, action: str, passed: int, total: int,
+                 git_ref: str = "", verifier_output: str = "",
+                 approach: str = "") -> dict:
+        """Fold one ratchet round into the context store.
+
+        `action` is RatchetState.record()'s return: 'solved' | 'pawl' | 'rollback'.
+        Returns a small summary dict (never raises)."""
+        out = {"action": action, "checkpoint": "", "tombstone": ""}
+        try:
+            fitness = (passed / total) if total else 0.0
+            if action in ("pawl", "solved"):
+                out["checkpoint"] = self.checkpoint.snapshot(
+                    f"round {round_no} {passed}/{total}",
+                    git_ref=git_ref, fitness=fitness)
+            elif action == "rollback":
+                attempt_id = f"ctx://attempt/r{round_no}"
+                self.store.put(ContextModule(
+                    context_id=attempt_id,
+                    body=(approach or f"round {round_no} attempt"),
+                    type="hypothesis", residency="working", scope="branch",
+                ))
+                failed = failed_checks(verifier_output)
+                t = tombstone(
+                    self.store, attempt_id,
+                    approach=(approach or f"round {round_no} attempt")[:400],
+                    result=f"scored {passed}/{total}; no improvement over the incumbent",
+                    reason="verifier did not improve — round rolled back",
+                    revisit_if="the failing checks change, or a later round makes this "
+                               "approach viable",
+                    evidence={"round": round_no, "passed": passed, "total": total,
+                              "failed": failed},
+                )
+                out["tombstone"] = t.context_id if t else ""
+        except Exception:  # noqa: BLE001 — never break the ratchet
+            pass
+        return out
+
+    def summary(self) -> dict:
+        """What the run accumulated — for a status line or /context."""
+        try:
+            mods = self.store.all()
+            return {
+                "run_id": self.run_id,
+                "modules": len(mods),
+                "tombstones": len([m for m in mods if m.residency == "tombstoned"]),
+                "checkpoints": len(self.checkpoint._all()),  # noqa: SLF001 — same package
+                "tokens_stored": sum(m.token_size for m in mods),
+            }
+        except Exception:  # noqa: BLE001
+            return {"run_id": self.run_id}

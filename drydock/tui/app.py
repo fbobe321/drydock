@@ -1044,6 +1044,10 @@ class DrydockApp(App):
             "policy": rmod.policy_for(effort or "medium"),
             "abort_flat": prof["abort_flat"],
             "flat": 0,
+            # MCR (PRD §11): mirror each tooth into the context runtime — a pawl takes a
+            # ContextCheckpoint beside the GitCheckpoint, a rollback leaves an
+            # evidence-backed tombstone. Purely additive; failures here never touch the run.
+            "mcr": self._new_context_ratchet(cwd, goal),
         }
         lvl = effort or "medium"
         self._info(
@@ -1053,6 +1057,27 @@ class DrydockApp(App):
         )
         self._mount(UserMessage(goal))
         self._begin(goal)
+
+    def _new_context_ratchet(self, cwd: str, goal: str):
+        """Modular Context Runtime recorder for this /ratchet run, or None. Optional by
+        construction: if anything goes wrong the ratchet runs exactly as before."""
+        try:
+            from drydock.context_ratchet import ContextRatchet
+            return ContextRatchet(cwd, goal=goal)
+        except Exception:  # noqa: BLE001 — MCR is bookkeeping; never break /ratchet
+            return None
+
+    def _mcr_round(self, r: dict, rnd: int, action: str, res, snap: str) -> None:
+        """Mirror one ratchet round into the context runtime (§11)."""
+        mcr = (r or {}).get("mcr")
+        if mcr is None:
+            return
+        try:
+            mcr.on_round(round_no=rnd, action=action, passed=res.passed, total=res.total,
+                         git_ref=snap or "", verifier_output=res.output or "",
+                         approach=r.get("last_approach", ""))
+        except Exception:  # noqa: BLE001
+            pass
 
     def _ratchet_step(self) -> None:
         """Worker (off the UI thread): after a turn ends, verify → snapshot →
@@ -1074,6 +1099,7 @@ class DrydockApp(App):
             return
         snap = cp.snapshot(f"ratchet r{rnd} {res.passed}/{res.total}")
         action = st.record(res.passed, res.total, snap)
+        self._mcr_round(r, rnd, action, res, snap)
         self.call_from_thread(self.query_one("#working", Static).update, "")
 
         if action == "solved":
