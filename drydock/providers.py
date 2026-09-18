@@ -642,6 +642,11 @@ def stream(
     config.setdefault("_abort", {})["client"] = client
 
     oai_messages = messages_to_openai(messages, system, vision=vision_enabled(config))
+    # Prefix-difference telemetry (cache-aware MCR spec §32 item 2): record how much
+    # of this prompt is identical to the previous one. No-op unless explicitly
+    # enabled; measures the payload that actually reaches the model.
+    from drydock.prefix_telemetry import record_for
+    record_for(config, oai_messages, model=str(model))
 
     has_tools = bool(tool_schemas)
     # Gemma (and any local server whose model name we can't trust) corrupts
