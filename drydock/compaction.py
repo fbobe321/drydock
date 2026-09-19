@@ -123,6 +123,71 @@ def _truncate_tool_call_args(messages: list, max_len: int) -> None:
                         inp[k] = v[: max_len // 2] + "\n[... arg truncated ...]"
 
 
+def first_divergence_index(before: list, after: list) -> int:
+    """Index of the first message that differs — where a re-prefill would start.
+    Used to price a compaction's cache cost (cache-aware MCR spec §24)."""
+    n = min(len(before), len(after))
+    for i in range(n):
+        if before[i] != after[i]:
+            return i
+    return n
+
+
+def _reclaimable(messages: list, keep_last: int) -> list:
+    """Indices of tool results eligible to be shrunk, LATEST FIRST.
+
+    Latest-first is the whole point. Editing message i forces everything from i onward
+    to re-prefill, so the cost of reclaiming space falls as the index rises. The
+    keep_last window already protects genuinely recent context, so within the eligible
+    range the later items are both cheaper to touch and no more valuable than the
+    ancient ones the default strategy reaches for first.
+    """
+    out = [i for i in range(1, max(1, len(messages) - keep_last))
+           if messages[i].get("role") == "tool"]
+    out.reverse()
+    return out
+
+
+def compact_cache_aware(messages: list, context_limit: int = 131072,
+                        target_frac: float = 0.45, keep_last: int = 8) -> list:
+    """Compact by reclaiming from the LATEST eligible messages first, so the cached
+    prefix survives (cache-aware MCR spec §24, Appendix A.1).
+
+    The default strategy blanket-truncates every long tool result and then drops the
+    OLDEST first. Both rewrite the head of the prompt, which measured at ~0.98x a cold
+    prefill — two such events accounted for roughly half of all re-prefill work in an
+    instrumented run. This variant shrinks the newest reclaimable material until it is
+    under target and stops, leaving the early messages byte-identical.
+
+    It trades a little relevance for a lot of cache: the material it touches first is
+    mid-age, not recent, because keep_last still protects the tail.
+    """
+    target = int(context_limit * target_frac)
+    if estimate_tokens(messages) <= target:
+        return messages
+
+    for i in _reclaimable(messages, keep_last):
+        content = messages[i].get("content")
+        if isinstance(content, str) and len(content) > 1500:
+            head, tail = 400, 300
+            messages[i]["content"] = (
+                content[:head]
+                + f"\n[... {len(content) - head - tail} chars truncated ...]\n"
+                + content[-tail:])
+            if estimate_tokens(messages) <= target:
+                return messages
+
+    for i in _reclaimable(messages, keep_last):
+        if messages[i].get("content") != "[tool result removed]":
+            messages[i]["content"] = "[tool result removed]"
+            if estimate_tokens(messages) <= target:
+                return messages
+
+    if estimate_tokens(messages) > target:
+        _truncate_tool_call_args(messages, max_len=1500)
+    return messages
+
+
 def compact(messages: list, context_limit: int = 131072,
             target_frac: float = 0.45) -> list:
     """Compact messages to fit within context limit.
@@ -142,7 +207,14 @@ def compact(messages: list, context_limit: int = 131072,
     """
     target = int(context_limit * target_frac)  # durable headroom below the 0.60 trigger
 
-    # Pass 1: Truncate long tool results
+    # Pass 1: Truncate long tool results — but only until we are under target.
+    # This used to truncate EVERY long tool result before checking, which overshot
+    # badly: on a 25.8k-token history needing 2.6k reclaimed (10%), it destroyed 22.3k
+    # (86%), landing at 6.8% of the window while aiming for 45%. The agent lost tool
+    # output, file contents and errors it still needed, which on a long task reads as
+    # "it forgot what it already learned". Stop at the target the docstring describes.
+    if estimate_tokens(messages) <= target:
+        return messages
     for m in messages:
         if m["role"] == "tool" and isinstance(m.get("content"), str):
             content = m["content"]
@@ -154,6 +226,8 @@ def compact(messages: list, context_limit: int = 131072,
                     + f"\n[... {len(content) - head - tail} chars truncated ...]\n"
                     + content[-tail:]
                 )
+                if estimate_tokens(messages) <= target:
+                    return messages
 
     current = estimate_tokens(messages)
     if current <= target:
