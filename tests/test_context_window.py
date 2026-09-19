@@ -187,3 +187,42 @@ def test_compaction_still_catches_what_paging_cannot(tmp_path, monkeypatch):
     before = estimate_tokens(s.messages)
     maybe_compact(s, {"cwd": str(tmp_path), "context_limit": int(before / 0.9)})
     assert estimate_tokens(s.messages) <= before        # did not raise, still bounded
+
+
+def test_a_dominant_recent_module_is_pageable(tmp_path):
+    """Observed live: a 5,893-token read at index 2 of a 3-message conversation was
+    always inside the recency-protected tail, so paging never engaged and compaction
+    truncated it instead. A module that alone eats a large share of the budget must be
+    eligible regardless of age."""
+    s = ContextStore(root=str(tmp_path), name="dom")
+    msgs = [{"role": "user", "content": "read it"},
+            {"role": "assistant", "content": "reading"},
+            {"role": "tool", "content": "FILE " * 4000},       # ~6.6k tok, dominant
+            {"role": "assistant", "content": "now fixing"},
+            {"role": "user", "content": "go on"}]              # …but no longer newest
+    out, rep = assemble(msgs, s, budget=3000)
+    assert rep["downgraded"], "an older dominant module must be pageable despite recency"
+    assert rep["after_tokens"] < rep["before_tokens"]
+    assert out[-2:] == msgs[-2:]                               # newest exchange intact
+
+
+def test_the_newest_exchange_is_never_paged_even_if_dominant(tmp_path):
+    """Handing the model a pointer to the file it just asked for is worse than not
+    paging at all."""
+    s2 = ContextStore(root=str(tmp_path), name="dom_new")
+    msgs = [{"role": "user", "content": "read it"},
+            {"role": "assistant", "content": "reading"},
+            {"role": "tool", "content": "FILE " * 4000}]
+    out, rep = assemble(msgs, s2, budget=3000)
+    assert out == msgs and not rep["downgraded"]
+
+
+def test_a_small_recent_module_is_still_protected(tmp_path):
+    """The override is for dominance only — ordinary recent context stays untouched."""
+    s = ContextStore(root=str(tmp_path), name="dom2")
+    msgs = [{"role": "user", "content": "go"}]
+    for i in range(6):
+        msgs.append({"role": "assistant", "content": f"step {i}"})
+        msgs.append({"role": "tool", "content": f"OUT{i} " * 400})   # ~660 tok each
+    out, rep = assemble(msgs, s, budget=int(estimate_tokens(msgs) * 0.6))
+    assert out[-2:] == msgs[-2:]

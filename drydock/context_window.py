@@ -110,7 +110,7 @@ def _protected_from(messages: list, budget: int, keep_frac: float, keep_min: int
 
 def assemble(messages: list, store: ContextStore, budget: int,
              keep_last: int = 8, keep_frac: float = 0.35,
-             keep_min: int = 2) -> "tuple[list, dict]":
+             keep_min: int = 2, dominant_frac: float = 0.30) -> "tuple[list, dict]":
     """Build the outgoing message list from modules under a token budget.
 
     Returns (messages, report). Never mutates the caller's list. When the transcript
@@ -134,7 +134,23 @@ def assemble(messages: list, store: ContextStore, budget: int,
 
     protected_from = _protected_from(messages, budget, keep_frac, keep_min)
     report["protected_from"] = protected_from
-    eligible = [i for i in sorted(idx_to_cid, reverse=True) if i < protected_from]
+
+    # Recency protection alone can never page a large tool result, because a large tool
+    # result is ALWAYS the newest message at the moment it arrives. Observed live: a
+    # 5,893-token file read sat at index 2 of a 3-message conversation, was protected,
+    # paging declined, and compaction truncated it instead — so paging never engaged
+    # once across an entire run. A module that alone consumes `dominant_frac` of the
+    # budget is therefore eligible regardless of age: protecting it defeats the purpose
+    # of having a budget at all.
+    # …but never the newest exchange. Paging a file read the instant it arrives hands
+    # the model a pointer to the thing it just asked for, which is worse than not paging
+    # at all. The override applies only to modules already older than `keep_min`.
+    dominant = max(1, int(budget * dominant_frac))
+    newest_floor = len(messages) - keep_min
+    eligible = [i for i in sorted(idx_to_cid, reverse=True)
+                if i < protected_from
+                or (i < newest_floor and estimate_tokens([messages[i]]) >= dominant)]
+    report["dominant_threshold"] = dominant
 
     # then degrade further, latest-first, one level at a time, until it fits
     for level in (L_SUMMARY, L_POINTER):
