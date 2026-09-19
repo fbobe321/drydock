@@ -484,9 +484,17 @@ def build_view(store: ContextStore, budget: int, *,
         if not placed:
             evicted.append(m.context_id)
 
+    # ORDERING is independent of selection. Selection sorted by priority and size to
+    # decide what fits; if that order leaked into the prompt, a new SMALL module would
+    # sort ahead of an existing large one and reshuffle the working set — breaking the
+    # cached prefix on every addition. (Caught by context_replay.diff on its first use:
+    # an appended module landed mid-prompt and invalidated two modules of prefix.)
+    # Within a residency class, keep store insertion order, which is append-only, so a
+    # new module always lands at the tail where it is cheapest.
+    seen_order = {m.context_id: i for i, m in enumerate(store.all())}
     selected = pinned + kept
-    # ordering: stable sort keeps the priority order within each residency class
-    selected.sort(key=lambda m: order.index(m.residency))
+    selected.sort(key=lambda m: (order.index(m.residency),
+                                 seen_order.get(m.context_id, 1 << 30)))
     return ContextView(modules=selected, budget=budget, evicted=evicted, order=order,
                        degraded=degraded)
 
