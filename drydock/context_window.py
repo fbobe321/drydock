@@ -87,8 +87,30 @@ def modularize(messages: list, store: ContextStore) -> dict:
     return out
 
 
+def _protected_from(messages: list, budget: int, keep_frac: float, keep_min: int) -> int:
+    """Index from which trailing messages are protected from degradation.
+
+    Reserved by TOKENS, not message count. A fixed count is the wrong unit here: one
+    tool result can be 5,893 tokens, so "keep the last 8 messages" protected an entire
+    10-message conversation and paging degraded nothing at 86% of window. Walking back
+    from the end until the reserve is spent keeps genuinely recent exchanges intact
+    while letting a single huge recent read be paged when it is dominating the window.
+    `keep_min` guarantees the last few messages survive regardless of size."""
+    reserve = int(budget * keep_frac)
+    spent = 0
+    idx = len(messages)
+    for i in range(len(messages) - 1, -1, -1):
+        kept = len(messages) - i
+        spent += estimate_tokens([messages[i]])
+        if spent > reserve and kept > keep_min:
+            break
+        idx = i
+    return idx
+
+
 def assemble(messages: list, store: ContextStore, budget: int,
-             keep_last: int = 8) -> "tuple[list, dict]":
+             keep_last: int = 8, keep_frac: float = 0.35,
+             keep_min: int = 2) -> "tuple[list, dict]":
     """Build the outgoing message list from modules under a token budget.
 
     Returns (messages, report). Never mutates the caller's list. When the transcript
@@ -110,8 +132,9 @@ def assemble(messages: list, store: ContextStore, budget: int,
             out[i]["content"] = mod.text_at(mod.level)
             report["downgraded"][cid] = mod.level
 
-    eligible = [i for i in sorted(idx_to_cid, reverse=True)
-                if i < len(messages) - keep_last]
+    protected_from = _protected_from(messages, budget, keep_frac, keep_min)
+    report["protected_from"] = protected_from
+    eligible = [i for i in sorted(idx_to_cid, reverse=True) if i < protected_from]
 
     # then degrade further, latest-first, one level at a time, until it fits
     for level in (L_SUMMARY, L_POINTER):
@@ -166,6 +189,16 @@ def reset_stores() -> None:
         _STORES.clear()
 
 
+def _profile(messages: list, system: str) -> dict:
+    try:
+        from drydock.context_profile import compose
+        p = compose(messages, system)
+        return {k: p[k] for k in ("total_tokens", "system_tokens", "by_role",
+                                  "tool_call_arg_tokens", "pageable_tool_tokens")}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def assemble_for(config: dict | None, messages: list, system: str = "") -> list:
     """Hook for the provider: assemble the window from modules. Returns `messages`
     unchanged when disabled or already within budget. Never raises — a failure here
@@ -184,8 +217,28 @@ def assemble_for(config: dict | None, messages: list, system: str = "") -> list:
         limit = int(cfg.get("context_limit") or 131072)
         budget = int(limit * float(cfg.get("modular_context_frac") or DEFAULT_BUDGET_FRAC))
         budget = max(512, budget - estimate_tokens([{"content": system or ""}]))
-        out, report = assemble(messages, store_for(cwd), budget=budget)
+        store = store_for(cwd)
+        out, report = assemble(messages, store, budget=budget)
         cfg.setdefault("_mcr_window", {})["last_report"] = report
+        # Record every assembly decision next to the data. Twice this session a silent
+        # path made a broken component look like a working one; a no-op that cannot
+        # explain itself is indistinguishable from one that had nothing to do.
+        try:
+            import json as _json
+            with (store.dir / "assembly.log").open("a", encoding="utf-8") as f:
+                f.write(_json.dumps({
+                    "limit": limit, "budget": budget, "messages": len(messages),
+                    "system_tokens": estimate_tokens([{"content": system or ""}]),
+                    **{k: report.get(k) for k in
+                       ("before_tokens", "after_tokens", "protected_from",
+                        "first_changed_index")},
+                    "downgraded": report.get("downgraded"),
+                    # where the window's tokens actually are — the pager can only touch
+                    # tool results, so record what share that even is
+                    "profile": _profile(messages, system),
+                }, default=str) + "\n")
+        except OSError:
+            pass
         return out
     except Exception:  # noqa: BLE001
         return messages

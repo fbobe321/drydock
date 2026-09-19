@@ -76,8 +76,24 @@ def test_nothing_is_lost_full_text_stays_retrievable(tmp_path):
 def test_recent_window_is_never_degraded(tmp_path):
     s = ContextStore(root=str(tmp_path), name="a4")
     msgs = convo(12)
-    out, _ = assemble(msgs, s, budget=int(estimate_tokens(msgs) * 0.3), keep_last=8)
-    assert out[-8:] == msgs[-8:]
+    out, rep = assemble(msgs, s, budget=int(estimate_tokens(msgs) * 0.3))
+    assert out[rep["protected_from"]:] == msgs[rep["protected_from"]:]
+    assert out[-2:] == msgs[-2:]            # the last exchange always survives
+
+
+def test_a_short_conversation_of_huge_reads_still_pages(tmp_path):
+    """Regression: with keep_last as a message COUNT, a 10-message conversation of
+    ~6k-token file reads protected everything and paging degraded nothing at 86% of
+    window. The reserve is tokens, so a dominating recent read is still eligible."""
+    s = ContextStore(root=str(tmp_path), name="a4b")
+    msgs = [{"role": "user", "content": "read them all"}]
+    for i in range(4):
+        msgs.append({"role": "assistant", "content": f"reading {i}"})
+        msgs.append({"role": "tool", "content": f"FILE{i} " * 2400})
+    out, rep = assemble(msgs, s, budget=int(estimate_tokens(msgs) * 0.45))
+    assert rep["downgraded"], "paging must engage on a short, heavy conversation"
+    assert rep["after_tokens"] < rep["before_tokens"]
+    assert out[-2:] == msgs[-2:]
 
 
 def test_degrades_latest_first_so_the_prefix_survives(tmp_path):
