@@ -210,7 +210,7 @@ def handle_command(cmd: str, state: AgentState, config: dict) -> bool:
             return True
         before = estimate_tokens(state.messages)
         limit = config.get("context_limit", 65536) or 65536
-        state.messages = compact(state.messages, limit)
+        state.messages = compact(state.messages, limit, force=True)
         if estimate_tokens(state.messages) > limit * 0.5:
             state.messages = emergency_compact(state.messages, limit)
         after = estimate_tokens(state.messages)

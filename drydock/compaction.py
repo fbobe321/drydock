@@ -189,7 +189,7 @@ def compact_cache_aware(messages: list, context_limit: int = 131072,
 
 
 def compact(messages: list, context_limit: int = 131072,
-            target_frac: float = 0.45) -> list:
+            target_frac: float = 0.45, force: bool = False) -> list:
     """Compact messages to fit within context limit.
 
     Strategy:
@@ -213,7 +213,10 @@ def compact(messages: list, context_limit: int = 131072,
     # (86%), landing at 6.8% of the window while aiming for 45%. The agent lost tool
     # output, file contents and errors it still needed, which on a long task reads as
     # "it forgot what it already learned". Stop at the target the docstring describes.
-    if estimate_tokens(messages) <= target:
+    # `force` is the manual /compact command: the user asked for space, so do the work
+    # even when already under the automatic target. Automatic compaction stops at the
+    # target instead of flattening everything (see above).
+    if not force and estimate_tokens(messages) <= target:
         return messages
     for m in messages:
         if m["role"] == "tool" and isinstance(m.get("content"), str):
@@ -226,7 +229,7 @@ def compact(messages: list, context_limit: int = 131072,
                     + f"\n[... {len(content) - head - tail} chars truncated ...]\n"
                     + content[-tail:]
                 )
-                if estimate_tokens(messages) <= target:
+                if not force and estimate_tokens(messages) <= target:
                     return messages
 
     current = estimate_tokens(messages)

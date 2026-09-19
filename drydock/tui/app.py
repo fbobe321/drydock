@@ -1717,7 +1717,7 @@ class DrydockApp(App):
             return
         before = estimate_tokens(msgs)
         limit = self.config.get("context_limit", 65536) or 65536
-        self.state.messages = compact(msgs, limit)
+        self.state.messages = compact(msgs, limit, force=True)
         # Escalate when the normal pass left us still heavy (>50% of the window):
         # this is exactly the "tried /compact, it said nothing, then OOM again"
         # case — the bloat isn't in droppable tool results, so go aggressive.
