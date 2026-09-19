@@ -1056,6 +1056,8 @@ class DrydockApp(App):
             "holdout": holdout_cmd,
             "holdout_fitness": fitness,
             "cwd": cwd,
+            # base ref for verifier-integrity checking (A.4 mitigation 2)
+            "base_ref": rmod.GitCheckpoint(cwd).snapshot("ratchet base") or "",
         }
         lvl = effort or "medium"
         self._info(
@@ -1084,8 +1086,25 @@ class DrydockApp(App):
         the ratchet records the HOLDOUT's score, so a fabricated pass neither solves nor
         pawls. An inconclusive holdout (could not run, nothing gradeable) changes
         nothing: it is evidence of nothing and must not veto honest work."""
+        claims_full_pass = res.total > 0 and res.passed >= res.total
+        if not claims_full_pass:
+            return res.passed, res.total, ""
+
+        # Mitigation 2 first: a holdout validates the CODE, never the SUITE. Observed —
+        # the agent deleted an unsatisfiable test, wrote a correct implementation, and
+        # both the primary suite and the holdout then agreed on a full pass for a spec
+        # that was never met.
+        try:
+            from drydock.verifier_integrity import edited_verifier_files, integrity_note
+            edited = edited_verifier_files(str(r.get("cwd") or "."), str(r.get("base_ref") or ""))
+        except Exception:  # noqa: BLE001
+            edited = []
+        if edited:
+            r["verifier_edited"] = edited
+            return res.passed, max(res.total, res.passed + 1), integrity_note(edited)
+
         cmd = (r or {}).get("holdout") or ""
-        if not cmd or not (res.total > 0 and res.passed >= res.total):
+        if not cmd:
             return res.passed, res.total, ""
         try:
             from drydock.holdout import confirm
