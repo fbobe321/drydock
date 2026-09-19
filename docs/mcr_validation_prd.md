@@ -14,6 +14,42 @@
 
 ---
 
+## 0. MEASURED RESULT (2026-09-18) — the design premise is wrong
+
+Two instrumented live runs (single-shot and a 6-round `/ratchet`, 29 and 88 context assemblies)
+produced **zero paging downgrades**. The assembly log and composition profile explain why, and it is
+not a threshold:
+
+**Composition of a real 14,126-token window**
+
+| | tokens | share |
+|---|---:|---:|
+| assistant (the model's own turns) | 11,577 | **82%** |
+| system prompt (pinned, unpageable) | 1,755 | 12% |
+| tool-call arguments | 1,118 | 8% |
+| **tool results** | **767** | **5%** |
+
+Both the MCR PRD and the cache-aware spec assume "the transcript's bulk is tool results", and the
+implementation pages tool results. **In Drydock tool results are ~5% of the window**, because tool
+output is already bounded at the tool layer. A pager that cannot touch 82% of the window cannot
+manage the window.
+
+**And even that 5% is unreachable.** A large tool result is always the NEWEST message when it
+arrives — correctly protected, since the model just asked for it — and by the next turn `compact()`
+has truncated it, so it is below the modularization threshold and no longer a candidate. Compaction
+structurally wins the race every time.
+
+**What does work, unintentionally:** the store retains the full text that compaction destroys
+(4 modules × ~5,893 tokens preserved while the transcript held truncated copies). That is
+*recoverability*, one of §3's four criteria — achieved as a side effect rather than by design.
+
+**Implication for this PRD:** Gates 1 and 2 pass, Gate 8 (efficiency vs baseline) cannot be reached
+by the current design. Re-targeting is required before the higher gates mean anything: modularize
+the **assistant tail and tool-call arguments**, which are 90% of the window, rather than tool
+results. Until then the ladder is measuring a mechanism that has nothing to act on.
+
+---
+
 ## 1. Problem
 
 A successful run depends on many mechanisms at once:

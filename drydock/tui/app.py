@@ -1125,6 +1125,18 @@ class DrydockApp(App):
     def _mcr_round(self, r: dict, rnd: int, action: str, res, snap: str) -> None:
         """Mirror one ratchet round into the context runtime (§11)."""
         mcr = (r or {}).get("mcr")
+        # Unconditional trace: this bridge has now silently recorded nothing on two
+        # separate live runs while logging no error, so the question "was it even
+        # called, and with what" must be answerable from disk.
+        try:
+            from pathlib import Path as _P
+            _p = _P(str(r.get("cwd") or ".")) / ".drydock" / "context"
+            _p.mkdir(parents=True, exist_ok=True)
+            with (_p / "bridge_trace.log").open("a", encoding="utf-8") as _f:
+                _f.write(f"round={rnd} action={action} mcr={'set' if mcr else 'NONE'} "
+                         f"passed={getattr(res, 'passed', '?')}/{getattr(res, 'total', '?')}\n")
+        except Exception:  # noqa: BLE001
+            pass
         if mcr is None:
             return
         try:
