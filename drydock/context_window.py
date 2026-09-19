@@ -67,18 +67,22 @@ def modularize(messages: list, store: ContextStore) -> dict:
     no-op, so this can run every turn."""
     out: dict = {}
     for i, m in enumerate(messages):
-        if m.get("role") != "tool":
+        if m.get("role") not in ("tool", "assistant"):
             continue
         content = m.get("content")
         if not isinstance(content, str) or len(content) < MIN_MODULARIZE_CHARS:
             continue
-        cid = tool_module_id(i)
+        if m.get("role") == "tool":
+            cid = tool_module_id(i)
+        else:  # assistant
+            cid = f"ctx://assistant/{i}"
         out[i] = cid
         existing = store.get(cid)
         if existing is not None and existing.resolutions.get(str(L_FULL)) == content:
             continue                                   # unchanged — do not churn versions
         store.put(ContextModule(
-            context_id=cid, type="tool_result", residency="working", scope="branch",
+            context_id=cid, type="assistant" if m.get("role") == "assistant" else "tool_result",
+            residency="working", scope="branch",
             resolutions={L_FULL: content,
                          L_SUMMARY: _summary(content),
                          L_POINTER: _pointer(cid, content)},
