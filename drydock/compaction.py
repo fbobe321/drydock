@@ -319,5 +319,24 @@ def maybe_compact(state, config: dict) -> None:
     limit = config.get("context_limit", 131072)
     current = max(estimate_tokens(state.messages), getattr(state, "last_input_tokens", 0))
 
-    if current > limit * 0.60:
-        state.messages = compact(state.messages, limit)
+    if current <= limit * 0.60:
+        return
+
+    # MCR §13: when the modular context window is managing residency, global compaction
+    # is the FALLBACK, not the default path. Without this, compaction runs first in the
+    # agent loop and flattens the transcript to 0.45 of the window — below the
+    # assembler's budget — so the modular window sees an already-destroyed history,
+    # correctly concludes it has nothing to do, and never engages at all. Paging must
+    # get the first attempt; compaction still catches anything paging cannot fit.
+    try:
+        from drydock.context_window import assemble_for, enabled as modular_enabled
+        if modular_enabled(config):
+            state.messages = assemble_for(config, state.messages,
+                                          system=str(config.get("_system") or ""))
+            if max(estimate_tokens(state.messages),
+                   getattr(state, "last_input_tokens", 0)) <= limit * 0.60:
+                return                      # paging was enough; nothing destroyed
+    except Exception:  # noqa: BLE001 — never let paging break the compaction safety net
+        pass
+
+    state.messages = compact(state.messages, limit)

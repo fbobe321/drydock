@@ -644,7 +644,7 @@ def stream(
     # Modular context window: assemble the prompt from addressable modules instead
     # of replaying the whole transcript. No-op unless enabled or already in budget.
     from drydock.context_window import assemble_for
-    messages = assemble_for(config, messages)
+    messages = assemble_for(config, messages, system=system)
     oai_messages = messages_to_openai(messages, system, vision=vision_enabled(config))
     # Prefix-difference telemetry (cache-aware MCR spec §32 item 2): record how much
     # of this prompt is identical to the previous one. No-op unless explicitly

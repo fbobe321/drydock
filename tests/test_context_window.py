@@ -111,3 +111,63 @@ def test_pointer_level_is_tiny_but_addressable(tmp_path):
     ptr = mod.text_at(L_POINTER)
     assert tool_module_id(2) in ptr and len(ptr) < 200
     assert mod.text_at(L_SUMMARY) != mod.text_at(L_FULL)
+
+
+def test_system_prompt_is_charged_against_the_budget(tmp_path, monkeypatch):
+    """Regression: budgeting against the message list alone under-counted the window.
+    With an 8k limit and a large system prompt, a conversation the TUI showed at 80%
+    full looked to the assembler like it still had room, so paging never engaged."""
+    from drydock.context_window import assemble_for, reset_stores
+    reset_stores()
+    monkeypatch.setenv("DRYDOCK_MODULAR_CONTEXT", "1")
+    msgs = convo(8, chars=1800)
+    big_system = "SYSTEM RULES. " * 400
+    cfg = {"cwd": str(tmp_path), "context_limit": 8192}
+    # messages alone fit; messages + system do not
+    assert estimate_tokens(msgs) < int(8192 * 0.55)
+    assert estimate_tokens(msgs) + estimate_tokens([{"content": big_system}]) > int(8192 * 0.55)
+    out = assemble_for(cfg, msgs, system=big_system)
+    assert cfg["_mcr_window"]["last_report"]["downgraded"], "paging must engage"
+    assert estimate_tokens(out) < estimate_tokens(msgs)
+
+
+def test_paging_runs_before_compaction_and_can_prevent_it(tmp_path, monkeypatch):
+    """MCR §13: global compaction is the FALLBACK. Without this ordering, compaction
+    flattened the transcript to 0.45 of the window — below the assembler's budget — so
+    the modular window saw an already-destroyed history and never engaged at all."""
+    from drydock.compaction import maybe_compact
+    from drydock.context_window import reset_stores
+    reset_stores()
+    monkeypatch.setenv("DRYDOCK_MODULAR_CONTEXT", "1")
+
+    class S:
+        last_input_tokens = 0
+    s = S(); s.messages = convo(10, chars=4000)   # above MIN_MODULARIZE_CHARS
+    limit = int(estimate_tokens(s.messages) / 0.75)      # over the 0.60 trigger
+    cfg = {"cwd": str(tmp_path), "context_limit": limit}
+    maybe_compact(s, cfg)
+
+    rep = cfg.get("_mcr_window", {}).get("last_report")
+    assert rep and rep["downgraded"], "paging must get the first attempt"
+    # and the full text of anything paged out is still retrievable
+    from drydock.context_window import L_FULL, store_for
+    cid = next(iter(rep["downgraded"]))
+    assert len(store_for(str(tmp_path)).get(cid).text_at(L_FULL)) > 1000
+
+
+def test_compaction_still_catches_what_paging_cannot(tmp_path, monkeypatch):
+    """Paging only addresses tool results; a transcript of huge user/assistant turns
+    must still fall through to compaction rather than blowing the window."""
+    from drydock.compaction import maybe_compact
+    from drydock.context_window import reset_stores
+    reset_stores()
+    monkeypatch.setenv("DRYDOCK_MODULAR_CONTEXT", "1")
+
+    class S:
+        last_input_tokens = 0
+    s = S()
+    s.messages = [{"role": "user", "content": "x" * 40000},
+                  {"role": "assistant", "content": "y" * 40000}]
+    before = estimate_tokens(s.messages)
+    maybe_compact(s, {"cwd": str(tmp_path), "context_limit": int(before / 0.9)})
+    assert estimate_tokens(s.messages) <= before        # did not raise, still bounded

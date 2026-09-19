@@ -166,10 +166,16 @@ def reset_stores() -> None:
         _STORES.clear()
 
 
-def assemble_for(config: dict | None, messages: list) -> list:
+def assemble_for(config: dict | None, messages: list, system: str = "") -> list:
     """Hook for the provider: assemble the window from modules. Returns `messages`
     unchanged when disabled or already within budget. Never raises — a failure here
-    must fall back to the ordinary transcript rather than breaking the run."""
+    must fall back to the ordinary transcript rather than breaking the run.
+
+    `system` is load-bearing. The window the model sees is system + messages, and
+    budgeting against the message list alone under-counts it: with an 8k limit and a
+    ~2k system prompt, a conversation the TUI showed at 80% full looked to the
+    assembler like it still had room, so paging never engaged. The system prompt is
+    charged against the budget before anything else because it is not evictable."""
     if not enabled(config):
         return messages
     try:
@@ -177,6 +183,7 @@ def assemble_for(config: dict | None, messages: list) -> list:
         cwd = str(cfg.get("cwd") or ".")
         limit = int(cfg.get("context_limit") or 131072)
         budget = int(limit * float(cfg.get("modular_context_frac") or DEFAULT_BUDGET_FRAC))
+        budget = max(512, budget - estimate_tokens([{"content": system or ""}]))
         out, report = assemble(messages, store_for(cwd), budget=budget)
         cfg.setdefault("_mcr_window", {})["last_report"] = report
         return out
