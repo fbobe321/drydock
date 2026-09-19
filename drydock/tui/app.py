@@ -992,6 +992,11 @@ class DrydockApp(App):
             arg = f'{off["goal"]} --verify "{off["verify"]}"'
         self._ratchet_offer = None
         try:
+            # Holdout (MCR PRD A.4 mitigation 1): pulled out first so the existing
+            # parser signature is untouched.
+            from drydock.holdout import extract_holdout
+            arg, holdout_cmd = extract_holdout(arg)
+
             goal, verify, rounds, fitness, effort = rmod.parse_ratchet_args(arg)
         except ValueError as e:
             self._info(
@@ -1048,6 +1053,9 @@ class DrydockApp(App):
             # ContextCheckpoint beside the GitCheckpoint, a rollback leaves an
             # evidence-backed tombstone. Purely additive; failures here never touch the run.
             "mcr": self._new_context_ratchet(cwd, goal),
+            "holdout": holdout_cmd,
+            "holdout_fitness": fitness,
+            "cwd": cwd,
         }
         lvl = effort or "medium"
         self._info(
@@ -1067,15 +1075,51 @@ class DrydockApp(App):
         except Exception:  # noqa: BLE001 — MCR is bookkeeping; never break /ratchet
             return None
 
+    def _holdout_adjust(self, r: dict, res) -> "tuple[int, int, str]":
+        """Confirm a claimed full pass with a check the agent never saw (MCR PRD A.4
+        mitigation 1), and return the score the ratchet should actually record.
+
+        Only runs when the primary verifier claims a full pass — that is the claim worth
+        doubting, and it keeps the cost off every round. A conclusive disagreement means
+        the ratchet records the HOLDOUT's score, so a fabricated pass neither solves nor
+        pawls. An inconclusive holdout (could not run, nothing gradeable) changes
+        nothing: it is evidence of nothing and must not veto honest work."""
+        cmd = (r or {}).get("holdout") or ""
+        if not cmd or not (res.total > 0 and res.passed >= res.total):
+            return res.passed, res.total, ""
+        try:
+            from drydock.holdout import confirm
+            h = confirm(cmd, str(r.get("cwd") or "."),
+                        fitness=str(r.get("holdout_fitness") or "auto"))
+        except Exception:  # noqa: BLE001 — confirmation must never break the ratchet
+            return res.passed, res.total, ""
+        r["last_holdout"] = h
+        if h.ran and not h.agreed and not h.inconclusive:
+            return h.passed, h.total, (
+                f"⚠ HOLDOUT REJECTED the claimed {res.passed}/{res.total} — {h.verdict()}. "
+                "Recording the holdout's score instead: a passing primary suite is not "
+                "proof the task was solved.")
+        if h.agreed:
+            return res.passed, res.total, f"✓ holdout confirmed — {h.verdict()}"
+        return res.passed, res.total, (f"holdout {h.verdict()}" if h.ran else "")
+
     def _mcr_round(self, r: dict, rnd: int, action: str, res, snap: str) -> None:
         """Mirror one ratchet round into the context runtime (§11)."""
         mcr = (r or {}).get("mcr")
         if mcr is None:
             return
         try:
-            mcr.on_round(round_no=rnd, action=action, passed=res.passed, total=res.total,
-                         git_ref=snap or "", verifier_output=res.output or "",
-                         approach=r.get("last_approach", ""))
+            out = mcr.on_round(round_no=rnd, action=action, passed=res.passed,
+                               total=res.total, git_ref=snap or "",
+                               verifier_output=res.output or "",
+                               approach=r.get("last_approach", ""))
+            # A holdout the agent never saw is exactly the independent agreement that
+            # `verified` is supposed to mean (context_runtime.corroborate).
+            h = r.get("last_holdout")
+            if out.get("claim") and h is not None and getattr(h, "agreed", False):
+                from drydock.holdout import corroboration_label
+                mcr.store.corroborate(out["claim"],
+                                      by=corroboration_label(r.get("holdout", ""), h))
         except Exception:  # noqa: BLE001
             pass
 
@@ -1098,7 +1142,10 @@ class DrydockApp(App):
             self.call_from_thread(self._finish_ratchet_idle)
             return
         snap = cp.snapshot(f"ratchet r{rnd} {res.passed}/{res.total}")
-        action = st.record(res.passed, res.total, snap)
+        score_p, score_t, note = self._holdout_adjust(r, res)
+        action = st.record(score_p, score_t, snap)
+        if note:
+            self.call_from_thread(self._info, note)
         self._mcr_round(r, rnd, action, res, snap)
         self.call_from_thread(self.query_one("#working", Static).update, "")
 
