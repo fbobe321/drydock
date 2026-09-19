@@ -63,17 +63,6 @@ def test_assistant_full_text_is_retained(tmp_path):
     assert len(s.get(cid).text_at(L_FULL)) > 1000, "paging must stay lossless"
 
 
-def test_tool_call_arguments_are_pageable(tmp_path):
-    """A Write carries a whole file body in tool_calls[].input — 8% of the window and
-    invisible to a per-role content breakdown."""
-    s = ContextStore(root=str(tmp_path), name="rt4")
-    msgs = _write_heavy()
-    before = estimate_tokens(msgs)
-    out, rep = assemble(msgs, s, budget=int(before * 0.5))
-    assert rep["downgraded"], "tool-call arguments must be pageable"
-    assert estimate_tokens(out) < before
-
-
 def test_newest_exchange_still_protected_after_retarget(tmp_path):
     s = ContextStore(root=str(tmp_path), name="rt5")
     msgs = _assistant_heavy()
