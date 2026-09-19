@@ -231,7 +231,17 @@ def test_detect_verifier_python(tmp_path):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     # `python -m pytest` (module form) not bare `pytest`: the module form puts the repo
     # root on sys.path so a tests/ suite importing a local package still collects.
-    assert detect_verifier(str(tmp_path)) == ("python -m pytest -q", "auto")
+    assert detect_verifier(str(tmp_path)) == (
+        "python -m pytest -q --continue-on-collection-errors", "auto")
+
+
+def test_detect_verifier_keeps_the_gradient_on_collection_errors():
+    """A broken import must not flatten the fitness signal: pytest without
+    --continue-on-collection-errors prints no counts, which scores 0/1 and makes a
+    recoverable break indistinguishable from an impossible task."""
+    from drydock.ratchet import score_output
+    assert score_output("2 errors in 0.24s", "auto", 1) == (0, 1)
+    assert score_output("83 passed, 4 failed, 2 errors in 0.5s", "auto", 1)[0] > 0
 
 
 def test_detect_verifier_rust_beats_python(tmp_path):

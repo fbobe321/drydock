@@ -287,7 +287,12 @@ def detect_verifier(cwd: str) -> tuple[str, str] | None:
         # `from src.foo import ...` on a repo with no install / no __init__.py / no
         # pythonpath config still collects. Bare `pytest` doesn't, so every candidate would
         # hit a collection error and score 0 — which silently breaks /swarm and /ratchet.
-        return "python -m pytest -q", "auto"
+        # --continue-on-collection-errors keeps the GRADIENT alive. Without it, one
+        # bad import makes pytest print "2 errors in 0.2s" with no counts at all, which
+        # scores 0/1 — so a run that broke ONE module looks identical to an impossible
+        # task, the ratchet loses its gradient and aborts as flat. Observed: a ratchet on
+        # a 102/106 baseline dropped to 0/1 the moment the agent removed an exported name.
+        return "python -m pytest -q --continue-on-collection-errors", "auto"
     pkg = os.path.join(cwd, "package.json")
     if os.path.exists(pkg):
         try:
