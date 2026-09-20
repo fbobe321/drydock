@@ -235,7 +235,10 @@ def assemble_for(config: dict | None, messages: list, system: str = "") -> list:
         cfg = config or {}
         cwd = str(cfg.get("cwd") or ".")
         limit = int(cfg.get("context_limit") or 131072)
-        budget = int(limit * float(cfg.get("modular_context_frac") or DEFAULT_BUDGET_FRAC))
+        frac = (cfg.get("modular_context_frac")
+                or os.environ.get("DRYDOCK_MODULAR_CONTEXT_FRAC")
+                or DEFAULT_BUDGET_FRAC)
+        budget = int(limit * float(frac))
         budget = max(512, budget - estimate_tokens([{"content": system or ""}]))
         store = store_for(cwd)
         out, report = assemble(messages, store, budget=budget)
