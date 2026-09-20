@@ -14,7 +14,7 @@ import pytest
 
 from drydock.compaction import estimate_tokens
 from drydock.context_runtime import ContextStore
-from drydock.context_window import L_FULL, assemble, modularize
+from drydock.context_window import assemble
 
 BIG = 2500   # chars per heavy message
 
