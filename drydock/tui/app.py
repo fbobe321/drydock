@@ -1065,6 +1065,17 @@ class DrydockApp(App):
             f"(fitness={fitness}). Snapshots on improvement, rolls back regressions; "
             "a stalled round changes strategy. Esc to stop."
         )
+        # Score the starting workspace so a regressing first round can roll BACK to it
+        # (see RatchetState.seed_baseline). Costs one verifier run; without it the
+        # ratchet can only ever compare against its own first attempt.
+        try:
+            base = self._ratchet["verifier"].run()
+            base_snap = cp.snapshot(f"ratchet baseline {base.passed}/{base.total}")
+            self._ratchet["state"].seed_baseline(base.passed, base.total, base_snap)
+            self._info(f"⚓ ratchet baseline: {base.passed}/{base.total} — a round that "
+                       "scores lower than this will roll back to the starting tree.")
+        except Exception:  # noqa: BLE001 — baseline is an improvement, never a blocker
+            pass
         self._mount(UserMessage(goal))
         self._begin(goal)
 

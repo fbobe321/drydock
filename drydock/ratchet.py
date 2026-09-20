@@ -240,6 +240,19 @@ class RatchetState:
     best_ref: str | None = None
     round: int = 0
 
+    def seed_baseline(self, passed: int, total: int, snapshot_ref: str | None) -> None:
+        """Score the STARTING workspace before any agent turn.
+
+        Without this the -1 sentinel makes round 1 pawl unconditionally, so a first
+        round that REGRESSES gets locked in and every later round is compared against
+        the regression rather than the original. On a repo that already partly works —
+        the normal "fix these failing tests" case — the ratchet could end by leaving the
+        tree worse than it found it, with no way back. Observed: a workspace at 104/105
+        was ratcheted down to 83/86 and held there for five further rounds.
+
+        Seeding does not consume a round; it only gives the pawl something true to beat."""
+        self.best_passed, self.best_total, self.best_ref = passed, total, snapshot_ref
+
     def record(self, passed: int, total: int, snapshot_ref: str | None) -> str:
         """Fold in a round's fitness + its workspace snapshot. Returns the action:
         'solved' | 'pawl' (improved, locked in) | 'rollback' (no gain, discard)."""

@@ -435,3 +435,34 @@ def test_diversify_prompt_varies_by_operator():
     assert "DIFFERENT strategy" in div and "STALLED" in div
     assert "first principles" in restart
     assert div != exploit and restart != exploit and div != restart
+
+
+def test_baseline_prevents_locking_in_a_regression():
+    """A first round that is WORSE than the starting tree must roll back to it.
+
+    Without a baseline the -1 sentinel makes round 1 pawl unconditionally: a workspace
+    at 104/105 ratcheted to 83/86 and stayed there for five more rounds, with the
+    original state unreachable."""
+    st = RatchetState(goal="x", max_rounds=6)
+    st.seed_baseline(104, 105, "start")
+    assert st.record(83, 86, "worse") == "rollback"
+    assert st.best_ref == "start" and st.best_passed == 104
+
+
+def test_baseline_does_not_consume_a_round():
+    st = RatchetState(goal="x", max_rounds=2)
+    st.seed_baseline(3, 10, "start")
+    assert st.round == 0 and st.exhausted() is False
+
+
+def test_an_improving_first_round_still_pawls_over_the_baseline():
+    st = RatchetState(goal="x")
+    st.seed_baseline(3, 10, "start")
+    assert st.record(7, 10, "better") == "pawl"
+    assert st.best_ref == "better"
+
+
+def test_first_round_still_pawls_when_no_baseline_was_seeded():
+    """Unchanged behaviour when a baseline could not be taken."""
+    st = RatchetState(goal="x")
+    assert st.record(0, 7, "sha0") == "pawl"
