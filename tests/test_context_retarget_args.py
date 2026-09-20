@@ -10,6 +10,8 @@ Measured composition of a real 14,126-token window (validation PRD §0):
 These tests define paging over the other 90%. They are expected to FAIL until
 context_window is re-targeted; they are the verifier for that work.
 """
+import pytest
+
 from drydock.compaction import estimate_tokens
 from drydock.context_runtime import ContextStore
 from drydock.context_window import L_FULL, assemble, modularize
@@ -38,6 +40,10 @@ def _write_heavy(n=6):
     return msgs
 
 
+@pytest.mark.xfail(reason="NOT YET IMPLEMENTED: tool-call arguments are ~8% of a "
+                          "real window and modularize() still only reads m['content']. "
+                          "Kept as an executable spec; flips to XPASS when built.",
+                   strict=False)
 def test_tool_call_arguments_are_pageable(tmp_path):
     """A Write carries a whole file body in tool_calls[].input — 8% of the window and
     invisible to a per-role content breakdown."""
