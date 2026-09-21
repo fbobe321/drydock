@@ -48,33 +48,48 @@ by the current design. Re-targeting is required before the higher gates mean any
 the **assistant tail and tool-call arguments**, which are 90% of the window, rather than tool
 results. Until then the ladder is measuring a mechanism that has nothing to act on.
 
-### A/B RESULT (§21/§22, 2026-09-20) — Gate 8 first evidence, n=1
+### A/B RESULT (§21/§22, 2026-09-20) — n=3 per arm
 
-After re-targeting paging onto assistant turns, the §22 experiment (large model window, deliberately
-small MANAGED budget) was run: identical task, model, server and prompt; only MCR differs.
-`C_model = 32K`, `C_MCR ≈ 6.4K` (0.25 × 32K minus the ~1.8K system prompt) — a ~3× squeeze against a
-baseline that peaked at 21,361 tokens.
+§22 setup: identical task, model, server and prompt; only MCR differs. `C_model = 32K`,
+`C_MCR ≈ 6.4K` (0.25 × 32K minus the ~1.8K system prompt) — roughly a 3× squeeze against a baseline
+peaking near 21K.
 
-| | A: append-only | B: MCR | |
-|---|---:|---:|---|
-| task (12 off-by-one bugs) | **12/12** | **12/12** | no capability loss |
-| test files modified | none | none | |
-| total prompt tokens | 531,409 | **316,669** | **−40%** |
-| uncached prefill | 75,411 | **55,786** | −26% |
-| uncached *rate* | 14.2% | 17.6% | **worse** |
-| peak window | 21,361 | **13,250** | −38% |
-| paging | — | 23/36 assemblies, 183,295 tok reclaimed | |
+| arm | prompt tokens | uncached | rate | peak window | task |
+|---|---:|---:|---:|---:|---|
+| A1 append | 531,409 | 75,411 | 14.2% | 21,361 | 12/12 |
+| A2 append | 373,668 | 49,569 | 13.3% | 20,372 | 12/12 |
+| A3 append | 426,970 | 47,226 | 11.1% | 20,949 | 12/12 |
+| **A mean** | **444,016** | **57,402** | **12.9%** | **20,894** | |
+| B1 mcr@0.25 | 316,669 | 55,786 | 17.6% | 13,250 | 12/12 |
+| B2 mcr@0.25 | 264,839 | 60,929 | 23.0% | 11,296 | 12/12 |
+| B3 mcr@0.25 | 340,935 | 53,430 | 15.7% | 13,508 | 12/12 |
+| **B mean** | **307,481** | **56,715** | **18.8%** | **12,685** | |
 
-**Efficiency gain without capability loss** — the §3 criterion — for the first time.
+**Capability: no loss.** All six runs solved 12/12 and none modified a test file.
 
-**The trade is real, not free.** The uncached RATE rose: paging rewrites earlier prompt regions and
-costs cache reuse (Appendix A.1). It won on absolute tokens only because the window shrank more than
-reuse degraded. On a task with a long STABLE prefix that trade could invert, which is precisely what
-§15's cache-economics test exists to find.
+**Window: real reduction.** Peak −39%, total prompt tokens −31%.
 
-**Do not over-read this.** n=1 per arm with a stochastic agent, one task, one model, one budget
-setting, and the arms differed slightly in call count (37 vs 35) — some of that is just trajectory
-variance. It is directional evidence, not a validated result; §19's repetition requirement stands.
+**Compute: no saving.** Uncached prefill is **−1.2%**, i.e. nothing. The uncached RATE rises
+(12.9% → 18.8%) and cancels the volume reduction almost exactly: paging rewrites earlier prompt
+regions and costs cache reuse (Appendix A.1), so what MCR removes is mostly cache-cheap tokens.
+This is §15's cache-economics warning landing in practice.
+
+**Correction.** An earlier single-run comparison reported uncached −26% and was recorded here as
+first evidence of a compute win. With n=3 that result does not survive — it was trajectory variance.
+Baseline prompt tokens alone ranged 374K–531K (a 42% spread) between identical runs, which is why
+§19's repetition requirement exists. The n=1 claim is withdrawn.
+
+**Still unknown:** whether a tighter budget costs capability. A 0.15 arm was attempted twice and is
+VOID — the vLLM container had exited, so both runs hit `Cannot reach the LLM` and recorded one call.
+That is the fourth time in this work an infrastructure failure nearly got attributed to the system
+under test; with a stateful system and a remote model, the default explanation for a bad result
+should be the plumbing.
+
+**Not tested at all:** whether MCR helps a ratchet SWEEP by suppressing dead ends (§18). The
+composition data is consistent with it — a sweep accumulates the model's own reasoning, which is 82%
+of the window, and a rolled-back round's reasoning stays resident while git restores the workspace —
+but consistency is not evidence. `ContextRatchet` already writes a tombstone on every rollback and
+that path has never fired live.
 
 ---
 
