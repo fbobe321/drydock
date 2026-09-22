@@ -130,6 +130,29 @@ class ContextRatchet:
         except OSError:
             pass
 
+    def rollback_to(self, git_ref: str) -> bool:
+        """Restore the context to the ContextCheckpoint paired with `git_ref`.
+
+        Gate 4 / PRD §20: a ratchet rollback must revert CODE and KNOWLEDGE together.
+        Until this existed the ratchet called GitCheckpoint.restore() alone, so a
+        discarded round's false hypothesis stayed resident and fed the next attempt —
+        the ratchet poisoning itself with the very work it just rejected.
+
+        The git ref of an accepted tooth is the join key: on_round() stamps each
+        ContextCheckpoint with the GitCheckpoint ref that justified it, so the two
+        halves of the transaction can always be matched later. Returns False (and
+        changes nothing) when no paired checkpoint exists — a rollback that cannot find
+        its context must not wipe the store."""
+        if not git_ref:
+            return False
+        try:
+            for rec in reversed(self.checkpoint._all()):  # noqa: SLF001 — same package
+                if rec.get("git_ref") == git_ref:
+                    return bool(self.checkpoint.restore(rec.get("id")))
+        except Exception as e:  # noqa: BLE001
+            self._log_error(f"rollback_to({git_ref})", e)
+        return False
+
     def summary(self) -> dict:
         """What the run accumulated — for a status line or /context."""
         try:

@@ -1133,6 +1133,21 @@ class DrydockApp(App):
             return res.passed, res.total, f"✓ holdout confirmed — {h.verdict()}"
         return res.passed, res.total, (f"holdout {h.verdict()}" if h.ran else "")
 
+    def _mcr_rollback(self, r: dict) -> None:
+        """Roll the context back with the code (Gate 4 / PRD §20).
+
+        GitCheckpoint.restore() alone reverts the workspace but leaves a discarded
+        round's hypotheses resident, so the ratchet feeds itself the work it just
+        rejected. The accepted tooth's git ref is the join key to its ContextCheckpoint."""
+        mcr = (r or {}).get("mcr")
+        ref = ((r or {}).get("state") and r["state"].best_ref) or ""
+        if mcr is None or not ref:
+            return
+        try:
+            mcr.rollback_to(ref)
+        except Exception:  # noqa: BLE001 — never let context bookkeeping break a rollback
+            pass
+
     def _mcr_round(self, r: dict, rnd: int, action: str, res, snap: str) -> None:
         """Mirror one ratchet round into the context runtime (§11)."""
         mcr = (r or {}).get("mcr")
@@ -1206,6 +1221,7 @@ class DrydockApp(App):
                 self._info, f"↑ ratchet round {st.round}: {res.passed}/{res.total} — locked in (pawl).")
         else:  # rollback
             cp.restore(st.best_ref)
+            self._mcr_rollback(r)
             self.call_from_thread(
                 self._info,
                 f"↩ ratchet round {st.round}: {res.passed}/{res.total} ≤ best "
@@ -1221,6 +1237,7 @@ class DrydockApp(App):
         r["flat"] = 0 if st.best_passed > 0 else r["flat"] + 1
         if r["abort_flat"] and r["flat"] >= r["abort_flat"]:
             cp.restore(st.best_ref)
+            self._mcr_rollback(r)
             self.call_from_thread(
                 self._info,
                 f"⚙ ratchet stopped after {st.round} rounds — verifier gives no gradient "
@@ -1232,6 +1249,7 @@ class DrydockApp(App):
 
         if st.exhausted():
             cp.restore(st.best_ref)  # leave the best result on disk
+            self._mcr_rollback(r)
             solved = st.best_total > 0 and st.best_passed >= st.best_total
             self.call_from_thread(
                 self._info,
