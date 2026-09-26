@@ -67,6 +67,10 @@ but no hands-on tmux `/ratchet` run happened yet.
   `DecisionProvider` for cheap orchestration decisions. Explicitly the engine Handshake uses to
   implement ABC (§11 coupling). §0 records the deliberate deviations (sync not async; no Laya
   model yet so it falls back to heuristic).
+- `docs/mcr_validation_prd.md` — the umbrella "main" PRD, now updated: a top-of-file pointer and a
+  new **§34** tie ABC + Laya into MCR as the roadmap arc (Ratchet → Handshake → modular context →
+  adaptive compute → heterogeneous routing). MCR's own Gate 8 efficiency win is expected to come
+  from ABC's module-unload + Laya's relevance routing, measured under MCR's discipline.
 
 **Shipped code (4 commits on the branch):**
 - `drydock/adaptive_budget.py` — `AdaptiveBudgetController` (probe→envelope; plateau→targeted

@@ -12,6 +12,19 @@
 > to test the pieces independently *before* asking whether the whole improves Terminal-Bench or
 > SWE-bench.
 
+> **MCR is the first stage of a larger arc.** Making context modular was step one; the roadmap
+> now makes context — and reasoning, agents, and tools — an *adaptively allocated* resource, with
+> a fast decision engine to route them. See **§34** and the two follow-on PRDs:
+> - `docs/abc_prd.md` — **Adaptive Budget Controller (ABC/Handshake):** allocate inference
+>   compute dynamically; escalate context modules (and reasoning/agents/tools) on a measured
+>   plateau, de-escalate when discovery makes a task easy. MCR §0's finding that *module-unload*
+>   (not tool-result paging) is the real lever is exactly ABC's context axis.
+> - `docs/laya_prd.md` — **Laya System-1 Decision Plane:** a fast, model-independent
+>   `DecisionProvider` that answers "which context module to load/unload?" and "which resource is
+>   limiting progress?" without a generative call — it becomes MCR's context router (§12/§13 there).
+> The through-line: **Ratchet → Handshake → modular context (this PRD) → adaptive compute (ABC)
+> → heterogeneous cognitive routing (Laya).**
+
 ---
 
 ## 0. MEASURED RESULT (2026-09-18) — the design premise is wrong
@@ -339,3 +352,47 @@ before moving into noisy real benchmarks.
 replay + context diffing**. With something this stateful, reconstructing exactly what was resident,
 what was archived, what changed, and where the prefix broke is essential to telling a context-policy
 problem apart from the model making a bad decision.
+
+---
+
+## 34. Roadmap — how ABC and Laya extend MCR (2026-09-26)
+
+MCR proved context can be made modular and that its real efficiency lever is **module-unload**,
+not tool-result paging (§0). Two follow-on PRDs turn that mechanism into a policy and give it a
+cheap controller. Both are on branch `feat/adaptive-budget-controller`; their Phase-1 cores are
+implemented and unit-tested (full suite 1413 pass via `.venv`), advisory/off by default, and
+pending the live TUI + benchmark validation this PRD's philosophy demands.
+
+### 34.1 Adaptive Budget Controller — `docs/abc_prd.md`
+Treats inference compute as a resource to allocate: start cheap, watch the verified progress
+signal, escalate one axis on a sustained plateau, de-escalate when progress resumes. The four
+axes are **reasoning, context, agents, tools** — and the **context axis is MCR**. Where MCR asks
+"is the module machinery correct?", ABC asks "should another module be resident *right now*?"
+Concretely:
+- `drydock/adaptive_budget.py`: `AdaptiveBudgetController` (probe → envelope → targeted
+  escalation ladder → de-escalation → §16 ledger); `reasoning_turn_config()` maps a level onto
+  the `reasoning_effort` seam the provider layer already forwards.
+- `RatchetBudgetAdvisor` bridges the `/ratchet` loop exactly like the existing MCR bridge:
+  fed each round's honest holdout-adjusted score, it surfaces a note only when the allocation
+  should change. Reasoning actuation is opt-in behind config `abc_actuate_reasoning` (default off).
+- Its context-escalation rung is the natural consumer of MCR's mount/unmount API — the point
+  where "add a module" stops being a validation question and becomes a scheduling decision.
+
+### 34.2 Laya System-1 Decision Plane — `docs/laya_prd.md`
+The decisions ABC and MCR need ("which module is most relevant to load?", "which active module to
+evict?", "which resource is limiting progress?") are frequent and cheap, and should not cost a
+generative call. Laya is a small decision model behind a model-independent `DecisionProvider`
+interface (`drydock/decision.py`): `ControlState` (compact control context, distinct from MCR's
+working context), `HeuristicProvider` (always-available fallback + baseline), `LayaProvider`
+(HTTP, off by default), a confidence router, a fallback chain, and a decision trace. It becomes
+**MCR's context router** (Laya PRD §12/§13): the module-load/unload choices MCR validates
+mechanically are, in production, made here. `decide_limiting_resource` + `RESOURCE_TO_AXIS`
+couple it to ABC so a confident verdict redirects escalation and an uncertain one defers to ABC's
+deterministic ladder.
+
+### 34.3 What this means for MCR's own gate ladder
+MCR's Gate 8 (efficiency vs baseline) was found unreachable by tool-result paging (§0). ABC's
+module-unload-on-completion and Laya's relevance-ranked routing are the intended path to a real
+efficiency win — but they must be measured under the same discipline: the §33 synthetic-ratchet
+fixture first, then the ABC §19 three-arm and Laya §23 four-arm experiments through the real TUI,
+never a headless batch judge. Until those run, the efficiency claim stays open for all three PRDs.
