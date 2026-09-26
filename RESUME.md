@@ -101,17 +101,24 @@ but no hands-on tmux `/ratchet` run happened yet.
 (14). **Full suite via `.venv`: 1438 passed, 1 skipped, 1 xfailed.** (Base python lacks `textual`; use
 `.venv/bin/python -m pytest` to include the 48 TUI tests.)
 
-**STILL TODO (needs the real box/model — could NOT be done autonomously while the fleet was busy):**
-1. Hands-on tmux `/ratchet` run: confirm the `⚖ budget:` note renders and (with
-   `abc_actuate_reasoning: true`) reasoning effort actually changes on the fleet. NOTE: the box was
-   busy with live eratchet loops (chess-best-move, circuit-fibsqrt) + swarm/docker TUIs on :8000, so
-   no competing TUI was launched — do this when the fleet is free.
-2. §19 three-arm ABC experiment (Fixed-Low / Fixed-High / Adaptive) on tbench-2 through the TUI.
-3. §23 four-arm Laya experiment (A gen-LLM / B heuristic / C Laya / D Laya+LLM fallback).
-4. Deferred build: a real Laya/Jev service, `LLMDecisionProvider` (§16 low-confidence escalation —
+**DONE 2026-09-26 (live TUI validation):** drove `/ratchet` hands-on via tmux against nemotron on
+localhost:8000 (shared the server; did NOT interrupt the live eratchet loops). Confirmed all three:
+(a) TUI launches with the ABC advisor + decision-plane decider wired, no crash; (b) the `⚖ budget:`
+note renders on a real plateau — verbatim "plateau — raise reasoning effort … [reasoning=medium,
+context=2mod, agents=1, tools=20]"; (c) actuation applies ABC's level (status showed "thinking with
+low effort" initially, escalated low→medium on the plateau, de-escalated after a pawl). Full chain
+fired: ratchet → holdout/integrity → ABC advisor → note → actuation. Caveat: the plateau arose
+because the throwaway repo lacked a .gitignore, so pytest's __pycache__/*.pyc tripped
+verifier-integrity (4/4→4/5, never "solved") — a scratch-setup artifact, not an ABC issue; a real
+repo with a .gitignore won't hit it. ABC responded correctly to the signal.
+
+**STILL TODO (needs the real box/model + operator judgement):**
+1. §19 three-arm ABC experiment (Fixed-Low / Fixed-High / Adaptive) on tbench-2 through the TUI.
+2. §23 four-arm Laya experiment (A gen-LLM / B heuristic / C Laya / D Laya+LLM fallback).
+3. Deferred build: a real Laya/Jev service, `LLMDecisionProvider` (§16 low-confidence escalation —
    intentionally NOT built headless since it can't be validated without a live model), Laya Phases
    2–4 (Ratchet wiring beyond ABC, richer context/agent routing).
-5. Decide whether to merge the branch to main / push origin master:main / open a PR.
+4. Decide whether to merge the branch to main / push origin master:main / open a PR.
 
 ---
 
