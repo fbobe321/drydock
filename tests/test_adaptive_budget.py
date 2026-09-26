@@ -269,3 +269,60 @@ def test_controller_turn_config_tracks_escalation():
 def test_advisor_turn_config_delegates():
     adv = RatchetBudgetAdvisor(effort="high")
     assert adv.turn_config() == {"reasoning_effort": "high"}
+
+
+# --- decision-plane coupling (§11) -----------------------------------------------------
+class _StubDecider:
+    """A DecisionProvider that always names one limiting resource with high confidence."""
+    name = "stub"
+
+    def __init__(self, resource: str):
+        self.resource = resource
+
+    def choose(self, state, question, choices):
+        from drydock.decision import Decision
+        opts = {c: 0.02 for c in choices}
+        opts[self.resource] = 0.9
+        return Decision.from_scores(question, opts, source=self.name)
+
+    def boolean(self, state, question):  # pragma: no cover - unused here
+        from drydock.decision import Decision
+        return Decision.from_scores(question, {"yes": 0.5, "no": 0.5}, source=self.name)
+
+    def score(self, state, criterion):  # pragma: no cover - unused here
+        return 0.5
+
+
+def test_decider_redirects_escalation_axis():
+    # a confident "more_context" verdict must escalate CONTEXT even though the fixed ladder
+    # would raise reasoning first.
+    adv = RatchetBudgetAdvisor(effort="low", decider=_StubDecider("more_context"))
+    before = adv.controller.envelope.context_modules
+    adv.observe_round(3, 10)                      # baseline
+    adv.observe_round(3, 10)                      # plateau 1
+    note = adv.observe_round(3, 10)              # plateau 2 -> decider picks context
+    assert note is not None and "context" in note
+    assert adv.controller.envelope.context_modules == before + 1
+    assert adv.controller.envelope.reasoning.level == "low"   # reasoning untouched
+
+
+def test_uncertain_decider_defers_to_fixed_ladder():
+    from drydock.decision import Decision
+
+    class _Unsure:
+        name = "unsure"
+
+        def choose(self, state, question, choices):
+            return Decision.from_scores(question, {c: 1 / len(choices) for c in choices})
+
+        def boolean(self, state, question):  # pragma: no cover
+            return Decision.from_scores(question, {"yes": 0.5, "no": 0.5})
+
+        def score(self, state, criterion):  # pragma: no cover
+            return 0.5
+
+    adv = RatchetBudgetAdvisor(effort="low", decider=_Unsure())
+    adv.observe_round(3, 10)
+    adv.observe_round(3, 10)
+    adv.observe_round(3, 10)                      # low-confidence -> fixed ladder (reasoning)
+    assert adv.controller.envelope.reasoning.level == "medium"

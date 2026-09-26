@@ -25,6 +25,7 @@ up mid-run is worse than one that holds the current budget.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from typing import Callable
 
 from .budget import BudgetState
 from .capacity import DEFAULT_TASK_DEMAND, swarm_size
@@ -193,6 +194,10 @@ class AdaptiveBudgetController:
         self.decisions: list[BudgetDecision] = []
         self.escalations = 0
         self.deescalations = 0
+        # Optional Laya coupling (abc_prd.md §11 / laya_prd.md): a callable returning the axis
+        # to escalate next ("reasoning"/"context"/"tools"/"agents"/"long_horizon"), consulted
+        # before the fixed ladder. None -> pure fixed-ladder behaviour.
+        self._axis_selector: "Callable[[], str] | None" = None
 
     # -- setup -------------------------------------------------------------------------
     def allocate(self, probe: TaskProbe) -> ResourceEnvelope:
@@ -205,6 +210,12 @@ class AdaptiveBudgetController:
         )
         self.budget.max_tool_calls = self.envelope.tool_calls
         return self.envelope
+
+    def set_axis_selector(self, fn: "Callable[[], str] | None") -> None:
+        """Install (or clear) a decision-plane hook that names which axis to escalate next.
+        When set, `_escalate` consults it before the fixed ladder — this is how Laya drives
+        ABC's targeted escalation (§11)."""
+        self._axis_selector = fn
 
     # -- feedback loop -----------------------------------------------------------------
     def observe(self, *, passed: int, total: int) -> BudgetDecision:
@@ -243,6 +254,20 @@ class AdaptiveBudgetController:
 
     # -- escalation --------------------------------------------------------------------
     def _escalate(self) -> BudgetDecision:
+        # §11: if a decision plane named the limiting resource, honour it before the fixed
+        # ladder. A directed escalation that actually changes something wins; otherwise fall
+        # through so a plateau still advances (the ladder is the guaranteed floor).
+        if self._axis_selector is not None:
+            try:
+                axis = self._axis_selector()
+            except Exception:  # noqa: BLE001 — a broken selector must never stall escalation
+                axis = ""
+            if axis:
+                changed, reason = self._apply_escalation(axis)
+                if changed:
+                    self._escalated = True
+                    self.escalations += 1
+                    return self._record("escalate", axis, f"{reason} (decision plane)")
         while self._rung < len(self._LADDER):
             axis = self._LADDER[self._rung]
             changed, reason = self._apply_escalation(axis)
@@ -399,17 +424,61 @@ class RatchetBudgetAdvisor:
     """
 
     def __init__(self, *, effort: str = "medium", concurrency: int = 4,
-                 has_verifier: bool = True) -> None:
+                 has_verifier: bool = True, decider=None, objective: str = "") -> None:
         self.controller = AdaptiveBudgetController(concurrency=concurrency)
+        self.decider = decider           # optional DecisionProvider (laya_prd.md §11)
+        self.objective = objective
+        self._prev: int | None = None
+        self._cur: int = 0
+        self._plateau = 0
+        self._total = 0
         try:
             self.controller.allocate(_effort_to_probe(effort, has_verifier=has_verifier))
         except Exception:  # noqa: BLE001 — allocation must never break /ratchet
             pass
+        if decider is not None:
+            self.controller.set_axis_selector(self._select_axis)
+
+    def _select_axis(self) -> str:
+        """Ask the decision plane which resource is limiting progress and map it to an ABC
+        axis (§11). Returns "" to defer to the fixed ladder — on any doubt, or a low-confidence
+        answer, the deterministic ladder is the floor."""
+        try:
+            from drydock.decision import (
+                RESOURCE_TO_AXIS,
+                ControlState,
+                decide_limiting_resource,
+            )
+            state = ControlState(
+                objective=self.objective,
+                fitness=self._cur,
+                maximum=self._total,
+                previous_fitness=self._prev or 0,
+                plateau_iterations=self._plateau,
+                reasoning=self.controller.envelope.reasoning.level,
+                agents=self.controller.envelope.agents,
+            )
+            d = decide_limiting_resource(self.decider, state)
+            if d.uncertain:
+                return ""
+            return RESOURCE_TO_AXIS.get(d.selected, "")
+        except Exception:  # noqa: BLE001 — decision plane is an accelerator, never a blocker
+            return ""
 
     def observe_round(self, passed: int, total: int) -> str | None:
         """Feed one round; return a note iff the allocation recommendation changed."""
         try:
-            d = self.controller.observe(passed=int(passed), total=int(total))
+            passed, total = int(passed), int(total)
+            # mirror the plateau signal so _select_axis can build a ControlState (§7).
+            if self._prev is not None:
+                if passed > self._cur:
+                    self._plateau = 0
+                else:
+                    self._plateau += 1
+            self._prev = self._cur if self._prev is not None else passed
+            self._cur = passed
+            self._total = total
+            d = self.controller.observe(passed=passed, total=total)
         except Exception:  # noqa: BLE001 — advice must never break /ratchet
             return None
         return self.describe(d)

@@ -1056,7 +1056,7 @@ class DrydockApp(App):
             # ABC (abc_prd.md §14): advise on inference-resource allocation from the same
             # round signal. Advisory only until the backend adapter lands; optional by
             # construction — a failure here never touches the run.
-            "budget": self._new_budget_advisor(effort or "medium"),
+            "budget": self._new_budget_advisor(effort or "medium", goal),
             "holdout": holdout_cmd,
             "holdout_fitness": fitness,
             "cwd": cwd,
@@ -1092,12 +1092,23 @@ class DrydockApp(App):
         except Exception:  # noqa: BLE001 — MCR is bookkeeping; never break /ratchet
             return None
 
-    def _new_budget_advisor(self, effort: str):
+    def _new_budget_advisor(self, effort: str, goal: str = ""):
         """Adaptive Budget Controller advisor for this /ratchet run, or None. Optional by
-        construction: any failure yields None and the ratchet runs exactly as before."""
+        construction: any failure yields None and the ratchet runs exactly as before. When a
+        decision plane is configured (decision_plane.enabled), it drives ABC's targeted
+        escalation (laya_prd.md §11); otherwise ABC uses its deterministic ladder."""
         try:
             from drydock.adaptive_budget import RatchetBudgetAdvisor
-            return RatchetBudgetAdvisor(effort=effort, has_verifier=True)
+            decider = None
+            try:
+                from drydock.decision import decision_provider
+                dp = self.config.get("decision_plane") or {}
+                if dp.get("enabled"):
+                    decider = decision_provider(self.config)
+            except Exception:  # noqa: BLE001 — decision plane is optional; ABC works without it
+                decider = None
+            return RatchetBudgetAdvisor(effort=effort, has_verifier=True,
+                                        decider=decider, objective=goal)
         except Exception:  # noqa: BLE001 — ABC is advisory; never break /ratchet
             return None
 
