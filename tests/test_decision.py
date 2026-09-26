@@ -172,6 +172,12 @@ def test_factory_default_is_heuristic():
     assert decision_provider({"decision_plane": {"enabled": False}}).name == "heuristic"
 
 
+def test_factory_reads_real_default_config():
+    # the shipped DEFAULTS must resolve to the heuristic (decision plane off by default).
+    from drydock.config import DEFAULTS
+    assert decision_provider(DEFAULTS).name == "heuristic"
+
+
 def test_factory_laya_wrapped_in_fallback():
     dp = decision_provider(
         {"decision_plane": {"enabled": True, "provider": "laya"}},

@@ -121,6 +121,25 @@ DEFAULTS: dict[str, object] = {
     # nobody needs to set it.
     "swarm_concurrency": 0,
     "swarm_concurrency_default": 4,
+    # Adaptive Budget Controller (docs/abc_prd.md). ABC is ADVISORY by default in /ratchet:
+    # it surfaces a note when the inference-resource allocation should change but does not
+    # actuate. Set true to also apply ABC's chosen reasoning level to the next ratchet worker
+    # turn (§5); the effort governor can still force LOW (§17), and the setting is cleared when
+    # the ratchet ends so it never leaks into ordinary chat.
+    "abc_actuate_reasoning": False,
+    # Laya System-1 Decision Plane (docs/laya_prd.md). Disabled by default -> Drydock uses the
+    # deterministic HeuristicProvider for the few orchestration decisions it exposes, and ABC
+    # uses its fixed escalation ladder. Enable to route "which resource is limiting progress?"
+    # (and, later, context/agent decisions) through a provider. `provider: laya` needs a running
+    # Laya service at `endpoint`; if it is unreachable the chain falls back to the heuristic, so
+    # this is never a single point of failure (§18). `provider: heuristic` needs no service.
+    "decision_plane": {
+        "enabled": False,
+        "provider": "heuristic",        # heuristic | laya
+        "endpoint": "http://localhost:8000/decide",
+        "confidence": {"execute": 0.80, "fallback": 0.55},
+        "logging": False,
+    },
     # URL substrings the web tools refuse: WebSearch drops matching results,
     # WebFetch declines matching URLs (with a plain message, never an error).
     # Used to keep benchmark/solution sites out of harvested training runs.
