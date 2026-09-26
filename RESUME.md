@@ -72,33 +72,46 @@ but no hands-on tmux `/ratchet` run happened yet.
   adaptive compute → heterogeneous routing). MCR's own Gate 8 efficiency win is expected to come
   from ABC's module-unload + Laya's relevance routing, measured under MCR's discipline.
 
-**Shipped code (4 commits on the branch):**
+**Shipped code (branch `feat/adaptive-budget-controller`, ~8 commits, all pushed):**
 - `drydock/adaptive_budget.py` — `AdaptiveBudgetController` (probe→envelope; plateau→targeted
   ladder reasoning→context→tools→agents→long-horizon→terminate; de-escalation; §16 ledger),
   `reasoning_turn_config()` backend adapter (maps a level to `config["reasoning_effort"]`, the
   seam providers.py already forwards; agent.py honors a pre-set effort), `RatchetBudgetAdvisor`
-  (never-raises bridge, mirrors the mcr bridge).
-- `drydock/decision.py` — `DecisionProvider` interface, `ControlState` (compact control context),
-  `HeuristicProvider` (§18 fallback + default), `LayaProvider` (HTTP, transport injected),
-  confidence router (§16), `FallbackDecisionProvider` (§18), `DecisionTrace` (§20), factory (§19),
-  Phase-1 decisions + `decide_limiting_resource`/`RESOURCE_TO_AXIS` for the ABC coupling.
+  (never-raises bridge, mirrors the mcr bridge; optional `decider=` installs the §11 axis-selector).
+- `drydock/decision.py` — `DecisionProvider` interface, `ControlState` (compact control context,
+  `state_hash`), `HeuristicProvider` (§18 fallback + default), `LayaProvider` (HTTP, transport
+  injected), confidence router (§16), `FallbackDecisionProvider` (§18), `DecisionTrace` (§20),
+  factory (§19), Phase-1 decisions + `decide_limiting_resource`/`RESOURCE_TO_AXIS` (ABC coupling),
+  `batch_decisions` (§10), `decide_context_module`/`decide_evict_module` (§12/§13 MCR router seam),
+  `strategy_family` + `StrategyLedger` (§15 dead-end families with synonym folding).
+- `drydock/context_sim.py` + `drydock context-test` CLI — the §33 DETERMINISTIC synthetic-ratchet
+  fixture (no LLM): a scripted trajectory drives the REAL RatchetState + ABC advisor + StrategyLedger
+  across append/modular/cache_aware policies and emits the §33 report. Sample output mirrors MCR §0
+  (modular −41% peak resident; plain modular pays uncached prefill; cache_aware recovers it). Token
+  figures are a labelled PLACEHOLDER (`modeled_*`), NOT a cache measurement — the live experiment
+  answers efficiency. Run: `.venv/bin/python -m drydock.cli context-test [--json] [--out P]`.
 - `drydock/tui/app.py` — `/ratchet` builds the advisor (+ a decider when `decision_plane.enabled`),
   feeds it the honest holdout-adjusted score each round, surfaces a note only when the allocation
   recommendation changes, and has OPT-IN reasoning actuation behind config `abc_actuate_reasoning`
   (default OFF → shipped behaviour unchanged; popped in `_finish_ratchet_idle` so it never leaks).
+- `drydock/config.py` — documented `decision_plane` (default off → heuristic) + `abc_actuate_reasoning`
+  (default off) defaults.
 
-**Tests:** 51 new unit tests (`tests/test_adaptive_budget.py` 29, `tests/test_decision.py` 22).
-**Full suite via `.venv`: 1413 passed, 1 skipped, 1 xfailed.** (Base python lacks `textual`; use
-`.venv/bin/python -m pytest` to include the TUI tests.)
+**Tests:** `tests/test_adaptive_budget.py` (31), `tests/test_decision.py` (34), `tests/test_context_sim.py`
+(14). **Full suite via `.venv`: 1438 passed, 1 skipped, 1 xfailed.** (Base python lacks `textual`; use
+`.venv/bin/python -m pytest` to include the 48 TUI tests.)
 
-**STILL TODO (the "a lot of testing" that needs the real box/model):**
+**STILL TODO (needs the real box/model — could NOT be done autonomously while the fleet was busy):**
 1. Hands-on tmux `/ratchet` run: confirm the `⚖ budget:` note renders and (with
-   `abc_actuate_reasoning: true`) reasoning effort actually changes on the fleet.
+   `abc_actuate_reasoning: true`) reasoning effort actually changes on the fleet. NOTE: the box was
+   busy with live eratchet loops (chess-best-move, circuit-fibsqrt) + swarm/docker TUIs on :8000, so
+   no competing TUI was launched — do this when the fleet is free.
 2. §19 three-arm ABC experiment (Fixed-Low / Fixed-High / Adaptive) on tbench-2 through the TUI.
 3. §23 four-arm Laya experiment (A gen-LLM / B heuristic / C Laya / D Laya+LLM fallback).
-4. Deferred build: a real Laya/Jev service, `LLMDecisionProvider` (§16 low-confidence escalation),
-   Laya Phases 2–4 (Ratchet wiring beyond ABC, context routing, swarm control), batched decisions.
-5. Decide whether to merge the branch to main / push origin master:main.
+4. Deferred build: a real Laya/Jev service, `LLMDecisionProvider` (§16 low-confidence escalation —
+   intentionally NOT built headless since it can't be validated without a live model), Laya Phases
+   2–4 (Ratchet wiring beyond ABC, richer context/agent routing).
+5. Decide whether to merge the branch to main / push origin master:main / open a PR.
 
 ---
 
