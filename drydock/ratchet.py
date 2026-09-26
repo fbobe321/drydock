@@ -215,6 +215,13 @@ class GitCheckpoint:
             ).stdout.splitlines()
             for rel in cur:
                 if rel and rel not in snap:
+                    # Never delete drydock's OWN bookkeeping on a code rollback: the MCR
+                    # context store and the ABC budget ledger live under .drydock/ and are
+                    # meta-state, not task workspace. Wiping them would lose the very record a
+                    # rollback is supposed to preserve (and silently emptied the ABC ledger in
+                    # a /ratchet benchmark until this was found).
+                    if rel == ".drydock" or rel.startswith(".drydock/"):
+                        continue
                     p = os.path.join(self.cwd, rel)
                     try:
                         os.remove(p)

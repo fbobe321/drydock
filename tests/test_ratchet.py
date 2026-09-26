@@ -150,6 +150,31 @@ def test_git_checkpoint_snapshot_restore(tmp_path):
     assert not (repo / "junk.txt").exists()            # file added since is pruned
 
 
+def test_git_checkpoint_restore_preserves_drydock_bookkeeping(tmp_path):
+    # A code rollback must NOT wipe drydock's own state under .drydock/ (MCR context store,
+    # ABC budget ledger) — it is meta-state a rollback is meant to preserve, not task workspace.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-q"], repo)
+    _git(["config", "user.email", "t@t"], repo)
+    _git(["config", "user.name", "t"], repo)
+    (repo / "a.txt").write_text("v1\n")
+    _git(["add", "-A"], repo)
+    _git(["commit", "-qm", "init"], repo)
+
+    cp = GitCheckpoint(str(repo))
+    good = cp.snapshot("best")
+
+    # a regressed round writes junk AND drydock bookkeeping appears after the snapshot
+    (repo / "junk.txt").write_text("noise\n")
+    (repo / ".drydock" / "context").mkdir(parents=True)
+    (repo / ".drydock" / "context" / "budget_ledger.json").write_text('{"rounds": 3}')
+
+    assert cp.restore(good)
+    assert not (repo / "junk.txt").exists()                                 # task junk pruned
+    assert (repo / ".drydock" / "context" / "budget_ledger.json").exists()  # bookkeeping kept
+
+
 def test_git_checkpoint_unavailable_outside_repo(tmp_path):
     assert GitCheckpoint(str(tmp_path)).available() is False
 
