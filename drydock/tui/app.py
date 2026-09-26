@@ -1224,6 +1224,15 @@ class DrydockApp(App):
             budget_note = advisor.observe_round(score_p, score_t)
             if budget_note:
                 self.call_from_thread(self._info, budget_note)
+            # Opt-in actuation (default OFF): apply ABC's reasoning level to the next worker
+            # turn. Safe because agent.py leaves a pre-set reasoning_effort untouched and the
+            # time governor can still force LOW (§17). Popped in _finish_ratchet_idle so it
+            # never leaks into ordinary chat. Advisory-only until validated live in the TUI.
+            if self.config.get("abc_actuate_reasoning"):
+                try:
+                    self.config["reasoning_effort"] = advisor.reasoning_effort
+                except Exception:  # noqa: BLE001 — actuation must never break the ratchet
+                    pass
         self.call_from_thread(self.query_one("#working", Static).update, "")
 
         if action == "solved":
@@ -1288,6 +1297,10 @@ class DrydockApp(App):
 
     def _finish_ratchet_idle(self) -> None:
         """Return the UI to an idle, focused state after a ratchet ends."""
+        # Undo any ABC reasoning actuation so the per-turn adaptive default resumes in
+        # ordinary chat (only ABC sets this under abc_actuate_reasoning).
+        if self.config.get("abc_actuate_reasoning"):
+            self.config.pop("reasoning_effort", None)
         self._refresh_status()
         self._update_suggestion()
         self.query_one("#prompt", PromptArea).focus()

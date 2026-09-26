@@ -15,6 +15,7 @@ from drydock.adaptive_budget import (
     ResourceEnvelope,
     TaskProbe,
     probe_to_envelope,
+    reasoning_turn_config,
 )
 
 
@@ -235,3 +236,36 @@ def test_advisor_never_raises_on_garbage_input():
     # unknown effort falls back to a sane level, and bad scores must not raise.
     assert adv.controller.envelope.reasoning.level in LEVELS
     assert adv.observe_round(0, 0) is None
+
+
+# --- backend adapter (§5) --------------------------------------------------------------
+def test_adapter_maps_levels_to_effort_labels():
+    assert reasoning_turn_config(ReasoningBudget.at("minimal")) == {"reasoning_effort": "low"}
+    assert reasoning_turn_config(ReasoningBudget.at("low")) == {"reasoning_effort": "low"}
+    assert reasoning_turn_config(ReasoningBudget.at("medium")) == {"reasoning_effort": "medium"}
+    assert reasoning_turn_config(ReasoningBudget.at("high")) == {"reasoning_effort": "high"}
+
+
+def test_adapter_never_emits_max_tokens():
+    # capping max_tokens would truncate the ANSWER, not just reasoning — the adapter must
+    # only touch the reasoning knob.
+    cfg = reasoning_turn_config(ReasoningBudget.at("high"))
+    assert set(cfg) == {"reasoning_effort"}
+
+
+def test_adapter_unknown_level_defaults_low():
+    assert reasoning_turn_config(ReasoningBudget(level="bogus")) == {"reasoning_effort": "low"}
+
+
+def test_controller_turn_config_tracks_escalation():
+    c = AdaptiveBudgetController()
+    c.allocate(TaskProbe(complexity="low"))
+    assert c.turn_config() == {"reasoning_effort": "low"}
+    _plateau_until_escalate(c, 5)               # low -> medium
+    assert c.turn_config() == {"reasoning_effort": "medium"}
+    assert c.reasoning_effort == "medium"
+
+
+def test_advisor_turn_config_delegates():
+    adv = RatchetBudgetAdvisor(effort="high")
+    assert adv.turn_config() == {"reasoning_effort": "high"}

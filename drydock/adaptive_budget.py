@@ -42,6 +42,25 @@ _LEVEL_ITERS = {"minimal": 2, "low": 4, "medium": 8, "high": 16}
 # how many CONSECUTIVE plateau observations trip one rung of escalation (§20 item 3).
 PLATEAU_TO_ESCALATE = 2
 
+# --- backend adapter (§5): translate a provider-independent level into the one request knob
+#     Drydock's provider layer already forwards (providers.py: config["reasoning_effort"] ->
+#     kwargs, ignored by endpoints without the knob). ABC's own "minimal" collapses to the
+#     provider's "low"; the loop's iteration budget (envelope.max_iterations) is the
+#     approximation for models with no reasoning knob at all — so the adapter never touches
+#     max_tokens (which would cap the ANSWER, not just the reasoning).
+_LEVEL_TO_EFFORT = {"minimal": "low", "low": "low", "medium": "medium", "high": "high"}
+
+
+def reasoning_turn_config(reasoning: "ReasoningBudget") -> dict:
+    """Map a ReasoningBudget onto the turn-config keys Drydock's providers understand.
+
+    Returns only `reasoning_effort`. agent.py honors a pre-set reasoning_effort (it sets its
+    own only `if "reasoning_effort" not in turn_config`), so a caller that merges this into a
+    turn config actuates ABC's choice without fighting the per-turn effort governor — which
+    remains free to force LOW later (the §17 safety hierarchy: policy limits outrank ABC)."""
+    level = getattr(reasoning, "level", "low")
+    return {"reasoning_effort": _LEVEL_TO_EFFORT.get(level, "low")}
+
 
 def _level_index(level: str) -> int:
     try:
@@ -312,6 +331,19 @@ class AdaptiveBudgetController:
         self.decisions.append(d)
         return d
 
+    # -- actuation (§5 backend adapter) ------------------------------------------------
+    @property
+    def reasoning_effort(self) -> str:
+        """The current reasoning level as the provider's request label."""
+        return reasoning_turn_config(self.envelope.reasoning)["reasoning_effort"]
+
+    def turn_config(self) -> dict:
+        """Turn-config fragment to merge into the next worker turn so the model actually
+        runs at ABC's current reasoning level (§5). Merge as `{**cfg, **abc.turn_config()}`
+        BEFORE the agent loop's per-turn default, since agent.py leaves a pre-set
+        reasoning_effort untouched."""
+        return reasoning_turn_config(self.envelope.reasoning)
+
     # -- ledger (§16) ------------------------------------------------------------------
     def ledger(self) -> dict:
         """What the controller allocated and how it moved — the §16 budget ledger, extended
@@ -398,6 +430,14 @@ class RatchetBudgetAdvisor:
             return ("⚖ budget: escalation ladder exhausted — no resource left to raise; "
                     "the plateau is not a budget problem")
         return None
+
+    def turn_config(self) -> dict:
+        """The controller's current reasoning turn-config (§5) — what a ratchet worker turn
+        should merge in to actuate ABC's reasoning level. Advisory callers can ignore it."""
+        try:
+            return self.controller.turn_config()
+        except Exception:  # noqa: BLE001
+            return {}
 
     def ledger(self) -> dict:
         return self.controller.ledger()
