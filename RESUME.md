@@ -51,6 +51,53 @@ quarantined). The whole point of v3 is clean IP provenance owned end to end.
   vs 64) but it FINISHES. Vision via matching `mmproj-gemma4-31b-F16.gguf`.
 
 ---
+## 🎛️ ADAPTIVE BUDGET (ABC) + LAYA DECISION PLANE — 2026-09-26
+
+**Branch `feat/adaptive-budget-controller` (NOT yet merged to main).** Two new PRDs + their
+Phase-1 implementations, built on the existing substrate rather than duplicating it. All
+pure-logic; the live TUI paths are py_compile+ruff clean and the TUI *tests* pass via `.venv`,
+but no hands-on tmux `/ratchet` run happened yet.
+
+**PRDs (committed):**
+- `docs/abc_prd.md` — Adaptive Budget Controller (Handshake ABC). Treat inference compute as a
+  resource to allocate: start cheap, escalate on sustained plateau, de-escalate when discovery
+  makes a hard task easy. §0 maps ~80% of it to existing modules (budget/capacity/progress/
+  loop_detect/bottleneck/context_ratchet). The one new axis = resource escalation itself.
+- `docs/laya_prd.md` — Laya System-1 Decision Plane ("Drydock Reflex"). A fast, model-independent
+  `DecisionProvider` for cheap orchestration decisions. Explicitly the engine Handshake uses to
+  implement ABC (§11 coupling). §0 records the deliberate deviations (sync not async; no Laya
+  model yet so it falls back to heuristic).
+
+**Shipped code (4 commits on the branch):**
+- `drydock/adaptive_budget.py` — `AdaptiveBudgetController` (probe→envelope; plateau→targeted
+  ladder reasoning→context→tools→agents→long-horizon→terminate; de-escalation; §16 ledger),
+  `reasoning_turn_config()` backend adapter (maps a level to `config["reasoning_effort"]`, the
+  seam providers.py already forwards; agent.py honors a pre-set effort), `RatchetBudgetAdvisor`
+  (never-raises bridge, mirrors the mcr bridge).
+- `drydock/decision.py` — `DecisionProvider` interface, `ControlState` (compact control context),
+  `HeuristicProvider` (§18 fallback + default), `LayaProvider` (HTTP, transport injected),
+  confidence router (§16), `FallbackDecisionProvider` (§18), `DecisionTrace` (§20), factory (§19),
+  Phase-1 decisions + `decide_limiting_resource`/`RESOURCE_TO_AXIS` for the ABC coupling.
+- `drydock/tui/app.py` — `/ratchet` builds the advisor (+ a decider when `decision_plane.enabled`),
+  feeds it the honest holdout-adjusted score each round, surfaces a note only when the allocation
+  recommendation changes, and has OPT-IN reasoning actuation behind config `abc_actuate_reasoning`
+  (default OFF → shipped behaviour unchanged; popped in `_finish_ratchet_idle` so it never leaks).
+
+**Tests:** 51 new unit tests (`tests/test_adaptive_budget.py` 29, `tests/test_decision.py` 22).
+**Full suite via `.venv`: 1413 passed, 1 skipped, 1 xfailed.** (Base python lacks `textual`; use
+`.venv/bin/python -m pytest` to include the TUI tests.)
+
+**STILL TODO (the "a lot of testing" that needs the real box/model):**
+1. Hands-on tmux `/ratchet` run: confirm the `⚖ budget:` note renders and (with
+   `abc_actuate_reasoning: true`) reasoning effort actually changes on the fleet.
+2. §19 three-arm ABC experiment (Fixed-Low / Fixed-High / Adaptive) on tbench-2 through the TUI.
+3. §23 four-arm Laya experiment (A gen-LLM / B heuristic / C Laya / D Laya+LLM fallback).
+4. Deferred build: a real Laya/Jev service, `LLMDecisionProvider` (§16 low-confidence escalation),
+   Laya Phases 2–4 (Ratchet wiring beyond ABC, context routing, swarm control), batched decisions.
+5. Decide whether to merge the branch to main / push origin master:main.
+
+---
+
 ## 🐝 SWARM SCALING + VERIFIER BUG FIX + SWARM-WIDTH LAW SPEC — 2026-09-18
 
 **Fleet = nemotron-30B on `.20`/`.22`/`.129` (vLLM, `--max-num-seqs 4` each).** Two ratchet_evolve
