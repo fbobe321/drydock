@@ -325,3 +325,79 @@ class AdaptiveBudgetController:
             "budget": self.budget.to_dict(),
             "decisions": [d.to_dict() for d in self.decisions],
         }
+
+
+# ======================================================================================
+# Ratchet bridge (§14) — advise on resource allocation from the /ratchet round signal.
+# ======================================================================================
+
+# what each escalation axis recommends the operator (or a future actuator) do. Until the
+# backend adapter lands, ABC is ADVISORY in the ratchet loop — it names the resource to raise
+# rather than raising it, per the "safety mechanisms advisory, never blocking" rule.
+_ADVICE = {
+    "reasoning": "raise reasoning effort — the model has evidence but keeps reaching a weak conclusion",
+    "context": "add a context module — the model repeatedly lacks information",
+    "tools": "spend a tool call, not more tokens — resolve the uncertainty experimentally",
+    "agents": "fan out to parallel hypotheses — one line of attack has plateaued",
+    "long_horizon": "engage long-horizon / ratchet mode — this needs sustained iteration",
+}
+
+
+def _effort_to_probe(effort: str, *, has_verifier: bool = True) -> TaskProbe:
+    """Map a /ratchet effort dial onto an initial probe (§4). The ratchet knows little about
+    the task up front, so this is deliberately coarse; the loop escalates from here."""
+    level = effort if effort in _LEVEL_TOKENS else "low"
+    return TaskProbe(
+        complexity=level,
+        tests_available=has_verifier,
+        tool_dependency="high" if has_verifier else "low",
+        long_horizon_risk="high" if level == "high" else "low",
+    )
+
+
+class RatchetBudgetAdvisor:
+    """Thin, never-raises bridge between the /ratchet round loop and the controller (§14).
+
+    Built once per run from the effort dial; fed each round's HONEST recorded score (the
+    holdout-adjusted one). Returns a short operator-facing note only when the allocation
+    should change — a plateau that trips an escalation rung, resumed progress that releases
+    budget, or an exhausted ladder. Holds emit nothing, so the transcript stays quiet until
+    something actually changes. Optional by construction: any failure yields None and the
+    ratchet runs exactly as before.
+    """
+
+    def __init__(self, *, effort: str = "medium", concurrency: int = 4,
+                 has_verifier: bool = True) -> None:
+        self.controller = AdaptiveBudgetController(concurrency=concurrency)
+        try:
+            self.controller.allocate(_effort_to_probe(effort, has_verifier=has_verifier))
+        except Exception:  # noqa: BLE001 — allocation must never break /ratchet
+            pass
+
+    def observe_round(self, passed: int, total: int) -> str | None:
+        """Feed one round; return a note iff the allocation recommendation changed."""
+        try:
+            d = self.controller.observe(passed=int(passed), total=int(total))
+        except Exception:  # noqa: BLE001 — advice must never break /ratchet
+            return None
+        return self.describe(d)
+
+    @staticmethod
+    def describe(d: BudgetDecision) -> str | None:
+        if d.action == "escalate":
+            env = d.envelope
+            detail = _ADVICE.get(d.axis, d.reason)
+            return (f"⚖ budget: plateau — {detail} "
+                    f"[reasoning={env.reasoning.level}, context={env.context_modules}mod, "
+                    f"agents={env.agents}, tools={env.tool_calls}]")
+        if d.action == "deescalate":
+            env = d.envelope
+            return (f"⚖ budget: progress resumed — releasing raised budget "
+                    f"[reasoning={env.reasoning.level}, agents={env.agents}]")
+        if d.action == "terminate":
+            return ("⚖ budget: escalation ladder exhausted — no resource left to raise; "
+                    "the plateau is not a budget problem")
+        return None
+
+    def ledger(self) -> dict:
+        return self.controller.ledger()

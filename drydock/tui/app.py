@@ -1053,6 +1053,10 @@ class DrydockApp(App):
             # ContextCheckpoint beside the GitCheckpoint, a rollback leaves an
             # evidence-backed tombstone. Purely additive; failures here never touch the run.
             "mcr": self._new_context_ratchet(cwd, goal),
+            # ABC (abc_prd.md §14): advise on inference-resource allocation from the same
+            # round signal. Advisory only until the backend adapter lands; optional by
+            # construction — a failure here never touches the run.
+            "budget": self._new_budget_advisor(effort or "medium"),
             "holdout": holdout_cmd,
             "holdout_fitness": fitness,
             "cwd": cwd,
@@ -1086,6 +1090,15 @@ class DrydockApp(App):
             from drydock.context_ratchet import ContextRatchet
             return ContextRatchet(cwd, goal=goal)
         except Exception:  # noqa: BLE001 — MCR is bookkeeping; never break /ratchet
+            return None
+
+    def _new_budget_advisor(self, effort: str):
+        """Adaptive Budget Controller advisor for this /ratchet run, or None. Optional by
+        construction: any failure yields None and the ratchet runs exactly as before."""
+        try:
+            from drydock.adaptive_budget import RatchetBudgetAdvisor
+            return RatchetBudgetAdvisor(effort=effort, has_verifier=True)
+        except Exception:  # noqa: BLE001 — ABC is advisory; never break /ratchet
             return None
 
     def _holdout_adjust(self, r: dict, res) -> "tuple[int, int, str]":
@@ -1204,6 +1217,13 @@ class DrydockApp(App):
         if note:
             self.call_from_thread(self._info, note)
         self._mcr_round(r, rnd, action, res, snap)
+        # ABC: feed the honest recorded score to the budget advisor; surface only when its
+        # allocation recommendation actually changes (§7/§14). Never blocks the round.
+        advisor = r.get("budget")
+        if advisor is not None:
+            budget_note = advisor.observe_round(score_p, score_t)
+            if budget_note:
+                self.call_from_thread(self._info, budget_note)
         self.call_from_thread(self.query_one("#working", Static).update, "")
 
         if action == "solved":

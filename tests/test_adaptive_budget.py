@@ -10,6 +10,7 @@ from drydock.adaptive_budget import (
     LEVELS,
     PLATEAU_TO_ESCALATE,
     AdaptiveBudgetController,
+    RatchetBudgetAdvisor,
     ReasoningBudget,
     ResourceEnvelope,
     TaskProbe,
@@ -189,3 +190,48 @@ def test_controller_never_raises_on_unknown_level():
     # an unknown level must not crash escalation; it is treated as "low".
     d = _plateau_until_escalate(c, 0)
     assert d.action in ("escalate", "terminate")
+
+
+# --- ratchet advisor bridge (§14) ------------------------------------------------------
+def test_advisor_stays_quiet_while_progressing():
+    adv = RatchetBudgetAdvisor(effort="low")
+    assert adv.observe_round(2, 10) is None    # baseline
+    assert adv.observe_round(4, 10) is None     # progress -> no note
+    assert adv.observe_round(6, 10) is None     # progress -> no note
+
+
+def test_advisor_notes_escalation_on_sustained_plateau():
+    adv = RatchetBudgetAdvisor(effort="low")
+    adv.observe_round(3, 10)                     # baseline
+    assert adv.observe_round(3, 10) is None      # plateau 1 -> quiet
+    note = adv.observe_round(3, 10)              # plateau 2 -> escalate
+    assert note is not None
+    assert "budget" in note and "reasoning=medium" in note
+
+
+def test_advisor_notes_release_on_resumed_progress():
+    adv = RatchetBudgetAdvisor(effort="low")
+    adv.observe_round(3, 10)
+    adv.observe_round(3, 10)
+    adv.observe_round(3, 10)                     # escalated to medium
+    note = adv.observe_round(8, 10)             # progress -> release
+    assert note is not None and "releasing" in note
+
+
+def test_advisor_effort_seeds_initial_level():
+    adv = RatchetBudgetAdvisor(effort="high")
+    assert adv.controller.envelope.reasoning.level == "high"
+
+
+def test_advisor_ledger_exposed():
+    adv = RatchetBudgetAdvisor(effort="medium")
+    adv.observe_round(1, 10)
+    led = adv.ledger()
+    assert "envelope" in led and "decisions" in led
+
+
+def test_advisor_never_raises_on_garbage_input():
+    adv = RatchetBudgetAdvisor(effort="nonsense")
+    # unknown effort falls back to a sane level, and bad scores must not raise.
+    assert adv.controller.envelope.reasoning.level in LEVELS
+    assert adv.observe_round(0, 0) is None
