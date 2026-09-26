@@ -1235,6 +1235,10 @@ class DrydockApp(App):
             budget_note = advisor.observe_round(score_p, score_t)
             if budget_note:
                 self.call_from_thread(self._info, budget_note)
+            # Persist the budget ledger each round so a /ratchet run is MEASURABLE (§16/§20) —
+            # this is the artifact a benchmark compares between ABC arms. Current-on-interrupt.
+            from pathlib import Path as _P
+            advisor.persist(_P(r.get("cwd") or ".") / ".drydock" / "context" / "budget_ledger.json")
             # Opt-in actuation (default OFF): apply ABC's reasoning level to the next worker
             # turn. Safe because agent.py leaves a pre-set reasoning_effort untouched and the
             # time governor can still force LOW (§17). Popped in _finish_ratchet_idle so it

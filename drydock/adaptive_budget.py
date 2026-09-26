@@ -432,6 +432,8 @@ class RatchetBudgetAdvisor:
         self._cur: int = 0
         self._plateau = 0
         self._total = 0
+        self.effort0 = effort
+        self.rounds: list[dict] = []      # per-round measurement record (§16/§20)
         try:
             self.controller.allocate(_effort_to_probe(effort, has_verifier=has_verifier))
         except Exception:  # noqa: BLE001 — allocation must never break /ratchet
@@ -479,6 +481,15 @@ class RatchetBudgetAdvisor:
             self._cur = passed
             self._total = total
             d = self.controller.observe(passed=passed, total=total)
+            env = self.controller.envelope
+            self.rounds.append({
+                "round": len(self.rounds) + 1,
+                "passed": passed, "total": total,
+                "action": d.action, "axis": d.axis,
+                "reasoning": env.reasoning.level,
+                "context_modules": env.context_modules,
+                "agents": env.agents, "tool_calls": env.tool_calls,
+            })
         except Exception:  # noqa: BLE001 — advice must never break /ratchet
             return None
         return self.describe(d)
@@ -510,3 +521,34 @@ class RatchetBudgetAdvisor:
 
     def ledger(self) -> dict:
         return self.controller.ledger()
+
+    def run_ledger(self) -> dict:
+        """The measurable record of one /ratchet run (§16/§20): the initial effort, per-round
+        scores + envelope, escalation counts, and the final envelope. This is the artifact a
+        benchmark compares between ABC-on and ABC-off arms."""
+        led = self.controller.ledger()
+        final = self.rounds[-1] if self.rounds else {}
+        return {
+            "objective": self.objective,
+            "initial_effort": self.effort0,
+            "rounds": list(self.rounds),
+            "escalations": self.controller.escalations,
+            "deescalations": self.controller.deescalations,
+            "final_passed": final.get("passed"),
+            "final_total": final.get("total"),
+            "final_envelope": led["envelope"],
+            "decider": getattr(self.decider, "name", None),
+        }
+
+    def persist(self, path) -> bool:
+        """Write run_ledger() to `path` as JSON. Never raises; returns True on success. Called
+        each round so the record is current even if the run is interrupted."""
+        try:
+            import json as _json
+            from pathlib import Path as _P
+            p = _P(path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(_json.dumps(self.run_ledger(), indent=2), encoding="utf-8")
+            return True
+        except Exception:  # noqa: BLE001 — measurement must never break /ratchet
+            return False

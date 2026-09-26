@@ -306,6 +306,35 @@ def test_decider_redirects_escalation_axis():
     assert adv.controller.envelope.reasoning.level == "low"   # reasoning untouched
 
 
+def test_advisor_run_ledger_records_rounds():
+    adv = RatchetBudgetAdvisor(effort="low")
+    adv.observe_round(3, 10)
+    adv.observe_round(3, 10)
+    adv.observe_round(3, 10)          # escalate
+    led = adv.run_ledger()
+    assert led["initial_effort"] == "low"
+    assert len(led["rounds"]) == 3
+    assert led["rounds"][-1]["passed"] == 3
+    assert led["escalations"] >= 1
+    assert led["final_envelope"]["reasoning"]["level"] == "medium"
+
+
+def test_advisor_persist_writes_json(tmp_path):
+    import json as _json
+    adv = RatchetBudgetAdvisor(effort="low")
+    adv.observe_round(5, 10)
+    out = tmp_path / "sub" / "budget_ledger.json"
+    assert adv.persist(out) is True
+    data = _json.loads(out.read_text())
+    assert data["initial_effort"] == "low" and len(data["rounds"]) == 1
+
+
+def test_advisor_persist_never_raises_on_bad_path():
+    adv = RatchetBudgetAdvisor(effort="low")
+    adv.observe_round(1, 10)
+    assert adv.persist("/nonexistent-root/nope/x.json") is False
+
+
 def test_uncertain_decider_defers_to_fixed_ladder():
     from drydock.decision import Decision
 
