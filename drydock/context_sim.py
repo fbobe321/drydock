@@ -194,3 +194,47 @@ def run_all(scenario: Scenario | None = None, *, decider=None) -> dict[str, SimR
     table, deterministically and without a model."""
     sc = scenario or default_scenario()
     return {mode: run(sc, mode, decider=decider) for mode in MODES}
+
+
+# ---- CLI (MCR §4: `drydock context-test`) — deterministic, no model, no GPU ----
+_TABLE_FIELDS = ("solved", "final_passed", "final_total", "rollbacks", "escalations",
+                 "deescalations", "page_faults", "evictions", "successful_restores",
+                 "dead_end_families", "modeled_peak_resident_tokens",
+                 "modeled_uncached_prompt_tokens")
+
+
+def run_cli(argv: list[str], config: dict | None = None) -> int:
+    """`drydock context-test [--json] [--out PATH]` — run the §33 synthetic fixture across all
+    three context policies and print the comparison. Deterministic; touches no model or GPU."""
+    import argparse
+    import json as _json
+
+    ap = argparse.ArgumentParser(prog="drydock context-test",
+                                 description="Deterministic MCR->ABC->Laya synthetic ratchet (§33).")
+    ap.add_argument("--json", action="store_true", help="emit the full reports as JSON")
+    ap.add_argument("--out", default="", help="write the JSON reports to this path")
+    opts = ap.parse_args(argv)
+
+    reps = run_all()
+    payload = {mode: rep.to_dict() for mode, rep in reps.items()}
+    if opts.out:
+        try:
+            from pathlib import Path as _P
+            _P(opts.out).write_text(_json.dumps(payload, indent=2), encoding="utf-8")
+            print(f"wrote {opts.out}")
+        except OSError as e:
+            print(f"could not write {opts.out}: {e}")
+    if opts.json:
+        print(_json.dumps(payload, indent=2))
+        return 0
+
+    # compact table
+    header = f"{'metric':<32}" + "".join(f"{m:>14}" for m in MODES)
+    print(header)
+    print("-" * len(header))
+    for f in _TABLE_FIELDS:
+        row = f"{f:<32}" + "".join(f"{str(getattr(reps[m], f)):>14}" for m in MODES)
+        print(row)
+    print("\nNote: modeled_* token figures are a transparent placeholder, NOT a cache "
+          "measurement — the live TUI experiment (ABC §19 / Laya §23) answers efficiency.")
+    return 0

@@ -90,3 +90,13 @@ def test_deterministic():
 def test_empty_scenario_is_safe():
     rep = run(Scenario(modules=[], rounds=[]), "modular")
     assert not rep.solved and rep.escalations == 0
+
+
+def test_cli_runs_and_writes(tmp_path, capsys):
+    from drydock.context_sim import run_cli
+    out = tmp_path / "reports.json"
+    rc = run_cli(["--out", str(out)])
+    assert rc == 0
+    payload = json.loads(out.read_text())
+    assert set(payload) == set(MODES)
+    assert all(payload[m]["solved"] for m in MODES)

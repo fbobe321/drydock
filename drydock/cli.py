@@ -419,6 +419,12 @@ def main():
         cfg["cwd"] = os.getcwd()
         sys.exit(swarm_run_cli(sys.argv[2:], config=cfg))
 
+    # `drydock context-test [--json] [--out PATH]` — deterministic MCR->ABC->Laya synthetic
+    # ratchet fixture (mcr_validation_prd.md §33). No model, no GPU; safe to run anytime.
+    if len(sys.argv) > 1 and sys.argv[1] == "context-test":
+        from drydock.context_sim import run_cli as context_test_run_cli
+        sys.exit(context_test_run_cli(sys.argv[2:]))
+
     # `drydock mission <create|status|run|resume|…>` — long-horizon autonomous missions.
     if len(sys.argv) > 1 and sys.argv[1] == "mission":
         from drydock import config as cfgmod
