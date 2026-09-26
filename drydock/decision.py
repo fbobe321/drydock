@@ -25,7 +25,9 @@ raises `DecisionUnavailable` so the chain falls back; a bad answer degrades to a
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -82,6 +84,12 @@ class ControlState:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    def state_hash(self) -> str:
+        """Stable short hash of the state (§20 `state_hash`) — identical states hash alike, so
+        the decision trace can group repeats and a learned scheduler (§21) can key on it."""
+        blob = json.dumps(self.to_dict(), sort_keys=True, default=str)
+        return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]  # noqa: S324 — not security
 
     def to_prompt(self) -> str:
         """Compact rendering for a decision model (§8). Terse on purpose — this is the whole
@@ -394,6 +402,113 @@ def decide_limiting_resource(provider: DecisionProvider, state: ControlState) ->
                            _LIMITING_RESOURCES)
 
 
+def decide_context_module(provider: DecisionProvider, state: ControlState) -> Decision:
+    """§12 — which currently-unloaded module would most improve the next attempt. Choices are
+    generated from the state, so this is MCR's context router seam (Laya PRD §12). Returns an
+    empty decision when nothing is available to load."""
+    choices = [m for m in state.available_modules if m not in state.active_modules]
+    if not choices:
+        return Decision(question="Which context module to load?", source="none")
+    return provider.choose(state, "Which context module to load?", choices + ["none"])
+
+
+def decide_evict_module(provider: DecisionProvider, state: ControlState) -> Decision:
+    """§13 — which active module is least relevant and can be unloaded (context paging). Returns
+    an empty decision when only the base is resident."""
+    choices = [m for m in state.active_modules if m.lower() != "base"]
+    if not choices:
+        return Decision(question="Which context module to evict?", source="none")
+    return provider.choose(state, "Which context module to evict?", choices + ["none"])
+
+
+# --- batched decisions (§10) -----------------------------------------------------------
+# A spec is (kind, choices): kind "bool" -> boolean(question); "choose" -> choose(question,
+# choices). Handshake asks several at once and gets a probabilistic picture, not prose.
+def batch_decisions(provider: DecisionProvider, state: ControlState,
+                    questions: dict[str, tuple[str, str, list[str]]]) -> dict[str, Decision]:
+    """Answer several questions over one ControlState (§10). `questions` maps a name to
+    (kind, question, choices); kind is "bool" or "choose". Built on the primitives so every
+    provider batches for free. A per-question failure degrades to an abstention rather than
+    failing the whole batch."""
+    out: dict[str, Decision] = {}
+    for name, (kind, question, choices) in questions.items():
+        try:
+            if kind == "bool":
+                out[name] = provider.boolean(state, question)
+            else:
+                out[name] = provider.choose(state, question, choices)
+        except DecisionUnavailable:
+            out[name] = Decision(question=question, source="none")
+    return out
+
+
+# ======================================================================================
+# Strategy families (§15) — semantic fingerprints so near-duplicate approaches collapse.
+# ======================================================================================
+_STOPWORDS = frozenset((
+    "the", "a", "an", "to", "of", "in", "on", "at", "for", "and", "or", "by", "with",
+    "then", "this", "that", "it", "is", "be", "into", "up", "down", "make", "try", "use",
+    "add", "change", "fix", "set", "get", "run", "again", "more", "less",
+))
+# lightweight synonym folding so "increase mutex scope" ≈ "lock larger section" (§15 example).
+_SYNONYMS = {
+    "increase": "expand", "widen": "expand", "larger": "expand", "grow": "expand",
+    "broaden": "expand", "extend": "expand", "bigger": "expand",
+    "mutex": "lock", "locking": "lock", "locked": "lock", "locks": "lock",
+    "section": "scope", "region": "scope", "area": "scope", "range": "scope",
+    "move": "shift", "raise": "shift", "upward": "shift",
+}
+
+
+def strategy_family(action: str) -> str:
+    """Normalize a free-text action/approach into a stable strategy-family key (§15). Lexically
+    different phrasings of the same idea collapse to the same key so a plateau across a *family*
+    of attempts is visible even when no two actions are byte-identical (which is what
+    loop_detect.py catches). Heuristic, not semantic — a real Laya would do better — but it
+    already folds the PRD's own example ('increase mutex scope' ≈ 'lock larger section')."""
+    tokens = re.findall(r"[a-z]+", (action or "").lower())
+    keys = sorted({_SYNONYMS.get(t, t) for t in tokens if t not in _STOPWORDS and len(t) > 2})
+    return "_".join(keys) if keys else "misc"
+
+
+@dataclass
+class _Family:
+    attempts: int = 0
+    fitness_gain: int = 0
+    invalidated: bool = False
+
+
+class StrategyLedger:
+    """Tracks attempts and verified gain per strategy family (§15). After a family accrues
+    several attempts with zero gain it can be INVALIDATED — the compact lesson ("avoid
+    lock_expansion: 3 attempts / 0 gain") that stays resident while the full histories leave
+    active context (the MCR tie-in). Never raises."""
+
+    def __init__(self, invalidate_after: int = 3) -> None:
+        self.invalidate_after = max(1, invalidate_after)
+        self.families: dict[str, _Family] = {}
+
+    def record(self, action: str, *, fitness_gain: int = 0) -> str:
+        """Record one attempt in `action`'s family; auto-invalidate a family that has tried
+        `invalidate_after` times with no positive gain. Returns the family key."""
+        key = strategy_family(action)
+        fam = self.families.setdefault(key, _Family())
+        fam.attempts += 1
+        fam.fitness_gain += int(fitness_gain)
+        if fam.attempts >= self.invalidate_after and fam.fitness_gain <= 0:
+            fam.invalidated = True
+        return key
+
+    def is_invalidated(self, action: str) -> bool:
+        fam = self.families.get(strategy_family(action))
+        return bool(fam and fam.invalidated)
+
+    def lessons(self) -> list[str]:
+        """Compact avoid-list for injection into control context (§15)."""
+        return [f"avoid {k}: {f.attempts} attempts / {f.fitness_gain:+d} gain"
+                for k, f in self.families.items() if f.invalidated]
+
+
 # ======================================================================================
 # Decision trace (§20) — state -> decision -> outcome, the seed of a learned scheduler (§21).
 # ======================================================================================
@@ -408,6 +523,7 @@ class DecisionTrace:
     def log(self, state: ControlState, decision: Decision, *, outcome: dict | None = None) -> dict:
         rec = {
             "ts": time.time(),
+            "state_hash": state.state_hash(),
             "state": state.to_dict(),
             "question": decision.question,
             "options": decision.options,

@@ -19,11 +19,16 @@ from drydock.decision import (
     FallbackDecisionProvider,
     HeuristicProvider,
     LayaProvider,
+    StrategyLedger,
+    batch_decisions,
+    decide_context_module,
     decide_continue,
+    decide_evict_module,
     decide_limiting_resource,
     decide_next_action,
     decide_reasoning,
     decision_provider,
+    strategy_family,
 )
 
 
@@ -206,3 +211,90 @@ def test_limiting_resource_decision_maps_to_axis():
                      active_modules=["a"], available_modules=["a", "b"])
     d = decide_limiting_resource(h, s)
     assert RESOURCE_TO_AXIS[d.selected] == "context"
+
+
+# --- state hashing (§20) ---------------------------------------------------------------
+def test_state_hash_stable_and_discriminating():
+    a = ControlState(objective="x", fitness=3, plateau_iterations=2)
+    b = ControlState(objective="x", fitness=3, plateau_iterations=2)
+    c = ControlState(objective="x", fitness=4, plateau_iterations=2)
+    assert a.state_hash() == b.state_hash()
+    assert a.state_hash() != c.state_hash()
+
+
+def test_trace_records_state_hash(tmp_path):
+    trace = DecisionTrace(tmp_path / "d.jsonl")
+    s = ControlState(objective="x", fitness=3)
+    rec = trace.log(s, Decision(question="q"))
+    assert rec["state_hash"] == s.state_hash()
+
+
+# --- context routing (§12/§13) ---------------------------------------------------------
+def test_context_module_choice_offers_unloaded_only():
+    h = HeuristicProvider()
+    s = ControlState(active_modules=["base", "auth"], available_modules=["base", "auth", "db", "api"])
+    d = decide_context_module(h, s)
+    assert set(d.options) <= {"db", "api", "none"}
+    assert "auth" not in d.options
+
+
+def test_context_module_choice_empty_when_all_loaded():
+    h = HeuristicProvider()
+    s = ControlState(active_modules=["base", "db"], available_modules=["base", "db"])
+    assert decide_context_module(h, s).source == "none"
+
+
+def test_evict_never_offers_base():
+    h = HeuristicProvider()
+    s = ControlState(active_modules=["base", "auth", "db"])
+    d = decide_evict_module(h, s)
+    assert "base" not in d.options
+
+
+# --- batched decisions (§10) -----------------------------------------------------------
+def test_batch_answers_all_questions():
+    h = HeuristicProvider()
+    s = ControlState(fitness=5, previous_fitness=3, available_actions=["continue", "finish"])
+    out = batch_decisions(h, s, {
+        "continue": ("bool", "Continue?", []),
+        "next": ("choose", "What next?", ["continue", "finish"]),
+        "reasoning": ("choose", "How much reasoning?", ["low", "medium", "high"]),
+    })
+    assert set(out) == {"continue", "next", "reasoning"}
+    assert out["continue"].selected in ("yes", "no")
+
+
+def test_batch_degrades_on_unavailable():
+    def boom(url, payload, timeout):
+        raise ConnectionError()
+    laya = LayaProvider(transport=boom)
+    out = batch_decisions(laya, ControlState(), {"c": ("bool", "Continue?", [])})
+    assert out["c"].source == "none"      # abstention, not an exception
+
+
+# --- strategy families (§15) -----------------------------------------------------------
+def test_strategy_family_folds_synonyms():
+    # the PRD's own example: these should collapse to the same family.
+    assert strategy_family("increase mutex scope") == strategy_family("lock larger section")
+
+
+def test_strategy_family_distinguishes_real_differences():
+    assert strategy_family("rewrite the parser") != strategy_family("add a database index")
+
+
+def test_strategy_ledger_invalidates_after_flat_attempts():
+    led = StrategyLedger(invalidate_after=3)
+    # three lexically-different phrasings of the SAME family (expand the lock scope).
+    led.record("increase mutex scope", fitness_gain=0)
+    led.record("lock larger section", fitness_gain=0)
+    key = led.record("expand the locked region", fitness_gain=0)
+    assert led.is_invalidated("widen the lock scope")   # same family, unseen phrasing
+    assert any(key in lesson for lesson in led.lessons())
+
+
+def test_strategy_ledger_progress_prevents_invalidation():
+    led = StrategyLedger(invalidate_after=3)
+    for _ in range(3):
+        led.record("expand lock scope", fitness_gain=2)   # gaining each time
+    assert not led.is_invalidated("expand lock scope")
+    assert led.lessons() == []
